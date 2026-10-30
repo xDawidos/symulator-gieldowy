@@ -1,3 +1,5 @@
+> **Zastąpione** przez `plan_0.15.5_budownictwo_banki.md` (wdrożone w 0.15.5); zostawione jako źródło pomysłów.
+
 # Plan Rozwoju: Sektor Budowlany z Systemem Przetargów
 
 ## 📋 Podsumowanie

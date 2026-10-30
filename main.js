@@ -419,29 +419,8 @@ function sanitizeCompanyNumbers(company, warnings) {
     }
 }
 
-/**
- * Waliduje i odtwarza stan z obiektu zapisu. Zwraca raport; przy błędach krytycznych nic nie zmienia.
- */
-function applySaveSnapshot(snapshot) {
-    const report = { ok: false, warnings: [], errors: [] };
-
-    if (!snapshot || typeof snapshot !== 'object') {
-        report.errors.push('Brak danych zapisu.');
-        return report;
-    }
-
-    if (!SUPPORTED_SAVE_VERSIONS.includes(snapshot.version)) {
-        report.errors.push(`Niezgodna wersja zapisu (${snapshot.version}). Obsługiwane: ${SUPPORTED_SAVE_VERSIONS.join(', ')}.`);
-        return report;
-    }
-
-    snapshot = migrateLegacyBankSymbols(snapshot); // 0.16.11 K0: BKINV1/BKINV3/BKCORP3 → SPR/RPK/BPIG
-    if (!Array.isArray(snapshot.stocks) || snapshot.stocks.length === 0) {
-        report.errors.push('Zapis nie zawiera spółek.');
-        return report;
-    }
-
-    // --- Spółki: duplikaty symboli ---
+/** Wczytanie zapisu: spółki bez duplikatów symboli, segmenty v14. */
+function restoreSavedStocks(snapshot, report) {
     const bySymbol = new Map();
     const restoredStocks = [];
 
@@ -462,12 +441,11 @@ function applySaveSnapshot(snapshot) {
         }
         restoredStocks.push(company);
     }
+    return { bySymbol, restoredStocks };
+}
 
-    const missing = new Set();
-    resolveStockRefs(restoredStocks, bySymbol, missing);
-    restoredStocks.forEach(company => sanitizeCompanyNumbers(company, report.warnings));
-
-    // --- Przetargi ---
+/** Wczytanie zapisu: przetargi z referencjami do spółek; błędne anulowane. */
+function restoreSavedTenders(snapshot, bySymbol, report) {
     const tenderIds = new Set();
     const restoredTenders = [];
 
@@ -513,10 +491,11 @@ function applySaveSnapshot(snapshot) {
         if (!Array.isArray(tender.evaluatedBy)) tender.evaluatedBy = [];
         restoredTenders.push(tender);
     }
+    return restoredTenders;
+}
 
-    const tenderById = new Map(restoredTenders.map(tender => [tender.id, tender]));
-
-    // --- Projekty budowlane ---
+/** Wczytanie zapisu: projekty budowlane (model 3) z przetargiem i wykonawcą. */
+function restoreSavedProjects(snapshot, bySymbol, tenderById, report) {
     const projectIds = new Set();
     const restoredProjects = [];
     const moneyFields = ['price', 'escrowBalance', 'paidToBuilder', 'costsPaid', 'estimatedCost', 'progress', 'elapsedGameMs', 'workRequiredMs', 'deadlineMs'];
@@ -564,6 +543,45 @@ function applySaveSnapshot(snapshot) {
         if (!Array.isArray(project.events)) project.events = [];
         restoredProjects.push(project);
     }
+    return restoredProjects;
+}
+
+/**
+ * Waliduje i odtwarza stan z obiektu zapisu. Zwraca raport; przy błędach krytycznych nic nie zmienia.
+ */
+function applySaveSnapshot(snapshot) {
+    const report = { ok: false, warnings: [], errors: [] };
+
+    if (!snapshot || typeof snapshot !== 'object') {
+        report.errors.push('Brak danych zapisu.');
+        return report;
+    }
+
+    if (!SUPPORTED_SAVE_VERSIONS.includes(snapshot.version)) {
+        report.errors.push(`Niezgodna wersja zapisu (${snapshot.version}). Obsługiwane: ${SUPPORTED_SAVE_VERSIONS.join(', ')}.`);
+        return report;
+    }
+
+    snapshot = migrateLegacyBankSymbols(snapshot); // 0.16.11 K0: BKINV1/BKINV3/BKCORP3 → SPR/RPK/BPIG
+    if (!Array.isArray(snapshot.stocks) || snapshot.stocks.length === 0) {
+        report.errors.push('Zapis nie zawiera spółek.');
+        return report;
+    }
+
+    // --- Spółki: duplikaty symboli ---
+    const { bySymbol, restoredStocks } = restoreSavedStocks(snapshot, report);
+
+    const missing = new Set();
+    resolveStockRefs(restoredStocks, bySymbol, missing);
+    restoredStocks.forEach(company => sanitizeCompanyNumbers(company, report.warnings));
+
+    // --- Przetargi ---
+    const restoredTenders = restoreSavedTenders(snapshot, bySymbol, report);
+
+    const tenderById = new Map(restoredTenders.map(tender => [tender.id, tender]));
+
+    // --- Projekty budowlane ---
+    const restoredProjects = restoreSavedProjects(snapshot, bySymbol, tenderById, report);
 
     // Przetarg "awarded" bez projektu nie ma kontynuacji.
     for (const tender of restoredTenders) {
@@ -1101,46 +1119,8 @@ function getMeasuredGameSpeed() {
     return { quartersPerMinute: 60000 / msPerQuarter, effectiveMultiplier: BASE_DELAYS.quarterly / msPerQuarter };
 }
 
-/**
- * Ustawia nową prędkość gry, czyszcząc stare pętle i tworząc nowe.
- * @param {number} speedMultiplier - Mnożnik prędkości (np. 1, 2, 5).
- */
-function setGameSpeed(speedMultiplier) {
-    clearIntervals(); // Zatrzymaj wszystkie istniejące pętle
-    currentSpeedMultiplier = speedMultiplier; // Ustaw nowy mnożnik
-
-    // Zaktualizuj wygląd przycisków prędkości
-    const speedButtons = document.querySelectorAll('.speed-btn');
-    speedButtons.forEach(btn => btn.classList.remove('active'));
-    const activeBtn = document.querySelector(`.speed-btn[data-speed="${speedMultiplier}"]`);
-    if (activeBtn) activeBtn.classList.add('active');
-
-    console.log(`Ustawiono prędkość gry na x${speedMultiplier}`);
-
-    // --- URUCHOMIENIE NOWYCH PĘTLI Z NOWĄ PRĘDKOŚCIĄ ---
-
-    // Pętla sprawdzania niespłaconych hipotek (z bazy main.js)
-    gameTimers.mortgageCheck = setGameInterval(() => {
-        if (isGamePaused) return;
-        checkMortgageDefaults();
-    }, BASE_DELAYS.weekly / speedMultiplier); // Sprawdzaj co tydzień
-
-    gameTimers.autoSave = setInterval(() => {
-        if (typeof saveGameState === 'function') {
-            saveGameState();
-        }
-    }, 60000 / Math.min(speedMultiplier, MAX_AUTOSAVE_SPEED)); // T0: przy ×100/×200 autozapis nie częściej niż przy ×50
-
-    // Pętla sprawdzania zapadalności bonów skarbowych
-    gameTimers.tBillMaturityCheck = setGameInterval(() => {
-        if (isGamePaused) return;
-        checkTBillMaturities();
-    }, 5000 / speedMultiplier);
-
-    // Główna pętla gry (aktualizacje co sekundę czasu gry). T0: przy prędkościach testowych (> ×50) kilka tików
-    // w jednym wywołaniu zamiast interwału krótszego niż ~10 ms (przeglądarka nie nadążyłaby z timerami).
-    const tickSteps = getTickStepsPerCall(speedMultiplier);
-    const stockTick = (skipUi = false) => {
+/** Jeden krok logiki giełdy (skipUi: bez odświeżania interfejsu). */
+function runStockTick(skipUi, speedMultiplier, tickSteps) {
 
         if (!skipUi) document.querySelectorAll('#stock-table-body tr').forEach(row => {
     const symbol = row.dataset.symbol;
@@ -1369,24 +1349,10 @@ function setGameSpeed(speedMultiplier) {
             }
         }
 
-    };
-    // T0: doganianie czasu — tyle kroków logiki, ile sekund gry upłynęło od ostatniego wywołania (najwyżej
-    // MAX_TICK_CATCHUP), żeby kwartał zawsze miał ~300 tików także przy ×50/×100/×200, gdy przeglądarka nie nadąża.
-    debugStockTick = stockTick; // testy symulacyjne: tiki logiki bez timerów przeglądarki
-    let lastTickAt = performance.now();
-    let tickBacklog = 0;
-    gameTimers.stockUpdate = setInterval(() => {
-        const now = performance.now();
-        tickBacklog += (now - lastTickAt) * speedMultiplier / BASE_DELAYS.stockUpdate;
-        lastTickAt = now;
-        const steps = Math.max(1, Math.min(MAX_TICK_CATCHUP, Math.floor(tickBacklog)));
-        tickBacklog = Math.max(0, Math.min(tickBacklog - steps, MAX_TICK_CATCHUP));
-        if (isGamePaused) { tickBacklog = 0; stockTick(); return; }
-        for (let step = 0; step < steps; step++) stockTick(step < steps - 1);
-    }, BASE_DELAYS.stockUpdate * tickSteps / speedMultiplier);
+}
 
-    // Pętla tygodniowa (z bazy main.js - bankowość komercyjna)
-gameTimers.weekly = setGameInterval(() => {
+/** Pętla tygodniowa gry. */
+function runWeeklyTick() {
         if (isGamePaused) return;
 
         // ===>>> NOWE WYWOŁANIE SKANERA WINDYKATORA <<<===
@@ -1456,10 +1422,10 @@ gameTimers.weekly = setGameInterval(() => {
 
         if (playerCash > 0) displayCash(); //
 
-    }, BASE_DELAYS.weekly / speedMultiplier);
+}
 
-    // Pętla kwartalna (z bazy main.js - zawiera AI Banku Centralnego)
-    gameTimers.quarterly = setGameInterval(() => {
+/** Pętla kwartalna gry. */
+function runQuarterlyTick() {
         if (isGamePaused) return;
         noteQuarterForSpeedStats();
         reviewCompanyPlacements();
@@ -1547,7 +1513,99 @@ gameTimers.weekly = setGameInterval(() => {
             runPrivateCompanyLogic(); // Logika rozwoju firm prywatnych
         }
 
-    }, BASE_DELAYS.quarterly / speedMultiplier);
+}
+
+/** Pętla roczna gry. */
+function runYearlyTick() {
+        if (isGamePaused) return;
+        updateCeoTenureAndAge();
+        triggerYearlyCeoEvents();
+        if (Date.now() >= nextWealthTaxTime) {
+         if (typeof processWealthTax === 'function') {
+             processWealthTax();
+         } else {
+             console.error("Funkcja processWealthTax nie została znaleziona!");
+         }
+    }
+
+    checkSanEscobarRisk();
+
+    if (typeof aiUpgradeAntitrustOffice === 'function') {
+            aiUpgradeAntitrustOffice(); // Państwo (AI) decyduje o ulepszeniu urzędu
+        }
+
+
+    if (Math.random() < 0.3) {
+        if (typeof triggerGovernmentSpendingEvent === 'function') {
+            triggerGovernmentSpendingEvent();
+        } else {
+            console.error("Funkcja triggerGovernmentSpendingEvent nie została znaleziona!");
+        }
+    }
+
+        processCityYearly(); // gospodarka miasta, polityka burmistrza, spółki miejskie, kampania i wybory (city.js)
+}
+
+/**
+ * Ustawia nową prędkość gry, czyszcząc stare pętle i tworząc nowe.
+ * @param {number} speedMultiplier - Mnożnik prędkości (np. 1, 2, 5).
+ */
+function setGameSpeed(speedMultiplier) {
+    clearIntervals(); // Zatrzymaj wszystkie istniejące pętle
+    currentSpeedMultiplier = speedMultiplier; // Ustaw nowy mnożnik
+
+    // Zaktualizuj wygląd przycisków prędkości
+    const speedButtons = document.querySelectorAll('.speed-btn');
+    speedButtons.forEach(btn => btn.classList.remove('active'));
+    const activeBtn = document.querySelector(`.speed-btn[data-speed="${speedMultiplier}"]`);
+    if (activeBtn) activeBtn.classList.add('active');
+
+    console.log(`Ustawiono prędkość gry na x${speedMultiplier}`);
+
+    // --- URUCHOMIENIE NOWYCH PĘTLI Z NOWĄ PRĘDKOŚCIĄ ---
+
+    // Pętla sprawdzania niespłaconych hipotek (z bazy main.js)
+    gameTimers.mortgageCheck = setGameInterval(() => {
+        if (isGamePaused) return;
+        checkMortgageDefaults();
+    }, BASE_DELAYS.weekly / speedMultiplier); // Sprawdzaj co tydzień
+
+    gameTimers.autoSave = setInterval(() => {
+        if (typeof saveGameState === 'function') {
+            saveGameState();
+        }
+    }, 60000 / Math.min(speedMultiplier, MAX_AUTOSAVE_SPEED)); // T0: przy ×100/×200 autozapis nie częściej niż przy ×50
+
+    // Pętla sprawdzania zapadalności bonów skarbowych
+    gameTimers.tBillMaturityCheck = setGameInterval(() => {
+        if (isGamePaused) return;
+        checkTBillMaturities();
+    }, 5000 / speedMultiplier);
+
+    // Główna pętla gry (aktualizacje co sekundę czasu gry). T0: przy prędkościach testowych (> ×50) kilka tików
+    // w jednym wywołaniu zamiast interwału krótszego niż ~10 ms (przeglądarka nie nadążyłaby z timerami).
+    const tickSteps = getTickStepsPerCall(speedMultiplier);
+    const stockTick = (skipUi = false) => runStockTick(skipUi, speedMultiplier, tickSteps);
+    // T0: doganianie czasu — tyle kroków logiki, ile sekund gry upłynęło od ostatniego wywołania (najwyżej
+    // MAX_TICK_CATCHUP), żeby kwartał zawsze miał ~300 tików także przy ×50/×100/×200, gdy przeglądarka nie nadąża.
+    debugStockTick = stockTick; // testy symulacyjne: tiki logiki bez timerów przeglądarki
+    let lastTickAt = performance.now();
+    let tickBacklog = 0;
+    gameTimers.stockUpdate = setInterval(() => {
+        const now = performance.now();
+        tickBacklog += (now - lastTickAt) * speedMultiplier / BASE_DELAYS.stockUpdate;
+        lastTickAt = now;
+        const steps = Math.max(1, Math.min(MAX_TICK_CATCHUP, Math.floor(tickBacklog)));
+        tickBacklog = Math.max(0, Math.min(tickBacklog - steps, MAX_TICK_CATCHUP));
+        if (isGamePaused) { tickBacklog = 0; stockTick(); return; }
+        for (let step = 0; step < steps; step++) stockTick(step < steps - 1);
+    }, BASE_DELAYS.stockUpdate * tickSteps / speedMultiplier);
+
+    // Pętla tygodniowa (z bazy main.js - bankowość komercyjna)
+    gameTimers.weekly = setGameInterval(runWeeklyTick, BASE_DELAYS.weekly / speedMultiplier);
+
+    // Pętla kwartalna (z bazy main.js - zawiera AI Banku Centralnego)
+    gameTimers.quarterly = setGameInterval(runQuarterlyTick, BASE_DELAYS.quarterly / speedMultiplier);
 
     // Pętla reputacji (powolny powrót do zera)
     gameTimers.reputationDecay = setGameInterval(() => {
@@ -1601,35 +1659,7 @@ gameTimers.weekly = setGameInterval(() => {
         triggerSemiAnnualEvents();
     }, BASE_DELAYS.quarterly * 2 / speedMultiplier); // Co pół roku
 
-    gameTimers.yearly = setGameInterval(() => {
-        if (isGamePaused) return;
-        updateCeoTenureAndAge();
-        triggerYearlyCeoEvents();
-        if (Date.now() >= nextWealthTaxTime) {
-         if (typeof processWealthTax === 'function') {
-             processWealthTax();
-         } else {
-             console.error("Funkcja processWealthTax nie została znaleziona!");
-         }
-    }
-
-    checkSanEscobarRisk();
-
-    if (typeof aiUpgradeAntitrustOffice === 'function') {
-            aiUpgradeAntitrustOffice(); // Państwo (AI) decyduje o ulepszeniu urzędu
-        }
-
-
-    if (Math.random() < 0.3) {
-        if (typeof triggerGovernmentSpendingEvent === 'function') {
-            triggerGovernmentSpendingEvent();
-        } else {
-            console.error("Funkcja triggerGovernmentSpendingEvent nie została znaleziona!");
-        }
-    }
-
-        processCityYearly(); // gospodarka miasta, polityka burmistrza, spółki miejskie, kampania i wybory (city.js)
-    }, BASE_DELAYS.quarterly * 4 / speedMultiplier); // Co rok
+    gameTimers.yearly = setGameInterval(runYearlyTick, BASE_DELAYS.quarterly * 4 / speedMultiplier); // Co rok
 }
 
 // Funkcja inicjalizująca grę
@@ -1743,15 +1773,8 @@ function initializeGame() {
     }
 }
 
-/** Tworzy nowy świat gry (banki, spółki budowlane, startupy, bilanse, R&D...). */
-function createNewWorld() {
-    // Inicjalizacja banków komercyjnych (ta funkcja teraz ustawia isActive dla banków startowych)
-    initializeCommercialBanks(); // Tworzy banki, może ustawić isActiveFromStart
-    generateCentralBankGovernor();
-    initializeConstructionCompanies();
-    initializeAllConstructionStats(); // Inicjalizuje maxProjects i currentProjects dla spółek budowlanych
-    ensureSubcontractorRegistry(); // 0.15.5 B2: rejestr podwykonawców (12 specjalności, min. 3 w każdej)
-    
+/** Nowy świat: cztery banki startowe (inwestycyjny, korporacyjny i dwa losowe). */
+function activateStartingBanks() {
     let activatedBankIds = []; // Tablica do śledzenia ID aktywowanych banków
     let activatedBanksCount = 0; // Licznik aktywowanych banków
 
@@ -1799,35 +1822,10 @@ function createNewWorld() {
     if (activatedBanksCount < 4) {
         console.warn(`! Nie udało się aktywować 4 banków, aktywnych jest tylko ${activatedBanksCount}. Sprawdź definicje banków.`);
     }
+}
 
-    // Tworzenie początkowych start-upów, jeśli ich brakuje
-    const existingStartups = Array.isArray(stocks) ? stocks.filter(s => s.assetType === 'Startup').length : 0;
-    if (existingStartups < 5) {
-        const genFn = (typeof generateNewStartup === 'function') ? generateNewStartup : (typeof window !== 'undefined' && typeof window.generateNewStartup === 'function') ? window.generateNewStartup : null;
-        if (genFn) {
-            const toCreate = 5 - existingStartups;
-            for (let i = 0; i < toCreate; i++) {
-                try {
-                    stocks.push(genFn());
-                } catch (err) {
-                    console.error('Błąd podczas generowania start-upu:', err); // Zachowany błąd
-                }
-            }
-        } else {
-            console.warn('generateNewStartup nie jest dostępna — pomijam tworzenie dodatkowych start-upów.'); // Zachowane ostrzeżenie
-        }
-    }
-
-    // Inicjalizacja opisów R&D Instytutów
-    let availableResearchDescriptions = [];
-    if (typeof researchInstituteDescriptions !== 'undefined' && Array.isArray(researchInstituteDescriptions)) {
-        availableResearchDescriptions = [...researchInstituteDescriptions];
-    } else {
-        console.warn("Zmienna researchInstituteDescriptions nie jest zdefiniowana lub nie jest tablicą."); // Zachowane ostrzeżenie
-    }
-    // (Pętla inicjalizująca opisy Instytutów - zakładam, że jest w innej części kodu lub była w usuniętym fragmencie)
-
-    // --- Dodawanie aktywnych banków do giełdy ---
+/** Nowy świat: aktywne banki jako spółki na giełdzie. */
+function listActiveBanksOnExchange() {
     console.log("[START GRY] Dodawanie aktywnych banków na giełdę...");
     let banksAddedToStocks = 0;
     commercialBanks.forEach(bank => {
@@ -1859,6 +1857,10 @@ function createNewWorld() {
         }
     });
     console.log(`[initializeGame] Zakończono dodawanie banków. ${banksAddedToStocks} banków jest teraz w 'stocks'. Całkowita liczba banków w 'stocks': ${stocks.filter(s=>s.isBankStock).length}`);
+}
+
+/** Nowy świat: startowe depozyty botów w aktywnych bankach. */
+function placeInitialAiDeposits() {
     console.log("[initializeGame] Inicjalizacja startowych depozytów AI...");
     aiCompetitors.forEach(ai => {
         if (ai.initialDeposit && ai.initialDeposit > 0) {
@@ -1905,6 +1907,49 @@ function createNewWorld() {
             }
         }
     });
+}
+
+/** Tworzy nowy świat gry (banki, spółki budowlane, startupy, bilanse, R&D...). */
+function createNewWorld() {
+    // Inicjalizacja banków komercyjnych (ta funkcja teraz ustawia isActive dla banków startowych)
+    initializeCommercialBanks(); // Tworzy banki, może ustawić isActiveFromStart
+    generateCentralBankGovernor();
+    initializeConstructionCompanies();
+    initializeAllConstructionStats(); // Inicjalizuje maxProjects i currentProjects dla spółek budowlanych
+    ensureSubcontractorRegistry(); // 0.15.5 B2: rejestr podwykonawców (12 specjalności, min. 3 w każdej)
+    
+    activateStartingBanks();
+
+    // Tworzenie początkowych start-upów, jeśli ich brakuje
+    const existingStartups = Array.isArray(stocks) ? stocks.filter(s => s.assetType === 'Startup').length : 0;
+    if (existingStartups < 5) {
+        const genFn = (typeof generateNewStartup === 'function') ? generateNewStartup : (typeof window !== 'undefined' && typeof window.generateNewStartup === 'function') ? window.generateNewStartup : null;
+        if (genFn) {
+            const toCreate = 5 - existingStartups;
+            for (let i = 0; i < toCreate; i++) {
+                try {
+                    stocks.push(genFn());
+                } catch (err) {
+                    console.error('Błąd podczas generowania start-upu:', err); // Zachowany błąd
+                }
+            }
+        } else {
+            console.warn('generateNewStartup nie jest dostępna — pomijam tworzenie dodatkowych start-upów.'); // Zachowane ostrzeżenie
+        }
+    }
+
+    // Inicjalizacja opisów R&D Instytutów
+    let availableResearchDescriptions = [];
+    if (typeof researchInstituteDescriptions !== 'undefined' && Array.isArray(researchInstituteDescriptions)) {
+        availableResearchDescriptions = [...researchInstituteDescriptions];
+    } else {
+        console.warn("Zmienna researchInstituteDescriptions nie jest zdefiniowana lub nie jest tablicą."); // Zachowane ostrzeżenie
+    }
+    // (Pętla inicjalizująca opisy Instytutów - zakładam, że jest w innej części kodu lub była w usuniętym fragmencie)
+
+    // --- Dodawanie aktywnych banków do giełdy ---
+    listActiveBanksOnExchange();
+    placeInitialAiDeposits();
 
     // Przypisywanie kont bankowych spółkom
     console.log("[START GRY] Przypisywanie kont bankowych spółkom..."); // Log informacyjny
