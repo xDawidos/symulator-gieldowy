@@ -4321,7 +4321,7 @@ function renderCompanyCardOverview(stock) {
 
 function describeForeignCompany(stock) {
     const def = COUNTRY_DEFS[stock.country];
-    const parts = [stock.desc, `${stock.name} jest notowana na giełdzie kraju: ${def?.name || stock.country} (${stock.exchangeLabel}), kwoty w ${stock.nativeCurrency}; w tej karcie przeliczone na złote po bieżącym kursie.`];
+    const parts = [stock.desc, `${stock.name} jest notowana na giełdzie kraju: ${def?.name || stock.country} (${stock.exchangeLabel}), kwoty w ${stock.nativeCurrency}; w tej karcie przeliczone na ${getBaseCurrency()} po bieżącym kursie.`];
     if (stock.giant) parts.push('Gigant swojego rynku.');
     if (stock.isStateOwned) parts.push(`Państwo trzyma ${Math.round(COUNTRY_RULES.statePct * 100)}% akcji (poza wolnym obrotem).`);
     return parts.filter(Boolean).join(' ');
@@ -4331,7 +4331,7 @@ function renderForeignCardOwners(stock) {
     const i = stock.foreignSource, total = Math.max(1, i.shares), pct = n => `${formatNumberPl(n / total * 100, 2)}%`;
     const names = id => id === 'player' ? 'Twój fundusz' : (aiCompetitors.find(b => b.id === id)?.name || id);
     const holders = Object.entries(i.holders || {}).filter(([, q]) => q > 0).sort((a, b) => b[1] - a[1]);
-    const rows = [...(i.statePack > 0 ? [['Skarb Państwa', i.statePack]] : []), ...holders.map(([id, q]) => [names(id), q]), ['Wolne akcje na rynku', Math.max(0, getGdrFree(i))]];
+    const rows = [...(i.statePack > 0 ? [['Skarb Państwa', i.statePack]] : []), ...(i.parentPack > 0 ? [[`Spółka matka: ${getForeignParent(i)?.name || '—'}`, i.parentPack]] : []), ...holders.map(([id, q]) => [names(id), q]), ['Wolne akcje na rynku', Math.max(0, getGdrFree(i))]];
     return `<p class="text-sm">Fundusz: <strong>${pct(getGdrHeld(i))}</strong> · wolny obrót: <strong>${formatNumberPl(Math.max(0, getGdrFree(i)), 0)}</strong> z ${formatNumberPl(i.shares, 0)} akcji.</p>
         <table class="asset-mini-table w-full"><thead><tr><th>Akcjonariusz</th><th class="cell-number">Akcje</th><th class="cell-number">Udział</th></tr></thead><tbody>${rows.map(([n, q]) => `<tr><td>${escapeHtml(n)}</td><td class="cell-number">${formatNumberPl(q, 0)}</td><td class="cell-number">${pct(q)}</td></tr>`).join('')}</tbody></table>`;
 }
@@ -4343,7 +4343,10 @@ function renderForeignCardManage(stock) {
 }
 
 function renderForeignCardGroup(stock) {
-    const i = stock.foreignSource;
+    const i = stock.foreignSource, parent = getForeignParent(i), kids = getForeignChildren(i);
+    const link = x => `<a href="#" onclick="openDescriptionModal('${getShareSymbol(x)}'); return false;">${escapeHtml(x.name)}</a> <span class="text-muted">${escapeHtml(getShareSymbol(x))}</span>`;
+    if (parent || kids.length) return `<p class="text-sm">${parent ? `↑ ${getForeignSubsidiaryKind(i)} — matka: ${link(parent)} (pakiet ${Math.round(i.parentPack / i.shares * 100)}%, poza wolnym obrotem).` : `${escapeHtml(i.name)} ma ${kids.length} z ${FOREIGN_SUB.max} możliwych spółek powiązanych (jedna córka, reszta zależne).`}</p>
+        <ul class="list-plain text-sm">${kids.map(c => `<li>↳ ${getForeignSubsidiaryKind(c)}: ${link(c)} — ${Math.round(c.parentPack / c.shares * 100)}% w rękach matki</li>`).join('')}</ul><p class="text-xs text-muted">Rynek: ${escapeHtml(stock.exchangeLabel)}.</p>`;
     return `<p class="text-sm">${escapeHtml(i.name)} to spółka niezależna: nie ma spółek zależnych ani kooperantów w grze. ${i.giant ? 'Gigant rynku kraju (większe wahania wpływają na cały indeks kraju).' : ''}${i.state ? ' Pakiet państwa należy do skarbu kraju spółki.' : ''}</p>
         <p class="text-xs text-muted">Rynek: ${escapeHtml(stock.exchangeLabel)}.</p>`;
 }
