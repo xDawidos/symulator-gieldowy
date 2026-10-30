@@ -3853,7 +3853,7 @@ function updateTradeLockAfterTick(stock) {
     stock.belowOneTicks = stock.price < 1.00 ? (stock.belowOneTicks || 0) + 1 : 0;
     if (stock.price < 1.00 && !stock.isTradeLocked && !stock.tradeHalted && stock.belowOneTicks >= 120) {
         stock.isTradeLocked = true;
-        logEvent(`⛔ Handel akcjami ${stock.name} (${stock.symbol}) wstrzymany — kurs od dwóch tygodni poniżej 1 PLN.`, 'review');
+        logEvent(`⛔ Handel akcjami ${stock.name} (${stock.symbol}) wstrzymany — kurs od dwóch tygodni poniżej ${formatZl(1, 0)}.`, 'review');
     } else if (stock.price > 1.50 && stock.isTradeLocked && !stock.tradeHalted) {
         stock.isTradeLocked = false;
         logEvent(`✅ Wznowiono handel akcjami ${stock.name} (${stock.symbol}).`, 'review');
@@ -4437,7 +4437,7 @@ function issueStateBonds() {
 function checkTBillAccess() {
     if (!playerHasTBillAccess && calculateNetWorth('player') >= 100000) {
         playerHasTBillAccess = true;
-        logEvent("💰 Osiągnięto próg 100,000 PLN wartości netto! Odblokowano dostęp do aukcji bonów skarbowych w Banku Centralnym.", 'success');
+        logEvent(`💰 Osiągnięto próg ${formatZl(100000, 0)} wartości netto! Odblokowano dostęp do aukcji bonów skarbowych w Banku Centralnym.`, 'success');
         showToast("Odblokowano aukcje bonów skarbowych!", 'success');
         // Odśwież widok banku, jeśli jest otwarty
         if (document.getElementById('bank-modal').style.display === 'block') {
@@ -4459,7 +4459,7 @@ function placeTBillBid(bidder, quantity, price) {
         return false;
     }
     if (isNaN(quantity) || quantity <= 0 || isNaN(price) || price <= 0 || price >= 1000) {
-        if (bidder === 'player') alert("Wprowadź poprawną ilość i cenę (poniżej 1000 PLN).");
+        if (bidder === 'player') alert(`Wprowadź poprawną ilość i cenę (poniżej ${formatZl(1000, 0)}).`);
         return false;
     }
 
@@ -5081,7 +5081,7 @@ function supportElectionCampaign(partyId, amount) {
     election.donations = { market: 0, state: 0, people: 0, social: 0, ...(election.donations || {}) };
     const assets = getFundAssets();
     const given = Object.values(election.donations).reduce((sum, value) => sum + (Number(value) || 0), 0);
-    if (!(amount >= 100)) { showToast('Minimalna darowizna: 100 PLN.', 'warning'); return false; }
+    if (!(amount >= 100)) { showToast(`Minimalna darowizna: ${formatZl(100, 0)}.`, 'warning'); return false; }
     if (given + amount > assets * ELECTION_DONATION_LIMIT) { showToast(`Limit: 2% aktywów funduszu na kampanię (zostało ${formatZl(Math.max(0, assets * ELECTION_DONATION_LIMIT - given), 0)}).`, 'warning'); return false; }
     if (playerCash < amount) { showToast('Za mało gotówki funduszu.', 'error'); return false; }
     playerCash -= amount;

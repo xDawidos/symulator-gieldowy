@@ -2494,14 +2494,14 @@ function giveGiftToBot(id, amount) {
     const person = findRelationPerson(id);
     amount = Math.floor(Number(amount));
     if (!person) return false;
-    if (!(amount >= 100)) { showToast('Prezent: minimum 100 PLN.', 'warning'); return false; }
+    if (!(amount >= 100)) { showToast(`Prezent: minimum ${formatZl(100, 0)}.`, 'warning'); return false; }
     if (playerWallet.cash < amount) { showToast('Za mało pieniędzy w portfelu prywatnym.', 'error'); return false; }
     const quarter = typeof macro === 'object' ? macro.quarter : 0;
     if (botRelations.lastGift[id] === quarter) { showToast(`${person.name} dostał już prezent w tym kwartale.`, 'warning'); return false; }
     // B1: charaktery i malejący efekt — przyjaźni nie da się po prostu kupić.
     const personality = person.entity.personality;
     if (personality === 'calm') { showToast(`${person.name} grzecznie odmawia przyjęcia prezentu.`, 'default'); return false; }
-    if (['whale', 'pro_investor'].includes(personality) && amount < 1000) { showToast(`${person.name} nie zauważa tak drobnych gestów (minimum 1000 PLN).`, 'default'); return false; }
+    if (['whale', 'pro_investor'].includes(personality) && amount < 1000) { showToast(`${person.name} nie zauważa tak drobnych gestów (minimum ${formatZl(1000, 0)}).`, 'default'); return false; }
     playerWallet.cash -= amount;
     if (person.kind === 'investor') person.entity.cash += amount;
     else person.entity.fund.cash += amount;
@@ -2748,7 +2748,7 @@ function renderCorporationFirm() {
         </div>
         <h4>Relacje (−100…100)</h4>
         <p class="fund-muted">Wymuszanie dywidend, zrzucanie pakietów i ataki na spółki botów psują relacje; prezenty (portfel prywatny, raz na kwartał), wspieranie ich spółek (zakup pakietu, datek) i odkupienie pakietu — poprawiają. Wrodzy boty szydzą, skupują akcje Twoich spółek i próbują je przejąć; przyjaźni dają rady i pakiety z rabatem.</p>
-        <table class="asset-mini-table w-full"><thead><tr><th>Osoba</th><th>Relacja</th><th></th><th>Prezent (PLN)</th></tr></thead><tbody>${relations}</tbody></table>
+        <table class="asset-mini-table w-full"><thead><tr><th>Osoba</th><th>Relacja</th><th></th><th>Prezent (${getBaseCurrency()})</th></tr></thead><tbody>${relations}</tbody></table>
         <h4>Ostatnie zmiany</h4><ul class="list-plain text-sm">${log || '<li class="text-muted">Brak zmian.</li>'}</ul>`;
 }
 
@@ -2774,7 +2774,7 @@ function checkPoliceChiefSpawn() {
             };
             aiCompetitors.push(jakub);
             if (typeof logEvent === 'function') {
-                logEvent('🚓 Program policyjny: Komendant Jakub dołącza do inwestorów giełdowych (kapitał 5 000 PLN, spółki defensywne).', 'state');
+                logEvent(`🚓 Program policyjny: Komendant Jakub dołącza do inwestorów giełdowych (kapitał ${formatZl(5000, 0)}, spółki defensywne).`, 'state');
             }
         }
         return jakub;

@@ -14581,4 +14581,24 @@ group('0.16.9 W1 Gotówka w wielu walutach', () => {
         for (let k = 0; k < 40; k++) processForeignMaQuarterly();
         assertEq(checkWorldInvariants().length, 0, 'niezmienniki po pętli kwartalnej');
     }));
+
+    // --- 0.16.12 D4: giełda macierzysta z danych kraju, etykiety, waluta w tekstach ---
+    test('0.16.12 D4: nagłówek giełdy macierzystej z danych kraju (DAX/WSE/PX), spółka UNI → kraj i waluta rynku macierzystego, PL bez zmian', () => withSubLinks(() => {
+        resetWorld([mk156('CTX', { price: 10 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+        assertEq(getMarketLabel('GPW'), 'GPW', 'PL: GPW'); assertEq(getMarketDef('GPW').name, 'Giełda Papierów Wartościowych');
+        assertEq(getCompanyCountryNote({ symbol: 'CTX', name: 'Cortex' }), 'Polska · PLN', 'PL: Polska · PLN'); assertEq(getHomeCityLabel(), 'Warszawa (GPW)');
+        for (const [country, op, name, note, currency] of [['DE', 'DAX', 'Frankfurter Börsenhaus', 'Niemcy · EUR', 'EUR'], ['US', 'WSE', 'Wall Street Exchange', 'USA · USD', 'USD'], ['CZ', 'PX', 'Burza Praha', 'Czechy · CZK', 'CZK']]) {
+            resetGdrState(); initFxState(); resetWorld([mk156('CTX', { price: 10 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' }); setStartCountry(country);
+            assertEq(getMarketLabel('GPW'), op, `${country}: skrót giełdy macierzystej`); assertEq(getMarketDef('GPW').name, name, `${country}: nazwa giełdy`);
+            assertEq(getCompanyCountryNote({ symbol: 'CTX', name: 'Cortex' }), note, `${country}: etykieta spółki uniwersalnej`); assert(getHomeCityLabel().includes(`(${op})`));
+            assertEq(getBaseCurrency(), currency); assertEq(localizeCurrencyText('Cena 20 PLN, kapitalizacja 2 mln zł na GPW'), `Cena 20 ${currency}, kapitalizacja 2 mln ${currency} na ${op}`, 'przykład z Akademii: tylko etykieta');
+            assertEq(localizeCurrencyText('Odblokuj · 1 000 PLN', true), `Odblokuj · ${formatZl(1000, 0)}`, 'statyczna kwota przeliczona na walutę bazową');
+        }
+        resetGdrState(); initFxState(); resetWorld([mk156('CTX', { price: 10 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+        assertEq(localizeCurrencyText('10 PLN na GPW', true), '10 PLN na GPW', 'PL: tekst bez zmian');
+    }));
+    test('0.16.12 D4: maile i dziennik pokazują kwoty w walucie bazowej konta (formatZl), nie w literale PLN', () => withSubLinks(() => {
+        resetWorld([mk156('CTX', { price: 10 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' }); setStartCountry('DE');
+        assert(getBaseCurrency() === 'EUR' && formatZl(100000, 0).endsWith('EUR') && formatZl(100000, 0).startsWith('25'), 'kwota przeliczona na EUR (÷4)');
+    }));
 });

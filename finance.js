@@ -993,7 +993,7 @@ function assignEliteExchanges() {
         stock.exchange = next;
         applyEliteBonuses(stock);
         applyPriceEffect(stock.symbol, up ? 0.03 : -0.03, up ? 'positive' : 'negative', 'review');
-        logEvent(`${up ? '📈 AWANS' : '📉 SPADEK'}: ${stock.name} ${up ? 'wchodzi na' : 'spada na'} ${exchanges[next].name} (kapitalizacja ${(getMarketCap(stock) / 1e6).toFixed(1)} mln PLN).`, 'market');
+        logEvent(`${up ? '📈 AWANS' : '📉 SPADEK'}: ${stock.name} ${up ? 'wchodzi na' : 'spada na'} ${exchanges[next].name} (kapitalizacja ${formatPLNShort(getMarketCap(stock))}).`, 'market');
         changes.push([stock.symbol, next]);
     }
     return changes;
@@ -1785,7 +1785,14 @@ const INTERNET_MARKET_POOL = [
 ];
 
 /** Definicja rynku: stała (GPW, XTD, PLU5, Euronext) albo zapisana przy rynku powstałym w trakcie gry. */
+/** 0.16.12 D4: giełda macierzysta (wewnętrzny klucz 'GPW') pod nazwą z danych kraju startowego: DAX/WSE/PX…; przy PL bez zmian. */
+function getHomeMarketDef() {
+    const base = MARKET_OPERATOR_DEFS.GPW, country = typeof getStartCountry === 'function' ? getStartCountry() : 'PL', op = typeof COUNTRY_DEFS === 'object' ? COUNTRY_DEFS[country]?.operator : null;
+    return country === 'PL' || !op ? base : { ...base, name: op.name.replace(/\s*\([^)]*\)\s*$/, ''), short: op.id };
+}
+
 function getMarketDef(id) {
+    if (id === 'GPW') return getHomeMarketDef();
     return MARKET_OPERATOR_DEFS[id] || (typeof marketOperators === 'object' && marketOperators ? marketOperators[id]?.def : null) || null;
 }
 
@@ -2019,7 +2026,7 @@ function activateMarketOperator(startup) {
     const fresh = Math.max(Math.min(1, count), Math.round(count * 0.7));
     for (let i = 0; i < fresh; i++) spawnMarketMember(operator.id, 'otwarcie nowego rynku');
     for (let i = fresh; i < count; i++) signExclusivity(operator, startup);
-    logEvent(`🏛️ ${getMarketDef(operator.id).name} debiutuje i otwiera własny rynek internetowy: ${fresh} nowych spółek${count > fresh ? `, ${count - fresh} przechodzi z GPW` : ''}!`, 'market');
+    logEvent(`🏛️ ${getMarketDef(operator.id).name} debiutuje i otwiera własny rynek internetowy: ${fresh} nowych spółek${count > fresh ? `, ${count - fresh} przechodzi z ${getMarketLabel('GPW')}` : ''}!`, 'market');
 }
 
 /** Upadek startupu-operatora (wołane z removeStartup). */
@@ -2263,7 +2270,7 @@ function renderMarketsPanel() {
                 <div><dt>Spółki</dt><dd>${operator.members}</dd></div>
                 ${typeof getMarketMinFee === 'function' ? `<div><dt>Opłata minimalna</dt><dd>${getMarketMinFee(operator.id) > 0 ? `${formatZl(getMarketMinFee(operator.id), 0)} / kw.` : operator.id === 'PRV' ? 'brak (nie ma operatora; ryzyko oszustw ×5 już ją obciąża)' : 'brak'}</dd></div>` : ''}
                 ${typeof describeMarketProfile === 'function' && isInternetMarket(operator.id) ? `<div><dt>Profil giełdy</dt><dd>${escapeHtml(describeMarketProfile(operator.id))}</dd></div>` : ''}
-                <div><dt>Kurs operatora</dt><dd>${stock ? formatZl(stock.price) : (def.entry ? 'bez operatora' : operator.status === 'active' ? 'GPW (rynek gł.)' : '—')}</dd></div>
+                <div><dt>Kurs operatora</dt><dd>${stock ? formatZl(stock.price) : (def.entry ? 'bez operatora' : operator.status === 'active' ? `${getMarketLabel('GPW')} (rynek gł.)` : '—')}</dd></div>
             </dl>
             ${startup ? `<p class="text-sm">Finansowanie startupu: ${formatZl(startup.currentFunding, 0)} / ${formatZl(startup.fundingGoal, 0)} · sponsorzy: ${operator.sponsors.length}</p>` : ''}
             ${operator.commissionsTotal > 0 ? `<p class="text-xs text-muted">Prowizje łącznie: ${formatZl(operator.commissionsTotal, 0)}</p>` : ''}

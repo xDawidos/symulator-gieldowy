@@ -107,7 +107,7 @@ function renderMarketsTab() {
         ${renderCountryCard(id)}
         ${id === 'CH' ? renderHiddenCashCard() : ''}
         ${access ? '' : `<p class="text-sm" role="status">Brak biletu na ten rynek — kupowanie jest zablokowane (sprzedaż posiadanych akcji działa). Bilet kupisz w Internecie, na stronie Ferie i wakacje (${formatZl(getTicketPrice(id), 0)}).</p>`}
-        ${countryState[id]?.link ? `<p class="text-sm" role="status">Giełda połączona z naszą: spółki ${escapeHtml(def.name)} (${id}) są na głównej liście akcji, na poziomach naszych giełd (wg ceny i kapitalizacji), z kupnem i sprzedażą jak krajowe (prowizja krajowa, bez biletu; dostęp wg poziomu giełdy). Tu zostają kursy walut, forex i kwity GDR.</p>` : `<table class="asset-mini-table w-full mt-3"><thead><tr><th>Spółka</th><th>Sektor</th><th class="text-right">Cena (waluta)</th><th class="text-right">Cena w PLN</th><th class="text-right">Twoje akcje</th><th class="text-right">Zlecenie</th></tr></thead><tbody>${rows}</tbody></table>`}
+        ${countryState[id]?.link ? `<p class="text-sm" role="status">Giełda połączona z naszą: spółki ${escapeHtml(def.name)} (${id}) są na głównej liście akcji, na poziomach naszych giełd (wg ceny i kapitalizacji), z kupnem i sprzedażą jak krajowe (prowizja krajowa, bez biletu; dostęp wg poziomu giełdy). Tu zostają kursy walut, forex i kwity GDR.</p>` : `<table class="asset-mini-table w-full mt-3"><thead><tr><th>Spółka</th><th>Sektor</th><th class="text-right">Cena (waluta)</th><th class="text-right">Cena w ${getBaseCurrency()}</th><th class="text-right">Twoje akcje</th><th class="text-right">Zlecenie</th></tr></thead><tbody>${rows}</tbody></table>`}
         <p class="text-sm text-muted">Kupno płacisz najpierw gotówką w ${def.currency}, resztę wymienia kantor (spread). Prowizja ${formatNumberPl(getCountryCommission(id) * 100, 1)}%. Wpływy ze sprzedaży trafiają na konto walutowe — złotówki dostaniesz w kantorze. Zysk to zmiana ceny <em>i</em> kursu ${def.currency}; ceny zawierają dywidendy.</p>`;
 }
 
@@ -181,7 +181,7 @@ function renderLinksCard() {
     const hint = chance >= 0.16 ? 'wysoka' : chance >= 0.04 ? 'rośnie' : 'niska';
     const rows = linked.map(id => `<li>${flagIcon(id, 12)} <strong>${escapeHtml(COUNTRY_DEFS[id].name)}</strong> — ${LINK_KIND_LABELS[countryState[id].link]}; bez biletu, prowizja ${formatNumberPl(LINK_RULES.domesticCommission * 100, 2)}%</li>`).join('');
     const intl = exchangeLinks.intl ? `<p class="text-sm">Giełda międzynarodowa: ${['PL', ...exchangeLinks.intl.members.filter(m => m !== 'PL')].map(m => escapeHtml(m === 'PL' ? 'Polska' : COUNTRY_DEFS[m]?.name || m)).join(', ')}.</p>` : '';
-    const taken = exchangeLinks.takenBy ? `<p class="text-sm text-warn">Wariant B: nasza giełda należy do ${escapeHtml(COUNTRY_DEFS[exchangeLinks.takenBy].name)} — opłaty za notowanie na GPW ×${LINK_RULES.listingFeeMult}.</p>` : '';
+    const taken = exchangeLinks.takenBy ? `<p class="text-sm text-warn">Wariant B: nasza giełda należy do ${escapeHtml(COUNTRY_DEFS[exchangeLinks.takenBy].name)} — opłaty za notowanie na ${getMarketLabel('GPW')} ×${LINK_RULES.listingFeeMult}.</p>` : '';
     const community = isEuropeanCommunity() ? '<p class="text-sm">Wspólnota europejska giełd działa — na rynku gra europejski hazardzista.</p>' : `<p class="text-sm text-muted">Wspólnota europejska powstanie, gdy na giełdzie będą ${LINK_RULES.communityMin} kraje europejskie (teraz ${countEuropeanJoined()}).</p>`;
     return `<div class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('rynek', 20)}</span><div><h4>Połączone giełdy</h4><span class="bank-card-type">szansa na kolejne połączenie: ${hint}</span></div></header>
         ${linked.length ? `<ul class="text-sm">${rows}</ul>` : '<p class="text-sm text-muted">Żadna giełda nie jest jeszcze połączona z naszą. Połączenie (przejęcie, giełda międzynarodowa albo przejęcie nas) zdarza się samo, od drugiego roku gry.</p>'}
@@ -205,7 +205,7 @@ function onLinkEvent(entry) {
     if (typeof isGamePaused !== 'undefined' && !isGamePaused && typeof togglePauseGame === 'function') togglePauseGame();
     document.getElementById('link-event-title').textContent = titles[entry.kind];
     const effects = entry.kind === 'taken'
-        ? `<li>Opłaty za notowanie na GPW rosną ×${LINK_RULES.listingFeeMult}.</li><li>Kurs GPW spada o ok. ${Math.round(entry.drop * 100)}% w ${LINK_RULES.dropQuarters} kwartały.</li>`
+        ? `<li>Opłaty za notowanie na ${getMarketLabel('GPW')} rosną ×${LINK_RULES.listingFeeMult}.</li><li>Kurs ${getMarketLabel('GPW')} spada o ok. ${Math.round(entry.drop * 100)}% w ${LINK_RULES.dropQuarters} kwartały.</li>`
         : '<li>Spółki kraju kupisz bez biletu, z prowizją krajową.</li>';
     document.getElementById('link-event-body').innerHTML = `<p>${escapeHtml(entry.text)}</p><ul class="text-sm">${effects}</ul><div class="btn-row"><button class="btn-primary" onclick="closeModalFrom(this)">Rozumiem — wznów grę</button></div>`;
     modal.style.display = 'block';

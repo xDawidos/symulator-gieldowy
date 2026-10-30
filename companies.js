@@ -9150,7 +9150,7 @@ function fundTopUpInvestment(symbol, uid, amount, mode) {
     amount = Math.floor(Number(amount));
     if (!stock || !project) { showToast('Inwestycja nie jest już w toku.', 'error'); return false; }
     if (!canFundTopUp(stock)) { showToast('Dopłata wymaga większości (> 50%) akcji w funduszu.', 'warning'); return false; }
-    if (!(amount >= 100) || amount > playerCash) { showToast('Za mało gotówki funduszu (minimum 100 PLN).', 'error'); return false; }
+    if (!(amount >= 100) || amount > playerCash) { showToast(`Za mało gotówki funduszu (minimum ${formatZl(100, 0)}).`, 'error'); return false; }
     const remaining = Math.max(0, project.cost - (project.fundTopUp || 0));
     amount = Math.min(amount, remaining);
     if (!(amount > 0)) { showToast('Fundusz sfinansował już całą inwestycję.', 'default'); return false; }

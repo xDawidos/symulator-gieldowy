@@ -2142,9 +2142,7 @@ function displayStocks(previousInputValues = {}) {
     cell.colSpan = STOCK_TABLE_COLS;
     
     const currDef = (typeof getMarketDef === 'function' ? getMarketDef(selectedMarketOperator) : null) || { name: selectedMarketOperator, short: selectedMarketOperator };
-    const currTitle = selectedMarketOperator === 'GPW'
-        ? 'GPW — GIEŁDA PAPIERÓW WARTOŚCIOWYCH'
-        : `${escapeHtml(currDef.short || selectedMarketOperator)} — ${escapeHtml((currDef.name || selectedMarketOperator).toUpperCase())}`;
+    const currTitle = `${escapeHtml(currDef.short || selectedMarketOperator)} — ${escapeHtml((currDef.name || selectedMarketOperator).toUpperCase())}`; // 0.16.12 D4: giełda macierzysta z danych kraju startowego
 
     const marketCards = activeMarkets.map(m => {
         const def = (typeof getMarketDef === 'function' ? getMarketDef(m.id) : null) || { name: m.id, short: m.id };
@@ -3103,7 +3101,7 @@ function openManagementModal(symbol, defaultTab = 'main') {
                 financesInfo.className = 'text-up';
             } else {
                 viewFinancesBtn.disabled = false;
-                financesInfo.textContent = 'Wymagana opłata: 2000 PLN.';
+                financesInfo.textContent = `Wymagana opłata: ${formatZl(2000, 0)}.`;
                 financesInfo.className = 'text-muted';
             }
         } else {
@@ -4506,7 +4504,7 @@ function updateStateOfferInfo() {
     if (!select || !quantityInput || !costLabel || !cooldownLabel) return;
 
     if (!select.value) {
-        costLabel.textContent = "0.00 PLN";
+        costLabel.textContent = formatZl(0);
         cooldownLabel.textContent = "Wybierz spółkę.";
         return;
     }
@@ -5134,7 +5132,7 @@ function renderFestivalView(festivalContainer) {
         <div class="bank-section">
             <p>Koniec za: <strong>${timeLeft}s</strong> | Zainteresowanie wydarzeniem: <strong>${formatNumberPl(festival.globalInterest, 1)}</strong></p>
             <p class="text-sm">Atrakcje: ${festival.attractions.join(', ')}</p>
-            <button onclick="playerPromoteEvent()">Promuj wydarzenie (500 PLN)</button>
+            <button onclick="playerPromoteEvent()">Promuj wydarzenie (${formatZl(500, 0)})</button>
         </div>
         <div class="bank-section">
             ${playerSectionHTML}
@@ -7109,7 +7107,7 @@ function renderPrivatePanel() {
         <ul class="fund-private-list">${holdings}</ul>
         <div class="fund-emission">
             <input type="number" id="private-ju-amount" min="1" value="50" aria-label="Kwota lub liczba udziałów">
-            <button class="btn-secondary" onclick="buyOwnFundUnits(document.getElementById('private-ju-amount').value)">Kup udziały za PLN</button>
+            <button class="btn-secondary" onclick="buyOwnFundUnits(document.getElementById('private-ju-amount').value)">Kup udziały za ${getBaseCurrency()}</button>
             <button class="btn-secondary" onclick="sellOwnFundUnits(document.getElementById('private-ju-amount').value)">Umórz udziały</button>
         </div>
         <p class="fund-muted">Prywatny handel akcjami: przełącz konto na „Konto prywatne” i kupuj w tabeli rynku.
@@ -7278,7 +7276,7 @@ function displayXP() {
 const INTRO_SMS = [
     'Cześć Wnusiu! 😊',
     'Słyszałam, że dostałeś pracę w tej wielkiej firmie od pieniędzy. Jestem z Ciebie taka dumna! ❤️',
-    'Wysyłam Ci 100 zł kieszonkowego na dobry start. Kup sobie coś mądrego, może jakąś książkę albo kurs.',
+    'Wysyłam Ci {kasa} kieszonkowego na dobry start. Kup sobie coś mądrego, może jakąś książkę albo kurs.',
     'Tylko nie przepuść wszystkiego od razu! Całuję, Babcia 👵'
 ];
 
@@ -7305,7 +7303,7 @@ function showIntroScene() {
         if (index >= INTRO_SMS.length) {
             const transfer = document.createElement('div');
             transfer.className = 'intro-transfer';
-            transfer.textContent = `💸 Przelew przychodzący: +${GRANDMA_POCKET_MONEY},00 zł od: Babcia`;
+            transfer.textContent = `💸 Przelew przychodzący: +${formatZl(GRANDMA_POCKET_MONEY)} od: Babcia`;
             thread.appendChild(transfer);
             form.hidden = false;
             return;
@@ -7316,7 +7314,7 @@ function showIntroScene() {
         thread.appendChild(bubble);
         setTimeout(() => {
             bubble.classList.remove('typing');
-            bubble.textContent = INTRO_SMS[index++];
+            bubble.textContent = INTRO_SMS[index++].replace('{kasa}', formatZl(GRANDMA_POCKET_MONEY, 0));
             setTimeout(typeNext, 450);
         }, 700);
     };

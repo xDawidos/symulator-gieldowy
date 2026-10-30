@@ -1282,14 +1282,14 @@ function renderAcademyPanel() {
         const quiz = entry.quiz.map((q, qi) => {
             const order = getQuizOrder(selected, qi, q.a.length);
             const chosen = result ? Number(academyView.answers?.[qi]) : null;
-            return `<fieldset class="academy-q"><legend>${qi + 1}. ${escapeHtml(q.q)}</legend>
-                ${order.map(ai => `<label class="${result ? (ai === q.c ? 'text-up' : ai === chosen ? 'text-down' : '') : ''}"><input type="radio" name="aq-${qi}" value="${ai}" ${chosen === ai ? 'checked' : ''}> ${escapeHtml(q.a[ai])}</label>`).join('')}
+            return `<fieldset class="academy-q"><legend>${qi + 1}. ${escapeHtml(localizeCurrencyText(q.q))}</legend>
+                ${order.map(ai => `<label class="${result ? (ai === q.c ? 'text-up' : ai === chosen ? 'text-down' : '') : ''}"><input type="radio" name="aq-${qi}" value="${ai}" ${chosen === ai ? 'checked' : ''}> ${escapeHtml(localizeCurrencyText(q.a[ai]))}</label>`).join('')}
             </fieldset>`;
         }).join('');
         detail = `
             <h3 class="mt-0">${entry.icon} ${escapeHtml(entry.title)}</h3>
-            <p>${escapeHtml(entry.text)}</p>
-            ${example ? `<p class="academy-example">🎮 <strong>W Twojej grze:</strong> ${escapeHtml(example)}</p>` : ''}
+            <p>${escapeHtml(localizeCurrencyText(entry.text))}</p>
+            ${example ? `<p class="academy-example">🎮 <strong>W Twojej grze:</strong> ${escapeHtml(localizeCurrencyText(example))}</p>` : ''}
             <h4>Quiz ${academy.quizzes[selected] ? '— zaliczony ✔' : `— za zaliczenie ${formatZl(ACADEMY_QUIZ_REWARD, 0)}`}</h4>
             ${quiz}
             ${result ? `<p class="${result.passed ? 'text-up' : 'text-down'}">${result.passed ? '✅ Wszystko dobrze!' : `Poprawne: ${result.correct}/${result.total} — spróbuj jeszcze raz.`}</p>` : ''}

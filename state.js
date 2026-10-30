@@ -522,7 +522,7 @@ function investInPpp(offerId, amount) {
     amount = Math.floor(Number(amount));
     if (!offer) { showToast('Oferta PPP nieaktualna.', 'error'); return null; }
     amount = Math.min(amount, offer.total - offer.raised);
-    if (!(amount >= 100)) { showToast('Minimalny udział: 100 PLN.', 'error'); return null; }
+    if (!(amount >= 100)) { showToast(`Minimalny udział: ${formatZl(100, 0)}.`, 'error'); return null; }
     if (amount > playerCash) { showToast('Za mało gotówki funduszu.', 'error'); return null; }
     if (amount > getFundPppCapacity() + 1e-6) { showToast(`Limit PPP: ${(PPP_FUND_LIMIT * 100).toFixed(0)}% aktywów funduszu.`, 'error'); return null; }
 
@@ -1090,7 +1090,7 @@ function buyProjectBond(projectId, amount) {
     if (!project) { showToast('Projekt nie jest już realizowany.', 'warning'); return false; }
     const room = project.cost * PROJECT_BOND_MAX_SHARE - getProjectBondTotal(project);
     const fundRoom = getFundAssets() * PROJECT_BOND_FUND_LIMIT - getFundProjectBondsValue();
-    if (!(amount >= 100)) { showToast('Minimalna kwota obligacji: 100 PLN.', 'warning'); return false; }
+    if (!(amount >= 100)) { showToast(`Minimalna kwota obligacji: ${formatZl(100, 0)}.`, 'warning'); return false; }
     if (amount > room) { showToast(`Emisja obligacji tego projektu: zostało ${formatZl(Math.max(0, room), 0)}.`, 'warning'); return false; }
     if (amount > fundRoom) { showToast(`Limit funduszu (10% aktywów): zostało ${formatZl(Math.max(0, fundRoom), 0)}.`, 'warning'); return false; }
     if (playerCash < amount) { showToast('Za mało gotówki funduszu.', 'error'); return false; }
@@ -1615,7 +1615,7 @@ function fundInstitution(institution, amount) {
 function donateToInstitution(kind, amount) {
     const institution = oversight[kind];
     amount = Math.floor(Number(amount));
-    if (!institution || !(amount >= 100)) { showToast('Dotacja: minimum 100 PLN.', 'warning'); return false; }
+    if (!institution || !(amount >= 100)) { showToast(`Dotacja: minimum ${formatZl(100, 0)}.`, 'warning'); return false; }
     if (playerWallet.cash < amount) { showToast('Za mało pieniędzy w portfelu prywatnym.', 'error'); return false; }
     playerWallet.cash -= amount;
     oversight.decentScore = (Number(oversight.decentScore) || 0) + amount;

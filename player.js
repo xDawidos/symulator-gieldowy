@@ -730,7 +730,7 @@ function withdrawFromPool(amount) {
 
 /** Status puli dla panelu: dlaczego pieniądze czekają. */
 function getPoolStatus() {
-    if ((Number(investmentPool.totalFunds) || 0) < 1000) return { code: 'low', text: 'Za mało środków (min. 1000 PLN) — pula czeka na wpłaty.' };
+    if ((Number(investmentPool.totalFunds) || 0) < 1000) return { code: 'low', text: `Za mało środków (min. ${formatZl(1000, 0)}) — pula czeka na wpłaty.` };
     const open = stocks.some(s => s.assetType === 'Startup' && s.stage === 'funding' && getStartupFundingGap(s) >= 1);
     if (!open) return { code: 'noTargets', text: 'Pula czeka: brak startupów w fazie zbiórki.' };
     return { code: 'ready', text: `Następna inwestycja za ${Math.max(0, Math.ceil((Number(investmentPool.investmentTimer) || 0) / 1000))} s gry.` };
@@ -3625,8 +3625,8 @@ function checkMilestones(period) {
     const m = corporation.milestones;
     if (!m.fund100k && getFundAssets() >= 100000) {
         m.fund100k = Date.now();
-        playerProfile.cv.push({ type: 'milestone', text: 'Fundusz przekroczył 100 000 PLN aktywów.' });
-        logEvent('🏅 Kamień milowy: fundusz powyżej 100 000 PLN!', 'review');
+        playerProfile.cv.push({ type: 'milestone', text: `Fundusz przekroczył ${formatZl(100000, 0)} aktywów.` });
+        logEvent(`🏅 Kamień milowy: fundusz powyżej ${formatZl(100000, 0)}!`, 'review');
     }
     const last4 = playerFund.periods.slice(-4);
     if (!m.beatGig4 && last4.length === 4 && last4.every(p => p.fundReturn > p.benchmarkReturn)) {

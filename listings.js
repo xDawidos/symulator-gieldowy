@@ -173,7 +173,7 @@ function processNewHorizonsQuarterly() {
 
 // --- E3: ścieżka startupu i Włoska Giełda ---
 // Debiut: kapitalizacja ≥ wymóg GPW → GPW (gdy brak miejsca: czeka w inkubatorze); ≥ wymóg NH → NH; poniżej → Włoska Giełda.
-// NH → po NH_PROMOTE_MIN_AGE kw.: awans na GPW (spełnia wymogi), a słabe spółki: Włoska Giełda albo firma prywatna (wykup).
+// NH → po NH_PROMOTE_MIN_AGE kw.: awans na ${getMarketLabel('GPW')} (spełnia wymogi), a słabe spółki: Włoska Giełda albo firma prywatna (wykup).
 // Włoska Giełda: szansa startu oszustwa ×5 względem GPW (kwartalnie), wykrycie później (4–10 kw.), mocniejszy spadek po ujawnieniu,
 // upadek ×1,5 (ENTRY_MARKET_RULES), pojemność ≤ 10% spółek, gracz najwyżej 20% wartości funduszu.
 const LISTING_RULES = { debutRouting: true };   // testy starsze od 0.15.6 wyłączają w resetWorld (debiut zawsze na GPW)
@@ -552,7 +552,7 @@ function renderListingPathPanel() {
         <dl class="bank-card-rates">${rows.map(([k, v]) => `<div><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd></div>`).join("")}</dl><p class="text-sm">${escapeHtml(note)}</p></article>`;
     const profit = (req, exempt) => req.profit ? (exempt ? 'zysk (bez wymogu dla spółek innowacyjnych)' : 'dodatni zysk') : 'brak wymogu';
     return `<h4 class="mt-3">Ścieżka spółki i wymogi wejścia</h4>
-        <ol class="list-plain text-sm"><li>Start-up w inkubatorze (pula) → debiut: kapitalizacja co najmniej ${money(gpw.cap)} → <strong>główny parkiet GPW</strong>; mniej, ale co najmniej ${money(nh.cap)} → <strong>NewHorizons</strong>.</li>
+        <ol class="list-plain text-sm"><li>Start-up w inkubatorze (pula) → debiut: kapitalizacja co najmniej ${money(gpw.cap)} → <strong>główny parkiet ${getMarketLabel('GPW')}</strong>; mniej, ale co najmniej ${money(nh.cap)} → <strong>NewHorizons</strong>.</li>
         <li>Z NewHorizons po ${NH_PROMOTE_MIN_AGE} kw.: awans na GPW (spełnia wymogi), a słaba spółka — <strong>Włoska Giełda</strong> albo wyjście z giełdy jako firma prywatna.</li>
         <li>GPW: spółka poniżej ${pct(LISTING_RETAIN_FACTOR)} wymogu kapitalizacji przez ${LISTING_BELOW_QUARTERS} kw. schodzi na NewHorizons zamiast upadać.</li></ol>
         <div class="bank-grid">${card("rynek", "GPW", "główny parkiet", [["Kapitalizacja", "≥ " + money(gpw.cap)], ["Wolny obrót", "≥ " + pct(gpw.freeFloat)], ["Zysk", profit(gpw)], ["Mnożnik wymogów", "×" + gpw.mult.toFixed(2)]], "Wymogi rosną, gdy rynek jest zatłoczony: ×1,0 do 100 spółek krajowych, ×1,5 przy 125. Ryzyko: standardowe.")}
