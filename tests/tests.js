@@ -14674,6 +14674,14 @@ group('0.16.10 Nowa scenka startowa', () => {
         introSubmitFund('Fundusz Ola'); togglePauseGame(); assert(isGamePaused, 'nadal blokada, dopóki szef nie odpisze'); c.tick(); assert(!isIntroActive());
         togglePauseGame(); assertEq(isGamePaused, false, 'po wiadomości szefa gra rusza'); isGamePaused = true;
     });
+    test('0.16.10 redukcja ruchu: zanikanie umowy trwa 0 ms (zamiana natychmiast), przy zwykłych ustawieniach 600 ms; wstrzyknięte opóźnienia mają pierwszeństwo', () => {
+        fresh(); const orig = window.matchMedia;
+        try {
+            window.matchMedia = () => ({ matches: true }); assertEq(startIntroFlow({ render: false }).delays.fade, 0, 'reduced-motion');
+            window.matchMedia = () => ({ matches: false }); assertEq(startIntroFlow({ render: false }).delays.fade, INTRO_DELAYS.fade, 'zwykły ruch');
+            assertEq(startIntroFlow({ render: false, delays: { fade: 5 } }).delays.fade, 5);
+        } finally { window.matchMedia = orig; }
+    });
     test('0.16.10 pominięcie w TeamedUP! (po pytaniu szefa): domyślny fundusz, odblokowanie, brak osieroconych czasomierzy; scenka kończy się raz', () => {
         const c = toBoss(); c.tick(); skipIntroScene(); assertEq(introFlow.step, 'done'); assertEq(c.q.length, 0); assertEq(playerProfile.fundName, INTRO_DEFAULTS.fundName); assertEq(introFlow.bossShown, false);
         const n = mailbox.messages.length; skipIntroScene(); assertEq(mailbox.messages.length, n, 'drugie pominięcie nic nie robi');

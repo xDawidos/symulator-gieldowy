@@ -5326,10 +5326,11 @@ td.sc-actions button { white-space: normal; margin: 0; }
 @keyframes intro-out { to { opacity: 0; visibility: hidden; } }
 @keyframes intro-in { from { opacity: 0; } }
 .intro-phone.is-leaving { animation: intro-out 600ms ease forwards; pointer-events: none; }
+.intro-contract, .intro-card { box-sizing: border-box; }
 .intro-contract { grid-area: 1 / 1; --paper: #f3ecd9; --ink: #1f1b14; width: min(440px, 100%); display: flex; flex-direction: column; gap: 18px; padding: 28px 26px 20px; border-radius: 6px; background: var(--paper); color: var(--ink); box-shadow: var(--shadow-soft); animation: intro-in 600ms ease 200ms both; }
 .intro-contract[hidden] { display: none; }
 .intro-contract header { display: flex; flex-direction: column; gap: 4px; border-bottom: 2px solid var(--ink); padding-bottom: 10px; }
-.intro-contract h2 { margin: 0; font-size: 22px; letter-spacing: .12em; text-transform: uppercase; }
+.intro-contract h2 { color: var(--ink) !important; margin: 0; font-size: 22px; letter-spacing: .12em; text-transform: uppercase; }
 .intro-contract-date { font-size: 13px; }
 .intro-contract-text { margin: 0; font-size: 18px; line-height: 1.5; }
 .intro-contract footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; border-top: 1px dashed var(--ink); padding-top: 12px; min-height: 56px; }

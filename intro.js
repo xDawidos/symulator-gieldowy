@@ -41,7 +41,7 @@ const introTimer = (ms, fn) => { const t = setTimeout(fn, ms); return () => clea
 
 /** Rozpoczyna scenkę. `schedule(ms, fn)` zwraca funkcję anulującą (testy wstrzykują własną), `render: false` — bez interfejsu. */
 function startIntroFlow({ schedule = introTimer, render = true, delays = {} } = {}) {
-    introFlow = { step: 'country', data: { ...INTRO_DEFAULTS }, schedule, render, pending: null, delays: { ...INTRO_DELAYS, ...delays }, sms: [], typing: null, chat: [], bossShown: false, awaitingFund: false };
+    introFlow = { step: 'country', data: { ...INTRO_DEFAULTS }, schedule, render, pending: null, delays: { ...INTRO_DELAYS, ...(typeof prefersReducedMotion === 'function' && prefersReducedMotion() ? { fade: 0 } : {}), ...delays }, sms: [], typing: null, chat: [], bossShown: false, awaitingFund: false };
     introRender();
     return introFlow;
 }
@@ -238,6 +238,8 @@ function introRenderChat() {
             <p class="intro-hint">Enter lub Spacja przyspiesza pisanie.</p></section>`;
     }
     body.querySelector('.te-role').textContent = `Przełożony · ${f.data.corporation}`;
+    const hint = $('teamedup-nav').querySelector('.intro-hint');
+    if (hint) hint.textContent = isIntroActive() ? 'Reszta aplikacji odblokuje się po rozmowie z szefem.' : 'Gra odblokowana. Kliknij „Zaczynam pracę”.';
     introSyncLog($('te-intro-log'), f.chat, f.typing, introChatBubble);
     const form = $('te-intro-form'), ask = f.step === 'boss' && f.awaitingFund, input = $('intro-fund');
     if (ask && form.hidden) { input.value = f.data.fundName; form.hidden = false; input.focus(); input.select(); }
