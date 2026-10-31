@@ -1314,6 +1314,11 @@
         <p id="intro-form-error" class="intro-error" role="alert"></p>
         <button type="submit" class="btn-primary">Dalej</button>
       </form>
+      <div id="intro-phone" class="intro-phone" hidden role="group" aria-labelledby="intro-phone-title">
+        <div class="intro-phone-header"><span id="intro-phone-title">Wiadomości · Babcia</span><button type="button" class="intro-skip btn-ghost" data-intro-skip hidden onclick="skipIntroScene()">Pomiń</button></div>
+        <div class="intro-phone-body" id="intro-sms-thread" role="log" aria-live="polite" aria-relevant="additions" onclick="introHurry()"></div>
+        <p class="intro-hint intro-phone-hint">Enter lub Spacja przyspiesza pisanie.</p>
+      </div>
     </div>
 
     <!-- Poczta (jak Gmail): korporacja, czasopisma, spam -->

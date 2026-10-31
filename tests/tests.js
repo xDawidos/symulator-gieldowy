@@ -14628,4 +14628,20 @@ group('0.16.10 Nowa scenka startowa', () => {
         assertEq(mailbox.messages.length, 1, 'jedno powitanie w poczcie'); skipIntroScene(); assertEq(mailbox.messages.length, 1);
         assertEq(checkWorldInvariants().join(' ; '), '');
     });
+    const toSms = () => { fresh(); const c = mkClock(); startIntroFlow({ render: false, schedule: c.schedule }); introPickCountry('PL'); assert(introSubmitProfile({ name: 'Ola', corporation: 'Alfa Kapitał', crisis: 'dotcom' }).ok); return c; };
+    test('0.16.10 krok 3: SMS-y pojawiają się z opóźnieniem (najpierw wskaźnik pisania), gracz pisze o firmie, babcia gratuluje i wysyła przelew', () => {
+        const c = toSms(); const f = introFlow;
+        assertEq(f.step, 'sms'); assertEq(f.sms.length, 0, 'żadnej wiadomości przed upływem opóźnienia'); assertEq(f.typing, 'me', 'gracz „pisze”');
+        c.tick(); assertEq(f.sms.length, 1); assertEq(f.sms[0].from, 'me');
+        assertEq(f.sms[0].text, 'W końcu! Dostałem się do firmy Alfa Kapitał na staż. Jeszcze tylko uzupełnię papiery i zaczynam.');
+        c.tick(); assertEq(f.typing, 'grandma', 'potem pisze babcia'); c.tick();
+        assertEq(f.sms[1].text, 'Gratulacje! W nagrodę wyślę ci małe co nieco ;)'); assertEq(f.sms[2].from, 'transfer', 'przelew od babci');
+        assertEq(f.data.corporation, 'Alfa Kapitał', 'dane z kroku 2 w scence');
+    });
+    test('0.16.10 przyspieszanie (Enter/Spacja): introHurry kończy bieżące oczekiwanie od razu, bez czekania; bez oczekiwania nic nie robi', () => {
+        const c = toSms(), f = introFlow;
+        assert(introHurry()); assertEq(f.sms.length, 1, 'pierwsza wiadomość od razu'); assert(introHurry()); assert(introHurry()); assert(introHurry());
+        assertEq(f.sms.filter(m => m.from !== 'transfer').length, 2, 'obie wiadomości po kilku „Enter”'); assertEq(f.typing, null);
+        c.all(); assert(!introHurry(), 'nie ma już oczekujących zdarzeń'); assertEq(c.q.length, 0, 'anulowane czasomierze nie zostają w kolejce');
+    });
 });
