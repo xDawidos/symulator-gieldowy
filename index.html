@@ -1301,21 +1301,19 @@
     <div id="chart-tooltip" style="display: none; position: absolute;"></div>
     <div id="toast-notification"></div>
 
-    <!-- Scenka startowa: SMS od babci + profil gracza -->
+    <!-- 0.16.10 Scenka startowa (intro.js): dane gracza → SMS → umowa; potem rozmowa z szefem w TeamedUP! -->
     <div id="intro-overlay" class="intro-overlay" hidden>
-      <div class="intro-phone" role="dialog" aria-labelledby="intro-phone-title">
-        <div class="intro-phone-header" id="intro-phone-title">Babcia
-          <button type="button" id="intro-skip-btn" class="intro-skip" hidden onclick="skipIntroScene()">Pomiń</button>
-        </div>
-        <div class="intro-phone-body" id="intro-sms-thread"></div>
-        <form id="intro-form" class="intro-form" hidden onsubmit="completeIntroScene(event)">
-          <label>Twoje imię<input id="intro-name" maxlength="30" required value="Dawid"></label>
-          <label>Nazwa korporacji<input id="intro-corporation" maxlength="40" required value="Wawelska Grupa Inwestycyjna"></label>
-          <label>Nazwa funduszu<input id="intro-fund" maxlength="40" required value="Fundusz Pierwszy Krok"></label>
+      <form id="intro-form" class="intro-card" hidden aria-labelledby="intro-form-title" onsubmit="introProfileSubmit(event)" novalidate>
+        <header class="intro-card-head"><h2 id="intro-form-title">Twoje dane</h2><button type="button" class="intro-skip btn-ghost" data-intro-skip hidden onclick="skipIntroScene()">Pomiń</button></header>
+        <p class="intro-lead">Zaczynasz staż w firmie inwestycyjnej. Podaj swoje imię i nazwę firmy.</p>
+        <label>Twoje imię<input id="intro-name" maxlength="30" required autocomplete="off" aria-describedby="intro-form-error" value="Dawid"></label>
+        <label>Firma, w której zaczynasz staż<input id="intro-corporation" maxlength="40" required autocomplete="off" aria-describedby="intro-form-error" value="Wawelska Grupa Inwestycyjna"></label>
+        <details class="intro-advanced"><summary>Opcje zaawansowane</summary>
           <label>Kryzys w grze<select id="intro-crisis"><option value="">Losowo (domyślnie)</option><option value="banking">Kryzys bankowy</option><option value="dotcom">Bańka internetowa</option><option value="oil">Szok naftowy</option><option value="black">Czarny czwartek</option><option value="pandemic">Pandemia</option></select></label>
-          <button type="submit" class="btn-pause">Zaczynam pracę</button>
-        </form>
-      </div>
+        </details>
+        <p id="intro-form-error" class="intro-error" role="alert"></p>
+        <button type="submit" class="btn-primary">Dalej</button>
+      </form>
     </div>
 
     <!-- Poczta (jak Gmail): korporacja, czasopisma, spam -->
@@ -1667,6 +1665,7 @@
 <script src="countries_ui.js"></script>
 <script src="country_picker.js"></script>
 <script src="internet.js"></script>
+<script src="intro.js"></script>
 <script src="lib/lz-string.min.js"></script>
 <script src="save_store.js"></script>
 <script src="main.js"></script>

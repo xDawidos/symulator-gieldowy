@@ -14605,3 +14605,27 @@ group('0.16.12 Dokończenie krajów (D1–D4)', () => {
         assert(getBaseCurrency() === 'EUR' && formatZl(100000, 0).endsWith('EUR') && formatZl(100000, 0).startsWith('25'), 'kwota przeliczona na EUR (÷4)');
     }));
 });
+
+group('0.16.10 Nowa scenka startowa', () => {
+    // Zegar wstrzykiwany: opóźnienia wykonują się dopiero po `tick()` (kolejka według czasu), bez czasomierzy zależnych od zegara.
+    const mkClock = () => { const q = []; let now = 0; return { q, schedule: (ms, fn) => { const e = { at: now + ms, fn }; q.push(e); return () => { const i = q.indexOf(e); if (i >= 0) q.splice(i, 1); }; }, tick: () => { q.sort((a, b) => a.at - b.at); const e = q.shift(); if (!e) return false; now = e.at; e.fn(); return true; }, all: () => { let n = 0; while (n++ < 100 && q.length) { q.sort((a, b) => a.at - b.at); const e = q.shift(); now = e.at; e.fn(); } } }; };
+    const fresh = () => { resetWorld([mk156('CTX', { price: 10 })]); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' }); introFlow = null; };
+    test('0.16.10 krok 1–2: kraj z globusa, potem dane gracza; walidacja pustych i za długich pól', () => {
+        fresh(); const f = startIntroFlow({ render: false });
+        assertEq(f.step, 'country', 'start od wyboru kraju'); assert(isIntroActive());
+        assert(!introSubmitProfile({ name: 'X', corporation: 'Y' }).ok, 'dane gracza dopiero po kraju');
+        assert(introPickCountry('DE')); assertEq(playerProfile.country, 'DE', 'kraj startowy z globusa'); assertEq(introFlow.step, 'profile');
+        assert(!introPickCountry('US'), 'kraj tylko raz');
+        let r = introSubmitProfile({ name: '   ', corporation: 'Firma' }); assert(!r.ok && r.errors.name, 'puste imię'); assertEq(introFlow.step, 'profile');
+        r = introSubmitProfile({ name: 'Ala', corporation: 'x'.repeat(41) }); assert(!r.ok && /40/.test(r.errors.corporation), 'za długa nazwa firmy');
+        assertEq(validateIntroField('name', '  Ala   Maria ').value, 'Ala Maria', 'spacje ściśnięte');
+        assertEq(introFlow.data.name, INTRO_DEFAULTS.name, 'błędne dane nie zmieniają wartości domyślnych');
+    });
+    test('0.16.10 pominięcie: dane domyślne i kraj domyślny, bez błędów stanu, wtórne pominięcie nic nie psuje', () => {
+        fresh(); startIntroFlow({ render: false }); skipIntroScene();
+        assertEq(introFlow.step, 'done'); assert(!isIntroActive());
+        assertEq(playerProfile.name, INTRO_DEFAULTS.name); assertEq(playerProfile.corporation, INTRO_DEFAULTS.corporation); assertEq(playerProfile.fundName, INTRO_DEFAULTS.fundName); assertEq(playerProfile.country, 'PL');
+        assertEq(mailbox.messages.length, 1, 'jedno powitanie w poczcie'); skipIntroScene(); assertEq(mailbox.messages.length, 1);
+        assertEq(checkWorldInvariants().join(' ; '), '');
+    });
+});

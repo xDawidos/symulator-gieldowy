@@ -5300,3 +5300,18 @@ td.sc-actions button { white-space: normal; margin: 0; }
 .cg-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .cg-pin { display: inline-flex; align-items: center; gap: 4px; padding: 1px 5px; font-size: 11px; background: rgba(2, 4, 10, 0.78); color: #fff; border: 1px solid rgba(255, 255, 255, 0.35); border-radius: 999px; cursor: pointer; white-space: nowrap; transform: translate(-50%, -50%); }
 @media (max-width: 720px) { .cg-body { grid-template-columns: 1fr; } .cg-stage { height: 38vh; min-height: 260px; } }
+
+/* ===================== 0.16.10: scenka startowa (intro.js) — karta danych, SMS-y, umowa, rozmowa z szefem w TeamedUP! ===================== */
+.intro-card { grid-area: 1 / 1; width: min(420px, 100%); max-height: 92vh; overflow: auto; display: flex; flex-direction: column; gap: var(--space-3); padding: 20px; border: 1px solid var(--border-color); border-top: 3px solid var(--color-warn); border-radius: var(--radius-lg); background: var(--bg-panel); box-shadow: var(--shadow-soft); }
+.intro-card[hidden] { display: none; }
+.intro-card-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.intro-card-head h2 { margin: 0; font-size: 20px; }
+.intro-lead { margin: 0; color: var(--text-muted); font-size: 14px; }
+.intro-card label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--text-muted); }
+.intro-card input, .intro-card select { font-size: 15px; }
+.intro-card input[aria-invalid="true"] { border-color: var(--color-down); }
+.intro-advanced summary { cursor: pointer; font-size: 13px; color: var(--text-muted); padding: 6px 0; }
+.intro-advanced summary:focus-visible, .intro-card button:focus-visible { outline: 2px solid var(--color-warn); outline-offset: 2px; }
+.intro-error { margin: 0; min-height: 1.2em; font-size: 13px; color: var(--color-down); }
+.intro-error:not(:empty)::before { content: "Błąd: "; font-weight: 700; }
+.intro-hint { margin: 0; font-size: 12px; color: var(--text-muted); }
