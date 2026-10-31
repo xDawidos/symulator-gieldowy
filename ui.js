@@ -7272,82 +7272,7 @@ function displayXP() {
     if (element) element.textContent = formatZl(playerWallet.cash);
 }
 
-// =================================================================================
-// SCENKA STARTOWA: SMS OD BABCI
-// =================================================================================
-
-const INTRO_SMS = [
-    'Cześć Wnusiu! 😊',
-    'Słyszałam, że dostałeś pracę w tej wielkiej firmie od pieniędzy. Jestem z Ciebie taka dumna! ❤️',
-    'Wysyłam Ci {kasa} kieszonkowego na dobry start. Kup sobie coś mądrego, może jakąś książkę albo kurs.',
-    'Tylko nie przepuść wszystkiego od razu! Całuję, Babcia 👵'
-];
-
-function showIntroScene() {
-    const overlay = document.getElementById('intro-overlay');
-    const thread = document.getElementById('intro-sms-thread');
-    const form = document.getElementById('intro-form');
-    if (!overlay || !thread || !form) return;
-
-    // Tryb debug: opcja „Pomijaj scenkę z babcią” — od razu profil domyślny z formularza.
-    if (isDebugMode() && isIntroSkipEnabled()) {
-        completeIntroScene();
-        return;
-    }
-
-    overlay.hidden = false;
-    thread.innerHTML = '';
-    form.hidden = true;
-    const skip = document.getElementById('intro-skip-btn');
-    if (skip) skip.hidden = !isDebugMode();
-
-    let index = 0;
-    const typeNext = () => {
-        if (index >= INTRO_SMS.length) {
-            const transfer = document.createElement('div');
-            transfer.className = 'intro-transfer';
-            transfer.textContent = `💸 Przelew przychodzący: +${formatZl(GRANDMA_POCKET_MONEY)} od: Babcia`;
-            thread.appendChild(transfer);
-            form.hidden = false;
-            return;
-        }
-        const bubble = document.createElement('div');
-        bubble.className = 'intro-sms typing';
-        bubble.textContent = '…';
-        thread.appendChild(bubble);
-        setTimeout(() => {
-            bubble.classList.remove('typing');
-            bubble.textContent = INTRO_SMS[index++].replace('{kasa}', formatZl(GRANDMA_POCKET_MONEY, 0));
-            setTimeout(typeNext, 450);
-        }, 700);
-    };
-    typeNext();
-}
-
-function completeIntroScene(event) {
-    if (event) event.preventDefault();
-    const value = id => (document.getElementById(id)?.value || '').trim();
-
-    playerProfile.name = value('intro-name') || playerProfile.name;
-    playerProfile.corporation = value('intro-corporation') || playerProfile.corporation;
-    playerProfile.fundName = value('intro-fund') || playerProfile.fundName;
-    playerProfile.cv = [{ type: 'start', text: `Zatrudnienie w ${playerProfile.corporation} jako Młodszy zarządca funduszu „${playerProfile.fundName}”.` }];
-
-    if (typeof setCrisisScenario === 'function') setCrisisScenario(value('intro-crisis')); // 0.15.3 W4: scenariusz startowy (po zapisie CV)
-    document.getElementById('intro-overlay').hidden = true;
-    if (typeof syncCeoTitle === 'function') syncCeoTitle(); // nazwa korporacji z formularza
-    logEvent(`💼 Witaj, ${playerProfile.name}! Zarządzasz funduszem „${playerProfile.fundName}” w ${playerProfile.corporation}. Wznów grę, aby zacząć.`, 'review');
-
-    // Jedno powitanie w poczcie — z nazwami z formularza (startNewCareer wysłał wcześniej domyślne).
-    mailbox = createMailbox();
-    addMail({
-        sender: 'corporation',
-        subject: `Witamy w ${playerProfile.corporation}, ${playerProfile.name}!`,
-        body: `Od dziś zarządzasz funduszem „${playerProfile.fundName}”. Wyniki oceniamy co 4 okresy. Wiadomości z rynku przysyłają czasopisma — prenumeraty ustawisz w zakładce Subskrypcje.${playerProfile.country !== 'PL' ? ` Kraj startowy: ${getCountryDef(playerProfile.country).name} — jego giełda (${getCountryDef(playerProfile.country).operator.name}) jest dla Ciebie rynkiem domowym, bez biletu.` : ''}`,
-        importance: 2
-    });
-    refreshFundViews();
-}
+// Scenka startowa: patrz intro.js (0.16.10).
 
 // =================================================================================
 // TRYB DEBUG (ustawienia): prędkości ×10/×50, dodawanie pieniędzy, wymuszenie okresu i oceny
@@ -7386,11 +7311,6 @@ function isIntroSkipEnabled() {
 function toggleIntroSkip() {
     try { localStorage.setItem(INTRO_SKIP_KEY, isIntroSkipEnabled() ? '0' : '1'); } catch (e) { /* brak localStorage */ }
     applyDebugModeUi();
-}
-
-/** Pomija trwającą scenkę (przycisk w scence, widoczny w trybie debug). */
-function skipIntroScene() {
-    completeIntroScene();
 }
 
 function toggleDebugMode() {
@@ -7742,6 +7662,7 @@ const MAIL_FOLDER_LABELS = {
 };
 
 function openMailbox(folder = mailView.folder) {
+    if (isIntroActive()) return; // 0.16.10: do końca scenki startowej reszta gry jest zablokowana
     mailView.folder = folder;
     mailView.pane = 'mail';
     document.getElementById('mail-overlay').hidden = false;
@@ -7772,14 +7693,19 @@ function openTeamedUp(pane = 'tasks') {
     document.getElementById('teamedup-overlay').hidden = false;
     renderTeamedUp();
 }
-function closeTeamedUp() { document.getElementById('teamedup-overlay').hidden = true; }
-function setTeamedPane(pane) { teamedView = { pane, selectedId: null }; renderTeamedUp(); }
+function closeTeamedUp() {
+    if (isIntroActive()) return; // 0.16.10: w trakcie scenki startowej TeamedUP! nie zamyka się
+    if (introFlow) introFlow.bossShown = false;
+    document.getElementById('teamedup-overlay').hidden = true;
+}
+function setTeamedPane(pane) { if (isIntroActive()) return; teamedView = { pane, selectedId: null }; renderTeamedUp(); }
 function selectTeamedMail(id) { teamedView.selectedId = id; markMailRead(id); renderTeamedUp(); }
 
 function renderTeamedUp() {
     updateMailBadge();
     const overlay = document.getElementById('teamedup-overlay');
     if (!overlay || overlay.hidden || !mailbox) return;
+    if (introFlow?.bossShown) { introRenderChat(); return; } // 0.16.10: rozmowa z szefem ze scenki startowej
     const unread = getTeamedUnread();
     const item = (pane, icon, label, extra = '') => `<button class="mail-folder ${teamedView.pane === pane ? 'active' : ''}" ${teamedView.pane === pane ? 'aria-current="page"' : ''} onclick="setTeamedPane('${pane}')"><span>${uiIcon(icon, 16)} ${label}</span>${extra}</button>`;
     document.getElementById('teamedup-nav').innerHTML = item('tasks', 'cel', 'Zadania i oceny') + item('messages', 'poczta', 'Wiadomości', unread ? `<b>${unread}</b>` : '') + item('hiring', 'pracownik', 'Zatrudnianie');
