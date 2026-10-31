@@ -14649,10 +14649,33 @@ group('0.16.10 Nowa scenka startowa', () => {
         const c = toContract(), f = introFlow; assertEq(f.step, 'contract', 'po babci przechodzi do umowy'); assert(isIntroActive());
         const doc = getIntroContract(); assertEq(doc.text, 'Ola od dzisiaj jest zatrudniony w Alfa Kapitał.'); assertEq(doc.date, formatGameDate(), 'data z gry'); assertEq(doc.title, 'Umowa o pracę');
         assert(!f.signed && !f.leaving, 'najpierw do podpisu'); c.tick(); assert(f.signed && !f.leaving, 'podpisano'); assertEq(f.step, 'contract');
-        c.tick(); assert(f.leaving, 'zanikanie'); assertEq(f.step, 'contract', 'jeszcze widać umowę podczas zanikania'); c.tick(); assertEq(f.step, 'done', 'etap 3: potem koniec (rozmowa z szefem w następnym etapie)');
+        c.tick(); assert(f.leaving, 'zanikanie'); assertEq(f.step, 'contract', 'jeszcze widać umowę podczas zanikania'); c.tick(); assertEq(f.step, 'boss', 'dopiero po zaniknięciu umowy otwiera się TeamedUP!');
     });
     test('0.16.10 krok 4: Enter przyspiesza także umowę; pominięcie w trakcie umowy kończy scenkę i czyści kolejkę', () => {
         const c = toContract(), f = introFlow; assert(introHurry()); assert(f.signed); skipIntroScene(); assertEq(f.step, 'done'); assertEq(c.q.length, 0, 'brak osieroconych czasomierzy'); assert(!introHurry());
         assertEq(playerProfile.name, 'Ola', 'pominięcie zostawia wpisane dane'); assertEq(playerProfile.corporation, 'Alfa Kapitał');
+    });
+    const toBoss = () => { const c = toContract(); for (let i = 0; i < 3; i++) c.tick(); return c; };
+    test('0.16.10 kroki 5–6: szef pisze po opóźnieniu, prosi o nazwę funduszu; walidacja pola; gracz „pisze” gotową wiadomość, szef żegna się; nazwa trafia do profilu', () => {
+        const c = toBoss(), f = introFlow; assertEq(f.step, 'boss'); assert(f.bossShown, 'TeamedUP! otwarty'); assertEq(f.chat.length, 0, 'szef jeszcze „pisze”'); assert(!introSubmitFund('X').ok, 'nie wolno odpowiedzieć przed pytaniem');
+        c.tick(); assertEq(f.chat[0].from, 'boss');
+        assertEq(f.chat[0].text, 'Cześć Ola, od dzisiaj jestem twoim szefem! Zanim zaczniesz, podaj nazwę swojego funduszu. Pogadam ze stałymi klientami, żebyś miał dobry start, a ty lepiej pomyśl, jak nazwiesz swój fundusz.');
+        assertEq(f.data.fundName, INTRO_DEFAULTS.fundName, 'wartość domyślna pola nazwy funduszu'); assert(f.awaitingFund);
+        assert(!introSubmitFund('   ').ok && !introSubmitFund('x'.repeat(41)).ok, 'walidacja'); assertEq(f.chat.length, 1, 'błędna nazwa nie dodaje wiadomości');
+        assert(introSubmitFund('  Fundusz   Ola ').ok); assertEq(f.chat[1].text, 'Miło mi cię poznać, mój fundusz będzie się nazywał: Fundusz Ola.'); assert(isIntroActive(), 'szef jeszcze nie odpisał');
+        assertEq(playerProfile.fundName, 'Fundusz Testowy', 'profil zmienia się dopiero na końcu scenki');
+        c.tick(); assertEq(f.chat[2].text, 'Powodzenia, nie zawiedź mnie.'); assertEq(f.step, 'done'); assert(!isIntroActive());
+        assertEq(playerProfile.name, 'Ola'); assertEq(playerProfile.corporation, 'Alfa Kapitał'); assertEq(playerProfile.fundName, 'Fundusz Ola'); assertEq(playerProfile.cv[0].text.includes('„Fundusz Ola”'), true);
+    });
+    test('0.16.10 blokada: do wiadomości szefa zegar gry stoi, TeamedUP! się nie zamyka ani nie przełącza, poczta i internet nie otwierają się; potem odblokowanie', () => {
+        const c = toBoss(); c.tick(); isGamePaused = true;
+        togglePauseGame(); assert(isGamePaused, 'zegar stoi w trakcie scenki'); assertEq(setTeamedPane('hiring'), undefined); assertEq(teamedView.pane === 'hiring', false, 'zakładki TeamedUP! zablokowane');
+        closeTeamedUp(); assert(introFlow.bossShown, 'TeamedUP! nie zamyka się'); openMailbox(); assertEq(openInternetPage('kantory24'), false, 'internet zablokowany');
+        introSubmitFund('Fundusz Ola'); togglePauseGame(); assert(isGamePaused, 'nadal blokada, dopóki szef nie odpisze'); c.tick(); assert(!isIntroActive());
+        togglePauseGame(); assertEq(isGamePaused, false, 'po wiadomości szefa gra rusza'); isGamePaused = true;
+    });
+    test('0.16.10 pominięcie w TeamedUP! (po pytaniu szefa): domyślny fundusz, odblokowanie, brak osieroconych czasomierzy; scenka kończy się raz', () => {
+        const c = toBoss(); c.tick(); skipIntroScene(); assertEq(introFlow.step, 'done'); assertEq(c.q.length, 0); assertEq(playerProfile.fundName, INTRO_DEFAULTS.fundName); assertEq(introFlow.bossShown, false);
+        const n = mailbox.messages.length; skipIntroScene(); assertEq(mailbox.messages.length, n, 'drugie pominięcie nic nie robi');
     });
 });

@@ -95,6 +95,7 @@ function getMailChannel(message) {
 
 /** Wejście z menu i z innych okien. `null` = ekran ulubionych. */
 function openInternetPage(id = null) {
+    if (isIntroActive()) return false; // 0.16.10: do końca scenki startowej reszta gry jest zablokowana
     if (id !== null) {
         const check = canOpenInternetPage(id);
         if (!check.ok) { if (typeof showToast === 'function') showToast(check.reason, 'warning'); return false; }

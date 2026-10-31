@@ -7662,6 +7662,7 @@ const MAIL_FOLDER_LABELS = {
 };
 
 function openMailbox(folder = mailView.folder) {
+    if (isIntroActive()) return; // 0.16.10: do końca scenki startowej reszta gry jest zablokowana
     mailView.folder = folder;
     mailView.pane = 'mail';
     document.getElementById('mail-overlay').hidden = false;
@@ -7692,14 +7693,19 @@ function openTeamedUp(pane = 'tasks') {
     document.getElementById('teamedup-overlay').hidden = false;
     renderTeamedUp();
 }
-function closeTeamedUp() { document.getElementById('teamedup-overlay').hidden = true; }
-function setTeamedPane(pane) { teamedView = { pane, selectedId: null }; renderTeamedUp(); }
+function closeTeamedUp() {
+    if (isIntroActive()) return; // 0.16.10: w trakcie scenki startowej TeamedUP! nie zamyka się
+    if (introFlow) introFlow.bossShown = false;
+    document.getElementById('teamedup-overlay').hidden = true;
+}
+function setTeamedPane(pane) { if (isIntroActive()) return; teamedView = { pane, selectedId: null }; renderTeamedUp(); }
 function selectTeamedMail(id) { teamedView.selectedId = id; markMailRead(id); renderTeamedUp(); }
 
 function renderTeamedUp() {
     updateMailBadge();
     const overlay = document.getElementById('teamedup-overlay');
     if (!overlay || overlay.hidden || !mailbox) return;
+    if (introFlow?.bossShown) { introRenderChat(); return; } // 0.16.10: rozmowa z szefem ze scenki startowej
     const unread = getTeamedUnread();
     const item = (pane, icon, label, extra = '') => `<button class="mail-folder ${teamedView.pane === pane ? 'active' : ''}" ${teamedView.pane === pane ? 'aria-current="page"' : ''} onclick="setTeamedPane('${pane}')"><span>${uiIcon(icon, 16)} ${label}</span>${extra}</button>`;
     document.getElementById('teamedup-nav').innerHTML = item('tasks', 'cel', 'Zadania i oceny') + item('messages', 'poczta', 'Wiadomości', unread ? `<b>${unread}</b>` : '') + item('hiring', 'pracownik', 'Zatrudnianie');

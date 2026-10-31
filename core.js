@@ -92,6 +92,7 @@ function getRandomElement(arr) {
 
 // Funkcja pauzy (używana przez UI)
 function togglePauseGame() {
+    if (typeof isIntroActive === 'function' && isIntroActive()) return; // 0.16.10: zegar stoi do końca scenki startowej
     isGamePaused = !isGamePaused;
     const pauseButton = document.getElementById('pause-game-btn');
     if (pauseButton) {
