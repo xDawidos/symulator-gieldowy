@@ -14644,4 +14644,15 @@ group('0.16.10 Nowa scenka startowa', () => {
         assertEq(f.sms.filter(m => m.from !== 'transfer').length, 2, 'obie wiadomości po kilku „Enter”'); assertEq(f.typing, null);
         c.all(); assert(!introHurry(), 'nie ma już oczekujących zdarzeń'); assertEq(c.q.length, 0, 'anulowane czasomierze nie zostają w kolejce');
     });
+    const toContract = () => { const c = toSms(); for (let i = 0; i < 5; i++) c.tick(); return c; };
+    test('0.16.10 krok 4: po SMS-ach umowa o pracę z imieniem, firmą i datą z gry; „Podpisano” po chwili, potem zanikanie i dopiero wtedy dalej', () => {
+        const c = toContract(), f = introFlow; assertEq(f.step, 'contract', 'po babci przechodzi do umowy'); assert(isIntroActive());
+        const doc = getIntroContract(); assertEq(doc.text, 'Ola od dzisiaj jest zatrudniony w Alfa Kapitał.'); assertEq(doc.date, formatGameDate(), 'data z gry'); assertEq(doc.title, 'Umowa o pracę');
+        assert(!f.signed && !f.leaving, 'najpierw do podpisu'); c.tick(); assert(f.signed && !f.leaving, 'podpisano'); assertEq(f.step, 'contract');
+        c.tick(); assert(f.leaving, 'zanikanie'); assertEq(f.step, 'contract', 'jeszcze widać umowę podczas zanikania'); c.tick(); assertEq(f.step, 'done', 'etap 3: potem koniec (rozmowa z szefem w następnym etapie)');
+    });
+    test('0.16.10 krok 4: Enter przyspiesza także umowę; pominięcie w trakcie umowy kończy scenkę i czyści kolejkę', () => {
+        const c = toContract(), f = introFlow; assert(introHurry()); assert(f.signed); skipIntroScene(); assertEq(f.step, 'done'); assertEq(c.q.length, 0, 'brak osieroconych czasomierzy'); assert(!introHurry());
+        assertEq(playerProfile.name, 'Ola', 'pominięcie zostawia wpisane dane'); assertEq(playerProfile.corporation, 'Alfa Kapitał');
+    });
 });

@@ -85,7 +85,7 @@ function introRunSms() {
     const f = introFlow, script = introSmsScript(f.data), d = f.delays;
     let i = 0;
     const next = () => {
-        if (i >= script.length) { f.typing = null; introRender(); return; } // etap 3: dalej umowa (następny etap)
+        if (i >= script.length) { f.typing = null; introAfter(d.gap, introOpenContract); return; }
         f.typing = script[i].from; introRender();
         introAfter(d.typing, () => {
             const m = script[i++];
@@ -97,6 +97,24 @@ function introRunSms() {
     };
     next();
 }
+
+/** Krok 4: umowa o pracę (data z gry); najpierw leży do podpisu, potem „Podpisano”, na końcu zanika. */
+function getIntroContract(d = introFlow.data) {
+    const date = typeof formatGameDate === 'function' ? formatGameDate() : '';
+    return { title: 'Umowa o pracę', date, text: `${d.name} od dzisiaj jest zatrudniony w ${d.corporation}.`, signer: d.name };
+}
+
+function introOpenContract() {
+    const f = introFlow, d = f.delays;
+    f.signed = false; f.leaving = false;
+    introGo('contract');
+    introAfter(d.contractRead, () => {
+        f.signed = true; introRender();
+        introAfter(d.contractSign, () => { f.leaving = true; introRender(); introAfter(d.fade, introAfterContract); });
+    });
+}
+
+function introAfterContract() { introFinish(); } // etap 4: dalej rozmowa z szefem (następny etap)
 
 /** Pominięcie: zostają wartości domyślne (albo już wpisane) i kraj taki, jaki wybrano (domyślnie PL). */
 function skipIntroScene() {
@@ -153,11 +171,14 @@ function introRender() {
     document.querySelector('.app-shell')?.toggleAttribute('inert', active); // blokada menu, zakładek i giełdy
     document.querySelectorAll('[data-intro-skip]').forEach(b => { b.hidden = !(active && isDebugMode()); });
     if (f.step === 'country' && !f.globeShown) { f.globeShown = true; if (typeof showCountryGlobe === 'function') showCountryGlobe(introPickCountry); }
-    overlay.hidden = !['profile', 'sms'].includes(f.step);
+    overlay.hidden = !['profile', 'sms', 'contract'].includes(f.step);
     $('intro-form').hidden = f.step !== 'profile';
-    $('intro-phone').hidden = f.step !== 'sms';
+    $('intro-phone').hidden = !['sms', 'contract'].includes(f.step);
+    $('intro-phone').classList.toggle('is-leaving', f.step === 'contract'); // telefon zanika, umowa wchodzi (przy reduced-motion: zamiana natychmiast)
+    $('intro-contract').hidden = f.step !== 'contract';
+    if (f.step === 'contract') introFillContract(f);
     if (f.step === 'profile') $('intro-name')?.focus();
-    if (f.step === 'sms') introSyncLog($('intro-sms-thread'), f.sms, f.typing, introSmsBubble);
+    if (f.step === 'sms' || f.step === 'contract') introSyncLog($('intro-sms-thread'), f.sms, f.typing, introSmsBubble);
 }
 
 /** Dopisuje tylko nowe wiadomości (bez przerysowania całości — czytnik ekranu czyta tylko dodane, `aria-live`); wskaźnik pisania jest zawsze ostatni. */
@@ -167,6 +188,16 @@ function introSyncLog(box, items, typing, makeBubble) {
     for (let i = box.querySelectorAll('[data-i]').length; i < items.length; i++) { const el = makeBubble(items[i]); el.dataset.i = i; box.appendChild(el); }
     if (typing) { const el = makeBubble({ from: typing, text: '…' }); el.classList.add('intro-typing'); el.setAttribute('aria-hidden', 'true'); box.appendChild(el); }
     box.scrollTop = box.scrollHeight;
+}
+
+function introFillContract(f) {
+    const c = getIntroContract(f.data), $ = id => document.getElementById(id);
+    $('intro-contract-date').textContent = c.date;
+    $('intro-contract-text').textContent = c.text;
+    $('intro-contract-sig').textContent = f.signed ? c.signer : '';
+    $('intro-contract-state').textContent = f.signed ? 'Podpisano' : 'Oczekuje na podpis';
+    $('intro-contract-box').classList.toggle('on', Boolean(f.signed));
+    $('intro-contract').classList.toggle('is-leaving', Boolean(f.leaving));
 }
 
 const INTRO_SENDERS = { me: 'Ty', grandma: 'Babcia' };
