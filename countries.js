@@ -11,8 +11,8 @@ const COUNTRY_RULES = {
     shares: 10_000_000,        // liczba akcji zwykłej spółki (giganci: giantShares)
     giantShares: 30_000_000,
     statePct: 0.5,             // pakiet obcego państwa (poza wolnym obrotem)
-    limitMult: 1.5,            // limit spółek kraju bez wskaźnika wielkości (kraj testowy) — patrz getCountryLimit
-    limitMultRange: [1.2, 2.0], // 0.16.8 F3: mnożnik liczby startowej rośnie z wielkością rynku (logarytmicznie od najmniejszego do największego)
+    limitMult: 2.0,            // limit spółek kraju bez wskaźnika wielkości (kraj testowy) — patrz getCountryLimit
+    limitMultRange: [1.6, 2.6], // 0.16.8 F3 (podniesione 2026-10-31 z [1.2, 2.0]: córki obcych zajmowały miejsca, 74/74 po ok. 15 latach): mnożnik liczby startowej rośnie z wielkością rynku (logarytmicznie od najmniejszego do największego)
     sizeIndex: { US: 10, CN: 8, JP: 4, DE: 3.5, IN: 3, FR: 2.5, TW: 1.5, CH: 1.2, SE: 1, PL: 1, CZ: 0.6 }, // względna wielkość (PKB / kapitalizacja giełdy), jedno miejsce parametrów
     sectorShareCap: 0.4,       // 0.16.8 F3: debiut nie może zwiększyć udziału jednego sektora głównego powyżej 40% spółek giełdy
     historyWeeks: 13,          // zapis uproszczony: 25% długości historii GDR (52 tyg.)

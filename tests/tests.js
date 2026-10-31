@@ -12305,7 +12305,7 @@ group('0.16.2', () => {
         startFund();
         assert(!isCountryJoined('ZZ') && getCountryIssuers('ZZ').length === 0, 'przed dołączeniem pusto');
         joinCountry('ZZ');
-        assert(isCountryJoined('ZZ'), 'dołączył'); assertEq(getCountryIssuers('ZZ').length, 4, '4 spółki'); assertEq(getCountryLimit('ZZ'), 6, 'limit ceil(1,5 × 4)');
+        assert(isCountryJoined('ZZ'), 'dołączył'); assertEq(getCountryIssuers('ZZ').length, 4, '4 spółki'); assertEq(getCountryLimit('ZZ'), Math.ceil(COUNTRY_RULES.limitMult * 4), 'limit ceil(limitMult × 4)');
         assert(marketRegimes.ZZ && marketRegimes.ZZ.premiumTarget !== undefined, 'nastrój kraju');
         const zd = foreignIssuers.ZD1; assert(zd.state && zd.statePack === zd.shares / 2 && zd.float === zd.shares - zd.statePack, 'pakiet państwa poza floatem');
         assertEq(getGdrSymbol(foreignIssuers.ZA1), 'ZA1.ZZ', 'symbol w kraju'); assert(joinCountry('ZZ') === null, 'drugie dołączenie nic nie robi');
