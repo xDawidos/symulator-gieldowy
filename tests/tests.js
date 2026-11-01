@@ -14890,4 +14890,62 @@ group('0.17 S3 Giełda towarowa', () => {
             assertEq(checkMarginInvariants().length, 0, 'niezmienniki silnika');
         } finally { delete marginMarkets._test; }
     }));
+    test('S3 kontrakty: F z backwardation nad średnią i contango pod nią; nazwa serii z kalendarza; 4 serie w ofercie', done(() => {
+        startFund();
+        assertEq(getContractName('oil', 10), 'OIL-R3Q3', 'Rok 3, kw. 3'); assertEq(parseContractName('OIL-R3Q3').absQ, 10);
+        assertEq(getContractSeries().length, 4, '4 zapadalności'); assertEq(getContractSeries()[0], macro.quarter, 'najbliższa: koniec bieżącego kwartału');
+        const M = getCommodityTarget('oil'), q = macro.quarter + 2;
+        commodityState.prices.oil = M * 1.5;
+        assert(getContractPriceUsd('oil', q) < getCommodityPrice('oil'), 'nad średnią: kontrakt tańszy (backwardation)'); assertEq(getContractStructure('oil', q), 'backwardation');
+        commodityState.prices.oil = M * 0.7;
+        assert(getContractPriceUsd('oil', q) > getCommodityPrice('oil'), 'pod średnią: kontrakt droższy (contango)'); assertEq(getContractStructure('oil', q), 'contango');
+        commodityState.qN = 13; assertNear(getContractPriceUsd('oil', macro.quarter), getCommodityPrice('oil'), 'w dniu zapadalności F = P', 1e-12);
+    }));
+    test('S3 kontrakty: zapadalność rozlicza gotówką po cenie bieżącej; „Przedłuż” przenosi pozycję na następną serię', done(() => {
+        startFund();
+        const series = getContractSeries(), r = openCommodityContract('gold', series[0], 1, 100_000, 5);
+        assert(r.ok, r.reason); assertEq(r.position.expires, fxWeek + getContractWeeksLeft(series[0]));
+        assertEq(Math.round(r.deposit), 20_000, 'depozyt 1:5');
+        const roll = rollCommodityContract(r.position.id); assert(roll.ok, roll.reason);
+        assertEq(roll.position.instrument, getContractName('gold', series[1]), 'następna seria'); assertEq(roll.position.notional, 100_000, 'ta sama wartość');
+        const pos = roll.position, cash0 = playerCash;
+        for (let w = 0; w < 40 && getMarginPositions('commodities').length; w++) { fxWeek++; stepCommodities(); if (commodityState.qN >= 13) { macro.quarter++; processCommoditiesQuarterly(); } stepMarginPositions(); }
+        assertEq(getMarginPositions('commodities').length, 0, 'kontrakt zapadł');
+        const last = marginClosedLog.at(-1); assertEq(last.reason, 'expiry');
+        assert(Math.abs(playerCash - cash0 - (pos.deposit + last.pnl)) < 1, 'gotówka = depozyt + wynik');
+    }));
+    test('S3 kontrakty: dźwignia wg surowca; limit łączny wspólny z forexem; margin call < 50% depozytu bez ujemnej gotówki', done(() => {
+        startFund(2_000_000);
+        const q = getContractSeries()[1];
+        assert(openCommodityContract('gold', q, 1, 50_000, 10).ok, 'złoto 1:10');
+        assert(!openCommodityContract('gas', q, 1, 50_000, 4).ok && openCommodityContract('gas', q, 1, 30_000, 3).ok, 'gaz najwyżej 1:3');
+        assert(!openCommodityContract('oil', q, 1, 50_000, 6).ok, 'ropa najwyżej 1:5');
+        joinCountry('DE');
+        const room = MARGIN_RULES.fundLeverageCap * getFundAssets() - getMarginNotional();
+        assert(openForexPosition('EUR/USD', 1, Math.floor(room) - 10_000, 10).ok, 'forex wypełnia limit');
+        assert(!openCommodityContract('metals', q, 1, 20_000, 5).ok, 'kontrakt ponad wspólny limit odrzucony');
+        for (const p of getMarginPositions()) closeMarginPosition(p.id);
+        const r = openCommodityContract('oil', q, 1, 100_000, 5); assert(r.ok, r.reason);
+        commodityState.prices.oil *= 0.85; // −15% przy 1:5 → kapitał ≈ 25% depozytu
+        stepMarginPositions();
+        assertEq(getMarginPositions('commodities').length, 0, 'zamknięcie automatyczne'); assertEq(marginClosedLog.at(-1).reason, 'margin');
+        assert(playerCash >= 0, 'gotówka nieujemna'); assertEq(checkMarginInvariants().length, 0);
+    }));
+    test('S3 exploit: „kup pod średnią i roluj” (200 przebiegów × 4 lata) ≤ lokata + 6 pp/rok', done(() => {
+        const quiet = {}; for (const k of Object.keys(COMMODITY_EVENTS)) { quiet[k] = COMMODITY_EVENTS[k].yearly; COMMODITY_EVENTS[k].yearly = 0; }
+        let logSum = 0, years = 0;
+        try {
+            for (let r = 0; r < 200; r++) {
+                macro.quarter = 1; initCommodityState();
+                for (let h = 0; h < 8; h++) { // półrocza bez nakładania: seria na koniec następnego kwartału (26 tyg.), rozliczenie po cenie z dnia zapadalności
+                    const buys = COMMODITY_IDS.filter(id => getCommodityPrice(id) < getCommodityTarget(id) * 0.9).map(id => [id, getContractPriceUsd(id, macro.quarter + 1)]);
+                    for (let q = 0; q < 2; q++) { for (let w = 0; w < 13; w++) stepCommodities(); macro.quarter++; processCommoditiesQuarterly(); }
+                    if (buys.length) logSum += buys.reduce((t, [id, f]) => t + Math.log(getCommodityPrice(id) / f), 0) / buys.length; // kapitał 1:1
+                    years += 0.5;
+                }
+            }
+        } finally { for (const k of Object.keys(quiet)) COMMODITY_EVENTS[k].yearly = quiet[k]; macro.quarter = 10; }
+        const annual = Math.exp(logSum / years) - 1, limit = getUsdRate() + 0.06;
+        assert(annual <= limit, `strategia ${(annual * 100).toFixed(2)}%/rok ≤ ${(limit * 100).toFixed(1)}%`);
+    }));
 });
