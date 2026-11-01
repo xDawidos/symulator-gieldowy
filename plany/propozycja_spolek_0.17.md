@@ -75,5 +75,5 @@ DBF Deutsche Bahnhof, AMR AmeriRail, CKO České Koleje, RDF Rail de France, IKP
 ## Do decyzji
 
 1. Nazwy i żarty w opisach (każdą można skreślić lub zmienić).
-2. PES i TBN jako giganci (duże kapitalizacje) czy zwykłe spółki państwowe.
+2. ✅ PES i TBN jako giganci (państwowe, decyzja 2026-11-01).
 3. Wpływ na limit spółek kraju: limit rośnie z liczbą definicji (`getCountryLimit`), więc CZ (10 → 11) i reszta bez ręcznych poprawek.
