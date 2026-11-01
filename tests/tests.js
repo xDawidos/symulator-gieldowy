@@ -4812,6 +4812,12 @@ group('Poprawki 0.13.1 (B1–B13)', () => {
         assertNear(getBotFundNav(manager.fund), nav, 'NAV funduszu bez zmian (udział po koszcie)', 1e-9);
         const claims = collectStartupClaims(startup);
         assert(claims.some(c => c.kind === 'botFund' && c.amount === amount), 'roszczenie przy debiucie');
+        // 0.17 S0b: konsolidacja funduszu kolegi przenosi roszczenie na fundusz gracza
+        const before = getStartupClaimsTotal(startup);
+        corporation.supervisedManagerId = manager.id;
+        assert(consolidateSupervisedFund(true), 'konsolidacja');
+        assertEq(playerPortfolio.STU?.investedAmount, amount, 'roszczenie u gracza');
+        assertNear(getStartupClaimsTotal(startup), before, 'suma roszczeń bez zmian', 1e-9);
     });
 
     test('B8–B13: panel dywidend, Gwardia jako fundusz, sektory, wycena holdingu, próg zaufania, mafia w Nadzorze', () => {
@@ -11345,8 +11351,11 @@ group('0.15.6 E3: ścieżka startupu, awans z NewHorizons, Włoska Giełda', () 
         const saved = hasEntryMarketSlot; hasEntryMarketSlot = id => id !== 'NH';
         try {
             const startup = generateNewStartup(); startup.fundingGoal = startup.currentFunding = 40_000; stocks.push(startup);
+            const bot = aiCompetitors[0]; bot.portfolio[startup.symbol] = { investedAmount: 40_000, assetType: 'Startup', isInsured: false }; // 0.17 S0b: roszczenie bota
             LISTING_RULES.debutRouting = true; handleSuccessfulIPO(startup, 1); LISTING_RULES.debutRouting = false;
             assertEq(startup.stage, 'awaitingListing', 'NH pełny: czeka w inkubatorze');
+            assertEq(bot.portfolio[startup.symbol]?.investedAmount, 40_000, 'roszczenie bota zostaje w czekającym startupie');
+            assertEq(checkIncubatorInvariants().length, 0, 'roszczenia = zebrane');
         } finally { hasEntryMarketSlot = saved; LISTING_RULES.debutRouting = false; }
     });
 
@@ -14487,6 +14496,23 @@ group('0.16.12 Dokończenie krajów (D1–D4)', () => {
         delistForeignIssuer(foreignIssuers[parent.id], 1);
         for (const id of ids) { const c = foreignIssuers[id]; assert(!c.parentId && c.parentPack === 0 && c.float === c.shares, 'pakiet wraca do obrotu'); }
         assertEq(checkWorldInvariants().length, 0, 'niezmienniki po upadku matki');
+    }));
+    test('0.17 S0b: zapis i wczytanie — córka bez raportu zachowuje liczbę akcji (pula nie ujemna), spółka zdjęta z giełdy nie wraca', () => withSubLinks(() => {
+        joinCountry('DE');
+        const parent = subParent(), child = foundForeignSubsidiary(parent);
+        assert(child && !child.fundamentals, 'córka przed pierwszym raportem');
+        child.shares = child.totalShares = 25_000_000; child.parentPack = 18_000_000; child.float = child.shares - child.parentPack; // więcej akcji niż domyślne 10 mln
+        const gone = getCountryIssuers('DE').find(i => i !== parent && !i.state && !i.giant && !i.special);
+        delistForeignIssuer(gone, gone.price);
+        const n = getCountryIssuers('DE').length;
+        const snap = JSON.parse(JSON.stringify({ gdr: getGdrSnapshot(), countries: getCountriesSnapshot() }));
+        applyGdrSnapshot(snap.gdr); applyCountriesSnapshot(snap.countries); // kolejność jak w main.js (wczytanie od zera)
+        const back = foreignIssuers[child.id];
+        assertEq(back.shares, 25_000_000, 'liczba akcji córki');
+        assertEq(back.float, 7_000_000, 'pula = akcje − pakiet matki');
+        assert(!foreignIssuers[gone.id], 'zdjęta spółka nie wraca');
+        assertEq(getCountryIssuers('DE').length, n, 'liczba spółek kraju');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki po wczytaniu');
     }));
 
     // --- 0.16.12 D2: walne spółek zagranicznych na wspólnym kodzie + drabina z wezwaniem ---

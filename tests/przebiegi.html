@@ -798,7 +798,7 @@ const PROBE = `(function () {
         const inv = typeof checkWorldInvariants === 'function' ? checkWorldInvariants() : [];
         return { level: built.level, chars: built.json.length, utf8, gzBytes: gz.compressed, gzRatio: +(utf8 / gz.compressed).toFixed(1), lzChars: lz.compressed, lzRatio: +(built.json.length / lz.compressed).toFixed(1),
             buildMs: Math.round(buildMs), gzMs: Math.round(gzMs), gzDecodeMs: Math.round(gzDecodeMs), lzMs: Math.round(lzMs), lzDecodeMs: Math.round(lzDecodeMs),
-            lossless, loadOk: report.ok, loadErrors: report.errors.slice(0, 3), invAfterLoad: inv.slice(0, 5), localFits: JSON.stringify(lz).length <= SAVE_LOCAL_LIMIT };
+            lossless, loadOk: report.ok, loadErrors: report.errors.slice(0, 3), invAfterLoad: inv.slice(0, 5), localFits: JSON.stringify(lz).length <= SAVE_LOCAL_LIMIT, lzShare: +(JSON.stringify(lz).length / SAVE_LOCAL_LIMIT).toFixed(3) };
     };
     s.finish = function () {
         const soc = typeof society === 'object' && society ? society : null;
@@ -1189,6 +1189,19 @@ const PROBE_0156 = `(function () {
     const origFinish = s.finish; s.finish = function () { const r = origFinish.apply(this, arguments); r.p0156 = T.finish(); return r; };
 })();`;
 
+// 0.17 S0b: łączna kapitalizacja rynku (PLN; GPW i spółki krajów dołączonych) i udział spółek krajowych w przejęciach D3. Wynik: pole s017.
+const PROBE_017 = `(function () {
+    const s = window.__sim, T = s.s017 = { d3: { n: 0, domAcq: 0, domTgt: 0 } };
+    if (typeof executeIssuerTakeover === 'function') { const o = executeIssuerTakeover; executeIssuerTakeover = function (a, t) { const r = o.apply(this, arguments); if (r && r.ok) { T.d3.n++; if (!acqForeignOf(a)) T.d3.domAcq++; if (!acqForeignOf(t)) T.d3.domTgt++; } return r; }; }
+    const origFinish = s.finish; s.finish = function () {
+        const r = origFinish.apply(this, arguments);
+        const capPl = stocks.filter(x => !x.isBankrupt && x.assetType !== 'Startup' && x.price > 0).reduce((a, x) => a + x.price * (x.totalShares || 0), 0);
+        const capForeign = typeof getForeignIssuerList === 'function' ? getForeignIssuerList().filter(i => i.kind === 'share').reduce((a, i) => a + toPln(i.price * i.shares, i.currency), 0) : 0;
+        r.s017 = { ...T, capPl: Math.round(capPl), capForeign: Math.round(capForeign) };
+        return r;
+    };
+})();`;
+
 const yieldNow = () => new Promise(resolve => { const ch = new MessageChannel(); ch.port1.onmessage = () => resolve(); ch.port2.postMessage(0); });
 
 // 0.15.4 P0: widok narzędzi deweloperskich — wykres liczby spółek w czasie (wg źródła), średni kurs wg branży (sortowanie po nagłówku),
@@ -1233,7 +1246,9 @@ function renderP0154(results) {
 }
 
 async function loadFrame() {
-    const html = await (await fetch(TARGET, { cache: 'no-store' })).text();
+    // 0.17 S0b: jedno ponowienie po „Failed to fetch” (jednowątkowy serwer plików przy wielu instancjach)
+    const get = () => fetch(TARGET, { cache: 'no-store' }).then(r => r.text());
+    const html = await get().catch(() => new Promise(r => setTimeout(r, 2000)).then(get));
     const baseHref = new URL(TARGET, location.href).href;
     const doc = html.replace(/<head>/i, `<head><base href="${baseHref}"><script>${STUB}<\/script>`);
     await new Promise(resolve => { frame.onload = resolve; frame.srcdoc = doc; });
@@ -1253,6 +1268,7 @@ async function oneRun(index) {
     w.eval(PROBE_0154);
     w.eval(PROBE_0155);
     w.eval(PROBE_0156);
+    w.eval(PROBE_017);
     const quarterMs = 300000 / SPEED;
     const startQ = w.eval('macro.quarter');
     w.eval('__sim.sample()');

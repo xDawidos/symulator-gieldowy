@@ -458,6 +458,7 @@ function getCountriesSnapshot() {
         if (i.oversightResale) row.or = i.oversightResale.until;
         const company = typeof getForeignCompanySnapshot === 'function' ? getForeignCompanySnapshot(i) : undefined;
         if (company) row.c = company; // 0.16.7: bilans, wyniki, dywidenda, prezes
+        else if (i.shares !== (i.giant ? COUNTRY_RULES.giantShares : COUNTRY_RULES.shares)) row.n = i.shares; // 0.17 S0b: córka przed pierwszym raportem (bez `c`) ma własną liczbę akcji
         if (i.generated) row.g = { name: i.name, sector: i.sectors.map(s => s[0]), subsector: i.subsector, country: i.country, currency: i.currency, ...(i.parentId ? { par: i.parentId } : {}) };
         issuers[i.id] = row;
     }
@@ -478,7 +479,7 @@ function applyCountriesSnapshot(snapshot) {
         countryState[id] = { id, joinedQ: Number(st.joinedQ) || 0, rate: Number(st.rate) || def.rateMean, treasury: Number(st.treasury) || 0, lastDebutQ: Number(st.lastDebutQ) || 0, by: st.by || 'test', link: ['merged', 'intl', 'taken'].includes(st.link) ? st.link : null };
         const raw = snapshot.regimes?.[id];
         marketRegimes[id] = raw && typeof raw === 'object' ? { ...createCountryRegime(id), ...raw } : createCountryRegime(id);
-        for (const c of def.companies) createCountryIssuer(def, c);
+        for (const c of def.companies) if (!snapshot.issuers || snapshot.issuers[c.id]) createCountryIssuer(def, c); // 0.17 S0b: spółka zdjęta z giełdy nie wraca po wczytaniu
     }
     for (const [id, row] of Object.entries(snapshot.issuers || {})) {
         let issuer = foreignIssuers[id];
@@ -496,6 +497,7 @@ function applyCountriesSnapshot(snapshot) {
         if (row.th) issuer.tradeHalted = true;
         if (Number.isFinite(Number(row.or))) issuer.oversightResale = { until: Number(row.or) };
         issuer.parentPack = Number(row.pp) > 0 && issuer.parentId ? Number(row.pp) : 0;
+        if (Number(row.n) > 0) { issuer.shares = Number(row.n); issuer.statePack = issuer.state ? Math.round(issuer.shares * COUNTRY_RULES.statePct) : 0; issuer.float = issuer.shares - issuer.statePack; }
         if (typeof applyForeignCompanySnapshot === 'function') applyForeignCompanySnapshot(issuer, row.c); // zapis v17 (bez `c`): model z ceny
         if (issuer.parentPack > 0) issuer.float = issuer.shares - issuer.statePack - issuer.parentPack;
         issuer.holders = {};
