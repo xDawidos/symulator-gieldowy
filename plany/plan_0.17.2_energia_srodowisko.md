@@ -38,6 +38,9 @@ Czego uczy:
 2. **Handel energią między państwami w prostej formie już w 0.17.2** (cena i przepływ); cła i embarga na energię dopiero w 0.19.
 3. **Opinia publiczna jako modyfikator bez osobnego KPI w pasku**; widoczna w oknie „Rynek” i karcie kraju.
 
+4. **Cena energii z surowców 0.17** (2026-11-01): cena prądu w kraju = miks (węgiel, gaz, uran z rejestru 0.17 + OZE bez paliwa, koszt kapitału); nowy wsad „energia” dla przemysłu, chemii i kolei (PKC) zastępuje część bezpośredniego wsadu węgla i gazu z 0.17 S2 (kalibracja „średnio zero” od nowa). Energia nie jest 8. surowcem na giełdzie towarowej.
+5. **UEiE jak inne urzędy** (2026-11-01): ta sama mechanika co `oversight` (poziomy, efektywność, budżet); kary za przekroczenie limitów emisji.
+
 ## Zlecenie dla czatu designu (przed N8)
 
 1. Zakładka energii: miks (OZE, atom, węgiel), produkcja i zużycie, UEiE (poziom, kary).

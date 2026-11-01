@@ -43,8 +43,8 @@ Rozmowy z prezesami (CEO) i inwestorami stają się krótką **minigrą wyboru**
 - Ryzyko: przesada w mikrozarządzaniu (rozmowa co tydzień) → limit rozmów (np. 1 na rozmówcę na kwartał gry) i powiadomienia zbiorcze.
 - Zapis: nowe pola relacji i historii rozmów opcjonalne; numer wersji zapisu wg wersji w czasie wdrożenia.
 
-## Otwarte pytania
+## Decyzje (2026-11-01)
 
-1. Czy relacje z CEO i botami to jedna skala (−100…+100), czy osobne?
-2. Czy rozmowa ma mieć limit czasu rzeczywistego, czy tylko gry (zalecane: gry)?
-3. Czy minigra ma być obowiązkowa, czy można wybrać „szybką” (stary wzór procentowy) dla gracza, który nie chce grać?
+1. **Jedna skala relacji −100…+100** dla prezesów, inwestorów i botów (jedno pole na rozmówcę; boty przenoszą relacje z 0.10.2).
+2. **Limit tylko w czasie gry** (1 rozmowa na rozmówcę na kwartał gry), bez czasu rzeczywistego.
+3. **Minigra z opcją „szybka rozmowa”:** stary wzór procentowy, nieco słabszy niż dobrze poprowadzona rozmowa.
