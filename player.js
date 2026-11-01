@@ -3410,6 +3410,11 @@ function consolidateSupervisedFund(forceApproval = null) {
         target.shares += holding.shares; // sharesHeld bez zmian — akcje tylko zmieniają fundusz
         playerPortfolio[symbol] = target;
     }
+    for (const [symbol, amount] of Object.entries(fund.startups || {})) { // 0.17 S0b: udziały w startupach (w wycenie po koszcie) przechodzą na fundusz gracza
+        const target = playerPortfolio[symbol] || { investedAmount: 0, assetType: 'Startup', isInsured: false };
+        target.investedAmount += Number(amount) || 0;
+        playerPortfolio[symbol] = target;
+    }
 
     const units = value / nav;
     playerFund.units += units;

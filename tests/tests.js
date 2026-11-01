@@ -4812,6 +4812,12 @@ group('Poprawki 0.13.1 (B1–B13)', () => {
         assertNear(getBotFundNav(manager.fund), nav, 'NAV funduszu bez zmian (udział po koszcie)', 1e-9);
         const claims = collectStartupClaims(startup);
         assert(claims.some(c => c.kind === 'botFund' && c.amount === amount), 'roszczenie przy debiucie');
+        // 0.17 S0b: konsolidacja funduszu kolegi przenosi roszczenie na fundusz gracza
+        const before = getStartupClaimsTotal(startup);
+        corporation.supervisedManagerId = manager.id;
+        assert(consolidateSupervisedFund(true), 'konsolidacja');
+        assertEq(playerPortfolio.STU?.investedAmount, amount, 'roszczenie u gracza');
+        assertNear(getStartupClaimsTotal(startup), before, 'suma roszczeń bez zmian', 1e-9);
     });
 
     test('B8–B13: panel dywidend, Gwardia jako fundusz, sektory, wycena holdingu, próg zaufania, mafia w Nadzorze', () => {
