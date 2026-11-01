@@ -8,7 +8,7 @@ Czego uczy:
 - **Koszty wsadu:** kto zyskuje i traci na wzroście ceny ropy, miedzi, zboża.
 - **Logistyka:** fracht morski (tani, wolny), lotniczy (drogi, szybki), lądowy (elastyczny); wąskie gardła.
 
-Kolejność: S0 → S0b → S1 → … → S7. **Commit po każdej części.** UI z komponentów 0.14.5; projekt wyglądu zleca się czatowi designu.
+Kolejność: S0 → S0b → S1 → … → S7. **Szczegóły części S1–S7 (liczby, wzory, testy): `plan_0.17_specyfikacja.md`.** **Commit po każdej części.** UI z komponentów 0.14.5; projekt wyglądu zleca się czatowi designu.
 
 **Zależności:** 0.16 (kraje otwarte: surowce mają kraje producentów; waluta USD; **silnik depozytu `marginEngine` z forexu G21**, który tu obsługuje kontrakty). Zapis: pola opcjonalne w v16.
 
@@ -79,3 +79,11 @@ Kolejność: S0 → S0b → S1 → … → S7. **Commit po każdej części.** U
 8. **Instrumenty:** kontrakty terminowe (za „Mistrzem Opcji” od S7) + ETC na pojedyncze surowce + ETF surowcowy na koszyk (Internet → ETF), bez dźwigni.
 9. **Nowe spółki:** listę proponuje czat planowania (`plany/propozycja_spolek_0.17.md`), użytkownik zatwierdza przed S2.
 10. **Design:** zlecenie czatowi designu przed S3 (zakres jak niżej + ETC/ETF w oknie giełdy towarowej).
+11. **Dźwignia kontraktów wg surowca** (2026-11-01): złoto 1:10; ropa, metale, zboże 1:5; gaz, węgiel, uran 1:3; limit łączny wspólny z forexem.
+12. **„Mistrz Opcji” — nowa umiejętność, 2 poziomy:** L1 tylko długie do 1:3, L2 krótkie i pełna dźwignia; ETC i ETF za „Ekspertem Rynków Globalnych” L1.
+13. **Czas dostaw w 0.17 tylko widoczny**; liczy się od 0.18. W 0.17 transport działa przez koszt (indeks frachtu).
+14. **Bezpieczeństwo państwa** wpływa na napływ kapitału zagranicznego, stabilność i nastroje oraz szansę szoków geopolitycznych (bez przestępczości).
+15. **Budżet obronny wg partii rządzącej** (`defenseShare` w `RULING_PARTIES`), skok o 50% po szoku geopolitycznym.
+16. **S6 pełne dla kraju startowego**, obce kraje ze stałym `security` w danych kraju.
+17. **Nowe zdarzenia S1:** embargo/blokada cieśniny, strajk w kopalniach, ucieczka do złota, rekordowe zbiory, awaria reaktora za granicą; istniejące (szok naftowy, susza, spadek cen energii) ruszają cenami.
+18. **Ceny surowców egzogeniczne** (gracz i boty nie ruszają ceną); wpływ na spółki względem średniej 8 kw. („średnio zero” z definicji).
