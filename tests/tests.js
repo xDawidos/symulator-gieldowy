@@ -14860,3 +14860,34 @@ group('0.17 S2 Spółki i koszty wsadu', () => {
         resetGdrState(); initFxState();
     });
 });
+
+group('0.17 S3 Giełda towarowa', () => {
+    const startFund = (cash = 5_000_000) => { resetWorld([mk156('GA', { price: 100 })]); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' }); playerCash = cash; initFxState(); resetGdrState(); macro.quarter = 10; initCommodityState(); };
+    const done = fn => () => { try { return fn(); } finally { resetMarginState(); resetGdrState(); initFxState(); initCommodityState(); } };
+    test('S3 silnik: reguły rynku (dźwignia z instrumentu, spread, bez kosztu utrzymania), zapadalność z rozliczeniem po cenie z tego dnia, zapis `expires`; forex bez zmian', done(() => {
+        startFund();
+        let px = 100;
+        registerMarginMarket('_test', { name: 'test', priceOf: () => px, maxLeverageOf: inst => inst === 'A' ? 3 : 10, holdingCostYear: 0, entrySpread: 0.003, expiresOf: () => fxWeek + 2, settleOf: () => 120 });
+        try {
+            assert(!openMarginPosition({ market: '_test', instrument: 'A', side: 1, notional: 30_000, leverage: 4 }).ok, 'dźwignia ponad regułę instrumentu');
+            const cash0 = playerCash, r = openMarginPosition({ market: '_test', instrument: 'A', side: 1, notional: 30_000, leverage: 3 });
+            assert(r.ok, r.reason); assertEq(Math.round(cash0 - playerCash), 10_000 + 90, 'depozyt + spread 0,3% z reguły rynku');
+            assertEq(r.position.expires, fxWeek + 2, 'pole expires');
+            const snap = JSON.parse(JSON.stringify(getForexSnapshot())); applyForexSnapshot(snap);
+            assertEq(getMarginPositions('_test')[0].expires, r.position.expires, 'expires po wczytaniu');
+            fxWeek++; stepMarginPositions();
+            assertEq(getMarginPositions('_test')[0].accrued, 0, 'bez kosztu utrzymania');
+            const cash1 = playerCash; fxWeek++; stepMarginPositions();
+            assertEq(getMarginPositions('_test').length, 0, 'zamknięcie przy zapadalności');
+            assertEq(Math.round(playerCash - cash1), 10_000 + 6_000, 'rozliczenie po cenie z dnia zapadalności (120 zamiast 100)');
+            assertEq(marginClosedLog.at(-1).reason, 'expiry');
+            // forex: domyślne reguły silnika
+            joinCountry('DE');
+            const f = openForexPosition('EUR/USD', 1, 100_000, 10); assert(f.ok, f.reason);
+            assert(!('expires' in f.position), 'forex bez zapadalności');
+            fxWeek++; stepMarginPositions();
+            assertNear(getMarginPositions('forex')[0].accrued, 100_000 * 0.9 * MARGIN_RULES.holdingCostYear / 52, 'koszt utrzymania forexu jak dotąd', 1e-6);
+            assertEq(checkMarginInvariants().length, 0, 'niezmienniki silnika');
+        } finally { delete marginMarkets._test; }
+    }));
+});

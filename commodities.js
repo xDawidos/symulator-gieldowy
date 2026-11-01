@@ -50,7 +50,7 @@ const COMMODITY_GOLD_CRISES = ['banking', 'black', 'pandemic'];
 
 let commodityState = null; // { startQ, w, prices, hist, qHist, qSum, qN, events: [{ id, until, shocks: {id: s}, product? }], lastDroughtQ }
 
-function commodityQuarterInYear(q = macro.quarter) { return ((q - 1) % 4 + 4) % 4 + 1; }
+function commodityQuarterInYear(q = macro.quarter) { return ((q % 4) + 4) % 4 + 1; } // kalendarz gry: formatQuarterDate (campaigns.js)
 
 function initCommodityState() {
     const q = typeof macro === 'object' ? macro.quarter : 0;
