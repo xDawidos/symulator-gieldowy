@@ -14488,6 +14488,23 @@ group('0.16.12 Dokończenie krajów (D1–D4)', () => {
         for (const id of ids) { const c = foreignIssuers[id]; assert(!c.parentId && c.parentPack === 0 && c.float === c.shares, 'pakiet wraca do obrotu'); }
         assertEq(checkWorldInvariants().length, 0, 'niezmienniki po upadku matki');
     }));
+    test('0.17 S0b: zapis i wczytanie — córka bez raportu zachowuje liczbę akcji (pula nie ujemna), spółka zdjęta z giełdy nie wraca', () => withSubLinks(() => {
+        joinCountry('DE');
+        const parent = subParent(), child = foundForeignSubsidiary(parent);
+        assert(child && !child.fundamentals, 'córka przed pierwszym raportem');
+        child.shares = child.totalShares = 25_000_000; child.parentPack = 18_000_000; child.float = child.shares - child.parentPack; // więcej akcji niż domyślne 10 mln
+        const gone = getCountryIssuers('DE').find(i => i !== parent && !i.state && !i.giant && !i.special);
+        delistForeignIssuer(gone, gone.price);
+        const n = getCountryIssuers('DE').length;
+        const snap = JSON.parse(JSON.stringify({ gdr: getGdrSnapshot(), countries: getCountriesSnapshot() }));
+        applyGdrSnapshot(snap.gdr); applyCountriesSnapshot(snap.countries); // kolejność jak w main.js (wczytanie od zera)
+        const back = foreignIssuers[child.id];
+        assertEq(back.shares, 25_000_000, 'liczba akcji córki');
+        assertEq(back.float, 7_000_000, 'pula = akcje − pakiet matki');
+        assert(!foreignIssuers[gone.id], 'zdjęta spółka nie wraca');
+        assertEq(getCountryIssuers('DE').length, n, 'liczba spółek kraju');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki po wczytaniu');
+    }));
 
     // --- 0.16.12 D2: walne spółek zagranicznych na wspólnym kodzie + drabina z wezwaniem ---
     test('0.16.12 D2: walne obcej spółki — porządek obrad, głosowanie wg akcjonariatu z holders, uchwały kapitałowe w walucie spółki, niezmienniki; zapis momentu walnego', () => withSubLinks(() => {
