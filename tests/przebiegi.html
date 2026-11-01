@@ -1197,7 +1197,13 @@ const PROBE_017 = `(function () {
         const r = origFinish.apply(this, arguments);
         const capPl = stocks.filter(x => !x.isBankrupt && x.assetType !== 'Startup' && x.price > 0).reduce((a, x) => a + x.price * (x.totalShares || 0), 0);
         const capForeign = typeof getForeignIssuerList === 'function' ? getForeignIssuerList().filter(i => i.kind === 'share').reduce((a, i) => a + toPln(i.price * i.shares, i.currency), 0) : 0;
-        r.s017 = { ...T, capPl: Math.round(capPl), capForeign: Math.round(capForeign) };
+        const sec = {}; // 0.17 S2: marża sektora = EBITDA / przychód z 4 ostatnich kwartałów (spółki krajowe, sektor główny)
+        for (const x of stocks) {
+            if (x.isBankrupt || x.assetType || x.isBankStock || !x.fundamentals?.history?.length) continue;
+            const k = Array.isArray(x.sector) ? x.sector[0] : x.sector, h = x.fundamentals.history.slice(-4), a = sec[k] || (sec[k] = [0, 0, 0]);
+            a[0] += h.reduce((t, y) => t + (Number(y.ebitda) || 0), 0); a[1] += h.reduce((t, y) => t + (Number(y.revenue) || 0), 0); a[2]++;
+        }
+        r.s017 = { ...T, capPl: Math.round(capPl), capForeign: Math.round(capForeign), secMargin: Object.fromEntries(Object.entries(sec).filter(([, a]) => a[1] > 0).map(([k, a]) => [k, [+(a[0] / a[1]).toFixed(4), a[2]]])) };
         return r;
     };
 })();`;

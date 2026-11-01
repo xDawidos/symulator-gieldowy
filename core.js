@@ -1856,13 +1856,14 @@ const SECTORS = {
         niches: { 'TV': { event: 'season' }, 'Rozrywka': { event: 'season' } } },                               // T3: hit albo klapa sezonu
     'Gaming':                { icon: '🎮', profile: { beta: 1.4, rateSens: 1.0, pe: 20, margin: 0.25, growth: 0.07, ps: 3.0, da: 0.06 } },
     'Przemysł':              { icon: '⚙️', profile: { beta: 1.3, rateSens: 0.8, pe: 13, margin: 0.14, growth: 0.03, ps: 1.0, da: 0.05 },
-        subsectors: { 'Robotyka': { delta: { growth: 0.02, margin: 0.02 } }, 'Przemysł ciężki': { profile: { beta: 1.4, da: 0.08 } } } }, // Przemysł ciężki: 0.16.4 G18
+        subsectors: { 'Robotyka': { delta: { growth: 0.02, margin: 0.02 } }, 'Przemysł ciężki': { profile: { beta: 1.4, da: 0.08 } }, 'Wydobycie': { listedOnly: true }, 'Handel surowcami': { listedOnly: true } } }, // Przemysł ciężki: 0.16.4 G18; Wydobycie, Handel surowcami: 0.17 S2 (tylko przypisane spółki)
     'Motoryzacja':           { icon: '🚗', profile: { beta: 1.4, rateSens: 1.0, pe: 12, margin: 0.12, growth: 0.03, ps: 0.8, da: 0.05 } }, // 0.16.2 G6a: cykliczna, koszt pracy 22% przychodów
     'Chemia':                { icon: '⚗️', profile: { beta: 1.2, rateSens: 0.7, pe: 13, margin: 0.16, growth: 0.03, ps: 1.1, da: 0.05 } },
     'Energia':               { icon: '⚡', profile: { beta: 0.8, rateSens: 0.9, pe: 12, margin: 0.25, growth: 0.02, ps: 1.5, da: 0.08 },
         subsectors: {
             'Energetyka jądrowa': { profile: { beta: 0.4, da: 0.14, pe: 14 }, mechanic: 'nuclear' },        // T2: budowa bloku
-            'OZE': { mult: { rateSens: 1.5 }, partySubsidy: true }                                           // dotacje według partii
+            'OZE': { mult: { rateSens: 1.5 }, partySubsidy: true },                                          // dotacje według partii
+            'Rafinerie': { listedOnly: true }, 'Gaz': { listedOnly: true }                                   // 0.17 S2: tylko przypisane spółki
         } },
     'Budowlany':             { icon: '🏗️', profile: { beta: 1.5, rateSens: 1.3, pe: 11, margin: 0.10, growth: 0.03, ps: 0.7, da: 0.03 } },
     'Transport i logistyka': { icon: '🚚', profile: { beta: 1.2, rateSens: 0.7, pe: 13, margin: 0.14, growth: 0.03, ps: 1.0, da: 0.07 }, // dawny „Transport”
@@ -2002,7 +2003,7 @@ const SUBSECTOR_RANDOM_CHANCE = 0.3; // nowe spółki i startupy: szansa na pods
 function assignRandomSubsector(stock, chance = SUBSECTOR_RANDOM_CHANCE) {
     const main = getMainSegment(stock);
     if (!main || main.subsector || !isValidSegmentList(stock.segments)) return null;
-    const options = Object.entries(SECTORS[main.sector]?.subsectors || {}).filter(([name]) => !name.startsWith('Bank '));
+    const options = Object.entries(SECTORS[main.sector]?.subsectors || {}).filter(([name, def]) => !name.startsWith('Bank ') && !def.listedOnly); // 0.17 S2: podsektory surowcowe tylko z przydziału
     if (!options.length || !(Math.random() < chance)) return null;
     const total = options.reduce((sum, [, def]) => sum + (def.weight || 1), 0);
     let roll = Math.random() * total;
@@ -2026,7 +2027,11 @@ const SUBSECTOR_START_ASSIGNMENTS = {
     WZM: ['Żywność', 'Rolnictwo'],                 // Miejskie Ziemniaki
     GROM: ['Obronność', 'Drony'],                  // Grom Systems
     WIP: ['Finanse', 'Fintech'],                   // WinPost — płatności (segmenty: Fintech 60%, Technologia 40%)
-    CRO: ['Finanse', 'Fintech']                    // Cyber-Ochrona — cyberbezpieczeństwo płatności (Fintech 50%, Usługi 50%)
+    CRO: ['Finanse', 'Fintech'],                   // Cyber-Ochrona — cyberbezpieczeństwo płatności (Fintech 50%, Usługi 50%)
+    PES: ['Energia', 'Rafinerie'],                 // 0.17 S2: PetroState
+    NAG: ['Energia', 'Gaz'],                       // NatGaz
+    ZST: ['Przemysł', 'Wydobycie'],                // Złoty Stok
+    SLS: ['Żywność', 'Rolnictwo']                  // Słodki Spichlerz
 };
 // Spółki przekształcone przy przydziale (decyzja użytkownika: jedna istniejąca spółka staje się fintechem).
 const SUBSECTOR_START_SEGMENTS = {

@@ -2042,6 +2042,47 @@ const initialStocks = [
         retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
     },
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) candlestickHistory: [], lineHistory: [], playerTransactions: [], priceAlerts: { buy: null, sell: null }
+    },
+    // 0.17 S2: spółki surowcowe (plany/propozycja_spolek_0.17.md); profil surowcowy: COMMODITY_ASSIGNMENTS (commodities.js)
+    {
+    name: 'PetroState', price: 120.00, volatilityFactor: 0.8, symbol: 'PES', exchange: 'SILVER', totalShares: 10000000, maxShares: 10000000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
+        assets: 0, liabilities: 0, shareCapital: 0, retainedEarnings: 0
+    },
+    quarterlyEarnings: 0,
+  lineHistory: [], playerTransactions: [], sector: ['Energia', 'Chemia'], financialHealth: 1, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, isStateOwned: true, stateOwnershipPct: 0.5, eventResistance: 0.6, dividendPolicy: 'Balanced',
+        dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
+        lastQuarterValue: 0, estimatedDividend: 0, bankAccountId: null,
+    cash: 0
+    },
+    {
+    name: 'NatGaz', price: 55.00, volatilityFactor: 1.0, symbol: 'NAG', exchange: 'BRONZE', totalShares: 60000, maxShares: 60000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
+        assets: 0, liabilities: 0, shareCapital: 0, retainedEarnings: 0
+    },
+    quarterlyEarnings: 0,
+  lineHistory: [], playerTransactions: [], sector: ['Energia'], financialHealth: 1, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, isStateOwned: true, stateOwnershipPct: 0.7, eventResistance: 0.6, dividendPolicy: 'Balanced',
+        dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
+        lastQuarterValue: 0, estimatedDividend: 0, bankAccountId: null,
+    cash: 0
+    },
+    {
+    name: 'Złoty Stok', price: 14.00, volatilityFactor: 1.8, symbol: 'ZST', exchange: 'JUNK', totalShares: 20000, maxShares: 20000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
+        assets: 0, liabilities: 0, shareCapital: 0, retainedEarnings: 0
+    },
+    quarterlyEarnings: 0,
+  lineHistory: [], playerTransactions: [], sector: ['Przemysł'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
+        dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
+        lastQuarterValue: 0, estimatedDividend: 0, bankAccountId: null,
+    cash: 0
+    },
+    {
+    name: 'Słodki Spichlerz', price: 32.00, volatilityFactor: 1.0, symbol: 'SLS', exchange: 'BRONZE', totalShares: 30000, maxShares: 30000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
+        assets: 0, liabilities: 0, shareCapital: 0, retainedEarnings: 0
+    },
+    quarterlyEarnings: 0,
+  lineHistory: [], playerTransactions: [], sector: ['Żywność'], financialHealth: 1, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
+        dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
+        lastQuarterValue: 0, estimatedDividend: 0, bankAccountId: null,
+    cash: 0
     }
 
 ];
@@ -3071,8 +3112,9 @@ function computeQuarterResults(stock) {
 
     // 0.13: strajk, epidemia, klęska — przychody tylko tego kwartału (baza przychodów bez zmian).
     const quarterFactor = (typeof getStrikeRevenueFactor === 'function' ? getStrikeRevenueFactor(stock) : 1) * (typeof getSocietyRevenueFactor === 'function' ? getSocietyRevenueFactor(stock) : 1) * consumeNicheRevenueFactor(stock) * getCooperationShockFactor(stock) * (typeof getCrisisRevenueFactor === 'function' ? getCrisisRevenueFactor(stock) : 1); // T3: sezon TV/Rozrywka; T5: strajk kooperanta (połowa szoku)
+    const commodityAdj = typeof getCommodityResultAdj === 'function' ? getCommodityResultAdj(stock) : { revenueFactor: 1, marginAdj: 0 }; // 0.17 S2: produkt i wsad względem Ś8
     const baseRevenue = fundamentals.revenue;
-    const revenue = baseRevenue * quarterFactor;
+    const revenue = baseRevenue * quarterFactor * commodityAdj.revenueFactor;
     const lostRevenue = baseRevenue - revenue; // dźwignia operacyjna: 40% kosztów jest sztywnych w krótkim terminie
     const inflationSqueeze = Math.max(0, inflation - 0.04) * 0.5; // wysoka inflacja zjada marże
     // 0.13: marża = marża_0.12 + udział_kosztu_pracy × (1 − indeks); neutralnie (indeks 1,0) bez zmian.
@@ -3085,7 +3127,7 @@ function computeQuarterResults(stock) {
     const competitiveErosion = excessMargin * 0.35;
     const stabilizedBaseMargin = baseMargin - competitiveErosion;
     // 0.13: marża = marża_bazowa + udział_kosztu_pracy × (1 − indeks); neutralnie (indeks 1,0) bez zmian.
-    const margin = Math.max(-0.4, Math.min(0.6, stabilizedBaseMargin + laborAdj));
+    const margin = Math.max(-0.4, Math.min(0.6, stabilizedBaseMargin + laborAdj + commodityAdj.marginAdj));
     const fixedExpenses = Math.max(0, Number(stock.fixedExpenses) || 0);
 
     // Działające inwestycje: kwartalny zysk lub strata (investments.js).
@@ -13152,7 +13194,7 @@ function creepSubsidiaryStake(child, parent) {
 
 // 0.16.11 K0: pochodzenie spółki startowej (decyzje użytkownika, plany/lista_firm_startowych.md). PL = tylko przy starcie z Polski,
 // UNI = w każdym kraju startowym, DE/US = firma tego kraju (przy innym starcie istnieje tylko jako zagraniczna z countries_data.js). Nie zapisujemy.
-const PL_ORIGIN_SYMBOLS = ['WZM', 'PIX', 'SUM', 'WIP', 'FIX', 'DRH', 'BAL', 'LEK', 'DPB', 'WPY', 'KRO', 'PLX', 'BTX', 'ANN', 'SIK', 'KRA', 'STM', 'SKP', 'BOR', 'BEW', 'ORT', 'ENG', 'TRN', 'PUR', 'NOC', 'GIEB', 'UnG', 'PZB', 'ORZD', 'HUSA', 'BPIG', 'MAJB'];
+const PL_ORIGIN_SYMBOLS = ['PES', 'NAG', 'ZST', 'SLS', 'WZM', 'PIX', 'SUM', 'WIP', 'FIX', 'DRH', 'BAL', 'LEK', 'DPB', 'WPY', 'KRO', 'PLX', 'BTX', 'ANN', 'SIK', 'KRA', 'STM', 'SKP', 'BOR', 'BEW', 'ORT', 'ENG', 'TRN', 'PUR', 'NOC', 'GIEB', 'UnG', 'PZB', 'ORZD', 'HUSA', 'BPIG', 'MAJB'];
 const COMPANY_ORIGIN_OVERRIDES = { WiS: 'DE', DMPC: 'US', CBK: 'DE', SPK: 'DE', VBK: 'DE', IBK: 'DE', DGH: 'DE' }; // + banki startowe kraju (COUNTRY_BANK_DEFS) // firmy z countries_data.js: krajowe tylko przy starcie ze swojego kraju
 function getCompanyOrigin(stock) {
     if (!stock) return 'UNI';

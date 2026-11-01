@@ -31,7 +31,8 @@ export function perGame(r) {
     moneyWarn: r.moneyWarnQuarters || 0, badPrice: (r.badPrice || []).length,
     invAfterLoad: (r.saveCheck?.invAfterLoad || []).length, lzShare: r.saveCheck?.lzShare, // 0.17 S0b
     capPl: r.s017?.capPl, capForeign: r.s017?.capForeign, capAll: r.s017 ? r.s017.capPl + r.s017.capForeign : undefined,
-    d3: r.s017?.d3?.n, d3DomAcq: r.s017?.d3?.domAcq, d3DomTgt: r.s017?.d3?.domTgt
+    d3: r.s017?.d3?.n, d3DomAcq: r.s017?.d3?.domAcq, d3DomTgt: r.s017?.d3?.domTgt,
+    earnIdx: r.earningsIndexCagr, secMargin: r.s017?.secMargin || null // 0.17 S2: kryterium kalibracji
   };
 }
 
@@ -48,9 +49,11 @@ export function summarize(g, expected) {
   const kinds = {}; for (const x of g) for (const k of x.crisisKinds) kinds[k] = (kinds[k] || 0) + 1;
   const starts = {}; for (const x of g) for (const k of x.startCountries) starts[k] = (starts[k] || 0) + 1;
   const out = { n: g.length, failed: g.failed || [], expected: expected ?? g.length + (g.failed || []).length };
-  for (const k of ['gig', 'margin', 'fundValue', 'capMedian', 'capMax', 'domestic', 'foreign', 'total', 'bankrupt', 'debuts', 'debutFail', 'maResolved', 'foreignTakeovers', 'giantTakeover', 'giantGdr', 'crisisLines', 'linkMerged', 'linkIntl', 'linkTaken', 'joinedN', 'msq', 'save', 'saveGz', 'saveBuildMs', 'trust', 'lzShare', 'capPl', 'capForeign', 'capAll', 'd3'])
+  for (const k of ['gig', 'margin', 'fundValue', 'capMedian', 'capMax', 'domestic', 'foreign', 'total', 'bankrupt', 'debuts', 'debutFail', 'maResolved', 'foreignTakeovers', 'giantTakeover', 'giantGdr', 'crisisLines', 'linkMerged', 'linkIntl', 'linkTaken', 'joinedN', 'msq', 'save', 'saveGz', 'saveBuildMs', 'trust', 'lzShare', 'capPl', 'capForeign', 'capAll', 'd3', 'earnIdx'])
     out[k] = num(k);
   out.crisisKinds = kinds; out.startCountries = starts;
+  const sec = {}; for (const x of g) for (const [k, [m]] of Object.entries(x.secMargin || {})) (sec[k] = sec[k] || []).push(m);
+  out.secMargin = Object.fromEntries(Object.entries(sec).map(([k, a]) => [k, stat(a)])); // marża sektora: rozkład między grami
   out.withTaken = sub(x => x.takenByForeign); out.withoutTaken = sub(x => !x.takenByForeign);
   out.inv = cnt(x => x.inv); out.neg = cnt(x => x.neg); out.err = cnt(x => x.err); out.cp = cnt(x => x.cp); out.moneyWarn = cnt(x => x.moneyWarn > 0); out.badPrice = cnt(x => x.badPrice); out.saveFail = cnt(x => x.saveOk === false);
   out.invAfterLoad = cnt(x => x.invAfterLoad); out.moneyWarnQ = num('moneyWarn'); // gry z naruszeniem po wczytaniu; kwartały z ostrzeżeniem na grę

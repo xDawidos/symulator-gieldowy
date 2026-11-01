@@ -165,6 +165,7 @@ function getActiveCommodityEvents() { return ensureCommodityState().events; }
 /** Co kwartał (main.js): zamyka średnią kwartalną, wygasza zdarzenia, losuje nowe. */
 function processCommoditiesQuarterly() {
     const st = ensureCommodityState();
+    noteCommodityDeviationRun(); // S2: przed zamknięciem średniej
     for (const id of COMMODITY_IDS) {
         const avg = st.qN ? st.qSum[id] / st.qN : st.prices[id];
         st.qHist[id].push(avg); if (st.qHist[id].length > COMMODITY_RULES.historyQuarters) st.qHist[id].shift();
@@ -192,7 +193,7 @@ function noteCrisisForCommodities(lineId) { return COMMODITY_GOLD_CRISES.include
 function getCommoditiesSnapshot() {
     const st = ensureCommodityState(), r = x => Math.round(x * 1e4) / 1e4, rs = x => Number(x.toPrecision(5));
     const map = f => Object.fromEntries(COMMODITY_IDS.map(id => [id, f(id)]));
-    return { s: st.startQ, w: st.w, p: map(id => st.prices[id]), h: map(id => st.hist[id].map(rs)), q: map(id => st.qHist[id].map(rs)), qs: map(id => r(st.qSum[id] || 0)), qn: st.qN, e: st.events, d: st.lastDroughtQ };
+    return { s: st.startQ, w: st.w, p: map(id => st.prices[id]), h: map(id => st.hist[id].map(rs)), q: map(id => st.qHist[id].map(rs)), qs: map(id => r(st.qSum[id] || 0)), qn: st.qN, e: st.events, d: st.lastDroughtQ, r: st.run };
 }
 function applyCommoditiesSnapshot(snap) {
     initCommodityState(); // stary zapis bez pola: ceny średnie
@@ -206,6 +207,7 @@ function applyCommoditiesSnapshot(snap) {
         const q = (snap.q?.[id] || []).map(Number).filter(v => v > 0); if (q.length) st.qHist[id] = q.slice(-COMMODITY_RULES.historyQuarters);
         st.qSum[id] = Number(snap.qs?.[id]) || 0;
     }
+    if (snap.r && typeof snap.r === 'object') st.run = Object.fromEntries(Object.entries(snap.r).filter(([k, v]) => COMMODITY_DEFS[k] && Number.isFinite(v?.n)).map(([k, v]) => [k, { sign: Math.sign(Number(v.sign) || 0), n: v.n }]));
     st.events = (Array.isArray(snap.e) ? snap.e : []).filter(ev => COMMODITY_EVENTS[ev?.id] && Number.isFinite(ev.until) && ev.shocks && typeof ev.shocks === 'object')
         .map(ev => ({ id: ev.id, until: ev.until, shocks: Object.fromEntries(Object.entries(ev.shocks).filter(([k, v]) => COMMODITY_DEFS[k] && Number.isFinite(v))), ...(COMMODITY_DEFS[ev.product] ? { product: ev.product } : {}) }));
 }
@@ -218,4 +220,134 @@ function checkCommodityInvariants() {
         else if (p < lo * (1 - 1e-9) || p > hi * (1 + 1e-9)) problems.push(`surowiec ${id}: cena ${p.toFixed(2)} poza widełkami ${lo.toFixed(2)}–${hi.toFixed(2)}`);
     }
     return problems;
+}
+
+// =================================================================================
+// 0.17 S2: SPÓŁKI I KOSZTY WSADU
+// =================================================================================
+// Produkt: przychód kwartału × (1 + w·((P̄q/Ś8)^0,6 − 1)); wsad: marża −= udział·(r_ef − 1)·(1 − przerzucenie), gdzie
+// r_ef = (1 − h)·P̄q/Ś8 + h·P̄(q−4)/Ś8 (zabezpieczenie h po cenie sprzed 4 kw.), przerzucenie 0 → 60% w 4 kw. trwania odchylenia.
+// Wszystko względem Ś8, więc długoterminowo średnio zero. Przypisania są w kodzie (symbol domowy / id spółki kraju), nie w zapisie.
+
+const COMMODITY_IMPACT = { productExp: 0.6, passMax: 0.6, passQuarters: 4, hedgeRange: [0.3, 0.7], hedgeState: 0.3, hedgeLagQ: 4, strikeCut: 0.2 };
+
+// `lag: 1` — produkt liczony po średniej poprzedniego kwartału (rafinerie, handel: marża przy zmianie ceny, nie na poziomie)
+const COMMODITY_ASSIGNMENTS = {
+    // Polska (nowe w S2 i istniejące)
+    PES: { product: { oil: 0.6 }, lag: 1, input: { oil: 0.6 } },
+    NAG: { product: { gas: 1 }, input: {} },
+    ZST: { product: { gold: 1 }, input: {} },
+    SLS: { product: { grain: 1 }, input: {} },
+    KWM: { product: { coal: 1 }, input: {} },
+    MLD: { product: { metals: 1 }, input: {} },
+    PUR: { product: { uranium: 1 }, input: {} },
+    SIK: { input: { gas: 0.15 } },
+    MEF: { product: { oil: 0.6 }, lag: 1, input: { oil: 0.6 } },
+    ECL: { input: { oil: 0.25 } },
+    KUP: { input: { gas: 0.3 } },
+    ESA: { input: { coal: 0.35 } },
+    TRN: { input: { coal: 0.3, uranium: 0.1 } },
+    // zagranica (countries_data.js)
+    TOB: { product: { oil: 1 }, input: {} },
+    NRG: { product: { oil: 0.5, gas: 0.5 }, input: {} },
+    GPR: { product: { gas: 1 }, input: {} },
+    WGI: { product: { coal: 1 }, input: {} },
+    TKS: { input: { metals: 0.3, coal: 0.1 } },
+    SSA: { input: { metals: 0.3, coal: 0.1 } },
+    LND: { input: { gas: 0.3 } },
+    JDM: { product: { grain: 1 }, input: {} },
+    NGR: { product: { gold: 1 }, input: {} },
+    GTG: { product: { gas: 0.6, oil: 0.4 }, input: {} },
+    DOL: { product: { coal: 1 }, input: {} },
+    KJM: { product: { metals: 1 }, input: {} },
+    GLK: { product: { metals: 0.2, coal: 0.1, oil: 0.1 }, lag: 1, input: { metals: 0.2, coal: 0.1, oil: 0.1 } },
+    TBN: { product: { oil: 0.6 }, lag: 1, input: { oil: 0.6 } },
+    UOW: { product: { metals: 1 }, input: {} },
+    BHO: { product: { grain: 1 }, input: {} }
+};
+
+// wsad domyślny: sektor → udziały; podsektor nadpisuje (pusty obiekt = brak wsadu). Rolnictwo: produkt zboże.
+const COMMODITY_SECTOR_INPUTS = {
+    'Chemia': { oil: 0.25, gas: 0.15 },
+    'Przemysł': { metals: 0.25, coal: 0.05 },
+    'Motoryzacja': { metals: 0.15, oil: 0.05 },
+    'Energia': { coal: 0.35, gas: 0.15 },
+    'Transport i logistyka': { oil: 0.20 },
+    'Żywność': { grain: 0.20 },
+    'Budowlany': { metals: 0.10 },
+    'Obronność': { metals: 0.15 }
+};
+const COMMODITY_SUBSECTOR_INPUTS = { 'OZE': {}, 'Energetyka jądrowa': { uranium: 0.20 }, 'Lotnictwo': { oil: 0.30 }, 'Rolnictwo': {} };
+const COMMODITY_SUBSECTOR_PRODUCTS = { 'Rolnictwo': { grain: 1 } };
+
+function getCommoditySegments(stock) {
+    if (stock?.kind === 'share' && Array.isArray(stock.sectors)) return stock.sectors.map(([sector, share], n) => ({ sector, share, subsector: n === 0 ? stock.subsector : null }));
+    return typeof getStockSegments === 'function' ? getStockSegments(stock) : [];
+}
+function getCommodityKey(stock) { return stock?.kind === 'share' ? stock.id : stock?.symbol; }
+
+/** Profil surowcowy spółki: { product: {id: w}, input: {id: udział}, lag }. Przypisanie z tabeli albo wsad (i produkt rolnictwa) z segmentów. */
+function getStockCommodityProfile(stock) {
+    // shortcut: tabela po symbolu/id — nowa spółka z wolnym już symbolem z tabeli dziedziczy profil; dodać znacznik pochodzenia, gdyby to wystąpiło
+    const own = stock && !stock.generated && !stock.assetType ? COMMODITY_ASSIGNMENTS[getCommodityKey(stock)] : null;
+    if (own) return { product: own.product || {}, input: own.input || {}, lag: own.lag || 0 };
+    const product = {}, input = {};
+    for (const seg of getCommoditySegments(stock)) {
+        const inp = (seg.subsector && COMMODITY_SUBSECTOR_INPUTS[seg.subsector]) || COMMODITY_SECTOR_INPUTS[seg.sector] || {};
+        for (const [id, w] of Object.entries(inp)) input[id] = (input[id] || 0) + w * seg.share;
+        for (const [id, w] of Object.entries(COMMODITY_SUBSECTOR_PRODUCTS[seg.subsector] || {})) product[id] = (product[id] || 0) + w * seg.share;
+    }
+    return { product, input, lag: 0 };
+}
+
+/** Udział zabezpieczonego wsadu h: państwowe 0,3, pozostałe 0,3–0,7 stałe dla spółki (z symbolu, bez pola w zapisie). */
+function getStockCommodityHedge(stock) {
+    if (Number.isFinite(stock?.hedge)) return stock.hedge;
+    if (stock?.isStateOwned || stock?.state) return COMMODITY_IMPACT.hedgeState;
+    const key = String(getCommodityKey(stock) || '');
+    let h = 0;
+    for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) % 1000;
+    const [a, b] = COMMODITY_IMPACT.hedgeRange;
+    return a + (b - a) * h / 999;
+}
+
+/** Średnia kwartału sprzed k zamkniętych kwartałów (k = 0: bieżący) względem Ś8. */
+function getCommodityRatioLag(id, k = 0) {
+    if (!k) return getCommodityTrendRatio(id);
+    const q = ensureCommodityState().qHist[id];
+    return (q[q.length - k] ?? q[0]) / getCommodityTrend(id);
+}
+/** Przerzucenie kosztów na ceny: 0 → 60% liniowo przez 4 kw. odchylenia w tę samą stronę (zamknięte kwartały). */
+function getCommodityPassThrough(id) {
+    const run = ensureCommodityState().run?.[id], sign = Math.sign(getCommodityTrendRatio(id) - 1);
+    const n = run && run.sign === sign && sign !== 0 ? run.n : 0;
+    return COMMODITY_IMPACT.passMax * Math.min(1, n / COMMODITY_IMPACT.passQuarters);
+}
+/** Przy zamknięciu kwartału: długość serii odchylenia (ten sam stosunek, który widziały raporty spółek). */
+function noteCommodityDeviationRun() {
+    const st = ensureCommodityState();
+    st.run = st.run || {};
+    for (const id of COMMODITY_IDS) {
+        const sign = Math.sign(getCommodityTrendRatio(id) - 1), cur = st.run[id];
+        st.run[id] = cur && cur.sign === sign ? { sign, n: cur.n + 1 } : { sign, n: 1 };
+    }
+}
+
+/** Wpływ surowców na kwartał spółki (computeQuarterResults): { revenueFactor, marginAdj }. */
+function getCommodityResultAdj(stock) {
+    if (!commodityState) return { revenueFactor: 1, marginAdj: 0 };
+    const prof = getStockCommodityProfile(stock);
+    let revenueFactor = 1, marginAdj = 0;
+    for (const [id, w] of Object.entries(prof.product)) {
+        if (!COMMODITY_DEFS[id] || !w) continue;
+        revenueFactor += w * (Math.pow(getCommodityRatioLag(id, prof.lag), COMMODITY_IMPACT.productExp) - 1);
+        if (stock.kind !== 'share' && commodityState.events.some(ev => ev.id === 'strike' && ev.product === id)) revenueFactor -= w * COMMODITY_IMPACT.strikeCut; // strajk: spółki kraju startowego
+    }
+    const h = Object.keys(prof.input).length ? getStockCommodityHedge(stock) : 0;
+    for (const [id, share] of Object.entries(prof.input)) {
+        if (!COMMODITY_DEFS[id] || !share) continue;
+        const r = (1 - h) * getCommodityTrendRatio(id) + h * getCommodityRatioLag(id, COMMODITY_IMPACT.hedgeLagQ);
+        marginAdj -= share * (r - 1) * (1 - getCommodityPassThrough(id));
+    }
+    return { revenueFactor: Math.max(0.2, revenueFactor), marginAdj };
 }
