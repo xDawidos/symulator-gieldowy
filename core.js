@@ -5217,6 +5217,7 @@ function triggerMacroShockEvent() {
     const event = pickMacroEvent(MACRO_SHOCK_EVENTS.filter(e => (e.type === 'positive') === wantPositive));
     if (!event) return null;
     if (typeof noteMacroShockForCrises === 'function') noteMacroShockForCrises(event); // 0.15.3: fałszywe alarmy (sygnały bez linii)
+    if (typeof applyCommodityMacroShock === 'function') applyCommodityMacroShock(event.id); // 0.17 S1: ropa, zboże, gaz i węgiel
     if (event.inflation) macro.shocks.inflation += event.inflation;
     for (const stock of stocks) {
         if (stock.assetType || stock.isBankrupt) continue;

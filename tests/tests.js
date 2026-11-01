@@ -14713,3 +14713,55 @@ group('0.16.10 Nowa scenka startowa', () => {
         const n = mailbox.messages.length; skipIntroScene(); assertEq(mailbox.messages.length, n, 'drugie pominięcie nic nie robi');
     });
 });
+
+group('0.17 S1 Surowce', () => {
+    // symulacja tygodni z kwartałem co 13 tygodni (bez zdarzeń losowych, gdy quiet)
+    const run = (weeks, { quiet = false, onWeek } = {}) => {
+        const saved = {}; if (quiet) for (const k of Object.keys(COMMODITY_EVENTS)) { saved[k] = COMMODITY_EVENTS[k].yearly; COMMODITY_EVENTS[k].yearly = 0; }
+        try {
+            for (let w = 1; w <= weeks; w++) { stepCommodities(); if (onWeek) onWeek(w); if (w % 13 === 0) { macro.quarter++; processCommoditiesQuarterly(); } }
+        } finally { for (const k of Object.keys(saved)) COMMODITY_EVENTS[k].yearly = saved[k]; }
+    };
+    const withQ = fn => { const q0 = macro.quarter; try { macro.quarter = 1; initCommodityState(); return fn(); } finally { macro.quarter = q0; initCommodityState(); } };
+    test('S1: ceny w widełkach w 100% kroków (200 przebiegów × 2 lata, ze zdarzeniami)', () => withQ(() => {
+        let bad = 0, steps = 0;
+        for (let r = 0; r < 200; r++) { macro.quarter = 1; initCommodityState(); run(104, { onWeek: () => { steps++; if (checkCommodityInvariants().length) bad++; } }); }
+        assertEq(bad, 0, `kroki poza widełkami (z ${steps})`);
+    }));
+    test('S1: zmienność roczna w ±5 pp od σ; sezon gazu: średnia Q1 > Q3', () => withQ(() => {
+        const prev = {}, rets = Object.fromEntries(COMMODITY_IDS.map(id => [id, []])), gasQ = { 1: [], 3: [] };
+        for (const id of COMMODITY_IDS) prev[id] = getCommodityPrice(id);
+        run(52 * 40, { quiet: true, onWeek: () => { for (const id of COMMODITY_IDS) { const p = getCommodityPrice(id); rets[id].push(Math.log(p / prev[id])); prev[id] = p; } const qy = commodityQuarterInYear(); if (gasQ[qy]) gasQ[qy].push(getCommodityPrice('gas')); } });
+        for (const id of COMMODITY_IDS) {
+            const a = rets[id], m = a.reduce((s, v) => s + v, 0) / a.length, vol = Math.sqrt(a.reduce((s, v) => s + (v - m) ** 2, 0) / (a.length - 1) * 52);
+            assert(Math.abs(vol - COMMODITY_DEFS[id].sigma) <= 0.05, `${id}: zmienność ${(vol * 100).toFixed(1)}% vs σ ${COMMODITY_DEFS[id].sigma * 100}%`);
+        }
+        const avg = a => a.reduce((s, v) => s + v, 0) / a.length;
+        assert(avg(gasQ[1]) > avg(gasQ[3]), `gaz Q1 ${avg(gasQ[1]).toFixed(2)} > Q3 ${avg(gasQ[3]).toFixed(2)}`);
+    }));
+    test('S1: zdarzenie przesuwa cenę i cel, potem wygasa; szok naftowy z core.js i linii 1973 rusza ropą', () => withQ(() => {
+        const u0 = getCommodityPrice('uranium'), m0 = getCommodityTarget('uranium');
+        const ev = startCommodityEvent('reactor');
+        assertNear(getCommodityPrice('uranium'), u0 * Math.sqrt(0.7), 'skok o połowę szoku (w logarytmie)', 1e-9);
+        assertNear(getCommodityTarget('uranium'), m0 * 0.7, 'cel −30%', 1e-9);
+        run(13 * 7, { quiet: true });
+        assert(!getActiveCommodityEvents().includes(ev), 'zdarzenie wygasło');
+        assert(getCommodityPrice('uranium') > u0 * 0.8, 'cena wraca ku średniej');
+        fireMacroShockById('oil', true);
+        assert(getActiveCommodityEvents().some(e => e.id === 'oilShock' && Math.abs(e.shocks.oil - 0.4) < 1e-9), 'szok naftowy: ropa +40%');
+        noteCrisisForCommodities('banking');
+        assert(getActiveCommodityEvents().some(e => e.id === 'goldFlight' && e.shocks.gold >= 0.1), 'kryzys bankowy: ucieczka do złota');
+    }));
+    test('S1: zapis i wczytanie bez różnic; stary zapis bez pola startuje z cen średnich', () => withQ(() => {
+        run(60);
+        startCommodityEvent('strike');
+        const snap = JSON.parse(JSON.stringify(getCommoditiesSnapshot()));
+        applyCommoditiesSnapshot(snap);
+        assertEq(JSON.stringify(getCommoditiesSnapshot()), JSON.stringify(snap), 'zapis bez strat');
+        assert(getActiveCommodityEvents().some(e => e.id === 'strike' && e.product), 'zdarzenie z produktem po wczytaniu');
+        applyCommoditiesSnapshot(undefined);
+        for (const id of COMMODITY_IDS) assertEq(getCommodityPrice(id), COMMODITY_DEFS[id].mean, `${id}: cena średnia`);
+        assertNear(getCommodityTrendRatio('oil'), 1, 'Ś8 startuje od średniej', 1e-12);
+        assertEq(checkWorldInvariants().filter(p => p.startsWith('surowiec')).length, 0);
+    }));
+});

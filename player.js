@@ -1785,6 +1785,7 @@ function startNewCareer(profile = {}) {
     if (typeof centralBank === 'object') { centralBank.indexes = {}; if (typeof ensureLaunchedIndexes === 'function') ensureLaunchedIndexes(); } // 0.16.1: nowa gra — tylko GIG i SIG20
     if (typeof initFxState === 'function') initFxState(); // 0.16.1: nowe kursy i pusta gotówka walutowa
     if (typeof resetMarginState === 'function') resetMarginState(); // 0.16.4 G21: bez pozycji forex
+    if (typeof initCommodityState === 'function') initCommodityState(); // 0.17 S1: surowce od cen średnich
     if (typeof resetGdrState === 'function') resetGdrState();
     if (typeof resetForeignBots === 'function') resetForeignBots(); // 0.16.2 G8: nowa gra bez botów zagranicznych
     for (const symbol of Object.keys(playerPortfolio)) delete playerPortfolio[symbol];
@@ -2041,6 +2042,7 @@ function processFundWeekly() {
 
     chargeManagementFee();
     if (typeof stepFxRates === 'function') stepFxRates(); // 0.16.1 G2a: kursy walut co tydzień gry
+    if (typeof stepCommodities === 'function') stepCommodities(); // 0.17 S1: ceny surowców co tydzień (przed depozytami)
     if (typeof stepMarginPositions === 'function') stepMarginPositions(); // 0.16.4 G21: koszt utrzymania i margin call
     if (typeof stepForeignIssuers === 'function') stepForeignIssuers(); // 0.16.1 G3: ceny obcych gigantów (GDR)
     if (typeof stepCountries === 'function') stepCountries(); // 0.16.2 G5: rynki zagraniczne (countries.js)

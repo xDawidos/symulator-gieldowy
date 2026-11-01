@@ -247,6 +247,7 @@ function startCrisisLine(id, options = {}) {
     };
     crisisState.lastEventQ = crisisQuarter();
     if (!crisisState.used.includes(id)) crisisState.used.push(id);
+    if (typeof noteCrisisForCommodities === 'function') noteCrisisForCommodities(id); // 0.17 S1: ucieczka do złota
     if (options.skipSpark) enterCrisisStage('burst'); else enterCrisisStage('spark');
     return crisisLine;
 }
@@ -412,6 +413,7 @@ function tryRescueBank(stock, def) {
 function fireMacroShockById(id, asSignal) {
     const event = MACRO_SHOCK_EVENTS.find(e => e.id === id);
     if (!event) return null;
+    if (typeof applyCommodityMacroShock === 'function') applyCommodityMacroShock(event.id); // 0.17 S1: iskra linii 1973 rusza ceną ropy
     if (event.inflation) macro.shocks.inflation += event.inflation;
     for (const stock of stocks) {
         if (stock.assetType || stock.isBankrupt) continue;
