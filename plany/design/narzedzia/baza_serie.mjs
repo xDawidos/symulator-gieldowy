@@ -28,7 +28,10 @@ export function perGame(r) {
     msq: r.msPerQuarter, realMs: r.realMs, save: r.saveSizes?.now, saveGz: r.saveCheck?.gzBytes, saveBuildMs: r.saveCheck?.buildMs,
     inv: (r.invariants || []).length, neg: (r.negCash || []).length, err: (r.errors || []).length, saveOk: r.saveCheck ? (r.saveCheck.lossless !== false && r.saveCheck.loadOk !== false && !(r.saveCheck.error)) : null,
     cp: (r.countries?.problems || []).length + (r.foreign?.problems || []).length + (r.giant?.fxProblems || []).length,
-    moneyWarn: r.moneyWarnQuarters || 0, badPrice: (r.badPrice || []).length
+    moneyWarn: r.moneyWarnQuarters || 0, badPrice: (r.badPrice || []).length,
+    invAfterLoad: (r.saveCheck?.invAfterLoad || []).length, lzShare: r.saveCheck?.lzShare, // 0.17 S0b
+    capPl: r.s017?.capPl, capForeign: r.s017?.capForeign, capAll: r.s017 ? r.s017.capPl + r.s017.capForeign : undefined,
+    d3: r.s017?.d3?.n, d3DomAcq: r.s017?.d3?.domAcq, d3DomTgt: r.s017?.d3?.domTgt
   };
 }
 
@@ -45,12 +48,14 @@ export function summarize(g, expected) {
   const kinds = {}; for (const x of g) for (const k of x.crisisKinds) kinds[k] = (kinds[k] || 0) + 1;
   const starts = {}; for (const x of g) for (const k of x.startCountries) starts[k] = (starts[k] || 0) + 1;
   const out = { n: g.length, failed: g.failed || [], expected: expected ?? g.length + (g.failed || []).length };
-  for (const k of ['gig', 'margin', 'fundValue', 'capMedian', 'capMax', 'domestic', 'foreign', 'total', 'bankrupt', 'debuts', 'debutFail', 'maResolved', 'foreignTakeovers', 'giantTakeover', 'giantGdr', 'crisisLines', 'linkMerged', 'linkIntl', 'linkTaken', 'joinedN', 'msq', 'save', 'saveGz', 'saveBuildMs', 'trust'])
+  for (const k of ['gig', 'margin', 'fundValue', 'capMedian', 'capMax', 'domestic', 'foreign', 'total', 'bankrupt', 'debuts', 'debutFail', 'maResolved', 'foreignTakeovers', 'giantTakeover', 'giantGdr', 'crisisLines', 'linkMerged', 'linkIntl', 'linkTaken', 'joinedN', 'msq', 'save', 'saveGz', 'saveBuildMs', 'trust', 'lzShare', 'capPl', 'capForeign', 'capAll', 'd3'])
     out[k] = num(k);
   out.crisisKinds = kinds; out.startCountries = starts;
   out.withTaken = sub(x => x.takenByForeign); out.withoutTaken = sub(x => !x.takenByForeign);
   out.inv = cnt(x => x.inv); out.neg = cnt(x => x.neg); out.err = cnt(x => x.err); out.cp = cnt(x => x.cp); out.moneyWarn = cnt(x => x.moneyWarn > 0); out.badPrice = cnt(x => x.badPrice); out.saveFail = cnt(x => x.saveOk === false);
-  out.invAfterLoad = null; // kontrola po wczytaniu: osobno w skrypcie raportu (saveCheck.invAfterLoad)
+  out.invAfterLoad = cnt(x => x.invAfterLoad); out.moneyWarnQ = num('moneyWarn'); // gry z naruszeniem po wczytaniu; kwartały z ostrzeżeniem na grę
+  const d3 = g.reduce((a, x) => a + (x.d3 || 0), 0); // udział spółek krajowych w przejęciach D3 (kupiec / cel), z sumy przejęć serii
+  out.d3Dom = d3 ? { n: d3, acq: g.reduce((a, x) => a + (x.d3DomAcq || 0), 0) / d3, tgt: g.reduce((a, x) => a + (x.d3DomTgt || 0), 0) / d3 } : null;
   return out;
 }
 
@@ -62,5 +67,5 @@ if (process.argv[1].endsWith("baza_serie.mjs")) {
   }
   if (outArg) fs.writeFileSync(outArg.slice(6), JSON.stringify(res, null, 1));
   const p = (v, d = 2) => v == null ? '—' : (v * 100).toFixed(d) + '%';
-  for (const [l, s] of Object.entries(res)) console.log(`${l}: n=${s.n}${s.failed.length ? ' (przerwane: ' + s.failed.join('; ') + ')' : ''} GIG ${p(s.gig.mean)} ± ${p(s.gig.sd)} (med ${p(s.gig.med)}, SE ${p(s.gig.se)}, CI95 ±${p(s.gig.ci)}) marża ${p(s.margin.mean)} ms/kw ${s.msq.mean?.toFixed(0)} zapis ${s.save.mean?.toFixed(0)} inv ${s.inv} neg ${s.neg} err ${s.err}`);
+  for (const [l, s] of Object.entries(res)) console.log(`${l}: n=${s.n}${s.failed.length ? ' (przerwane: ' + s.failed.join('; ') + ')' : ''} GIG ${p(s.gig.mean)} ± ${p(s.gig.sd)} (med ${p(s.gig.med)}, SE ${p(s.gig.se)}, CI95 ±${p(s.gig.ci)}) marża ${p(s.margin.mean)} ms/kw ${s.msq.mean?.toFixed(0)} zapis ${s.save.mean?.toFixed(0)} inv ${s.inv} neg ${s.neg} err ${s.err} invAfterLoad ${s.invAfterLoad} moneyWarn ${s.moneyWarn} lz/limit ${p(s.lzShare.mean, 1)} kap. ${s.capAll.mean == null ? '—' : (s.capAll.mean / 1e9).toFixed(1)} mld D3 ${s.d3Dom ? `${s.d3Dom.n} (krajowy kupiec ${p(s.d3Dom.acq, 0)}, cel ${p(s.d3Dom.tgt, 0)})` : '—'}`);
 }
