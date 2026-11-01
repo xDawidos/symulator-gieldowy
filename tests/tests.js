@@ -14948,4 +14948,39 @@ group('0.17 S3 Giełda towarowa', () => {
         const annual = Math.exp(logSum / years) - 1, limit = getUsdRate() + 0.06;
         assert(annual <= limit, `strategia ${(annual * 100).toFixed(2)}%/rok ≤ ${(limit * 100).toFixed(1)}%`);
     }));
+    test('S3 ETC: wymaga „Eksperta Rynków Globalnych”; traci 0,4% rocznie względem ceny surowca; wchodzi do aktywów, nie do limitu dźwigni', done(() => {
+        startFund();
+        playerProfile.unlockedSkills = { ...(playerProfile.unlockedSkills || {}) }; delete playerProfile.unlockedSkills.etfExpert;
+        const lvl0 = getSkillLevel('etfExpert');
+        if (lvl0 < 1) assert(!buyCommodityFund('gold', 10_000).ok, 'bez umiejętności zablokowane');
+        const saved = getSkillLevel; getSkillLevel = id => id === 'etfExpert' ? 1 : saved(id);
+        try {
+            const assets0 = getFundAssets(), notional0 = getMarginNotional();
+            const r = buyCommodityFund('gold', 100_000); assert(r.ok, r.reason);
+            assertNear(getFundAssets(), assets0 - 200, 'aktywa spadły tylko o spread 0,2%', 1e-6);
+            assertEq(getMarginNotional(), notional0, 'ETC poza limitem dźwigni');
+            for (let w = 0; w < 52; w++) stepCommodityMarket();
+            assertNear(getCommodityFundPriceUsd('gold') / getCommodityPrice('gold'), 1 - 0.004, 'opłata roczna 0,4%', 1e-12);
+            const s = sellCommodityFund('gold', getCommodityFundUnits('gold')); assert(s.ok && getCommodityFundUnits('gold') === 0, 'sprzedaż całości');
+        } finally { getSkillLevel = saved; }
+    }));
+    test('S3 ETF „Koszyk Surowców”: równe wagi po rebalansie, wartość jednostki ciągła, opłata 0,6%/rok; zapis i wczytanie', done(() => {
+        startFund();
+        const saved = getSkillLevel; getSkillLevel = id => id === 'etfExpert' ? 1 : saved(id);
+        try {
+            assert(buyCommodityFund('basket', 50_000).ok, 'kupno koszyka');
+            for (let w = 0; w < 13; w++) { stepCommodities(); stepCommodityMarket(); }
+            const f = ensureCommodityFunds(), before = getCommodityFundPriceUsd('basket');
+            const shares = () => COMMODITY_IDS.map(id => f.bq[id] * getCommodityPrice(id));
+            assert(Math.max(...shares()) / Math.min(...shares()) > 1.001, 'przed rebalansem wagi się rozjechały');
+            macro.quarter++; processCommoditiesQuarterly();
+            assertNear(getCommodityFundPriceUsd('basket'), before, 'rebalans nie zmienia wartości jednostki', 1e-9);
+            assertNear(Math.max(...shares()) / Math.min(...shares()), 1, 'równe wagi', 1e-9);
+            assertNear(f.bF, Math.pow(1 - 0.006, 13 / 52), 'opłata naliczana co tydzień', 1e-12);
+            const value = getFundCommodityValue(), snap = JSON.parse(JSON.stringify(getCommoditiesSnapshot()));
+            applyCommoditiesSnapshot(snap);
+            assertNear(getFundCommodityValue(), value, 'wartość po wczytaniu', 1e-6);
+            assertEq(JSON.stringify(getCommoditiesSnapshot()), JSON.stringify(snap), 'zapis bez strat');
+        } finally { getSkillLevel = saved; }
+    }));
 });

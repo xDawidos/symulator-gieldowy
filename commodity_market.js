@@ -74,3 +74,69 @@ function rollCommodityContract(posId) {
     const opened = openMarginPosition({ market: 'commodities', instrument: getContractName(c.id, next), side: pos.side, notional: pos.notional, leverage: pos.leverage });
     return opened.ok ? { ok: true, closed, position: opened.position } : { ok: false, reason: `Zamknięto ${pos.instrument}, ale nowej serii nie otwarto: ${opened.reason}`, closed };
 }
+
+// =================================================================================
+// 0.17 S3: ETC (1 surowiec) i ETF „Koszyk Surowców” — bez dźwigni, osobny portfel (nie tablica `etfs`, która trzyma akcje)
+// =================================================================================
+// ETC: cena = cena surowca × czynnik opłaty (−0,4%/rok); koszyk: równe wagi 7 surowców, rebalans co kwartał, −0,6%/rok.
+// Jednostki w `commodityState.funds` (zapis surowców). Wartość wchodzi do aktywów funduszu i NAV; nie liczy się do limitu dźwigni.
+const COMMODITY_FUNDS = { etcFee: 0.004, basketFee: 0.006, spread: 0.002, basketStart: 100 };
+const COMMODITY_BASKET_NAME = 'Koszyk Surowców';
+
+function ensureCommodityFunds() {
+    const st = ensureCommodityState();
+    if (!st.funds) {
+        const bq = Object.fromEntries(COMMODITY_IDS.map(id => [id, COMMODITY_FUNDS.basketStart / COMMODITY_IDS.length / st.prices[id]]));
+        st.funds = { etcF: 1, bF: 1, bq, units: {} };
+    }
+    return st.funds;
+}
+/** Cena jednostki w USD: ETC surowca albo koszyka ('basket'). */
+function getCommodityFundPriceUsd(key) {
+    const f = ensureCommodityFunds();
+    if (key === 'basket') return COMMODITY_IDS.reduce((s, id) => s + f.bq[id] * getCommodityPrice(id), 0) * f.bF;
+    return COMMODITY_DEFS[key] ? getCommodityPrice(key) * f.etcF : NaN;
+}
+function getCommodityFundPrice(key) { return usdToBase(getCommodityFundPriceUsd(key)); }
+function getCommodityFundUnits(key) { return Number(ensureCommodityFunds().units[key]) || 0; }
+function getFundCommodityValue() {
+    if (!commodityState?.funds) return 0;
+    return Object.entries(commodityState.funds.units).reduce((s, [k, u]) => s + (u > 0 ? u * getCommodityFundPrice(k) : 0), 0);
+}
+function canTradeCommodityFunds() {
+    if (!playerFund) return { ok: false, reason: 'ETC i ETF kupuje fundusz.' };
+    if (typeof getSkillLevel === 'function' && getSkillLevel('etfExpert') < 1) return { ok: false, reason: "Wymaga umiejętności 'Ekspert Rynków Globalnych'." };
+    if (typeof isMarketHalted === 'function' && isMarketHalted()) return { ok: false, reason: 'Handel wstrzymany — zadziałał bezpiecznik giełdowy.' };
+    return { ok: true };
+}
+/** Kupno za kwotę w walucie bazowej (spread 0,2% od kwoty). */
+function buyCommodityFund(key, amount) {
+    const gate = canTradeCommodityFunds(); if (!gate.ok) return gate;
+    amount = Number(amount);
+    if (key !== 'basket' && !COMMODITY_DEFS[key]) return { ok: false, reason: 'Nieznany instrument.' };
+    if (!(amount >= 100)) return { ok: false, reason: 'Najmniejszy zakup to 100.' };
+    if (amount > playerCash + 1e-9) return { ok: false, reason: 'Za mało gotówki.' };
+    const units = amount * (1 - COMMODITY_FUNDS.spread) / getCommodityFundPrice(key), f = ensureCommodityFunds();
+    playerCash -= amount; f.units[key] = getCommodityFundUnits(key) + units;
+    return { ok: true, units };
+}
+function sellCommodityFund(key, units) {
+    const gate = canTradeCommodityFunds(); if (!gate.ok) return gate;
+    const held = getCommodityFundUnits(key); units = Math.min(held, Number(units));
+    if (!(units > 0)) return { ok: false, reason: 'Brak jednostek.' };
+    const cash = units * getCommodityFundPrice(key) * (1 - COMMODITY_FUNDS.spread), f = ensureCommodityFunds();
+    playerCash += cash; f.units[key] = held - units; if (f.units[key] < 1e-9) delete f.units[key];
+    return { ok: true, cash };
+}
+/** Co tydzień (po cenach surowców): opłaty ETC i koszyka. */
+function stepCommodityMarket() {
+    const f = ensureCommodityFunds();
+    f.etcF *= Math.pow(1 - COMMODITY_FUNDS.etcFee, 1 / 52);
+    f.bF *= Math.pow(1 - COMMODITY_FUNDS.basketFee, 1 / 52);
+    if (typeof stepCommodityBots === 'function') stepCommodityBots();
+}
+/** Co kwartał: rebalans koszyka do równych wag (wartość jednostki bez zmian). */
+function rebalanceCommodityBasket() {
+    const f = ensureCommodityFunds(), raw = COMMODITY_IDS.reduce((s, id) => s + f.bq[id] * getCommodityPrice(id), 0);
+    for (const id of COMMODITY_IDS) f.bq[id] = raw / COMMODITY_IDS.length / getCommodityPrice(id);
+}
