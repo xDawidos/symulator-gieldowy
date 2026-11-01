@@ -12,9 +12,9 @@ Kolejność: S0 → S0b → S1 → … → S7. **Szczegóły części S1–S7 (l
 
 **Zależności:** 0.16 (kraje otwarte: surowce mają kraje producentów; waluta USD; **silnik depozytu `marginEngine` z forexu G21**, który tu obsługuje kontrakty). Zapis: pola opcjonalne w v16.
 
-**Wielkość orientacyjna:** L (9 części, ok. 40 testów; nowe spółki ok. 25; zapis ≤ +4%).
+**Wielkość orientacyjna:** L (9 części, ok. 40 testów; nowe spółki ok. 25; zapis ≤ +7% (podniesione z +4% 2026-11-02)).
 
-**Stan (2026-11-01):** S0 zrobione i scalone (`raporty/baza_0.17.md`): PL 48 gier GIG 9,9% ± 1,15, marża 22,2%, zapis 2,327 mln znaków, krok 1213 ms/kw. (jedna instancja). **Budżet 0.17: zapis ≤ 2,42 mln znaków, krok ≤ 1334 ms/kw.** (pomiar sekwencyjny, ≥ 8 gier przed i po). Silnik `marginEngine` jest w `forex.js` (dźwignia ≤ 1:10, łącznie ≤ 3 × aktywa funduszu). Umiejętności „Mistrz Opcji” w kodzie jeszcze nie ma (dopisać w S7 do drzewa umiejętności w `player.js`).
+**Stan (2026-11-01):** S0 zrobione i scalone (`raporty/baza_0.17.md`): PL 48 gier GIG 9,9% ± 1,15, marża 22,2%, zapis 2,327 mln znaków, krok 1213 ms/kw. (jedna instancja). **Budżet 0.17: zapis ≤ 2,49 mln znaków (+7%, decyzja 2026-11-02; po S2 zużyte +3,3%), krok ≤ 1334 ms/kw.** (pomiar sekwencyjny, ≥ 8 gier przed i po). Silnik `marginEngine` jest w `forex.js` (dźwignia ≤ 1:10, łącznie ≤ 3 × aktywa funduszu). Umiejętności „Mistrz Opcji” w kodzie jeszcze nie ma (dopisać w S7 do drzewa umiejętności w `player.js`).
 
 ---
 
@@ -50,7 +50,7 @@ Kolejność: S0 → S0b → S1 → … → S7. **Szczegóły części S1–S7 (l
 | Cena surowca w widełkach | 100% kroków; zmienność roczna 15–40% wg surowca |
 | Spekulacja „kup nisko, sprzedaj wysoko” na kontraktach | ≤ lokata + 6 pp/rok |
 | Margin call | zamknięcie przy kapitale pozycji < 50% depozytu; 0 ujemnej gotówki |
-| Zapis / czas kroku | ≤ +4% / ≤ +10% |
+| Zapis / czas kroku | ≤ +7% / ≤ +10% |
 | Niezmienniki, wyjątki JS | 0 |
 
 ## Główne ryzyka
@@ -87,3 +87,4 @@ Kolejność: S0 → S0b → S1 → … → S7. **Szczegóły części S1–S7 (l
 16. **S6 pełne dla kraju startowego**, obce kraje ze stałym `security` w danych kraju.
 17. **Nowe zdarzenia S1:** embargo/blokada cieśniny, strajk w kopalniach, ucieczka do złota, rekordowe zbiory, awaria reaktora za granicą; istniejące (szok naftowy, susza, spadek cen energii) ruszają cenami.
 18. **Ceny surowców egzogeniczne** (gracz i boty nie ruszają ceną); wpływ na spółki względem średniej 8 kw. („średnio zero” z definicji).
+19. **Budżet zapisu 0.17 podniesiony do +7%** (2026-11-02): ≤ 2,49 mln znaków PL 27 kw.; po S2 zużyte +3,3%.

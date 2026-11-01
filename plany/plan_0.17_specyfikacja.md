@@ -184,7 +184,7 @@ Nowy plik `commodities.js` (rejestr, krok tygodniowy, historia, zapis).
   - ETC i ETF zostają za „Ekspertem Rynków Globalnych” L1. Pozycje otwarte przed zakupem umiejętności (stare zapisy z czasu testów) zostają do zapadalności.
 - **Interfejs:** okno giełdy towarowej wg projektu czatu designu (lista 7 surowców z ceną i zmianą, wykres 104 tyg., seria kontraktów z contango/backwardation słowem, depozyt słowem i liczbą, ETC, ETF koszykowy); indeks frachtu i przepustowość; bezpieczeństwo państwa w karcie kraju. Kolor nigdy jedynym nośnikiem; bez nowych okien modalnych.
 - **Akademia (8 lekcji):** Cykl surowcowy; Koszt wsadu i przerzucenie na ceny; Kontrakt terminowy; Contango i backwardation; Depozyt i margin call na towarach; ETC i ETF surowcowy; Fracht i wąskie gardła; Bezpieczeństwo państwa i zbrojenia.
-- **Zapis:** budżet ≤ 2,42 mln znaków (PL 27 kw.); historia cen 104 tyg. × 7 + indeks frachtu 3 × 104 ≈ 1 000 liczb.
+- **Zapis:** budżet ≤ 2,49 mln znaków (+7%) (PL 27 kw.); historia cen 104 tyg. × 7 + indeks frachtu 3 × 104 ≈ 1 000 liczb.
 - **Kontrola** `raporty/kontrola_0.17.md`: GIG ±1 pp na 120 + 120 gier PL (jedna partia), seria PL 20 lat ×12, czas kroku ≤ 1 334 ms/kw. (≥ 8 gier sekwencyjnie), niezmienniki 0, exploit kontraktów ≤ lokata + 6 pp.
 
 **Testy S7 (ok. 4):** bez umiejętności brak kontraktów; L1 tylko długie ≤ 1:3; L2 krótkie; lekcje Akademii mają wpisy.
