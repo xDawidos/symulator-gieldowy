@@ -11833,7 +11833,7 @@ group('0.16.1', () => {
         const origin = sym => getCompanyOrigin(initialStocks.find(s => s.symbol === sym) || { symbol: sym }); // banki startowe powstają przy starcie gry
         for (const sym of ['WZM', 'BPIG', 'MAJB', 'GIEB', 'UnG', 'KRA', 'DRH']) assertEq(origin(sym), 'PL', `${sym}: PL`);
         for (const sym of ['KFX', 'KWM', 'MLD', 'LIN', 'GROM', 'KUP', 'CZB', 'BLP', 'SPR', 'RPK', 'GPW']) assertEq(origin(sym), 'UNI', `${sym}: UNI`);
-        assertEq(PL_ORIGIN_SYMBOLS.length, 32, '32 firmy PL');
+        assertEq(PL_ORIGIN_SYMBOLS.length, 36, '36 firm PL (0.17 S2: +PES, NAG, ZST, SLS)');
         assert(!initialStocks.some(s => ['WiS', 'DMPC'].includes(s.symbol)), 'WiS i DMPC nie są firmami polskimi');
         assertEq(getCompanyOrigin({ symbol: 'WiS' }), 'DE', 'WiS = DE'); assertEq(getCompanyOrigin({ symbol: 'DMPC' }), 'US', 'DMPC = US');
         assert(COUNTRY_DEFS.DE.companies.some(c => c.id === 'WiS') && COUNTRY_DEFS.US.companies.some(c => c.id === 'DMPC'), 'są w danych krajów');
@@ -12410,7 +12410,7 @@ group('0.16.2', () => {
 
     // --- G6: Niemcy, USA, Czechy ---
     const REAL_COUNTRIES = () => ['DE', 'US', 'CZ'].filter(id => COUNTRY_DEFS[id]);
-    const COUNTRY_COUNTS = { DE: [36, 7], US: [16, 4], CZ: [8, 1] }; // zwykłe + państwowe (załącznik B)
+    const COUNTRY_COUNTS = { DE: [36, 7], US: [19, 4], CZ: [9, 1] }; // 0.17 S2: US +JDM, NGR, GTG; CZ +DOL // zwykłe + państwowe (załącznik B)
 
     test('G6: dane krajów są spójne — liczby spółek z załącznika B, sektory i podsektory z rejestru, waluty, banki w Bankowości, giganci zgodni z gdr.js', () => {
         assert(REAL_COUNTRIES().length >= 1, 'jakiś kraj zdefiniowany');
@@ -12873,7 +12873,7 @@ group('0.16.3', () => {
 
     // --- G11: Szwecja, Szwajcaria, Francja ---
     test('G11: SE 7+2, CH 7+1, FR 11+2 spółek; symbole unikalne w całej grze; giganci zgodni z kwitami (to samo id i cena)', () => {
-        const expected = { SE: [7, 2], CH: [7, 1], FR: [11, 2] };
+        const expected = { SE: [7, 3], CH: [8, 1], FR: [11, 2] }; // 0.17 S2: SE +KJM, CH +GLK
         for (const [id, [normal, state]] of Object.entries(expected)) {
             const def = COUNTRY_DEFS[id];
             assert(def, `kraj ${id} zdefiniowany`);
@@ -13261,7 +13261,7 @@ group('0.16.3', () => {
 
     // --- G18b: Chiny i Indie, napięcie Chiny–Tajwan ---
     test('G18b: CN 13+4, IN 10+4; symbole unikalne, giganci zgodni z kwitami, sektory istnieją', () => withLinks(() => {
-        const expected = { CN: [13, 4], IN: [10, 4] };
+        const expected = { CN: [14, 5], IN: [10, 5] }; // 0.17 S2: CN +TBN, UOW; IN +BHO
         for (const [id, [normal, state]] of Object.entries(expected)) {
             const def = COUNTRY_DEFS[id];
             assertEq(def.companies.filter(c => c.kind !== 'state').length, normal, `${id}: zwykłe`);
@@ -14711,5 +14711,152 @@ group('0.16.10 Nowa scenka startowa', () => {
     test('0.16.10 pominięcie w TeamedUP! (po pytaniu szefa): domyślny fundusz, odblokowanie, brak osieroconych czasomierzy; scenka kończy się raz', () => {
         const c = toBoss(); c.tick(); skipIntroScene(); assertEq(introFlow.step, 'done'); assertEq(c.q.length, 0); assertEq(playerProfile.fundName, INTRO_DEFAULTS.fundName); assertEq(introFlow.bossShown, false);
         const n = mailbox.messages.length; skipIntroScene(); assertEq(mailbox.messages.length, n, 'drugie pominięcie nic nie robi');
+    });
+});
+
+group('0.17 S1 Surowce', () => {
+    // symulacja tygodni z kwartałem co 13 tygodni (bez zdarzeń losowych, gdy quiet)
+    const run = (weeks, { quiet = false, onWeek } = {}) => {
+        const saved = {}; if (quiet) for (const k of Object.keys(COMMODITY_EVENTS)) { saved[k] = COMMODITY_EVENTS[k].yearly; COMMODITY_EVENTS[k].yearly = 0; }
+        try {
+            for (let w = 1; w <= weeks; w++) { stepCommodities(); if (onWeek) onWeek(w); if (w % 13 === 0) { macro.quarter++; processCommoditiesQuarterly(); } }
+        } finally { for (const k of Object.keys(saved)) COMMODITY_EVENTS[k].yearly = saved[k]; }
+    };
+    const withQ = fn => { const q0 = macro.quarter; try { macro.quarter = 1; initCommodityState(); return fn(); } finally { macro.quarter = q0; initCommodityState(); } };
+    test('S1: ceny w widełkach w 100% kroków (200 przebiegów × 2 lata, ze zdarzeniami)', () => withQ(() => {
+        let bad = 0, steps = 0;
+        for (let r = 0; r < 200; r++) { macro.quarter = 1; initCommodityState(); run(104, { onWeek: () => { steps++; if (checkCommodityInvariants().length) bad++; } }); }
+        assertEq(bad, 0, `kroki poza widełkami (z ${steps})`);
+    }));
+    test('S1: zmienność roczna w ±5 pp od σ; sezon gazu: średnia Q1 > Q3', () => withQ(() => {
+        const prev = {}, rets = Object.fromEntries(COMMODITY_IDS.map(id => [id, []])), gasQ = { 1: [], 3: [] };
+        for (const id of COMMODITY_IDS) prev[id] = getCommodityPrice(id);
+        run(52 * 40, { quiet: true, onWeek: () => { for (const id of COMMODITY_IDS) { const p = getCommodityPrice(id); rets[id].push(Math.log(p / prev[id])); prev[id] = p; } const qy = commodityQuarterInYear(); if (gasQ[qy]) gasQ[qy].push(getCommodityPrice('gas')); } });
+        for (const id of COMMODITY_IDS) {
+            const a = rets[id], m = a.reduce((s, v) => s + v, 0) / a.length, vol = Math.sqrt(a.reduce((s, v) => s + (v - m) ** 2, 0) / (a.length - 1) * 52);
+            assert(Math.abs(vol - COMMODITY_DEFS[id].sigma) <= 0.05, `${id}: zmienność ${(vol * 100).toFixed(1)}% vs σ ${COMMODITY_DEFS[id].sigma * 100}%`);
+        }
+        const avg = a => a.reduce((s, v) => s + v, 0) / a.length;
+        assert(avg(gasQ[1]) > avg(gasQ[3]), `gaz Q1 ${avg(gasQ[1]).toFixed(2)} > Q3 ${avg(gasQ[3]).toFixed(2)}`);
+    }));
+    test('S1: zdarzenie przesuwa cenę i cel, potem wygasa; szok naftowy z core.js i linii 1973 rusza ropą', () => withQ(() => {
+        const u0 = getCommodityPrice('uranium'), m0 = getCommodityTarget('uranium');
+        const ev = startCommodityEvent('reactor');
+        assertNear(getCommodityPrice('uranium'), u0 * Math.sqrt(0.7), 'skok o połowę szoku (w logarytmie)', 1e-9);
+        assertNear(getCommodityTarget('uranium'), m0 * 0.7, 'cel −30%', 1e-9);
+        run(13 * 7, { quiet: true });
+        assert(!getActiveCommodityEvents().includes(ev), 'zdarzenie wygasło');
+        assert(getCommodityPrice('uranium') > u0 * 0.8, 'cena wraca ku średniej');
+        fireMacroShockById('oil', true);
+        assert(getActiveCommodityEvents().some(e => e.id === 'oilShock' && Math.abs(e.shocks.oil - 0.4) < 1e-9), 'szok naftowy: ropa +40%');
+        noteCrisisForCommodities('banking');
+        assert(getActiveCommodityEvents().some(e => e.id === 'goldFlight' && e.shocks.gold >= 0.1), 'kryzys bankowy: ucieczka do złota');
+    }));
+    test('S1: zapis i wczytanie bez różnic; stary zapis bez pola startuje z cen średnich', () => withQ(() => {
+        run(60);
+        startCommodityEvent('strike');
+        const snap = JSON.parse(JSON.stringify(getCommoditiesSnapshot()));
+        applyCommoditiesSnapshot(snap);
+        assertEq(JSON.stringify(getCommoditiesSnapshot()), JSON.stringify(snap), 'zapis bez strat');
+        assert(getActiveCommodityEvents().some(e => e.id === 'strike' && e.product), 'zdarzenie z produktem po wczytaniu');
+        applyCommoditiesSnapshot(undefined);
+        for (const id of COMMODITY_IDS) assertEq(getCommodityPrice(id), COMMODITY_DEFS[id].mean, `${id}: cena średnia`);
+        assertNear(getCommodityTrendRatio('oil'), 1, 'Ś8 startuje od średniej', 1e-12);
+        assertEq(checkWorldInvariants().filter(p => p.startsWith('surowiec')).length, 0);
+    }));
+});
+
+group('0.17 S2 Spółki i koszty wsadu', () => {
+    // stan surowców: Ś8 = średnia, bieżący kwartał = średnia × ratio (dla wybranego surowca)
+    const setRatio = (ratios = {}) => {
+        initCommodityState();
+        const st = commodityState; st.qN = 13;
+        for (const id of COMMODITY_IDS) { const m = COMMODITY_DEFS[id].mean; st.qHist[id] = Array(8).fill(m); st.qSum[id] = m * (ratios[id] ?? 1) * 13; }
+        return st;
+    };
+    const after = fn => { try { return fn(); } finally { initCommodityState(); } };
+    test('S2: cena +20% ponad Ś8 → przychód kopalni +11,5% (wykładnik 0,6); strajk w kopalniach tnie produkcję krajową o 20%', () => after(() => {
+        setRatio({ coal: 1.2 });
+        const kwm = { symbol: 'KWM', sector: ['Przemysł'] };
+        assertNear(getCommodityResultAdj(kwm).revenueFactor, Math.pow(1.2, 0.6), 'przychód × 1,2^0,6', 1e-9);
+        assert(Math.abs(getCommodityResultAdj(kwm).revenueFactor - 1.115) < 0.001, '+11,5%');
+        assertEq(getCommodityResultAdj(kwm).marginAdj, 0, 'kopalnia bez wsadu');
+        commodityState.events.push({ id: 'strike', until: macro.quarter + 1, shocks: { coal: 0.2 }, product: 'coal' });
+        assertNear(getCommodityResultAdj(kwm).revenueFactor, Math.pow(1.2, 0.6) - 0.2, 'strajk −20% produkcji', 1e-9);
+        assertNear(getCommodityResultAdj({ kind: 'share', id: 'WGI', sectors: [['Przemysł', 1]] }).revenueFactor, Math.pow(1.2, 0.6), 'strajk nie dotyczy spółek zagranicznych', 1e-9);
+    }));
+    test('S2: marża huty spada o udział × 0,2 przy przerzuceniu 0; po 4 kw. odchylenia przerzucenie 60%', () => after(() => {
+        setRatio({ metals: 1.2, coal: 1.2 });
+        const huta = { kind: 'share', id: 'TKS', sectors: [['Przemysł', 1]], hedge: 0 };
+        assertNear(getCommodityPassThrough('metals'), 0, 'bez historii odchylenia', 1e-12);
+        assertNear(getCommodityResultAdj(huta).marginAdj, -(0.3 + 0.1) * 0.2, 'marża −(0,3 + 0,1) × 0,2', 1e-9);
+        commodityState.run = { metals: { sign: 1, n: 2 }, coal: { sign: 1, n: 4 } };
+        assertNear(getCommodityPassThrough('metals'), 0.3, 'po 2 kw. 30%', 1e-12);
+        assertNear(getCommodityPassThrough('coal'), 0.6, 'po 4 kw. 60%', 1e-12);
+        commodityState.run = { metals: { sign: 1, n: 9 }, coal: { sign: -1, n: 9 } };
+        assertNear(getCommodityPassThrough('metals'), 0.6, 'najwyżej 60%', 1e-12);
+        assertNear(getCommodityPassThrough('coal'), 0, 'odchylenie w drugą stronę zaczyna od zera', 1e-12);
+        // seria liczona przy zamknięciu kwartału
+        setRatio({ oil: 1.3 });
+        for (let q = 0; q < 4; q++) { noteCommodityDeviationRun(); commodityState.qHist.oil.push(COMMODITY_DEFS.oil.mean); }
+        assertNear(getCommodityPassThrough('oil'), 0.6, '4 zamknięte kwartały powyżej Ś8 → 60%', 1e-12);
+    }));
+    test('S2: zabezpieczenie h opóźnia wpływ (h części wsadu po cenie sprzed 4 kw.); h z zakresu 0,3–0,7, państwowe 0,3', () => after(() => {
+        setRatio({ oil: 1.2 });
+        const chem = h => ({ kind: 'share', id: 'XCH', sectors: [['Chemia', 1]], hedge: h });
+        assertNear(getCommodityResultAdj(chem(0.5)).marginAdj, -0.25 * 0.2 * 0.5, 'połowa wsadu po cenie sprzed 4 kw. (= Ś8)', 1e-9);
+        assertNear(getCommodityResultAdj(chem(0)).marginAdj, -0.25 * 0.2, 'bez zabezpieczenia pełny wpływ', 1e-9);
+        commodityState.qHist.oil[commodityState.qHist.oil.length - 4] = COMMODITY_DEFS.oil.mean * 1.2;
+        assertNear(getCommodityResultAdj(chem(0.5)).marginAdj, -0.25 * (1.2 / (1 + 0.2 / 8) - 1), 'gdy 4 kw. temu też było drogo, zabezpieczenie nie chroni (Ś8 też wyżej)', 1e-9);
+        for (const sym of ['KWM', 'ABC', 'XYZQ', 'PES']) { const h = getStockCommodityHedge({ symbol: sym }); assert(h >= 0.3 && h <= 0.7, `${sym}: h ${h}`); }
+        assertEq(getStockCommodityHedge({ symbol: 'ABC', isStateOwned: true }), 0.3, 'państwowa 0,3');
+        assertEq(getStockCommodityHedge({ symbol: 'ABC' }), getStockCommodityHedge({ symbol: 'ABC' }), 'h stałe dla spółki');
+    }));
+    test('S2: spółka bez przypisania dostaje wsad sektora i podsektora; rafineria zarabia na zmianie ceny (produkt z opóźnieniem)', () => after(() => {
+        setRatio();
+        const prof = s => getStockCommodityProfile(s);
+        assertEq(JSON.stringify(prof({ kind: 'share', id: 'X1', sectors: [['Chemia', 1]] }).input), JSON.stringify({ oil: 0.25, gas: 0.15 }), 'Chemia');
+        assertEq(JSON.stringify(prof({ kind: 'share', id: 'X2', sectors: [['Transport i logistyka', 1]], subsector: 'Lotnictwo' }).input), JSON.stringify({ oil: 0.3 }), 'Lotnictwo');
+        assertEq(JSON.stringify(prof({ kind: 'share', id: 'X3', sectors: [['Energia', 1]], subsector: 'OZE' }).input), '{}', 'OZE bez wsadu');
+        assertEq(JSON.stringify(prof({ kind: 'share', id: 'X4', sectors: [['Żywność', 1]], subsector: 'Rolnictwo' }).product), JSON.stringify({ grain: 1 }), 'Rolnictwo: produkt zboże');
+        const two = prof({ kind: 'share', id: 'X5', sectors: [['Przemysł', 0.7], ['Budowlany', 0.3]] }).input;
+        assertNear(two.metals, 0.25 * 0.7 + 0.1 * 0.3, 'segmenty ważone udziałem', 1e-12);
+        assertEq(JSON.stringify(prof({ kind: 'share', id: 'X6', sectors: [['Technologia', 1]] }).input), '{}', 'Technologia bez wsadu');
+        // rafineria: kwartał wzrostu ceny — marża w dół; kwartał po wzroście (produkt po cenie poprzedniego kwartału) — przychód w górę
+        const pes = { symbol: 'PES', sector: ['Energia'], hedge: 0 };
+        setRatio({ oil: 1.2 });
+        const up = getCommodityResultAdj(pes);
+        assert(up.marginAdj < 0 && Math.abs(up.revenueFactor - 1) < 1e-9, 'skok ceny: marża w dół, przychód jeszcze bez zmian');
+        commodityState.qHist.oil.push(COMMODITY_DEFS.oil.mean * 1.2);
+        assert(getCommodityResultAdj(pes).revenueFactor > 1, 'kwartał później: przychód z paliw w górę');
+    }));
+    test('S2: nowe spółki na giełdach i w zapisie (PL: PES, NAG, ZST, SLS; zagranica: JDM, NGR, GTG, DOL, KJM, GLK, TBN, UOW, BHO)', () => {
+        resetWorld(JSON.parse(JSON.stringify(initialStocks)));
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        macro.subsectorsAssigned = false; applyStartSubsectors(); // jak przy nowej grze (main.js)
+        for (const sym of ['PES', 'NAG', 'ZST', 'SLS']) {
+            const s = stocks.find(x => x.symbol === sym);
+            assert(s, `${sym} na giełdzie`);
+            const ex = exchanges[s.exchange];
+            assert(ex && !ex.rankBased && s.price >= ex.minPrice && s.price < ex.maxPrice, `${sym}: poziom giełdy ${s.exchange} zgodny z ceną ${s.price}`);
+            assert(getStockCommodityProfile(s).product && Object.keys(getStockCommodityProfile(s).product).length, `${sym}: produkt`);
+        }
+        assert(stocks.find(x => x.symbol === 'PES').price * stocks.find(x => x.symbol === 'PES').totalShares >= 1e9, 'PES gigant (≥ 1 mld zł)');
+        assert(stocks.find(x => x.symbol === 'PES').isStateOwned && stocks.find(x => x.symbol === 'NAG').isStateOwned, 'PES i NAG państwowe');
+        assertEq(getMainSegment(stocks.find(x => x.symbol === 'ZST')).subsector, 'Wydobycie', 'podsektor ZST');
+        const saved = JSON.parse(buildSaveJson(SAVE_IDB_RAW_LIMIT).json);
+        assert(['PES', 'SLS'].every(sym => JSON.stringify(saved.stocks).includes(`"${sym}"`)), 'spółki krajowe w zapisie');
+        assert(saved.commodities && saved.commodities.p.oil > 0, 'ceny surowców w zapisie');
+        initFxState(); resetGdrState();
+        for (const c of ['US', 'CZ', 'SE', 'CH', 'CN', 'IN']) joinCountry(c);
+        for (const id of ['JDM', 'NGR', 'GTG', 'DOL', 'KJM', 'GLK', 'TBN', 'UOW', 'BHO']) {
+            assert(foreignIssuers[id]?.kind === 'share', `${id} na giełdzie kraju`);
+            assert(Object.keys(getStockCommodityProfile(foreignIssuers[id]).product).length, `${id}: produkt`);
+        }
+        assertEq(foreignIssuers.TBN.giant, true, 'TBN gigant');
+        const snap = getCountriesSnapshot();
+        assert(['JDM', 'TBN', 'BHO'].every(id => snap.issuers[id]), 'spółki zagraniczne w zapisie');
+        assertEq([...checkCountryInvariants(), ...checkCommodityInvariants()].length, 0, 'niezmienniki krajów i surowców');
+        resetGdrState(); initFxState();
     });
 });
