@@ -46,7 +46,7 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, async () => {
   const edgePath = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
-  const url = `http://localhost:${PORT}/tests/przebiegi.html?runs=${runs}&quarters=${quarters}&speed=${speed}&label=${label}${preset ? `&preset=${preset}` : ''}`;
+  const url = `http://localhost:${PORT}/tests/przebiegi.html?runs=${runs}&quarters=${quarters}&speed=${speed}&label=${label}${preset ? `&preset=${preset}` : ''}${args.patch ? '&patch=' + encodeURIComponent(fs.readFileSync(args.patch, 'utf8')) : ''}`; // --patch=plik.js: kod wykonywany w ramce po starcie gry
   console.log(`Starting headless runner: ${url}`);
   
   const edge = spawn(edgePath, [

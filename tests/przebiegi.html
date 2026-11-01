@@ -1246,7 +1246,9 @@ function renderP0154(results) {
 }
 
 async function loadFrame() {
-    const html = await (await fetch(TARGET, { cache: 'no-store' })).text();
+    // 0.17 S0b: jedno ponowienie po „Failed to fetch” (jednowątkowy serwer plików przy wielu instancjach)
+    const get = () => fetch(TARGET, { cache: 'no-store' }).then(r => r.text());
+    const html = await get().catch(() => new Promise(r => setTimeout(r, 2000)).then(get));
     const baseHref = new URL(TARGET, location.href).href;
     const doc = html.replace(/<head>/i, `<head><base href="${baseHref}"><script>${STUB}<\/script>`);
     await new Promise(resolve => { frame.onload = resolve; frame.srcdoc = doc; });
