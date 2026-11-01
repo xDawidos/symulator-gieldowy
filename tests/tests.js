@@ -11345,8 +11345,11 @@ group('0.15.6 E3: ścieżka startupu, awans z NewHorizons, Włoska Giełda', () 
         const saved = hasEntryMarketSlot; hasEntryMarketSlot = id => id !== 'NH';
         try {
             const startup = generateNewStartup(); startup.fundingGoal = startup.currentFunding = 40_000; stocks.push(startup);
+            const bot = aiCompetitors[0]; bot.portfolio[startup.symbol] = { investedAmount: 40_000, assetType: 'Startup', isInsured: false }; // 0.17 S0b: roszczenie bota
             LISTING_RULES.debutRouting = true; handleSuccessfulIPO(startup, 1); LISTING_RULES.debutRouting = false;
             assertEq(startup.stage, 'awaitingListing', 'NH pełny: czeka w inkubatorze');
+            assertEq(bot.portfolio[startup.symbol]?.investedAmount, 40_000, 'roszczenie bota zostaje w czekającym startupie');
+            assertEq(checkIncubatorInvariants().length, 0, 'roszczenia = zebrane');
         } finally { hasEntryMarketSlot = saved; LISTING_RULES.debutRouting = false; }
     });
 
