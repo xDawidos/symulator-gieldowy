@@ -14796,7 +14796,11 @@ group('0.17 S1 Surowce', () => {
         assertNear(getCommodityTarget('uranium'), m0 * 0.7, 'cel −30%', 1e-9);
         run(13 * 7, { quiet: true });
         assert(!getActiveCommodityEvents().includes(ev), 'zdarzenie wygasło');
-        assert(getCommodityPrice('uranium') > u0 * 0.8, 'cena wraca ku średniej');
+        assertNear(getCommodityTarget('uranium') / m0, Math.pow(1.02, 7 / 4), 'cel bez szoku (sama inflacja)', 1e-6);
+        // powrót ceny: średnia z 30 ścieżek (jedna ścieżka zależy od kolejności losowań, np. frachtu z S4)
+        let sum = 0;
+        for (let r = 0; r < 30; r++) { macro.quarter = 1; initCommodityState(); startCommodityEvent('reactor'); run(13 * 7, { quiet: true }); sum += getCommodityPrice('uranium') / COMMODITY_DEFS.uranium.mean; }
+        assert(sum / 30 > Math.sqrt(0.7), `cena wraca ku średniej (średnio ${(sum / 30).toFixed(3)} > skok ${Math.sqrt(0.7).toFixed(3)})`);
         fireMacroShockById('oil', true);
         assert(getActiveCommodityEvents().some(e => e.id === 'oilShock' && Math.abs(e.shocks.oil - 0.4) < 1e-9), 'szok naftowy: ropa +40%');
         noteCrisisForCommodities('banking');
