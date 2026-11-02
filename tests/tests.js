@@ -15079,3 +15079,116 @@ group('0.17 S3 Giełda towarowa', () => {
         try { renderCommodityFundsBox(); assert(box.innerHTML.includes('Koszyk Surowców') && box.innerHTML.includes('ETC Ropa'), 'ETC i koszyk w panelu ETF'); } finally { box.remove(); }
     }));
 });
+
+group('0.17 S4 Transport i indeks frachtu', () => {
+    const run = weeks => { for (let w = 1; w <= weeks; w++) { stepCommodities(); if (w % 13 === 0) { macro.quarter++; processCommoditiesQuarterly(); } } };
+    const quiet = fn => {
+        const saved = {};
+        for (const k of [...Object.keys(COMMODITY_EVENTS), ...Object.keys(FREIGHT_EVENTS)]) { const d = COMMODITY_EVENTS[k] || FREIGHT_EVENTS[k]; saved[k] = d.yearly; d.yearly = 0; }
+        try { return fn(); } finally { for (const k of Object.keys(saved)) (COMMODITY_EVENTS[k] || FREIGHT_EVENTS[k]).yearly = saved[k]; }
+    };
+    const withQ = fn => { const q0 = macro.quarter, cyc = macro.sectorCycles; try { macro.quarter = 1; initCommodityState(); return fn(); } finally { macro.quarter = q0; macro.sectorCycles = cyc; initCommodityState(); } };
+    let n4 = 0;
+    const share = (sector, subsector) => ({ kind: 'share', id: `S4X${n4++}`, sectors: [[sector, 1]], subsector });
+    test('S4: indeks rośnie z ropą (wykładnik f) i popytem (wykładnik d); bez zmian = 100', () => withQ(() => {
+        macro.sectorCycles = { ...(macro.sectorCycles || {}), 'Przemysł': { phase: 'peak' } }; // popyt 1,05
+        commodityState.prices.oil = getCommodityTrend('oil');
+        const base = Object.fromEntries(FREIGHT_IDS.map(id => [id, getFreightFundamental(id)]));
+        for (const id of FREIGHT_IDS) assertNear(base[id], 100 * Math.pow(1.05, FREIGHT_MODES[id].d), `${id}: popyt^d`, 1e-9);
+        commodityState.prices.oil = getCommodityTrend('oil') * 1.5;
+        for (const id of FREIGHT_IDS) assertNear(getFreightFundamental(id) / base[id], Math.pow(1.5, FREIGHT_MODES[id].f), `${id}: ropa^f`, 1e-9);
+        const withOil = Object.fromEntries(FREIGHT_IDS.map(id => [id, getFreightFundamental(id)]));
+        macro.sectorCycles['Przemysł'] = { phase: 'boom' }; // 1,15
+        assert(FREIGHT_IDS.every(id => getFreightFundamental(id) > withOil[id]), 'boom podnosi indeks');
+        assert(getFreightFundamental('sea') / getFreightFundamental('land') > withOil.sea / withOil.land, 'morski najbardziej czuły na popyt');
+    }));
+    test('S4: zakłócenie podnosi indeks i czas dostawy, po czasie wygasa; „Statek utknął w kanale” obniża kurs EVG o 8%', () => withQ(() => quiet(() => {
+        initFxState(); resetGdrState(); joinCountry('TW');
+        try {
+            const evg0 = foreignIssuers.EVG.price;
+            run(4);
+            const ev = startFreightEvent('canal');
+            assertNear(foreignIssuers.EVG.price, evg0 * 0.92, 'EVG −8%', 1e-9);
+            stepFreight();
+            assertNear(getFreightIndex('sea') / (getFreightFundamental('sea') * Math.exp(ensureFreightState().z.sea)), 1.4, 'morski +40%', 1e-9);
+            assertEq(getFreightDelivery('sea').join('–'), '6–8', 'dostawa morska dłuższa o 2 tyg.');
+            assertEq(getFreightDelivery('land').join('–'), '1–2', 'lądowa bez zmian');
+            assert(ev.until - commodityState.w >= 3 && ev.until - commodityState.w <= 8, 'czas 4–8 tyg.');
+            run(9);
+            assertEq(ensureFreightState().e.length, 0, 'zakłócenie wygasło');
+            assertNear(getFreightDisruption('sea'), 1, 'bez mnożnika', 1e-12);
+            startFreightEvent('railStrike'); startFreightEvent('volcano');
+            assertNear(getFreightDisruption('land'), 1.15, 'strajk +15%', 1e-12);
+            assertNear(getFreightDisruption('air'), 1.3, 'pył +30%', 1e-12);
+        } finally { resetGdrState(); initFxState(); }
+    })));
+    test('S4: przewoźnik zyskuje przy wysokim indeksie (Ī/Ś8)^0,7, odbiorca traci udział × odchylenie; Logistyka bez frachtu', () => withQ(() => {
+        const fr = ensureFreightState();
+        for (const id of FREIGHT_IDS) { fr.q[id] = Array(8).fill(100); fr.qs[id] = 130 * 13; }
+        fr.qn = 13;
+        assertNear(getFreightResultAdj(share('Transport i logistyka', 'Morski')).revenueFactor, Math.pow(1.3, 0.7), 'armator: przychód × 1,3^0,7', 1e-9);
+        assertNear(getFreightResultAdj(share('Przemysł', null)).marginAdj, -0.06 * 0.3, 'Przemysł: marża −0,06 × 0,3', 1e-9);
+        assertNear(getFreightResultAdj(share('Chemia', null)).marginAdj, -0.04 * 0.3, 'Chemia: −0,04 × 0,3', 1e-9);
+        assertEq(getFreightResultAdj(share('Transport i logistyka', 'Logistyka')).revenueFactor, 1, 'Logistyka bez indeksu');
+        assertEq(getFreightResultAdj(share('Finanse', null)).marginAdj, 0, 'Finanse bez kosztu transportu');
+        assert(getCommodityResultAdj(share('Transport i logistyka', 'Lotnictwo')).revenueFactor > 1.15, 'fracht w wyniku kwartału (getCommodityResultAdj)');
+    }));
+    test('S4: „średnio zero” — koszt transportu odbiorców i przychód przewoźników względem Ś8 (×200, 4 lata)', () => withQ(() => {
+        let mSum = 0, rSum = 0, n = 0;
+        const buyer = share('Przemysł', null), carrier = share('Transport i logistyka', 'Morski');
+        for (let r = 0; r < 200; r++) {
+            macro.quarter = 1; initCommodityState();
+            for (let w = 1; w <= 208; w++) {
+                stepCommodities();
+                if (w % 13 === 0) {
+                    if (w > 104) { mSum += getFreightResultAdj(buyer).marginAdj; rSum += getFreightResultAdj(carrier).revenueFactor - 1; n++; }
+                    macro.quarter++; processCommoditiesQuarterly();
+                }
+            }
+        }
+        assert(Math.abs(mSum / n) < 0.003, `marża Przemysłu średnio ${(mSum / n * 100).toFixed(3)} pp (|·| < 0,3 pp)`);
+        assert(Math.abs(rSum / n) < 0.03, `przychód armatora średnio ${(rSum / n * 100).toFixed(2)}% (|·| < 3%)`);
+    }));
+    test('S4: nowe spółki transportowe na giełdach, z opisami i w zapisie; koleje w „Lądowy”; fracht w zapisie, stary zapis od 100', () => {
+        for (const symbol of ['GRT', 'CFL', 'PKC', 'TIR']) {
+            const stock = structuredClone(initialStocks.find(s => s.symbol === symbol));
+            assert(COMPANY_DESCRIPTIONS[symbol] && assembleDescription(stock).includes(COMPANY_DESCRIPTIONS[symbol]), `${symbol}: opis własny`);
+        }
+        resetWorld(JSON.parse(JSON.stringify(initialStocks)));
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        macro.subsectorsAssigned = false; applyStartSubsectors();
+        const sub = { GRT: 'Morski', CFL: 'Lotnictwo', PKC: 'Lądowy', TIR: 'Lądowy' };
+        for (const [sym, s] of Object.entries(sub)) {
+            const stock = stocks.find(x => x.symbol === sym);
+            assert(stock && getMainSegment(stock).sector === 'Transport i logistyka' && getMainSegment(stock).subsector === s, `${sym}: ${s}`);
+            const ex = exchanges[stock.exchange];
+            assert(stock.price >= ex.minPrice && stock.price < ex.maxPrice, `${sym}: poziom giełdy zgodny z ceną`);
+        }
+        assert(stocks.find(x => x.symbol === 'GRT').isStateOwned && !stocks.find(x => x.symbol === 'TIR').isStateOwned, 'GRT państwowa, TIR prywatna');
+        stepCommodities(); startFreightEvent('volcano');
+        const saved = JSON.parse(buildSaveJson(SAVE_IDB_RAW_LIMIT).json);
+        assert(['GRT', 'CFL', 'PKC', 'TIR'].every(sym => JSON.stringify(saved.stocks).includes(`"${sym}"`)), 'spółki krajowe w zapisie');
+        assert(saved.commodities.fr && saved.commodities.fr.e.some(e => e.id === 'volcano'), 'fracht i zakłócenie w zapisie');
+        const snap = JSON.parse(JSON.stringify(getCommoditiesSnapshot()));
+        applyCommoditiesSnapshot(snap);
+        assertEq(JSON.stringify(getCommoditiesSnapshot()), JSON.stringify(snap), 'fracht bez strat po wczytaniu');
+        delete snap.fr; applyCommoditiesSnapshot(snap);
+        assert(FREIGHT_IDS.every(id => getFreightIndex(id) === 100 && getFreightTrend(id) === 100), 'stary zapis: indeks od 100');
+        initFxState(); resetGdrState();
+        try {
+            for (const c of ['DE', 'US', 'FR', 'JP', 'TW', 'CZ', 'CN', 'IN']) joinCountry(c);
+            for (const id of ['HKR', 'DHX', 'POP', 'CMA', 'KML', 'EVG']) assert(foreignIssuers[id]?.kind === 'share' && foreignIssuers[id].sectors[0][0] === 'Transport i logistyka' && foreignIssuers[id].desc, `${id}: na giełdzie, transport, opis`);
+            for (const id of ['DBF', 'AMR', 'CKO', 'RDF', 'IKP', 'CKN']) assertEq(foreignIssuers[id].subsector, 'Lądowy', `${id}: kolej w „Lądowy”`);
+            assertEq(foreignIssuers.JDL.subsector, 'Logistyka', 'JDL w „Logistyka”');
+            assertEq(foreignIssuers.ABL.sectors[0][0], 'Budowlany', 'ABL zostaje w „Budowlany”');
+            assert(['HKR', 'EVG'].every(id => getCountriesSnapshot().issuers[id]), 'spółki zagraniczne w zapisie');
+            assertEq([...checkCountryInvariants(), ...checkCommodityInvariants()].length, 0, 'niezmienniki');
+        } finally { resetGdrState(); initFxState(); }
+    });
+    test('S4: okno „Rynek” pokazuje indeks frachtu (trzy rodzaje, czas dostawy, zakłócenie słowem)', () => withQ(() => {
+        stepCommodities(); startFreightEvent('canal');
+        const html = renderFreightSection();
+        assert(['Fracht morski', 'Fracht lotniczy', 'Fracht lądowy', 'dostawa', 'Statek utknął w kanale', 'Ropa'].every(t => html.includes(t)), 'treść sekcji');
+        assert(/[▲▼]/.test(html), 'kierunek nie tylko kolorem');
+    }));
+});
