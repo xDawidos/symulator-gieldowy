@@ -37,12 +37,12 @@ function getFreightDisruption(id) {
     for (const ev of ensureFreightState().e) if (FREIGHT_EVENTS[ev.id]?.mode === id) m *= 1 + FREIGHT_EVENTS[ev.id].jump;
     return m;
 }
-function getFreightCapacity() { return 1; } // S5: przepustowość infrastruktury
+function getFreightCapacity(id) { return typeof getInfraCapacity === 'function' ? getInfraCapacity(id) : 1; } // S5: przepustowość kraju
 
 /** Indeks bez szumu i zakłóceń (do testów i wykładu). */
 function getFreightFundamental(id) {
     const def = FREIGHT_MODES[id];
-    return 100 * Math.pow(getCommodityPrice('oil') / getCommodityTrend('oil'), def.f) * Math.pow(getCommodityIndustryDemand(), def.d) * Math.pow(1 / getFreightCapacity(), def.k);
+    return 100 * Math.pow(getCommodityPrice('oil') / getCommodityTrend('oil'), def.f) * Math.pow(getCommodityIndustryDemand(), def.d) * Math.pow(1 / getFreightCapacity(id), def.k);
 }
 
 /** Co tydzień (na końcu stepCommodities): szum, zakłócenia, nowy indeks. */
@@ -102,7 +102,9 @@ function getFreightResultAdj(stock) {
     const buyerRatio = Object.entries(FREIGHT_RULES.buyerMix).reduce((s, [id, w]) => s + w * getFreightTrendRatio(id), 0);
     for (const seg of getCommoditySegments(stock)) {
         const mode = getSubsectorDef(seg.sector, seg.subsector)?.freight;
-        if (mode) revenue += seg.share * (Math.pow(getFreightTrendRatio(mode), FREIGHT_RULES.carrierExp) - 1);
+        // S5: przewoźnicy krajowi (spółki PL, bez `kind`) +5% wolumenu na +0,15 przepustowości kraju
+        const home = !stock.kind && typeof getInfraCarrierFactor === 'function' ? getInfraCarrierFactor(mode) : 1;
+        if (mode) revenue += seg.share * (Math.pow(getFreightTrendRatio(mode), FREIGHT_RULES.carrierExp) * home - 1);
         const cost = FREIGHT_SECTOR_COST[seg.sector];
         if (cost) margin -= seg.share * cost * (buyerRatio - 1);
     }
@@ -147,7 +149,7 @@ function renderFreightSection() {
         return `<div class="bank-ticker-item">
             <span>Fracht ${escapeHtml(FREIGHT_MODES[id].name.toLowerCase())}</span>
             <strong>${formatNumberPl(v, 0)}</strong>
-            <small class="text-muted">${pct(dev)} vs średnia 8 kw. · dostawa ${a === b ? a : `${a}–${b}`} tyg.${ev ? ` · ${escapeHtml(FREIGHT_EVENTS[ev.id].name)}` : ''}</small>
+            <small class="text-muted">${pct(dev)} vs średnia 8 kw. · dostawa ${a === b ? a : `${a}–${b}`} tyg. · przepustowość ${formatNumberPl(getFreightCapacity(id), 2)}${ev ? ` · ${escapeHtml(FREIGHT_EVENTS[ev.id].name)}` : ''}</small>
         </div>`;
     }).join('');
     const oilDev = getCommodityPrice('oil') / getCommodityTrend('oil') - 1;

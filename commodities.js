@@ -226,6 +226,7 @@ function checkCommodityInvariants() {
         else if (p < lo * (1 - 1e-9) || p > hi * (1 + 1e-9)) problems.push(`surowiec ${id}: cena ${p.toFixed(2)} poza widełkami ${lo.toFixed(2)}–${hi.toFixed(2)}`);
     }
     if (typeof checkFreightInvariants === 'function') problems.push(...checkFreightInvariants()); // 0.17 S4
+    if (typeof checkInfraInvariants === 'function') problems.push(...checkInfraInvariants()); // 0.17 S5
     return problems;
 }
 

@@ -896,7 +896,8 @@ function autoAwardExpiredTenders() {
             !tender.projectId &&
             tender.remainingGameMs <= 0
         ) {
-            awardTender(tender.id);
+            if (tender.infra && typeof awardInfraTender === 'function') awardInfraTender(tender); // 0.17 S5: projekty państwa
+            else awardTender(tender.id);
         }
     }
 }
@@ -962,7 +963,7 @@ function generateAIBids() {
     if (builders.length === 0) return;
 
     for (const tender of activeTenders) {
-        if (tender.status !== 'open' || tender.clientCompany?.isPlayer) continue;
+        if (tender.status !== 'open' || tender.clientCompany?.isPlayer || tender.infra?.highway) continue; // 0.17 S5: odcinki autostrady — oferty pakietowe przy rozstrzygnięciu
         if (!Array.isArray(tender.evaluatedBy)) tender.evaluatedBy = [];
 
         for (const builder of builders) {
@@ -1007,8 +1008,9 @@ function getContractValue(project) {
 
 function getMilestonePaymentTarget(project, milestone) {
     const rules = CONSTRUCTION_RULES;
-    const workShare = 1 - rules.advanceRate - rules.retentionRate;
-    return getContractValue(project) * (rules.advanceRate + workShare * milestone);
+    const advance = Number(project.advanceRate ?? rules.advanceRate); // 0.17 S5: zaliczka państwa 30% przy infrastrukturze
+    const workShare = 1 - advance - rules.retentionRate;
+    return getContractValue(project) * (advance + workShare * milestone);
 }
 
 /** Wypłata z depozytu (escrow) zamawiającego do wykonawcy. Wykonawca księguje ją jako zaliczkę (zobowiązanie). */
@@ -1141,6 +1143,7 @@ function startConstructionProject(tender, winningBid) {
         deadlineMs: durationDays * dayMs,
         plannedDurationMs: durationDays * dayMs,
         dayMs,
+        advanceRate: Number(tender.advanceRate) > 0 ? Number(tender.advanceRate) : CONSTRUCTION_RULES.advanceRate,
         technologyBonuses: { ...technologyBonuses },
         speedMultiplier: getBuilderSpeedMultiplier(builder),
         performanceFactor,
@@ -1189,7 +1192,7 @@ function startConstructionProject(tender, winningBid) {
     tender.startDate = project.startTime;
 
     // Zaliczka dla wykonawcy.
-    releaseEscrowToBuilder(project, price * CONSTRUCTION_RULES.advanceRate, 'Zaliczka przy podpisaniu umowy');
+    releaseEscrowToBuilder(project, price * project.advanceRate, 'Zaliczka przy podpisaniu umowy');
 
     logEvent(
         `${builder.name} rozpoczyna budowę ${building.name} (termin: ${durationDays} dni budowy). ` +
@@ -1535,12 +1538,15 @@ function completeConstructionProject(project) {
 
     // Bilans zamawiającego bez zmian: depozyt zamienia się w budynek wg ceny nabycia.
     const purchasePrice = revenue;
-    addBuildingToClient(client, project, {
-        status: 'completed',
-        purchasePrice,
-        marketValue: Number(project.tender.buildingType.estimatedMarketValue) || purchasePrice
-    });
-    if (typeof onReitBuildingCompleted === 'function') onReitBuildingCompleted(client, project, purchasePrice); // 0.15.5 B5: obiekt zwiększa portfel REIT-u
+    if (project.tender.infra && typeof onInfraProjectCompleted === 'function') onInfraProjectCompleted(project); // 0.17 S5: przepustowość zamiast budynku
+    else {
+        addBuildingToClient(client, project, {
+            status: 'completed',
+            purchasePrice,
+            marketValue: Number(project.tender.buildingType.estimatedMarketValue) || purchasePrice
+        });
+        if (typeof onReitBuildingCompleted === 'function') onReitBuildingCompleted(client, project, purchasePrice); // 0.15.5 B5: obiekt zwiększa portfel REIT-u
+    }
 
     if (Number(project.tender.buildingType.healthBonus) > 0) {
         client.financialHealth = Math.min(5, (Number(client.financialHealth) || 0) + Number(project.tender.buildingType.healthBonus) * 0.5);
@@ -1665,7 +1671,7 @@ function cancelConstructionProject(project, reason = 'Anulowanie', faultParty = 
         postPeriodEntry(client, `contract_client_${project.id}`, { otherIncome: penaltyCollected - uncollected });
     }
 
-    if (unfinishedValue > 0) {
+    if (unfinishedValue > 0 && !project.tender.infra) {
         addBuildingToClient(client, project, { status: 'unfinished', purchasePrice: unfinishedValue, marketValue: unfinishedValue * 0.6 });
     }
 
@@ -1683,6 +1689,7 @@ function cancelConstructionProject(project, reason = 'Anulowanie', faultParty = 
     project.tender.status = 'cancelled';
     project.tender.cancelReason = project.cancelReason;
     project.tender.completionDate = project.completionDate;
+    if (project.tender.infra && typeof onInfraProjectCancelled === 'function') onInfraProjectCancelled(project); // 0.17 S5
 
     constructionProjects = constructionProjects.filter(item => item.id !== project.id);
     if (builder.constructionStats) builder.constructionStats.currentProjects = getActiveProjectsForBuilder(builder).length;
@@ -5330,7 +5337,9 @@ const SOCIAL_LAWS = {
     tenderThreshold: { name: 'Próg wezwania', icon: '📣', levels: ['66%', '75%', '90%', '99%'], start: 0 },
     // 0.15.1 (Socjaldemokraci): CIT zależny od wielkości spółki; kontrola koncentracji rynku
     corpTaxBrackets: { name: 'Progi CIT', icon: '🧾', levels: ['liniowy', 'dwa progi', 'progresywny'], start: 0 },
-    antitrust: { name: 'Ustawa antymonopolowa', icon: '⚖️', levels: ['łagodna', 'standardowa', 'surowa'], start: 1 }
+    antitrust: { name: 'Ustawa antymonopolowa', icon: '⚖️', levels: ['łagodna', 'standardowa', 'surowa'], start: 1 },
+    // 0.17 S5: wydatki na infrastrukturę, zużycie przepustowości i szansa projektu państwa (INFRA_LEVELS w infrastructure.js)
+    infrastructure: { name: 'Finansowanie infrastruktury', icon: '🛣️', levels: ['Porzucenie', 'Łatanie dziur', 'Utrzymanie', 'Rozbudowa', 'Autostrady na wczoraj'], start: 2 }
 };
 // Progi CIT: [mała spółka (dolne 50% kapitalizacji), duża (górne 10%)] — zmiana stawki w pp.
 const CORP_TAX_BRACKETS = [[0, 0], [-0.04, 0.02], [-0.06, 0.05]];
@@ -5371,10 +5380,10 @@ const RIGHTS_UNION_MULT = [0.7, 1, 1.5];
 
 // Programy partii: kierunek zmian ustaw i priorytet edukacji.
 const PARTY_PROGRAMS = {
-    market: { moves: [['minWage', -1], ['benefits', -1], ['housing', -1], ['rights', -1], ['tenderThreshold', -1], ['corpTaxBrackets', -1], ['antitrust', -1]], education: 'high', deficit: 'cut' },
+    market: { moves: [['minWage', -1], ['benefits', -1], ['housing', -1], ['rights', -1], ['tenderThreshold', -1], ['corpTaxBrackets', -1], ['antitrust', -1], ['infrastructure', -1]], education: 'high', deficit: 'cut' },
     social: { moves: [['corpTaxBrackets', 1], ['antitrust', 1], ['benefits', 1], ['tenderThreshold', 1]], education: 'high', deficit: 'cit' },
-    state:  { moves: [['rights', 1], ['housing', 1], ['tenderThreshold', 1]], education: 'high', deficit: 'cit' },
-    people: { moves: [['minWage', 1], ['benefits', 1], ['housing', 1], ['tenderThreshold', 1]], education: 'medium', deficit: 'cit' }
+    state:  { moves: [['rights', 1], ['housing', 1], ['tenderThreshold', 1], ['infrastructure', 1]], education: 'high', deficit: 'cit' },
+    people: { moves: [['minWage', 1], ['benefits', 1], ['housing', 1], ['tenderThreshold', 1], ['infrastructure', 1]], education: 'medium', deficit: 'cit' }
 };
 // Preferencje wyborcze klas: [Ludowcy, Blok Państwowy, Koalicja Rynkowa].
 const CLASS_VOTE = { poor: [35, 25, 10, 30], lowerMid: [30, 30, 25, 15], mid: [18, 32, 42, 8], upperMid: [10, 28, 57, 5], rich: [5, 20, 72, 3], veryRich: [5, 15, 78, 2] };
@@ -5765,7 +5774,8 @@ const LAW_ANNOUNCEMENT_EFFECTS = {
     minWage:  { 1: { 'Żywność': -0.015, 'Usługi': -0.02, 'Turystyka': -0.02, 'Budowlany': -0.015 }, '-1': { 'Usługi': 0.01, 'Turystyka': 0.01, 'Budowlany': 0.01 } },
     benefits: { 1: { 'Żywność': 0.015, 'Dobra konsumpcyjne': 0.015 }, '-1': { 'Żywność': -0.01, 'Dobra konsumpcyjne': -0.01 } },
     housing:  { 1: { 'Budowlany': 0.04, 'Nieruchomości': 0.03 }, '-1': { 'Budowlany': -0.03, 'Nieruchomości': -0.02 } },
-    rights:   { 1: { 'Przemysł': -0.01, 'Budowlany': -0.01, 'Usługi': -0.01 }, '-1': { 'Przemysł': 0.01, 'Budowlany': 0.01, 'Usługi': 0.01 } }
+    rights:   { 1: { 'Przemysł': -0.01, 'Budowlany': -0.01, 'Usługi': -0.01 }, '-1': { 'Przemysł': 0.01, 'Budowlany': 0.01, 'Usługi': 0.01 } },
+    infrastructure: { 1: { 'Budowlany': 0.03, 'Transport i logistyka': 0.01 }, '-1': { 'Budowlany': -0.02, 'Transport i logistyka': -0.005 } } // 0.17 S5
 };
 
 /** Przesunięcia biednych do średniej niższej z ustaw (na kwartał). */
@@ -5909,7 +5919,8 @@ function settleSocialBudget() {
     const baseline = cit + laborTaxesGross;
     if (!(budget.publicServices > 0)) budget.publicServices = baseline * 0.97;
     budget.revenue = revenue;
-    budget.spending = budget.publicServices + benefits + extra;
+    budget.infrastructureSpending = typeof settleInfraBudget === 'function' ? settleInfraBudget(revenue) : 0; // 0.17 S5: ustawa + raty projektów
+    budget.spending = budget.publicServices + benefits + extra + budget.infrastructureSpending;
     budget.balance = revenue - budget.spending;
     budget.hasBalance = true;
     budget.publicServices = budget.publicServices * 0.8 + baseline * 0.97 * 0.2; // usługi publiczne: sztywne, z opóźnieniem
@@ -5978,6 +5989,7 @@ function advanceSocialPolicy() {
     applyPendingLaw();
     settleSocialBudget();
     settleSocialPrograms();
+    if (typeof processInfraQuarterly === 'function') processInfraQuarterly(); // 0.17 S5: zużycie, przetargi, nowe projekty
     if (society.housingProgram > 0) {
         society.housingProgram--;
         if (Math.random() < 0.5 * Math.max(1, Number(society.laws.housing) || 0)) commissionSocialHousing();
