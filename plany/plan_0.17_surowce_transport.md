@@ -89,3 +89,5 @@ Kolejność: S0 → S0b → S1 → … → S7. **Szczegóły części S1–S7 (l
 18. **Ceny surowców egzogeniczne** (gracz i boty nie ruszają ceną); wpływ na spółki względem średniej 8 kw. („średnio zero” z definicji).
 19. **Budżet zapisu 0.17 podniesiony do +7%** (2026-11-02): ≤ 2,49 mln znaków PL 27 kw.; po S2 zużyte +3,3%.
 20. **S3 bez czekania na design** (2026-11-02): okno giełdy towarowej w S3 roboczo z komponentów okna forexu; projekt czatu designu przed S7, wtedy ostateczny wygląd.
+21. **Opisy własne spółek krajowych** (2026-11-02): `COMPANY_DESCRIPTIONS` w `companies.js` (PES, NAG, ZST, SLS już są); transportowe w S4, wszystkie pozostałe spółki PL w S7 (szczegóły w specyfikacji).
+22. **Podatek od zysków z forexu, kontraktów, ETC i ETF** (2026-11-02) jak od zysków kapitałowych z akcji; wprowadzany na gałęzi S3 przed scaleniem.

@@ -126,6 +126,7 @@ Nowy plik `commodities.js` (rejestr, krok tygodniowy, historia, zapis).
 | Lotniczy | 0,5 | 0,8 | 0,3 | 20%/rok | 1 tydz. |
 | Lądowy | 0,3 | 0,6 | 0,8 | 10%/rok | 1–2 tyg. |
 
+- **Opisy:** krajowe spółki transportowe (GRT, CFL, PKC, TIR) od razu z wpisem w `COMPANY_DESCRIPTIONS` (teksty z listy spółek); zagraniczne mają pole `desc` w danych kraju.
 - **Przewoźnicy:** przychód × `(Ī/Ś8_I)^0,7`, koszt paliwa przez wsad ropy (S2).
 - **Koszt transportu dla sektorów** (udział, „średnio zero” względem Ś8): Przemysł 0,06, Motoryzacja 0,05, Żywność 0,05, Dobra konsumpcyjne 0,05, Chemia 0,04.
 - **Zakłócenia:** „Statek utknął w kanale” (morski +40% na 4–8 tyg., EVG −8% kursu, 5%/rok), „Strajk kolejarzy” (lądowy +15% na 2–4 tyg., koleje kraju −3%, 5%/rok), „Pył wulkaniczny” (lotniczy +30% na 2–4 tyg., 3%/rok).
@@ -183,6 +184,7 @@ Nowy plik `commodities.js` (rejestr, krok tygodniowy, historia, zapis).
   - **L2 (koszt 5 000):** pozycje krótkie i pełna dźwignia wg surowca.
   - ETC i ETF zostają za „Ekspertem Rynków Globalnych” L1. Pozycje otwarte przed zakupem umiejętności (stare zapisy z czasu testów) zostają do zapadalności.
 - **Interfejs:** okno giełdy towarowej wg projektu czatu designu (lista 7 surowców z ceną i zmianą, wykres 104 tyg., seria kontraktów z contango/backwardation słowem, depozyt słowem i liczbą, ETC, ETF koszykowy); indeks frachtu i przepustowość; bezpieczeństwo państwa w karcie kraju. Kolor nigdy jedynym nośnikiem; bez nowych okien modalnych.
+- **Opisy własne spółek krajowych** (decyzja 2026-11-02): mapa `COMPANY_DESCRIPTIONS` w `companies.js` (po symbolu, działa w starych zapisach; zastępuje zdanie o działalności z szablonu sektora) ma dziś 4 wpisy (PES, NAG, ZST, SLS). W S7 dopisać opisy **wszystkich ok. 32 pozostałych spółek PL** (1–2 zdania: czym się zajmuje, żart w stylu nazw, na co reaguje kurs). Propozycje tekstów w `plany/opisy_spolek_pl.md` do akceptacji przed wpisaniem; test: każda spółka z `initialStocks` ma wpis.
 - **Akademia (8 lekcji):** Cykl surowcowy; Koszt wsadu i przerzucenie na ceny; Kontrakt terminowy; Contango i backwardation; Depozyt i margin call na towarach; ETC i ETF surowcowy; Fracht i wąskie gardła; Bezpieczeństwo państwa i zbrojenia.
 - **Zapis:** budżet ≤ 2,49 mln znaków (+7%) (PL 27 kw.); historia cen 104 tyg. × 7 + indeks frachtu 3 × 104 ≈ 1 000 liczb.
 - **Kontrola** `raporty/kontrola_0.17.md`: GIG ±1 pp na 120 + 120 gier PL (jedna partia), seria PL 20 lat ×12, czas kroku ≤ 1 334 ms/kw. (≥ 8 gier sekwencyjnie), niezmienniki 0, exploit kontraktów ≤ lokata + 6 pp.

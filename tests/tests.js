@@ -14775,6 +14775,12 @@ group('0.17 S2 Spółki i koszty wsadu', () => {
         return st;
     };
     const after = fn => { try { return fn(); } finally { initCommodityState(); } };
+    test('S2: nowe spółki krajowe mają własny opis w karcie (COMPANY_DESCRIPTIONS)', () => {
+        for (const symbol of ['PES', 'NAG', 'ZST', 'SLS']) {
+            const stock = structuredClone(initialStocks.find(s => s.symbol === symbol));
+            assert(assembleDescription(stock).includes(COMPANY_DESCRIPTIONS[symbol]), `${symbol}: opis własny zamiast szablonu`);
+        }
+    });
     test('S2: cena +20% ponad Ś8 → przychód kopalni +11,5% (wykładnik 0,6); strajk w kopalniach tnie produkcję krajową o 20%', () => after(() => {
         setRatio({ coal: 1.2 });
         const kwm = { symbol: 'KWM', sector: ['Przemysł'] };

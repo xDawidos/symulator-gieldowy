@@ -504,6 +504,14 @@ function getVolatilitySentence(stock) {
     return "Inwestycja w tę firmę wiąże się z bardzo wysokim ryzykiem i dużą zmiennością notowań.";
 }
 
+// Opisy własne spółek krajowych (po symbolu, więc działają też w starych zapisach); zastępują zdanie o działalności z szablonu sektora.
+const COMPANY_DESCRIPTIONS = {
+    PES: 'Narodowy koncern paliwowy ze stacjami w każdej gminie i wiecznie „przejściowymi” cenami. Kupuje ropę i sprzedaje paliwa, więc zarabia na marży rafineryjnej, a nie na samym poziomie ceny ropy.',
+    NAG: 'Państwowa spółka wydobycia i importu gazu, z kontraktami długoterminowymi ze wschodu „do renegocjacji”. Przychody rosną razem z ceną gazu.',
+    ZST: 'Mała kopalnia złota na Dolnym Śląsku, w której pracuje więcej geologów niż jest złota. Kurs mocno idzie za ceną złota, a ta zwykle rośnie w kryzysach.',
+    SLS: 'Skupuje zboże od rolników i eksportuje je w świat, korzystając z dotacji partii rolniczej. Zarabia przy drogim zbożu, a traci w roku rekordowych zbiorów.'
+};
+
 function initializeDescriptionParts(stock) {
     generateCEO(stock);
     
@@ -549,7 +557,7 @@ function assembleDescription(stock) {
         const sentence1_dynamic = `${stock.name} to ${getCompanyDescriptor(stock)} w kategorii ${getMainSector(stock)}.`;
         const sentence3_dynamic = getVolatilitySentence(stock);
         const sentence7_dynamic = `'${getCEOQuote(stock)}' - komentuje ${ceoName.split(' ').pop()}.`;
-        const sentence2_static = parts.activitySentence;
+        const sentence2_static = COMPANY_DESCRIPTIONS[stock.symbol] || parts.activitySentence;
         const sentence4_static = parts.keywordsSentence;
         const sentence5_static = parts.mottoSentence;
         const sentence6_static = `Na czele spółki stoi prezes ${ceoName}.`;
