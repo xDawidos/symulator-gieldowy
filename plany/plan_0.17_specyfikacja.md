@@ -187,21 +187,10 @@ Zmiany użytkownika 2026-11-03 (decyzja 23): koszty ×2, projekty bez nazw włas
 - Gracz może współfinansować projekt przez **ofertę PPP** (istniejące `PPP_FUND_LIMIT`, `PPP_RECOVERY`); autostrada jako jedna oferta PPP na cały projekt.
 - **Interwencje państwa 0.15.3:** „program robót publicznych” w Czarnym czwartku i bessie zamawia projekt z tej listy (poniżej limitu) zamiast samej dopłaty dla Budowlanego → **domyka odstępstwo 6** z `kontrola_0.15.3.md`.
 - Po ukończeniu: przepustowość ↑ → niższy indeks frachtu w kraju → niższy koszt transportu sektorów krajowych, a przewoźnicy krajowi +5% wolumenu.
+- **Ustalenia z sesją kodu (2026-11-03):** zamawiający to podmiot „Skarb Państwa (inwestycje)”, który przy podpisaniu umowy wpłaca całą cenę na depozyt z `governmentTreasury`; do budżetu koszt wchodzi w ratach (cena / kwartały budowy). `infrastructureSpending` = % wpływów z ustawy + raty projektów w toku. Państwo wypłaca wykonawcy **zaliczkę 30% ceny** projektu lub odcinka na start (mniej kredytu obrotowego). Przewoźnicy krajowi: przychód × (1 + 0,05 · (przepustowość − 1) / 0,15). PPP: jedna oferta na 25% kosztu, spłata ze skarbu, oprocentowanie obligacji skarbowych + 1 pp, termin = budowa + 4 kw., wpłata gracza zmniejsza raty państwa. Przetarg bez reputacji. Czas: kwartał = 35 dni budowy. W serii: zerwane budowy infrastruktury na grę.
 - Zapis: pola opcjonalne (przepustowość, liczniki obiektów, projekty w toku z odcinkami); nowa ustawa w starym zapisie startuje od Utrzymania.
 
 **Testy S5 (ok. 8):** projekt podnosi przepustowość po ukończeniu (autostrada po każdym odcinku); zużycie zależy od poziomu ustawy; limit obiektów blokuje kolejny projekt typu; ustawa: wydatki w budżecie i ruchy partii; przetarg autostrady dzieli odcinki między dwie firmy, gdy tak taniej, i daje wszystkie jednej, gdy pakiet tańszy; odcinek zajmuje slot wykonawcy; PPP z udziałem gracza rozlicza się jak dotąd; interwencja kryzysowa zamawia projekt; stary zapis wczytuje się z ustawą na Utrzymaniu.
-
----|---|---|---|---|
-| Port „Wałęsa Shipment” (rozbudowa terminalu) | morski | +0,15 | 1,6 mln | 8–12 kw. |
-| Lotnisko „Chopin Industry Airport” | lotniczy | +0,15 | 1,4 mln | 8–12 kw. |
-| Magistrala kolejowa | lądowy | +0,10 | 1,0 mln | 6–10 kw. |
-| Autostrada | lądowy | +0,08 | 0,8 mln | 4–8 kw. |
-
-- Państwo ogłasza projekt: szansa 25%/rok × `subsidies` partii rządzącej, ×0,5 przy deficycie (`budget.deficitQuarters > 0`); wykonawcę wybiera istniejący przetarg (`commissionCityTender` → spółki Budowlany, w tym ABL); gracz może współfinansować przez **ofertę PPP** (istniejące `PPP_FUND_LIMIT`, `PPP_RECOVERY`).
-- **Interwencje państwa 0.15.3:** „program robót publicznych” w Czarnym czwartku i bessie zamawia projekt z tej listy zamiast samej dopłaty dla Budowlanego → **domyka odstępstwo 6** z `kontrola_0.15.3.md`.
-- Po ukończeniu: przepustowość ↑ → niższy indeks frachtu w kraju → niższy koszt transportu sektorów krajowych, a przewoźnicy krajowi +5% wolumenu.
-
-**Testy S5 (ok. 4):** projekt podnosi przepustowość po ukończeniu; zużycie; PPP z udziałem gracza rozlicza się jak dotąd; interwencja kryzysowa zamawia projekt.
 
 ---
 
