@@ -4764,8 +4764,6 @@ group('Poprawki 0.13.1 (B1–B13)', () => {
         playerPortfolio.AAA = { shares: 2000, avgPrice: 100, assetType: 'stock' };
         a.sharesHeld = 5000;
         assert(getFreeFloatShares(a) === getAvailableShares(a) + getTrackedHeldShares(a), `${getFreeFloatShares(a)} ≠ ${getAvailableShares(a)} + ${getTrackedHeldShares(a)}`);
-        const text = renderCompanyCardOwners(a);
-        assert(text.includes('dostępnych na rynku') && text.includes('u inwestorów'), 'rozbicie w karcie');
     });
 
     test('B4: wymuszona sprzedaż zostawia ślad z przyczyną', () => {
@@ -14314,7 +14312,7 @@ group('0.16.9 W3 Spółki zagraniczne jak krajowe', () => {
         joinCountry('DE'); countryState.DE.link = 'intl';
         const i = getCountryIssuers('DE')[0]; i.history = [30, 31, 33, 32, 35, 34, i.price];
         const sym = symOf(i); companyCardView.symbol = sym;
-        for (const tab of ['overview', 'finance', 'owners', 'manage', 'group']) {
+        for (const tab of ['overview', 'finance', 'manage', 'group']) {
             companyCardView.tab = tab; renderCompanyCard();
             const body = document.getElementById('company-card-body').innerHTML;
             assert(body.length > 40 && !/undefined|NaN/.test(body), `zakładka ${tab} bez undefined/NaN`);
@@ -14327,9 +14325,8 @@ group('0.16.9 W3 Spółki zagraniczne jak krajowe', () => {
         assert(!document.getElementById('company-card-header').querySelector('.flag-ic'), 'nagłówek bez flagi');
         companyCardView.tab = 'overview'; renderCompanyCard();
         assert(!document.getElementById('cc-foreign-chart'), 'Przegląd bez osobnego wykresu ceny (jak u krajowej)');
-        companyCardView.tab = 'owners'; renderCompanyCard();
-        assert(/Wykres akcjonariatu/.test(document.getElementById('company-card-body').innerHTML), 'akcjonariat z wykresem kołowym jak u krajowej');
-        if (i.state) assert(document.getElementById('company-card-body').textContent.includes('Państwo: Niemcy'), 'pakiet państwa należy do Niemiec, nie do Skarbu Państwa');
+        assert(!tabs().includes('Akcjonariat'), 'bez zakładki Akcjonariat (wykres kołowy w szufladzie handlu)');
+        if (i.state) assert(document.getElementById('company-card-header').textContent.includes('Państwo: Niemcy'), 'pakiet państwa należy do Niemiec, nie do Skarbu Państwa');
         companyCardView.tab = 'overview';
     }));
 

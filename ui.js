@@ -4189,7 +4189,6 @@ let companyCardView = { symbol: null, tab: 'overview' };
 const COMPANY_CARD_TABS = [
     ['overview', 'Przegląd'],
     ['finance', 'Finanse'],
-    ['owners', 'Akcjonariat'],
     ['manage', 'Zarządzanie'],
     ['workforce', 'Zatrudnienie'],
     ['group', 'Grupa'] // 0.14 T5: karta koncernu
@@ -4309,7 +4308,6 @@ function renderCompanyCard() {
         if (typeof noteMentorEvent === 'function') noteMentorEvent('financeView', stock);
         body.innerHTML = renderCompanyCardFinance(stock, f);
     }
-    else if (companyCardView.tab === 'owners') body.innerHTML = foreign ? renderForeignCardOwners(stock) : renderCompanyCardOwners(stock);
     else if (companyCardView.tab === 'manage') body.innerHTML = foreign ? renderForeignCardManage(stock) : renderCompanyCardManage(stock);
     else if (companyCardView.tab === 'workforce' && !foreign) body.innerHTML = renderCompanyCardWorkforce(stock);
     else if (companyCardView.tab === 'group' && foreign && hasForeignGroup(stock.foreignSource)) body.innerHTML = renderForeignCardGroup(stock);
@@ -4347,16 +4345,6 @@ function describeForeignCompany(stock) {
     if (stock.giant) parts.push('Gigant swojego rynku.');
     if (stock.isStateOwned) parts.push(`Państwo ${def?.name || stock.country} trzyma ${Math.round(COUNTRY_RULES.statePct * 100)}% akcji (poza wolnym obrotem).`);
     return parts.filter(Boolean).join(' ');
-}
-
-function renderForeignCardOwners(stock) {
-    const i = stock.foreignSource, total = Math.max(1, i.shares), pct = n => `${formatNumberPl(n / total * 100, 2)}%`;
-    const names = id => id === 'player' ? 'Twój fundusz' : (aiCompetitors.find(b => b.id === id)?.name || id);
-    const holders = Object.entries(i.holders || {}).filter(([, q]) => q > 0).sort((a, b) => b[1] - a[1]);
-    const rows = [...(i.statePack > 0 ? [[getForeignStateOwnerName(i), i.statePack]] : []), ...(i.parentPack > 0 ? [[`Spółka matka: ${getForeignParent(i)?.name || '—'}`, i.parentPack]] : []), ...holders.map(([id, q]) => [names(id), q]), ['Wolne akcje na rynku', Math.max(0, getGdrFree(i))]];
-    return `<p class="text-sm">Fundusz: <strong>${pct(getGdrHeld(i))}</strong> · wolny obrót: <strong>${formatNumberPl(Math.max(0, getGdrFree(i)), 0)}</strong> z ${formatNumberPl(i.shares, 0)} akcji.</p>
-        <table class="asset-mini-table w-full"><thead><tr><th>Akcjonariusz</th><th class="cell-number">Akcje</th><th class="cell-number">Udział</th></tr></thead><tbody>${rows.map(([n, q]) => `<tr><td>${escapeHtml(n)}</td><td class="cell-number">${formatNumberPl(q, 0)}</td><td class="cell-number">${pct(q)}</td></tr>`).join('')}</tbody></table>
-        <button class="btn-secondary mt-2" onclick="openStockDetailsModal('${stock.symbol}')">${uiIcon('akcjonariat', 14)} Wykres akcjonariatu</button>`;
 }
 
 function renderForeignCardManage(stock) {
@@ -4465,22 +4453,6 @@ function renderValuationSection(stock, f) {
     return `<h4 class="mt-3">Wycena (kurs ${formatZl(stock.price)})</h4>
         <table class="asset-mini-table w-full"><tbody>${rows.map(([label, value]) => `<tr><td>${label}</td><td class="cell-number">${value}</td></tr>`).join('')}</tbody></table>
         <p class="text-xs text-muted">Różne metody dają różne wyniki — traktuj je jako przedział, nie jedną cenę.${level < 2 ? ' Kolejne metody: Analityk Finansowy poziom 2.' : ''}</p>${consensus}`;
-}
-
-function renderCompanyCardOwners(stock) {
-    const fundPct = typeof getFundStakePct === 'function' ? getFundStakePct(stock) : 0;
-    const wallet = playerWallet?.portfolio?.[stock.symbol]?.shares || 0;
-    // 0.13.1 (B3): wolny obrót = dostępne na rynku + akcje u inwestorów (gdzie są akcje).
-    const freeFloat = getFreeFloatShares(stock), available = getAvailableShares(stock);
-    const byKind = {};
-    for (const holder of getShareholders(stock)) if (!['state', 'insiders'].includes(holder.kind)) byKind[holder.kind] = (byKind[holder.kind] || 0) + holder.shares;
-    const kindLabels = { player: 'Twój fundusz', wallet: 'konto prywatne', ai: 'inwestorzy (boty)', botFund: 'fundusze kolegów', bank: 'banki', etf: 'ETF-y', holding: 'holdingi', company: 'spółki', city: 'miasto' };
-    const where = Object.entries(byKind).sort((a, b) => b[1] - a[1]).map(([kind, shares]) => `${kindLabels[kind] || kind} ${shares.toLocaleString('pl-PL')}`).join(' · ');
-    return `
-        <p class="text-sm">Fundusz: <strong>${formatNumberPl((fundPct * 100), 2)}%</strong>${wallet ? ` · konto prywatne: <strong>${wallet.toLocaleString('pl-PL')} akcji</strong>` : ''}</p>
-        <p class="text-sm">Wolny obrót: <strong>${freeFloat.toLocaleString('pl-PL')}</strong> z ${stock.totalShares.toLocaleString('pl-PL')} akcji = <strong>${available.toLocaleString('pl-PL')}</strong> dostępnych na rynku + <strong>${Math.max(0, freeFloat - available).toLocaleString('pl-PL')}</strong> u inwestorów${where ? ` (${escapeHtml(where)})` : ''}.${available <= 0 ? ' <span class="text-warn">Teraz nie da się kupić — akcje kupisz, gdy ktoś je sprzeda.</span>' : ''}</p>
-        <div class="gov-bars">${typeof renderShareholderBars === 'function' ? renderShareholderBars(stock) : ''}</div>
-        <button class="btn-secondary mt-2" onclick="openStockDetailsModal('${stock.symbol}')">${uiIcon('akcjonariat', 14)} Wykres akcjonariatu</button>`;
 }
 
 function renderCompanyCardManage(stock) {
