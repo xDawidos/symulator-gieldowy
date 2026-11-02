@@ -1064,6 +1064,8 @@ function renderMarketModal() {
 
         ${typeof renderCrisisSection === 'function' ? renderCrisisSection() : ''}
 
+        ${typeof renderFreightSection === 'function' ? renderFreightSection() : ''}
+
         <div>
             <h4 class="bank-section-title">Historia faz</h4>
             <ul class="phase-history">${historyItems}</ul>

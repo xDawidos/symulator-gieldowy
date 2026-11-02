@@ -2,7 +2,7 @@
 // 0.17 S1: SUROWCE — rejestr 7 surowców, cena w USD co tydzień, zdarzenia surowcowe, zapis (pole opcjonalne `commodities`)
 // =================================================================================
 // Ceny są egzogeniczne (rynek światowy): nie zależą od gracza ani botów. Model tygodniowy:
-//   ln X ← ln X + θ_t·(ln M − ln X) + σ/√52·ε,  θ_t = 1 − (1 − θ)^(1/13),  P = X · sezon(tydzień)
+//   ln X ← ln X + θ_t·(ln M − ln X) + σ/√(rok gry)·ε,  θ_t = 1 − (1 − θ)^(1/WEEKS_PER_QUARTER),  P = X · sezon(tydzień)
 //   M = średnia · inflacja USD · (1 + β_p·(popyt − 1)) · (1 + β_z·(zbrojenia − 1)) · nastrój · szoki
 // Sezon mnoży cenę wprost (płynnie między środkami kwartałów): w celu M przy θ = 0,25/kw. zostałoby z niego ok. ±2% (S1, kalibracja).
 // Szok przesuwa ln M na czas zdarzenia i jednorazowo podbija cenę o połowę szoku. Wpływ na spółki (S2) liczy się
@@ -87,7 +87,7 @@ function getCommodityShock(id) {
 function getCommoditySeason(id, q = macro.quarter, weekInQ = ensureCommodityState().qN) {
     const s = COMMODITY_DEFS[id].season;
     if (!s) return 1;
-    const t = commodityQuarterInYear(q) - 1 + Math.min(1, weekInQ / 13) - 0.5, i = Math.floor(t), f = t - i;
+    const t = commodityQuarterInYear(q) - 1 + Math.min(1, weekInQ / WEEKS_PER_QUARTER) - 0.5, i = Math.floor(t), f = t - i;
     return 1 + s[(i + 4) % 4] * (1 - f) + s[(i + 5) % 4] * f;
 }
 
@@ -118,9 +118,9 @@ function stepCommodities() {
     st.w++;
     for (const id of COMMODITY_IDS) {
         const def = COMMODITY_DEFS[id];
-        const thetaW = 1 - Math.pow(1 - def.theta, 1 / 13);
+        const thetaW = 1 - Math.pow(1 - def.theta, 1 / WEEKS_PER_QUARTER);
         let x = Math.log(st.prices[id] / getCommoditySeason(id, macro.quarter, st.qN));
-        x += thetaW * (Math.log(getCommodityTarget(id)) - x) + def.sigma / Math.sqrt(52) * gaussianRandom();
+        x += thetaW * (Math.log(getCommodityTarget(id)) - x) + def.sigma / Math.sqrt(WEEKS_PER_YEAR) * gaussianRandom();
         const [lo, hi] = getCommodityBand(id);
         const p = Math.min(hi, Math.max(lo, Math.exp(x) * getCommoditySeason(id, macro.quarter, st.qN + 1)));
         st.prices[id] = p;
@@ -128,6 +128,7 @@ function stepCommodities() {
         st.qSum[id] = (st.qSum[id] || 0) + p;
     }
     st.qN++;
+    if (typeof stepFreight === 'function') stepFreight(); // 0.17 S4: indeks frachtu (po cenie ropy)
 }
 
 /** Średnia ceny w bieżącym kwartale (P̄q); przed pierwszym tygodniem — cena bieżąca. */
@@ -172,6 +173,7 @@ function processCommoditiesQuarterly() {
         st.qSum[id] = 0;
     }
     st.qN = 0;
+    if (typeof processFreightQuarterly === 'function') processFreightQuarterly(); // 0.17 S4
     if (typeof rebalanceCommodityBasket === 'function' && st.funds) rebalanceCommodityBasket(); // S3
     for (const id of COMMODITY_IDS) { const [lo, hi] = getCommodityBand(id); st.prices[id] = Math.min(hi, Math.max(lo, st.prices[id])); } // widełki rosną z inflacją co kwartał
     st.events = st.events.filter(ev => ev.until > macro.quarter);
@@ -194,7 +196,7 @@ function noteCrisisForCommodities(lineId) { return COMMODITY_GOLD_CRISES.include
 function getCommoditiesSnapshot() {
     const st = ensureCommodityState(), r = x => Math.round(x * 1e4) / 1e4, rs = x => Number(x.toPrecision(5));
     const map = f => Object.fromEntries(COMMODITY_IDS.map(id => [id, f(id)]));
-    return { s: st.startQ, w: st.w, p: map(id => st.prices[id]), h: map(id => st.hist[id].map(rs)), q: map(id => st.qHist[id].map(rs)), qs: map(id => r(st.qSum[id] || 0)), qn: st.qN, e: st.events, d: st.lastDroughtQ, r: st.run, f: st.funds, b: st.bots }; // f, b: S3 (ETC/ETF, kontrakty botów)
+    return { s: st.startQ, w: st.w, p: map(id => st.prices[id]), h: map(id => st.hist[id].map(rs)), q: map(id => st.qHist[id].map(rs)), qs: map(id => r(st.qSum[id] || 0)), qn: st.qN, e: st.events, d: st.lastDroughtQ, r: st.run, f: st.funds, b: st.bots, fr: typeof getFreightSnapshot === 'function' ? getFreightSnapshot() : undefined }; // f, b: S3 (ETC/ETF, kontrakty botów); fr: S4 (fracht)
 }
 function applyCommoditiesSnapshot(snap) {
     initCommodityState(); // stary zapis bez pola: ceny średnie
@@ -210,6 +212,7 @@ function applyCommoditiesSnapshot(snap) {
     }
     if (snap.f && typeof snap.f === 'object' && snap.f.bq) st.funds = { etcF: Number(snap.f.etcF) || 1, bF: Number(snap.f.bF) || 1, bq: Object.fromEntries(COMMODITY_IDS.map(id => [id, Number(snap.f.bq[id]) > 0 ? Number(snap.f.bq[id]) : COMMODITY_DEFS[id].mean])), units: Object.fromEntries(Object.entries(snap.f.units || {}).filter(([k, u]) => (k === 'basket' || COMMODITY_DEFS[k]) && Number(u) > 0).map(([k, u]) => [k, Number(u)])) };
     if (snap.b && typeof snap.b === 'object') st.bots = snap.b;
+    if (typeof applyFreightSnapshot === 'function') applyFreightSnapshot(snap.fr); // 0.17 S4
     if (snap.r && typeof snap.r === 'object') st.run = Object.fromEntries(Object.entries(snap.r).filter(([k, v]) => COMMODITY_DEFS[k] && Number.isFinite(v?.n)).map(([k, v]) => [k, { sign: Math.sign(Number(v.sign) || 0), n: v.n }]));
     st.events = (Array.isArray(snap.e) ? snap.e : []).filter(ev => COMMODITY_EVENTS[ev?.id] && Number.isFinite(ev.until) && ev.shocks && typeof ev.shocks === 'object')
         .map(ev => ({ id: ev.id, until: ev.until, shocks: Object.fromEntries(Object.entries(ev.shocks).filter(([k, v]) => COMMODITY_DEFS[k] && Number.isFinite(v))), ...(COMMODITY_DEFS[ev.product] ? { product: ev.product } : {}) }));
@@ -222,6 +225,7 @@ function checkCommodityInvariants() {
         if (!(p > 0) || !Number.isFinite(p)) problems.push(`surowiec ${id}: cena ${p}`);
         else if (p < lo * (1 - 1e-9) || p > hi * (1 + 1e-9)) problems.push(`surowiec ${id}: cena ${p.toFixed(2)} poza widełkami ${lo.toFixed(2)}–${hi.toFixed(2)}`);
     }
+    if (typeof checkFreightInvariants === 'function') problems.push(...checkFreightInvariants()); // 0.17 S4
     return problems;
 }
 
@@ -266,7 +270,8 @@ const COMMODITY_ASSIGNMENTS = {
     GLK: { product: { metals: 0.2, coal: 0.1, oil: 0.1 }, lag: 1, input: { metals: 0.2, coal: 0.1, oil: 0.1 } },
     TBN: { product: { oil: 0.6 }, lag: 1, input: { oil: 0.6 } },
     UOW: { product: { metals: 1 }, input: {} },
-    BHO: { product: { grain: 1 }, input: {} }
+    BHO: { product: { grain: 1 }, input: {} },
+    PKC: { input: { coal: 0.10 } } // 0.17 S4: kolej (energia od 0.17.2)
 };
 
 // wsad domyślny: sektor → udziały; podsektor nadpisuje (pusty obiekt = brak wsadu). Rolnictwo: produkt zboże.
@@ -352,5 +357,6 @@ function getCommodityResultAdj(stock) {
         const r = (1 - h) * getCommodityTrendRatio(id) + h * getCommodityRatioLag(id, COMMODITY_IMPACT.hedgeLagQ);
         marginAdj -= share * (r - 1) * (1 - getCommodityPassThrough(id));
     }
-    return { revenueFactor: Math.max(0.2, revenueFactor), marginAdj };
+    const freight = typeof getFreightResultAdj === 'function' ? getFreightResultAdj(stock) : { revenueFactor: 1, marginAdj: 0 }; // 0.17 S4: przewoźnicy i koszt transportu
+    return { revenueFactor: Math.max(0.2, revenueFactor * freight.revenueFactor), marginAdj: marginAdj + freight.marginAdj };
 }
