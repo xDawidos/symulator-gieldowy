@@ -206,7 +206,7 @@ const KANTOR_PROVIDER_RULES = {
     [BANK_TYPES.INTERNATIONAL]: { spread: [0.006, 0.011], minPln: 100_000, maxPln: Infinity, currencies: null, tag: 'bank międzynarodowy', gdrSpreadFactor: 0.5 }
 };
 const MUNICIPAL_KANTOR_RULE = { spread: [0.012, 0.020], maxPln: 30_000, currencies: ['EUR', 'USD', 'CZK'], tag: 'spółka miejska' };
-const KANTOR_OFFER_WEEKS = 13; // oferty dostawców odświeżane co kwartał gry
+const KANTOR_OFFER_WEEKS = WEEKS_PER_QUARTER; // oferty dostawców odświeżane co kwartał gry
 
 function getMunicipalKantor() { return typeof municipalCompanies !== 'undefined' ? municipalCompanies.find(c => c.kantor) || null : null; }
 

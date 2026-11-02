@@ -2,7 +2,7 @@
 // 0.17 S1: SUROWCE — rejestr 7 surowców, cena w USD co tydzień, zdarzenia surowcowe, zapis (pole opcjonalne `commodities`)
 // =================================================================================
 // Ceny są egzogeniczne (rynek światowy): nie zależą od gracza ani botów. Model tygodniowy:
-//   ln X ← ln X + θ_t·(ln M − ln X) + σ/√52·ε,  θ_t = 1 − (1 − θ)^(1/13),  P = X · sezon(tydzień)
+//   ln X ← ln X + θ_t·(ln M − ln X) + σ/√(rok gry)·ε,  θ_t = 1 − (1 − θ)^(1/WEEKS_PER_QUARTER),  P = X · sezon(tydzień)
 //   M = średnia · inflacja USD · (1 + β_p·(popyt − 1)) · (1 + β_z·(zbrojenia − 1)) · nastrój · szoki
 // Sezon mnoży cenę wprost (płynnie między środkami kwartałów): w celu M przy θ = 0,25/kw. zostałoby z niego ok. ±2% (S1, kalibracja).
 // Szok przesuwa ln M na czas zdarzenia i jednorazowo podbija cenę o połowę szoku. Wpływ na spółki (S2) liczy się
@@ -87,7 +87,7 @@ function getCommodityShock(id) {
 function getCommoditySeason(id, q = macro.quarter, weekInQ = ensureCommodityState().qN) {
     const s = COMMODITY_DEFS[id].season;
     if (!s) return 1;
-    const t = commodityQuarterInYear(q) - 1 + Math.min(1, weekInQ / 13) - 0.5, i = Math.floor(t), f = t - i;
+    const t = commodityQuarterInYear(q) - 1 + Math.min(1, weekInQ / WEEKS_PER_QUARTER) - 0.5, i = Math.floor(t), f = t - i;
     return 1 + s[(i + 4) % 4] * (1 - f) + s[(i + 5) % 4] * f;
 }
 
@@ -118,9 +118,9 @@ function stepCommodities() {
     st.w++;
     for (const id of COMMODITY_IDS) {
         const def = COMMODITY_DEFS[id];
-        const thetaW = 1 - Math.pow(1 - def.theta, 1 / 13);
+        const thetaW = 1 - Math.pow(1 - def.theta, 1 / WEEKS_PER_QUARTER);
         let x = Math.log(st.prices[id] / getCommoditySeason(id, macro.quarter, st.qN));
-        x += thetaW * (Math.log(getCommodityTarget(id)) - x) + def.sigma / Math.sqrt(52) * gaussianRandom();
+        x += thetaW * (Math.log(getCommodityTarget(id)) - x) + def.sigma / Math.sqrt(WEEKS_PER_YEAR) * gaussianRandom();
         const [lo, hi] = getCommodityBand(id);
         const p = Math.min(hi, Math.max(lo, Math.exp(x) * getCommoditySeason(id, macro.quarter, st.qN + 1)));
         st.prices[id] = p;

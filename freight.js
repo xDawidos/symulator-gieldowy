@@ -49,10 +49,10 @@ function getFreightFundamental(id) {
 function stepFreight() {
     const fr = ensureFreightState(), w = ensureCommodityState().w;
     fr.e = fr.e.filter(ev => ev.until > w);
-    for (const [key, def] of Object.entries(FREIGHT_EVENTS)) if (!fr.e.some(ev => ev.id === key) && Math.random() < def.yearly / 52) startFreightEvent(key);
-    const thetaW = 1 - Math.pow(1 - FREIGHT_RULES.theta, 1 / 13);
+    for (const [key, def] of Object.entries(FREIGHT_EVENTS)) if (!fr.e.some(ev => ev.id === key) && Math.random() < def.yearly / WEEKS_PER_YEAR) startFreightEvent(key);
+    const thetaW = 1 - Math.pow(1 - FREIGHT_RULES.theta, 1 / WEEKS_PER_QUARTER);
     for (const id of FREIGHT_IDS) {
-        fr.z[id] = fr.z[id] * (1 - thetaW) + FREIGHT_MODES[id].sigma / Math.sqrt(52) * gaussianRandom();
+        fr.z[id] = fr.z[id] * (1 - thetaW) + FREIGHT_MODES[id].sigma / Math.sqrt(WEEKS_PER_YEAR) * gaussianRandom();
         fr.idx[id] = getFreightFundamental(id) * getFreightDisruption(id) * Math.exp(fr.z[id]);
         fr.qs[id] += fr.idx[id];
     }

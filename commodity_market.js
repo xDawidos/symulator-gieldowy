@@ -13,7 +13,7 @@ const COMMODITY_MARKET = {
     entrySpread: 0.003,
     series: 4,           // 4 zapadalności naprzód
     minWeeksLeft: 2,     // seria bieżącego kwartału znika z oferty na 2 tygodnie przed końcem
-    weeksPerQuarter: 13
+    weeksPerQuarter: WEEKS_PER_QUARTER // tydzień gry (core.js: 5 na kwartał)
 };
 
 function getCommodityByCode(code) { return Object.keys(COMMODITY_CODES).find(id => COMMODITY_CODES[id] === code) || null; }
@@ -30,7 +30,7 @@ function getContractWeeksLeft(absQ) { return Math.max(0, COMMODITY_MARKET.weeksP
 
 /** Cena kontraktu w USD (przy T = 0 równa cenie bieżącej). */
 function getContractPriceUsd(id, absQ) {
-    const P = getCommodityPrice(id), T = getContractWeeksLeft(absQ) / 52;
+    const P = getCommodityPrice(id), T = getContractWeeksLeft(absQ) / WEEKS_PER_YEAR;
     if (!(T > 0)) return P;
     const a = 1 - Math.pow(1 - COMMODITY_DEFS[id].theta, T * 4);
     const M = getCommodityTarget(id) * getCommoditySeason(id, absQ, COMMODITY_MARKET.weeksPerQuarter);
@@ -131,8 +131,8 @@ function sellCommodityFund(key, units) {
 /** Co tydzień (po cenach surowców): opłaty ETC i koszyka. */
 function stepCommodityMarket() {
     const f = ensureCommodityFunds();
-    f.etcF *= Math.pow(1 - COMMODITY_FUNDS.etcFee, 1 / 52);
-    f.bF *= Math.pow(1 - COMMODITY_FUNDS.basketFee, 1 / 52);
+    f.etcF *= Math.pow(1 - COMMODITY_FUNDS.etcFee, 1 / WEEKS_PER_YEAR);
+    f.bF *= Math.pow(1 - COMMODITY_FUNDS.basketFee, 1 / WEEKS_PER_YEAR);
     if (typeof stepCommodityBots === 'function') stepCommodityBots();
 }
 /** Co kwartał: rebalans koszyka do równych wag (wartość jednostki bez zmian). */
@@ -145,13 +145,13 @@ function rebalanceCommodityBasket() {
 // 0.17 S3: BOTY — spekulanci (2 krajowe boty agresywne, małe pozycje) i pozycje zabezpieczające spółek (tylko podgląd)
 // =================================================================================
 // Pozycje botów są w `commodityState.bots` (zapis surowców), nie w silniku gracza; ceny nie zależą od botów.
-const COMMODITY_BOTS = { personalities: ['reckless', 'yolo_trader'], maxPositions: 2, openChance: 0.06, maxCashShare: 0.05, maxLeverage: 3, trendWeeks: 13, trendBand: 0.05, revertBand: 0.1, minDeposit: 50 }; // minDeposit w skali gotówki botów (start ok. 10 tys.)
+const COMMODITY_BOTS = { personalities: ['reckless', 'yolo_trader'], maxPositions: 2, openChance: 0.06, maxCashShare: 0.05, maxLeverage: 3, trendWeeks: WEEKS_PER_QUARTER, trendBand: 0.05, revertBand: 0.1, minDeposit: 50 }; // minDeposit w skali gotówki botów (start ok. 10 tys.)
 
 function ensureCommodityBots() { const st = ensureCommodityState(); return st.bots || (st.bots = { pos: [], stats: { opened: 0, closed: 0, margin: 0, pnl: 0 } }); }
 function getCommodityBotList() { return (typeof aiCompetitors !== 'undefined' ? aiCompetitors : []).filter(ai => !ai.isForeignBot && COMMODITY_BOTS.personalities.includes(ai.personality)); }
 function getCommodityBotEquity(p) { const price = marginMarkets.commodities.priceOf(p.inst); return Math.max(0, p.deposit + p.side * p.notional * ((price > 0 ? price : p.entry) / p.entry - 1)); }
 
-/** Sygnał bota: trend 13-tygodniowy, a bez trendu powrót do średniej. 1 = długa, −1 = krótka, 0 = nic. */
+/** Sygnał bota: trend kwartalny, a bez trendu powrót do średniej. 1 = długa, −1 = krótka, 0 = nic. */
 function getCommodityBotSignal(id) {
     const h = ensureCommodityState().hist[id], P = getCommodityPrice(id), past = h[h.length - 1 - COMMODITY_BOTS.trendWeeks];
     if (past > 0 && Math.abs(P / past - 1) > COMMODITY_BOTS.trendBand) return Math.sign(P / past - 1);
@@ -205,7 +205,7 @@ function getCompanyHedgePositions(limit = 12) {
 // =================================================================================
 let commodityForm = { id: 'oil', q: null, side: 1, notional: 50000, leverage: 2 };
 const commodityStructureLabel = s => s === 'contango' ? 'contango (kontrakt droższy od ceny bieżącej)' : 'backwardation (kontrakt tańszy od ceny bieżącej)';
-function getCommodityChange(id, weeks = 13) { const h = ensureCommodityState().hist[id], past = h[Math.max(0, h.length - 1 - weeks)]; return past > 0 ? getCommodityPrice(id) / past - 1 : 0; }
+function getCommodityChange(id, weeks = WEEKS_PER_QUARTER) { const h = ensureCommodityState().hist[id], past = h[Math.max(0, h.length - 1 - weeks)]; return past > 0 ? getCommodityPrice(id) / past - 1 : 0; }
 const commodityArrow = v => v > 0.0005 ? '▲ +' : v < -0.0005 ? '▼ ' : '■ ';
 function fmtCommodityUsd(v) { return `${formatNumberPl(v, v >= 100 ? 0 : 2)} USD`; }
 function commodityCoverWord(cover) { return cover < MARGIN_RULES.closeBelow + 0.1 ? 'ryzyko zamknięcia' : cover < MARGIN_RULES.warnBelow ? 'margin call' : 'bezpieczna'; }
@@ -221,7 +221,7 @@ function renderCommodityTab() {
         const def = COMMODITY_DEFS[id], ch = getCommodityChange(id);
         return `<tr class="${id === f.id ? 'row-selected' : ''}" onclick="commodityUiPick('${id}')" tabindex="0" onkeydown="if(event.key==='Enter')commodityUiPick('${id}')">
             <td>${escapeHtml(def.name)} <span class="text-muted">(${def.unit})</span></td><td class="text-right">${fmtCommodityUsd(getCommodityPrice(id))}</td>
-            <td class="text-right">${commodityArrow(ch)}${commodityPct(ch)}%<span class="text-muted"> w 13 tyg.</span></td>
+            <td class="text-right">${commodityArrow(ch)}${commodityPct(ch)}%<span class="text-muted"> w kwartale</span></td>
             <td>${getContractStructure(id, near)}</td><td class="text-right">1:${COMMODITY_MARKET.leverage[id]}</td></tr>`;
     }).join('');
     const seriesRows = series.map(q => `<tr><td>${getContractName(f.id, q)}</td><td class="text-right">${getContractWeeksLeft(q)} tyg.</td><td class="text-right">${fmtCommodityUsd(getContractPriceUsd(f.id, q))}</td><td>${commodityStructureLabel(getContractStructure(f.id, q))}</td></tr>`).join('');

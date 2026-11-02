@@ -14765,25 +14765,25 @@ group('0.16.10 Nowa scenka startowa', () => {
 });
 
 group('0.17 S1 Surowce', () => {
-    // symulacja tygodni z kwartałem co 13 tygodni (bez zdarzeń losowych, gdy quiet)
+    // symulacja tygodni z kwartałem co WEEKS_PER_QUARTER tygodni (bez zdarzeń losowych, gdy quiet)
     const run = (weeks, { quiet = false, onWeek } = {}) => {
         const saved = {}; if (quiet) for (const k of Object.keys(COMMODITY_EVENTS)) { saved[k] = COMMODITY_EVENTS[k].yearly; COMMODITY_EVENTS[k].yearly = 0; }
         try {
-            for (let w = 1; w <= weeks; w++) { stepCommodities(); if (onWeek) onWeek(w); if (w % 13 === 0) { macro.quarter++; processCommoditiesQuarterly(); } }
+            for (let w = 1; w <= weeks; w++) { stepCommodities(); if (onWeek) onWeek(w); if (w % WEEKS_PER_QUARTER === 0) { macro.quarter++; processCommoditiesQuarterly(); } }
         } finally { for (const k of Object.keys(saved)) COMMODITY_EVENTS[k].yearly = saved[k]; }
     };
     const withQ = fn => { const q0 = macro.quarter; try { macro.quarter = 1; initCommodityState(); return fn(); } finally { macro.quarter = q0; initCommodityState(); } };
     test('S1: ceny w widełkach w 100% kroków (200 przebiegów × 2 lata, ze zdarzeniami)', () => withQ(() => {
         let bad = 0, steps = 0;
-        for (let r = 0; r < 200; r++) { macro.quarter = 1; initCommodityState(); run(104, { onWeek: () => { steps++; if (checkCommodityInvariants().length) bad++; } }); }
+        for (let r = 0; r < 200; r++) { macro.quarter = 1; initCommodityState(); run(8 * WEEKS_PER_QUARTER, { onWeek: () => { steps++; if (checkCommodityInvariants().length) bad++; } }); }
         assertEq(bad, 0, `kroki poza widełkami (z ${steps})`);
     }));
     test('S1: zmienność roczna w ±5 pp od σ; sezon gazu: średnia Q1 > Q3', () => withQ(() => {
         const prev = {}, rets = Object.fromEntries(COMMODITY_IDS.map(id => [id, []])), gasQ = { 1: [], 3: [] };
         for (const id of COMMODITY_IDS) prev[id] = getCommodityPrice(id);
-        run(52 * 40, { quiet: true, onWeek: () => { for (const id of COMMODITY_IDS) { const p = getCommodityPrice(id); rets[id].push(Math.log(p / prev[id])); prev[id] = p; } const qy = commodityQuarterInYear(); if (gasQ[qy]) gasQ[qy].push(getCommodityPrice('gas')); } });
+        run(WEEKS_PER_YEAR * 40, { quiet: true, onWeek: () => { for (const id of COMMODITY_IDS) { const p = getCommodityPrice(id); rets[id].push(Math.log(p / prev[id])); prev[id] = p; } const qy = commodityQuarterInYear(); if (gasQ[qy]) gasQ[qy].push(getCommodityPrice('gas')); } });
         for (const id of COMMODITY_IDS) {
-            const a = rets[id], m = a.reduce((s, v) => s + v, 0) / a.length, vol = Math.sqrt(a.reduce((s, v) => s + (v - m) ** 2, 0) / (a.length - 1) * 52);
+            const a = rets[id], m = a.reduce((s, v) => s + v, 0) / a.length, vol = Math.sqrt(a.reduce((s, v) => s + (v - m) ** 2, 0) / (a.length - 1) * WEEKS_PER_YEAR);
             assert(Math.abs(vol - COMMODITY_DEFS[id].sigma) <= 0.05, `${id}: zmienność ${(vol * 100).toFixed(1)}% vs σ ${COMMODITY_DEFS[id].sigma * 100}%`);
         }
         const avg = a => a.reduce((s, v) => s + v, 0) / a.length;
@@ -14794,12 +14794,12 @@ group('0.17 S1 Surowce', () => {
         const ev = startCommodityEvent('reactor');
         assertNear(getCommodityPrice('uranium'), u0 * Math.sqrt(0.7), 'skok o połowę szoku (w logarytmie)', 1e-9);
         assertNear(getCommodityTarget('uranium'), m0 * 0.7, 'cel −30%', 1e-9);
-        run(13 * 7, { quiet: true });
+        run(WEEKS_PER_QUARTER * 7, { quiet: true });
         assert(!getActiveCommodityEvents().includes(ev), 'zdarzenie wygasło');
         assertNear(getCommodityTarget('uranium') / m0, Math.pow(1.02, 7 / 4), 'cel bez szoku (sama inflacja)', 1e-6);
         // powrót ceny: średnia z 30 ścieżek (jedna ścieżka zależy od kolejności losowań, np. frachtu z S4)
         let sum = 0;
-        for (let r = 0; r < 30; r++) { macro.quarter = 1; initCommodityState(); startCommodityEvent('reactor'); run(13 * 7, { quiet: true }); sum += getCommodityPrice('uranium') / COMMODITY_DEFS.uranium.mean; }
+        for (let r = 0; r < 30; r++) { macro.quarter = 1; initCommodityState(); startCommodityEvent('reactor'); run(WEEKS_PER_QUARTER * 7, { quiet: true }); sum += getCommodityPrice('uranium') / COMMODITY_DEFS.uranium.mean; }
         assert(sum / 30 > Math.sqrt(0.7), `cena wraca ku średniej (średnio ${(sum / 30).toFixed(3)} > skok ${Math.sqrt(0.7).toFixed(3)})`);
         fireMacroShockById('oil', true);
         assert(getActiveCommodityEvents().some(e => e.id === 'oilShock' && Math.abs(e.shocks.oil - 0.4) < 1e-9), 'szok naftowy: ropa +40%');
@@ -14824,8 +14824,8 @@ group('0.17 S2 Spółki i koszty wsadu', () => {
     // stan surowców: Ś8 = średnia, bieżący kwartał = średnia × ratio (dla wybranego surowca)
     const setRatio = (ratios = {}) => {
         initCommodityState();
-        const st = commodityState; st.qN = 13;
-        for (const id of COMMODITY_IDS) { const m = COMMODITY_DEFS[id].mean; st.qHist[id] = Array(8).fill(m); st.qSum[id] = m * (ratios[id] ?? 1) * 13; }
+        const st = commodityState; st.qN = WEEKS_PER_QUARTER;
+        for (const id of COMMODITY_IDS) { const m = COMMODITY_DEFS[id].mean; st.qHist[id] = Array(8).fill(m); st.qSum[id] = m * (ratios[id] ?? 1) * WEEKS_PER_QUARTER; }
         return st;
     };
     const after = fn => { try { return fn(); } finally { initCommodityState(); } };
@@ -14959,7 +14959,7 @@ group('0.17 S3 Giełda towarowa', () => {
         assert(getContractPriceUsd('oil', q) < getCommodityPrice('oil'), 'nad średnią: kontrakt tańszy (backwardation)'); assertEq(getContractStructure('oil', q), 'backwardation');
         commodityState.prices.oil = M * 0.7;
         assert(getContractPriceUsd('oil', q) > getCommodityPrice('oil'), 'pod średnią: kontrakt droższy (contango)'); assertEq(getContractStructure('oil', q), 'contango');
-        commodityState.qN = 13; assertNear(getContractPriceUsd('oil', macro.quarter), getCommodityPrice('oil'), 'w dniu zapadalności F = P', 1e-12);
+        commodityState.qN = WEEKS_PER_QUARTER; assertNear(getContractPriceUsd('oil', macro.quarter), getCommodityPrice('oil'), 'w dniu zapadalności F = P', 1e-12);
     }));
     test('S3 kontrakty: zapadalność rozlicza gotówką po cenie bieżącej; „Przedłuż” przenosi pozycję na następną serię', done(() => {
         startFund();
@@ -14969,7 +14969,7 @@ group('0.17 S3 Giełda towarowa', () => {
         const roll = rollCommodityContract(r.position.id); assert(roll.ok, roll.reason);
         assertEq(roll.position.instrument, getContractName('gold', series[1]), 'następna seria'); assertEq(roll.position.notional, 100_000, 'ta sama wartość');
         const pos = roll.position, cash0 = playerCash;
-        for (let w = 0; w < 40 && getMarginPositions('commodities').length; w++) { fxWeek++; stepCommodities(); if (commodityState.qN >= 13) { macro.quarter++; processCommoditiesQuarterly(); } stepMarginPositions(); }
+        for (let w = 0; w < 40 && getMarginPositions('commodities').length; w++) { fxWeek++; stepCommodities(); if (commodityState.qN >= WEEKS_PER_QUARTER) { macro.quarter++; processCommoditiesQuarterly(); } stepMarginPositions(); }
         assertEq(getMarginPositions('commodities').length, 0, 'kontrakt zapadł');
         const last = marginClosedLog.at(-1); assertEq(last.reason, 'expiry');
         assert(Math.abs(playerCash - cash0 - (pos.deposit + last.pnl)) < 1, 'gotówka = depozyt + wynik');
@@ -14999,7 +14999,7 @@ group('0.17 S3 Giełda towarowa', () => {
                 macro.quarter = 1; initCommodityState();
                 for (let h = 0; h < 8; h++) { // półrocza bez nakładania: seria na koniec następnego kwartału (26 tyg.), rozliczenie po cenie z dnia zapadalności
                     const buys = COMMODITY_IDS.filter(id => getCommodityPrice(id) < getCommodityTarget(id) * 0.9).map(id => [id, getContractPriceUsd(id, macro.quarter + 1)]);
-                    for (let q = 0; q < 2; q++) { for (let w = 0; w < 13; w++) stepCommodities(); macro.quarter++; processCommoditiesQuarterly(); }
+                    for (let q = 0; q < 2; q++) { for (let w = 0; w < WEEKS_PER_QUARTER; w++) stepCommodities(); macro.quarter++; processCommoditiesQuarterly(); }
                     if (buys.length) logSum += buys.reduce((t, [id, f]) => t + Math.log(getCommodityPrice(id) / f), 0) / buys.length; // kapitał 1:1
                     years += 0.5;
                 }
@@ -15019,7 +15019,7 @@ group('0.17 S3 Giełda towarowa', () => {
             const r = buyCommodityFund('gold', 100_000); assert(r.ok, r.reason);
             assertNear(getFundAssets(), assets0 - 200, 'aktywa spadły tylko o spread 0,2%', 1e-6);
             assertEq(getMarginNotional(), notional0, 'ETC poza limitem dźwigni');
-            for (let w = 0; w < 52; w++) stepCommodityMarket();
+            for (let w = 0; w < WEEKS_PER_YEAR; w++) stepCommodityMarket();
             assertNear(getCommodityFundPriceUsd('gold') / getCommodityPrice('gold'), 1 - 0.004, 'opłata roczna 0,4%', 1e-12);
             const s = sellCommodityFund('gold', getCommodityFundUnits('gold')); assert(s.ok && getCommodityFundUnits('gold') === 0, 'sprzedaż całości');
         } finally { getSkillLevel = saved; }
@@ -15029,7 +15029,7 @@ group('0.17 S3 Giełda towarowa', () => {
         const saved = getSkillLevel; getSkillLevel = id => id === 'etfExpert' ? 1 : saved(id);
         try {
             assert(buyCommodityFund('basket', 50_000).ok, 'kupno koszyka');
-            for (let w = 0; w < 13; w++) { stepCommodities(); stepCommodityMarket(); }
+            for (let w = 0; w < WEEKS_PER_QUARTER; w++) { stepCommodities(); stepCommodityMarket(); }
             const f = ensureCommodityFunds(), before = getCommodityFundPriceUsd('basket');
             const shares = () => COMMODITY_IDS.map(id => f.bq[id] * getCommodityPrice(id));
             assert(Math.max(...shares()) / Math.min(...shares()) > 1.001, 'przed rebalansem wagi się rozjechały');
@@ -15037,7 +15037,7 @@ group('0.17 S3 Giełda towarowa', () => {
             assertNear(getCommodityFundPriceUsd('basket'), before, 'rebalans nie zmienia wartości jednostki', 1e-9);
             stepCommodities(); macro.quarter++; processCommoditiesQuarterly();
             assertNear(Math.max(...shares()) / Math.min(...shares()), 1, 'równe wagi po zamknięciu kwartału', 1e-9);
-            assertNear(f.bF, Math.pow(1 - 0.006, 13 / 52), 'opłata naliczana co tydzień (13 tyg.)', 1e-12);
+            assertNear(f.bF, Math.pow(1 - 0.006, WEEKS_PER_QUARTER / WEEKS_PER_YEAR), 'opłata naliczana co tydzień (kwartał)', 1e-12);
             const value = getFundCommodityValue(), snap = JSON.parse(JSON.stringify(getCommoditiesSnapshot()));
             applyCommoditiesSnapshot(snap);
             assertNear(getFundCommodityValue(), value, 'wartość po wczytaniu', 1e-6);
@@ -15059,7 +15059,7 @@ group('0.17 S3 Giełda towarowa', () => {
         for (const p of pos) { assert(p.deposit <= 0.05 * 1_000_000 + 1e-6 && p.lev <= 3, `mała pozycja (${p.deposit}, 1:${p.lev})`); }
         const locked = pos.reduce((s, p) => s + p.deposit + p.spread, 0);
         assertNear(bots.reduce((s, b) => s + b.cash, 0), cash0 - locked, 'depozyt i spread z gotówki botów', 1e-6);
-        for (let w = 0; w < 60 && ensureCommodityBots().pos.length; w++) { stepCommodities(); if (commodityState.qN >= 13) { macro.quarter++; processCommoditiesQuarterly(); } withRandom(0.99, () => stepCommodityBots()); }
+        for (let w = 0; w < 60 && ensureCommodityBots().pos.length; w++) { stepCommodities(); if (commodityState.qN >= WEEKS_PER_QUARTER) { macro.quarter++; processCommoditiesQuarterly(); } withRandom(0.99, () => stepCommodityBots()); }
         const st = ensureCommodityBots();
         assertEq(st.pos.length, 0, 'wszystkie rozliczone'); assertEq(st.stats.closed, st.stats.opened);
         assertNear(bots.reduce((s, b) => s + b.cash, 0), cash0 + st.stats.pnl, 'gotówka = start + wynik na kontraktach', 1e-6);
@@ -15081,7 +15081,7 @@ group('0.17 S3 Giełda towarowa', () => {
 });
 
 group('0.17 S4 Transport i indeks frachtu', () => {
-    const run = weeks => { for (let w = 1; w <= weeks; w++) { stepCommodities(); if (w % 13 === 0) { macro.quarter++; processCommoditiesQuarterly(); } } };
+    const run = weeks => { for (let w = 1; w <= weeks; w++) { stepCommodities(); if (w % WEEKS_PER_QUARTER === 0) { macro.quarter++; processCommoditiesQuarterly(); } } };
     const quiet = fn => {
         const saved = {};
         for (const k of [...Object.keys(COMMODITY_EVENTS), ...Object.keys(FREIGHT_EVENTS)]) { const d = COMMODITY_EVENTS[k] || FREIGHT_EVENTS[k]; saved[k] = d.yearly; d.yearly = 0; }
@@ -15124,8 +15124,8 @@ group('0.17 S4 Transport i indeks frachtu', () => {
     })));
     test('S4: przewoźnik zyskuje przy wysokim indeksie (Ī/Ś8)^0,7, odbiorca traci udział × odchylenie; Logistyka bez frachtu', () => withQ(() => {
         const fr = ensureFreightState();
-        for (const id of FREIGHT_IDS) { fr.q[id] = Array(8).fill(100); fr.qs[id] = 130 * 13; }
-        fr.qn = 13;
+        for (const id of FREIGHT_IDS) { fr.q[id] = Array(8).fill(100); fr.qs[id] = 130 * WEEKS_PER_QUARTER; }
+        fr.qn = WEEKS_PER_QUARTER;
         assertNear(getFreightResultAdj(share('Transport i logistyka', 'Morski')).revenueFactor, Math.pow(1.3, 0.7), 'armator: przychód × 1,3^0,7', 1e-9);
         assertNear(getFreightResultAdj(share('Przemysł', null)).marginAdj, -0.06 * 0.3, 'Przemysł: marża −0,06 × 0,3', 1e-9);
         assertNear(getFreightResultAdj(share('Chemia', null)).marginAdj, -0.04 * 0.3, 'Chemia: −0,04 × 0,3', 1e-9);
@@ -15138,10 +15138,10 @@ group('0.17 S4 Transport i indeks frachtu', () => {
         const buyer = share('Przemysł', null), carrier = share('Transport i logistyka', 'Morski');
         for (let r = 0; r < 200; r++) {
             macro.quarter = 1; initCommodityState();
-            for (let w = 1; w <= 208; w++) {
+            for (let w = 1; w <= 16 * WEEKS_PER_QUARTER; w++) {
                 stepCommodities();
-                if (w % 13 === 0) {
-                    if (w > 104) { mSum += getFreightResultAdj(buyer).marginAdj; rSum += getFreightResultAdj(carrier).revenueFactor - 1; n++; }
+                if (w % WEEKS_PER_QUARTER === 0) {
+                    if (w > 8 * WEEKS_PER_QUARTER) { mSum += getFreightResultAdj(buyer).marginAdj; rSum += getFreightResultAdj(carrier).revenueFactor - 1; n++; }
                     macro.quarter++; processCommoditiesQuarterly();
                 }
             }
