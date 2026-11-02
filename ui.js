@@ -8365,6 +8365,7 @@ function updateStateModalContent() {
                 <tbody>
                     <tr><td>Dywidendy</td><td>${(TAX_RATES.dividend * 100).toFixed(0)}%</td><td>inwestorzy prywatni i Twoje konto prywatne; <strong>fundusz zwolniony</strong> (dywidenda podnosi NAV)</td></tr>
                     <tr><td>Zyski kapitałowe</td><td>${(TAX_RATES.capitalGains * 100).toFixed(0)}%</td><td>konto prywatne (z ulgami szkoleń); klienci funduszu płacą przy umorzeniu udziałów</td></tr>
+                    <tr><td>Forex, kontrakty, ETC i ETF</td><td>0% w funduszu</td><td>jak akcje: <strong>fundusz zwolniony</strong>, zysk podnosi NAV i jest opodatkowany u klientów przy umorzeniu udziałów</td></tr>
                     <tr><td>CIT spółek</td><td>wg progów</td><td>zysk spółek giełdowych (raport kwartalny)</td></tr>
                     <tr><td>Podatek miejski</td><td>od zysku spółek</td><td>spółki; stawkę zmienia polityka burmistrza (${escapeHtml(MAYOR_POLICIES[city.mayor?.policy]?.label || '—')})</td></tr>
                     <tr><td>Podatek od bogactwa</td><td>progi</td><td>wielcy inwestorzy prywatni (boty); nie dotyczy funduszu</td></tr>
