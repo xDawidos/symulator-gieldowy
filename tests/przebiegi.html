@@ -1192,6 +1192,7 @@ const PROBE_0156 = `(function () {
 // 0.17 S0b: łączna kapitalizacja rynku (PLN; GPW i spółki krajów dołączonych) i udział spółek krajowych w przejęciach D3. Wynik: pole s017.
 const PROBE_017 = `(function () {
     const s = window.__sim, T = s.s017 = { d3: { n: 0, domAcq: 0, domTgt: 0 } };
+    T.frEv = {}; if (typeof startFreightEvent === 'function') { const o = startFreightEvent; startFreightEvent = function (k) { T.frEv[k] = (T.frEv[k] || 0) + 1; return o.apply(this, arguments); }; } // 0.17 S4: zakłócenia frachtu
     if (typeof executeIssuerTakeover === 'function') { const o = executeIssuerTakeover; executeIssuerTakeover = function (a, t) { const r = o.apply(this, arguments); if (r && r.ok) { T.d3.n++; if (!acqForeignOf(a)) T.d3.domAcq++; if (!acqForeignOf(t)) T.d3.domTgt++; } return r; }; }
     const origFinish = s.finish; s.finish = function () {
         const r = origFinish.apply(this, arguments);
@@ -1205,7 +1206,8 @@ const PROBE_017 = `(function () {
         }
         r.s017 = { ...T, capPl: Math.round(capPl), capForeign: Math.round(capForeign), secMargin: Object.fromEntries(Object.entries(sec).filter(([, a]) => a[1] > 0).map(([k, a]) => [k, [+(a[0] / a[1]).toFixed(4), a[2]]])),
             // 0.17 S3: surowce na koniec (cena / średnia), wynik botów na kontraktach, otwarte pozycje gracza na towarach
-            com: typeof commodityState === 'object' && commodityState ? { px: Object.fromEntries(COMMODITY_IDS.map(id => [id, +(commodityState.prices[id] / COMMODITY_DEFS[id].mean).toFixed(3)])), bots: commodityState.bots?.stats || null, botOpen: commodityState.bots?.pos?.length || 0, ev: commodityState.events.map(e => e.id), playerPos: typeof getMarginPositions === 'function' ? getMarginPositions('commodities').length : null } : null };
+            com: typeof commodityState === 'object' && commodityState ? { px: Object.fromEntries(COMMODITY_IDS.map(id => [id, +(commodityState.prices[id] / COMMODITY_DEFS[id].mean).toFixed(3)])), bots: commodityState.bots?.stats || null, botOpen: commodityState.bots?.pos?.length || 0, ev: commodityState.events.map(e => e.id), playerPos: typeof getMarginPositions === 'function' ? getMarginPositions('commodities').length : null,
+                fr: commodityState.freight ? Object.fromEntries(Object.keys(commodityState.freight.idx).map(id => [id, +commodityState.freight.idx[id].toFixed(1)])) : null } : null }; // 0.17 S4: indeks frachtu na koniec
         return r;
     };
 })();`;
