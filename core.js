@@ -1869,7 +1869,9 @@ const SECTORS = {
     'Transport i logistyka': { icon: '🚚', profile: { beta: 1.2, rateSens: 0.7, pe: 13, margin: 0.14, growth: 0.03, ps: 1.0, da: 0.07 }, // dawny „Transport”
         subsectors: {
             'Logistyka': { profile: { pe: 14, margin: 0.12, growth: 0.04, da: 0.06 } },                      // dawna „Logistyka”
-            'Lotnictwo': { profile: { beta: 1.8 }, energySens: 0.5 }                                         // drogie paliwo: odwrotnie do cyklu Energii
+            'Lotnictwo': { profile: { beta: 1.8 }, energySens: 0.5, freight: 'air' },                        // drogie paliwo: odwrotnie do cyklu Energii
+            'Morski': { profile: { beta: 1.5 }, freight: 'sea' },                                            // 0.17 S4: armatorzy (indeks frachtu morskiego)
+            'Lądowy': { profile: { beta: 1.0 }, freight: 'land' }                                            // 0.17 S4: kolej i ciężarówki
         } },
     'Medycyna':              { icon: '💊', profile: { beta: 0.6, rateSens: 0.6, pe: 20, margin: 0.22, growth: 0.05, ps: 3.0, da: 0.05 },
         subsectors: {
@@ -2031,7 +2033,11 @@ const SUBSECTOR_START_ASSIGNMENTS = {
     PES: ['Energia', 'Rafinerie'],                 // 0.17 S2: PetroState
     NAG: ['Energia', 'Gaz'],                       // NatGaz
     ZST: ['Przemysł', 'Wydobycie'],                // Złoty Stok
-    SLS: ['Żywność', 'Rolnictwo']                  // Słodki Spichlerz
+    SLS: ['Żywność', 'Rolnictwo'],                 // Słodki Spichlerz
+    GRT: ['Transport i logistyka', 'Morski'],      // 0.17 S4: GrubyTransport
+    CFL: ['Transport i logistyka', 'Lotnictwo'],   // CargoFLY
+    PKC: ['Transport i logistyka', 'Lądowy'],      // PKP Cargo
+    TIR: ['Transport i logistyka', 'Lądowy']       // Tir-Pol Spedycja
 };
 // Spółki przekształcone przy przydziale (decyzja użytkownika: jedna istniejąca spółka staje się fintechem).
 const SUBSECTOR_START_SEGMENTS = {

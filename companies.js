@@ -509,7 +509,11 @@ const COMPANY_DESCRIPTIONS = {
     PES: 'Narodowy koncern paliwowy ze stacjami w każdej gminie i wiecznie „przejściowymi” cenami. Kupuje ropę i sprzedaje paliwa, więc zarabia na marży rafineryjnej, a nie na samym poziomie ceny ropy.',
     NAG: 'Państwowa spółka wydobycia i importu gazu, z kontraktami długoterminowymi ze wschodu „do renegocjacji”. Przychody rosną razem z ceną gazu.',
     ZST: 'Mała kopalnia złota na Dolnym Śląsku, w której pracuje więcej geologów niż jest złota. Kurs mocno idzie za ceną złota, a ta zwykle rośnie w kryzysach.',
-    SLS: 'Skupuje zboże od rolników i eksportuje je w świat, korzystając z dotacji partii rolniczej. Zarabia przy drogim zbożu, a traci w roku rekordowych zbiorów.'
+    SLS: 'Skupuje zboże od rolników i eksportuje je w świat, korzystając z dotacji partii rolniczej. Zarabia przy drogim zbożu, a traci w roku rekordowych zbiorów.',
+    GRT: 'Narodowy armator z Gdańska; masowce tak pojemne jak nazwa. Zarabia, gdy rośnie fracht morski, a płaci za paliwo statków.',
+    CFL: 'Państwowe cargo lotnicze; dostawa szybka, rachunek za paliwo jeszcze szybszy. Przychody idą za frachtem lotniczym.',
+    PKC: 'Kolej towarowa; przepustowość zależy od torów. Przewozi węgiel i kontenery w głąb kraju.',
+    TIR: 'Największa flota ciężarówek w kraju; elastyczna, wrażliwa na paliwo. Zarabia na frachcie lądowym, a ceny diesla zjadają marżę.'
 };
 
 function initializeDescriptionParts(stock) {
@@ -2088,6 +2092,47 @@ const initialStocks = [
     },
     quarterlyEarnings: 0,
   lineHistory: [], playerTransactions: [], sector: ['Żywność'], financialHealth: 1, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
+        dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
+        lastQuarterValue: 0, estimatedDividend: 0, bankAccountId: null,
+    cash: 0
+    },
+    // 0.17 S4: spółki transportowe (plany/propozycja_spolek_0.17.md)
+    {
+    name: 'GrubyTransport', price: 48.00, volatilityFactor: 1.1, symbol: 'GRT', exchange: 'BRONZE', totalShares: 80000, maxShares: 80000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
+        assets: 0, liabilities: 0, shareCapital: 0, retainedEarnings: 0
+    },
+    quarterlyEarnings: 0,
+  lineHistory: [], playerTransactions: [], sector: ['Transport i logistyka'], financialHealth: 1, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, isStateOwned: true, stateOwnershipPct: 0.6, eventResistance: 0.6, dividendPolicy: 'Balanced',
+        dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
+        lastQuarterValue: 0, estimatedDividend: 0, bankAccountId: null,
+    cash: 0
+    },
+    {
+    name: 'CargoFLY', price: 26.00, volatilityFactor: 1.4, symbol: 'CFL', exchange: 'BRONZE', totalShares: 60000, maxShares: 60000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
+        assets: 0, liabilities: 0, shareCapital: 0, retainedEarnings: 0
+    },
+    quarterlyEarnings: 0,
+  lineHistory: [], playerTransactions: [], sector: ['Transport i logistyka'], financialHealth: 1, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, isStateOwned: true, stateOwnershipPct: 0.6, eventResistance: 0.6, dividendPolicy: 'Balanced',
+        dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
+        lastQuarterValue: 0, estimatedDividend: 0, bankAccountId: null,
+    cash: 0
+    },
+    {
+    name: 'PKP Cargo', price: 18.00, volatilityFactor: 1.0, symbol: 'PKC', exchange: 'JUNK', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
+        assets: 0, liabilities: 0, shareCapital: 0, retainedEarnings: 0
+    },
+    quarterlyEarnings: 0,
+  lineHistory: [], playerTransactions: [], sector: ['Transport i logistyka'], financialHealth: 1, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, isStateOwned: true, stateOwnershipPct: 0.5, eventResistance: 0.6, dividendPolicy: 'Balanced',
+        dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
+        lastQuarterValue: 0, estimatedDividend: 0, bankAccountId: null,
+    cash: 0
+    },
+    {
+    name: 'Tir-Pol Spedycja', price: 40.00, volatilityFactor: 1.2, symbol: 'TIR', exchange: 'BRONZE', totalShares: 40000, maxShares: 40000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
+        assets: 0, liabilities: 0, shareCapital: 0, retainedEarnings: 0
+    },
+    quarterlyEarnings: 0,
+  lineHistory: [], playerTransactions: [], sector: ['Transport i logistyka'], financialHealth: 1, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
         lastQuarterValue: 0, estimatedDividend: 0, bankAccountId: null,
     cash: 0
@@ -13202,7 +13247,7 @@ function creepSubsidiaryStake(child, parent) {
 
 // 0.16.11 K0: pochodzenie spółki startowej (decyzje użytkownika, plany/lista_firm_startowych.md). PL = tylko przy starcie z Polski,
 // UNI = w każdym kraju startowym, DE/US = firma tego kraju (przy innym starcie istnieje tylko jako zagraniczna z countries_data.js). Nie zapisujemy.
-const PL_ORIGIN_SYMBOLS = ['PES', 'NAG', 'ZST', 'SLS', 'WZM', 'PIX', 'SUM', 'WIP', 'FIX', 'DRH', 'BAL', 'LEK', 'DPB', 'WPY', 'KRO', 'PLX', 'BTX', 'ANN', 'SIK', 'KRA', 'STM', 'SKP', 'BOR', 'BEW', 'ORT', 'ENG', 'TRN', 'PUR', 'NOC', 'GIEB', 'UnG', 'PZB', 'ORZD', 'HUSA', 'BPIG', 'MAJB'];
+const PL_ORIGIN_SYMBOLS = ['PES', 'NAG', 'ZST', 'SLS', 'GRT', 'CFL', 'PKC', 'TIR', 'WZM', 'PIX', 'SUM', 'WIP', 'FIX', 'DRH', 'BAL', 'LEK', 'DPB', 'WPY', 'KRO', 'PLX', 'BTX', 'ANN', 'SIK', 'KRA', 'STM', 'SKP', 'BOR', 'BEW', 'ORT', 'ENG', 'TRN', 'PUR', 'NOC', 'GIEB', 'UnG', 'PZB', 'ORZD', 'HUSA', 'BPIG', 'MAJB'];
 const COMPANY_ORIGIN_OVERRIDES = { WiS: 'DE', DMPC: 'US', CBK: 'DE', SPK: 'DE', VBK: 'DE', IBK: 'DE', DGH: 'DE' }; // + banki startowe kraju (COUNTRY_BANK_DEFS) // firmy z countries_data.js: krajowe tylko przy starcie ze swojego kraju
 function getCompanyOrigin(stock) {
     if (!stock) return 'UNI';

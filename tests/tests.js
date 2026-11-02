@@ -11831,7 +11831,7 @@ group('0.16.1', () => {
         const origin = sym => getCompanyOrigin(initialStocks.find(s => s.symbol === sym) || { symbol: sym }); // banki startowe powstają przy starcie gry
         for (const sym of ['WZM', 'BPIG', 'MAJB', 'GIEB', 'UnG', 'KRA', 'DRH']) assertEq(origin(sym), 'PL', `${sym}: PL`);
         for (const sym of ['KFX', 'KWM', 'MLD', 'LIN', 'GROM', 'KUP', 'CZB', 'BLP', 'SPR', 'RPK', 'GPW']) assertEq(origin(sym), 'UNI', `${sym}: UNI`);
-        assertEq(PL_ORIGIN_SYMBOLS.length, 36, '36 firm PL (0.17 S2: +PES, NAG, ZST, SLS)');
+        assertEq(PL_ORIGIN_SYMBOLS.length, 40, '40 firm PL (0.17 S2: +PES, NAG, ZST, SLS; S4: +GRT, CFL, PKC, TIR)');
         assert(!initialStocks.some(s => ['WiS', 'DMPC'].includes(s.symbol)), 'WiS i DMPC nie są firmami polskimi');
         assertEq(getCompanyOrigin({ symbol: 'WiS' }), 'DE', 'WiS = DE'); assertEq(getCompanyOrigin({ symbol: 'DMPC' }), 'US', 'DMPC = US');
         assert(COUNTRY_DEFS.DE.companies.some(c => c.id === 'WiS') && COUNTRY_DEFS.US.companies.some(c => c.id === 'DMPC'), 'są w danych krajów');
@@ -12457,7 +12457,7 @@ group('0.16.2', () => {
 
     // --- G6: Niemcy, USA, Czechy ---
     const REAL_COUNTRIES = () => ['DE', 'US', 'CZ'].filter(id => COUNTRY_DEFS[id]);
-    const COUNTRY_COUNTS = { DE: [36, 7], US: [19, 4], CZ: [9, 1] }; // 0.17 S2: US +JDM, NGR, GTG; CZ +DOL // zwykłe + państwowe (załącznik B)
+    const COUNTRY_COUNTS = { DE: [38, 7], US: [19, 5], CZ: [9, 1] }; // 0.17 S2: US +JDM, NGR, GTG; CZ +DOL; S4: DE +HKR, DHX; US +POP // zwykłe + państwowe (załącznik B)
 
     test('G6: dane krajów są spójne — liczby spółek z załącznika B, sektory i podsektory z rejestru, waluty, banki w Bankowości, giganci zgodni z gdr.js', () => {
         assert(REAL_COUNTRIES().length >= 1, 'jakiś kraj zdefiniowany');
@@ -12920,7 +12920,7 @@ group('0.16.3', () => {
 
     // --- G11: Szwecja, Szwajcaria, Francja ---
     test('G11: SE 7+2, CH 7+1, FR 11+2 spółek; symbole unikalne w całej grze; giganci zgodni z kwitami (to samo id i cena)', () => {
-        const expected = { SE: [7, 3], CH: [8, 1], FR: [11, 2] }; // 0.17 S2: SE +KJM, CH +GLK
+        const expected = { SE: [7, 3], CH: [8, 1], FR: [12, 2] }; // 0.17 S2: SE +KJM, CH +GLK; S4: FR +CMA
         for (const [id, [normal, state]] of Object.entries(expected)) {
             const def = COUNTRY_DEFS[id];
             assert(def, `kraj ${id} zdefiniowany`);
@@ -13291,7 +13291,7 @@ group('0.16.3', () => {
 
     // --- G18a: Japonia i Tajwan ---
     test('G18a: JP 13+3, TW 5+1 spółek; sektory istnieją; kraje da się dołączyć, niezmienniki bez błędów', () => withLinks(() => {
-        const expected = { JP: [13, 3], TW: [5, 1] };
+        const expected = { JP: [14, 3], TW: [6, 1] }; // 0.17 S4: JP +KML, TW +EVG
         for (const [id, [normal, state]] of Object.entries(expected)) {
             const def = COUNTRY_DEFS[id];
             assertEq(def.companies.filter(c => c.kind !== 'state').length, normal, `${id}: zwykłe`);

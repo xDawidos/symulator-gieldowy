@@ -24,7 +24,7 @@ COUNTRY_DEFS.DE = {
         { id: 'OKT', name: 'Oktoberbräu Feust', sector: 'Alkohole', subsector: 'Piwowarstwo i napoje', kind: 'normal', price: 55 },
         { id: 'ABL', name: 'Autobahn Logistik', sector: 'Budowlany', kind: 'normal', price: 35 },
         { id: 'MRA', name: 'MetallRai', sector: ['Przemysł', 'Obronność'], kind: 'normal', price: 45, special: 'defense' },
-        { id: 'DBF', name: 'Deutsche Bahnhof', sector: 'Usługi', kind: 'state', price: 22, desc: 'Państwowa kolej.' },
+        { id: 'DBF', name: 'Deutsche Bahnhof', sector: 'Transport i logistyka', subsector: 'Lądowy', kind: 'state', price: 22, desc: 'Państwowa kolej.' },
         { id: 'BPS', name: 'Bundespost', sector: 'Usługi', kind: 'state', price: 18, desc: 'Państwowa poczta.' },
         { id: 'WiS', name: 'Wolf & Stein Tech.', sector: 'Technologia', subsector: 'Półprzewodniki', kind: 'normal', price: 19, vol: 2.2, desc: 'Mała spółka półprzewodnikowa o gwałtownych notowaniach.' },
         { id: 'SPI', name: 'Spielkonsole Nord', sector: 'Gaming', kind: 'normal', price: 32, desc: 'Konsole i gry; cykl premier.' },
@@ -54,7 +54,9 @@ COUNTRY_DEFS.DE = {
         { id: 'HNS', name: 'Hensolt Radar', sector: 'Obronność', kind: 'normal', price: 95, special: 'defense', desc: 'Radary i optoelektronika dla wojska.' },
         { id: 'MRH', name: 'Münchner Rückhalt', sector: 'Finanse', kind: 'normal', price: 210, desc: 'Reasekuracja; kwartalne straty po katastrofach.' },
         { id: 'RWK', name: 'Rheinwestfalen Kraftwerke', sector: 'Energia', kind: 'normal', price: 33, desc: 'Elektrownie węglowe i gazowe w transformacji.' },
-        { id: 'WAB', name: 'Wiederaufbaubank', sector: 'Bankowość', subsector: 'Bank komercyjny', kind: 'state', price: 25, desc: 'Państwowy bank rozwoju.' }
+        { id: 'WAB', name: 'Wiederaufbaubank', sector: 'Bankowość', subsector: 'Bank komercyjny', kind: 'state', price: 25, desc: 'Państwowy bank rozwoju.' },
+        { id: 'HKR', name: 'Happy-Kag Reederei', sector: 'Transport i logistyka', subsector: 'Morski', kind: 'normal', price: 140, desc: 'Kontenerowce z Hamburga; wskaźnik frachtu morskiego dla Europy.' }, // 0.17 S4
+        { id: 'DHX', name: 'DHXL Express', sector: 'Transport i logistyka', subsector: 'Lotnictwo', kind: 'normal', price: 45, desc: 'Paczki ekspresowe na cały świat; żółte samoloty, czerwone faktury.' } // 0.17 S4
     ]
 };
 
@@ -80,13 +82,14 @@ COUNTRY_DEFS.US = {
         { id: 'CHQ', name: 'ChickQueen', sector: 'Żywność', kind: 'normal', price: 45 },
         { id: 'CKF', name: 'Coke&Fent', sector: 'Alkohole', subsector: 'Piwowarstwo i napoje', kind: 'normal', price: 65 },
         { id: 'DMPC', name: 'Dunder Mifflin Paper Company, Inc.', sector: 'Przemysł', kind: 'normal', price: 22, vol: 1.1, desc: 'Papier biurowy ze Scranton.' },
-        { id: 'AMR', name: 'AmeriRail', sector: 'Usługi', kind: 'state', price: 30, desc: 'Państwowa kolej.' },
+        { id: 'AMR', name: 'AmeriRail', sector: 'Transport i logistyka', subsector: 'Lądowy', kind: 'state', price: 30, desc: 'Państwowa kolej.' },
         { id: 'USM', name: 'US Mail & Parcel', sector: 'Usługi', kind: 'state', price: 12, desc: 'Państwowa poczta.' },
         { id: 'TVP', name: 'Tennessee Valley Power', sector: 'Energia', kind: 'state', price: 28, desc: 'Państwowa energetyka.' },
         { id: 'FFM', name: 'Fannie & Freddie Mortgage', sector: 'Bankowość', subsector: 'Bank komercyjny', kind: 'state', price: 15, desc: 'Państwowe hipoteki.' },
         { id: 'JDM', name: 'JackobDaniels Middling', sector: 'Żywność', subsector: 'Rolnictwo', kind: 'normal', price: 60, desc: 'Handel zbożem z Midwestu; hedguje wsad na giełdzie towarowej.' },
         { id: 'NGR', name: 'Nevada Gold Rush', sector: 'Przemysł', subsector: 'Wydobycie', kind: 'normal', price: 30, vol: 1.6, desc: 'Kopalnia złota; rośnie w kryzysach.' },
-        { id: 'GTG', name: 'GothamGas', sector: 'Energia', subsector: 'Gaz', kind: 'normal', price: 22, vol: 1.5, desc: 'Gaz łupkowy; szybko zwiększa i tnie wydobycie.' } // 0.17 S2
+        { id: 'GTG', name: 'GothamGas', sector: 'Energia', subsector: 'Gaz', kind: 'normal', price: 22, vol: 1.5, desc: 'Gaz łupkowy; szybko zwiększa i tnie wydobycie.' }, // 0.17 S2
+        { id: 'POP', name: 'POP Service', sector: 'Transport i logistyka', subsector: 'Lotnictwo', kind: 'state', price: 85, desc: 'Federalna poczta lotnicza; „Postal Overnight Priority”.' } // 0.17 S4
     ]
 };
 
@@ -105,7 +108,7 @@ COUNTRY_DEFS.CZ = {
         { id: 'BSK', name: 'Bohemia Sklo', sector: 'Dobra konsumpcyjne', kind: 'normal', price: 410, desc: 'Szkło i kryształy.' },
         { id: 'PRB', name: 'Praha Bank', sector: 'Bankowość', subsector: 'Bank komercyjny', kind: 'normal', price: 780 },
         { id: 'KRG', name: 'Krecik Group', sector: 'Media', niche: 'TV', kind: 'normal', price: 150 },
-        { id: 'CKO', name: 'České Koleje', sector: 'Usługi', kind: 'state', price: 120, desc: 'Państwowa kolej.' },
+        { id: 'CKO', name: 'České Koleje', sector: 'Transport i logistyka', subsector: 'Lądowy', kind: 'state', price: 120, desc: 'Państwowa kolej.' },
         { id: 'DOL', name: 'DolyCoast', sector: 'Przemysł', subsector: 'Wydobycie', kind: 'normal', price: 180, desc: 'Kopalnie węgla kamiennego na Śląsku Cieszyńskim.' } // 0.17 S2
     ]
 };
@@ -171,7 +174,8 @@ COUNTRY_DEFS.FR = {
         { id: 'CRD', name: 'Croissanterie Dupont', sector: 'Żywność', kind: 'normal', price: 34 },
         { id: 'CAR', name: "Côte d'Azur Resorts", sector: 'Turystyka', kind: 'normal', price: 56 },
         { id: 'ENA', name: 'Électricité Nationale', sector: 'Energia', kind: 'state', price: 28, desc: 'Państwowa energetyka (atom).' },
-        { id: 'RDF', name: 'Rail de France', sector: 'Usługi', kind: 'state', price: 20, desc: 'Państwowa kolej.' }
+        { id: 'RDF', name: 'Rail de France', sector: 'Transport i logistyka', subsector: 'Lądowy', kind: 'state', price: 20, desc: 'Państwowa kolej.' },
+        { id: 'CMA', name: 'Compagnie Maritime', sector: 'Transport i logistyka', subsector: 'Morski', kind: 'normal', price: 70, desc: 'Armator z Marsylii; „przypłynie, gdy przypłynie”.' } // 0.17 S4
     ]
 };
 
@@ -196,7 +200,8 @@ COUNTRY_DEFS.JP = {
         { id: 'SMR', name: 'Samurai', sector: 'Obronność', kind: 'normal', price: 3800 },
         { id: 'NPH', name: 'Nippon Poczta Holding', sector: 'Usługi', kind: 'state', price: 1300, desc: 'Państwowa poczta i bank pocztowy.' },
         { id: 'TPK', name: 'TEPKO Tokio Energia', sector: 'Energia', kind: 'state', price: 1100, desc: 'Państwowa energetyka.' },
-        { id: 'JBR', name: 'Japoński Bank Rozwoju', sector: 'Bankowość', subsector: 'Bank komercyjny', kind: 'state', price: 1600, desc: 'Państwowy bank rozwoju.' }
+        { id: 'JBR', name: 'Japoński Bank Rozwoju', sector: 'Bankowość', subsector: 'Bank komercyjny', kind: 'state', price: 1600, desc: 'Państwowy bank rozwoju.' },
+        { id: 'KML', name: 'Kaiun Maru Lines', sector: 'Transport i logistyka', subsector: 'Morski', kind: 'normal', price: 3200, desc: 'Japoński armator; tankowce i masowce.' } // 0.17 S4
     ]
 };
 
@@ -211,7 +216,8 @@ COUNTRY_DEFS.TW = {
         { id: 'ASU', name: 'Asuss', sector: 'Technologia', kind: 'normal', price: 340 },
         { id: 'FMC', name: 'Formoza Chemia', sector: 'Chemia', kind: 'normal', price: 90 },
         { id: 'BBT', name: 'Bubble Tea Taipei', sector: 'Żywność', kind: 'normal', price: 55 },
-        { id: 'TPF', name: 'Taipower Formosa', sector: 'Energia', kind: 'state', price: 45, desc: 'Państwowa energetyka.' }
+        { id: 'TPF', name: 'Taipower Formosa', sector: 'Energia', kind: 'state', price: 45, desc: 'Państwowa energetyka.' },
+        { id: 'EVG', name: 'Evergiven Marine', sector: 'Transport i logistyka', subsector: 'Morski', kind: 'normal', price: 210, desc: 'Kontenerowce; wąskie gardło, gdy „statek utknie w kanale”.' } // 0.17 S4
     ]
 };
 
@@ -231,11 +237,11 @@ COUNTRY_DEFS.CN = {
         { id: 'RPL', name: 'RicePlantators', sector: 'Żywność', kind: 'normal', price: 12, desc: 'Start na giełdzie brązowej.' },
         { id: 'PND', name: 'PanDa Bank', sector: 'Bankowość', subsector: 'Bank komercyjny', kind: 'normal', price: 8, desc: 'Parabank: wysokie oprocentowanie lokat, ryzyko upadku jak Amber Gold (mechanika parabanku z 0.11).' },
         { id: 'TTM', name: 'TikTak Media', sector: 'Media', kind: 'giant', price: 120, desc: 'Gigant krótkich filmów.' },
-        { id: 'JDL', name: 'Jedwabn Logistyka', sector: 'Usługi', kind: 'normal', price: 30 },
+        { id: 'JDL', name: 'Jedwabn Logistyka', sector: 'Transport i logistyka', subsector: 'Logistyka', kind: 'normal', price: 30 },
         { id: 'HYN', name: 'Herbata Yunnan', sector: 'Żywność', subsector: 'Herbata', kind: 'normal', price: 55 },
         { id: 'DAJ', name: 'Daj', sector: 'Żywność', kind: 'normal', price: 18, desc: 'Sprzedaż jaj.' },
         { id: 'PSE', name: 'Państwowa Sieć Energetyczna', sector: 'Energia', kind: 'state', price: 14, desc: 'Państwowa energetyka.' },
-        { id: 'CKN', name: 'Chińska Kolej Narodowa', sector: 'Budowlany', kind: 'state', price: 9, desc: 'Państwowa kolej.' },
+        { id: 'CKN', name: 'Chińska Kolej Narodowa', sector: 'Transport i logistyka', subsector: 'Lądowy', kind: 'state', price: 9, desc: 'Państwowa kolej.' },
         { id: 'LBR', name: 'Ludowy Bank Rolny', sector: 'Bankowość', subsector: 'Bank komercyjny', kind: 'state', price: 5, desc: 'Państwowy bank rolny.' },
         { id: 'SNN', name: 'Sinochem Narodowy', sector: 'Chemia', kind: 'state', price: 22, desc: 'Państwowy koncern chemiczny.' },
         { id: 'TBN', name: 'TybetNaft', sector: ['Energia', 'Chemia'], subsector: 'Rafinerie', kind: 'giant', price: 7, desc: 'Państwowa rafineria i chemia; największy importer ropy.' },
@@ -259,7 +265,7 @@ COUNTRY_DEFS.IN = {
         { id: 'IEX', name: 'Indian Express', sector: 'Usługi', kind: 'normal', price: 600 },
         { id: 'TMH', name: 'Taj Mahal Hotels', sector: 'Turystyka', kind: 'normal', price: 1900 },
         { id: 'KRK', name: 'Karakorum', sector: 'Obronność', kind: 'normal', price: 1500 },
-        { id: 'IKP', name: 'Indyjskie Koleje Państwowe', sector: 'Usługi', kind: 'state', price: 450, desc: 'Państwowa kolej.' },
+        { id: 'IKP', name: 'Indyjskie Koleje Państwowe', sector: 'Transport i logistyka', subsector: 'Lądowy', kind: 'state', price: 450, desc: 'Państwowa kolej.' },
         { id: 'WGI', name: 'Węgiel Indii', sector: 'Przemysł', kind: 'state', price: 380, desc: 'Państwowe kopalnie węgla.' },
         { id: 'NRG', name: 'Narodowa Ropa i Gaz Indii', sector: 'Energia', kind: 'state', price: 260, desc: 'Państwowy koncern paliwowy.' },
         { id: 'NUB', name: 'Narodowe Ubezpieczenia Bharat', sector: 'Bankowość', subsector: 'Bank komercyjny', kind: 'state', price: 520, desc: 'Państwowy ubezpieczyciel.' },
