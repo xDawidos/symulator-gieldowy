@@ -8,8 +8,9 @@
 // =================================================================================
 
 const COUNTRY_RULES = {
-    shares: 10_000_000,        // liczba akcji zwykłej spółki (giganci: giantShares)
+    shares: 10_000_000,        // mediana liczby akcji zwykłej spółki (giganci: giantShares); każda spółka ma własną — getDefaultIssuerShares
     giantShares: 30_000_000,
+    sharesSpread: [0.3, 3],    // poprawka z gry 2026-11-02: liczba akcji × 0,3…3 (rozkład logarytmiczny, stały dla spółki), zamiast zawsze 10 mln
     statePct: 0.5,             // pakiet obcego państwa (poza wolnym obrotem)
     limitMult: 2.0,            // limit spółek kraju bez wskaźnika wielkości (kraj testowy) — patrz getCountryLimit
     limitMultRange: [1.6, 2.6], // 0.16.8 F3 (podniesione 2026-10-31 z [1.2, 2.0]: córki obcych zajmowały miejsca, 74/74 po ok. 15 latach): mnożnik liczby startowej rośnie z wielkością rynku (logarytmicznie od najmniejszego do największego)
@@ -130,6 +131,17 @@ function normalizeCompanySectors(sectors) {
     return list.length > 1 ? [[list[0], 0.7], [list[1], 0.3]] : [[list[0], 1]];
 }
 
+/** Liczba akcji spółki z definicji: pole `shares` albo mediana rodzaju × mnożnik z symbolu (stały między grami i po wczytaniu). */
+function getDefaultIssuerShares(c) {
+    if (Number(c.shares) > 0) return Number(c.shares);
+    const id = String(c.id || '');
+    let h = 0;
+    for (let k = 0; k < id.length; k++) h = (h * 31 + id.charCodeAt(k)) % 9973;
+    const [lo, hi] = COUNTRY_RULES.sharesSpread, u = h / 9973;
+    const base = c.kind === 'giant' ? COUNTRY_RULES.giantShares : COUNTRY_RULES.shares;
+    return Math.max(100_000, Math.round(base * lo * Math.pow(hi / lo, u) / 10_000) * 10_000);
+}
+
 /** Wypełnia pola statyczne emitenta z definicji (nie zapisujemy ich — wracają z kodu). */
 function applyCompanyDef(issuer, countryDef, c) {
     issuer.name = c.name; issuer.country = countryDef.id; issuer.currency = countryDef.currency;
@@ -138,7 +150,7 @@ function applyCompanyDef(issuer, countryDef, c) {
     issuer.subsector = c.subsector || null; issuer.niche = c.niche || null;
     issuer.kind = 'share'; issuer.state = c.kind === 'state'; issuer.giant = c.kind === 'giant';
     issuer.special = c.special || null; issuer.vol = c.vol || 1; issuer.desc = c.desc || '';
-    issuer.shares = c.kind === 'giant' ? COUNTRY_RULES.giantShares : COUNTRY_RULES.shares;
+    issuer.shares = getDefaultIssuerShares(c);
     issuer.statePack = issuer.state ? Math.round(issuer.shares * COUNTRY_RULES.statePct) : 0;
     issuer.float = issuer.shares - issuer.statePack;
     return issuer;
@@ -454,11 +466,12 @@ function getCountriesSnapshot() {
         if (i.leakQ !== undefined) row.lk = i.leakQ;
         if (i.vintage) row.v = i.vintage;
         if (i.tradeHalted) row.th = 1;
+        if (i.homeListed) row.hl = 1; // gigant notowany u nas po przejęciu polskiej spółki
         if (i.parentPack > 0) row.pp = i.parentPack; // 0.16.12 D1: pakiet matki
         if (i.oversightResale) row.or = i.oversightResale.until;
         const company = typeof getForeignCompanySnapshot === 'function' ? getForeignCompanySnapshot(i) : undefined;
         if (company) row.c = company; // 0.16.7: bilans, wyniki, dywidenda, prezes
-        else if (i.shares !== (i.giant ? COUNTRY_RULES.giantShares : COUNTRY_RULES.shares)) row.n = i.shares; // 0.17 S0b: córka przed pierwszym raportem (bez `c`) ma własną liczbę akcji
+        else row.n = i.shares; // spółka przed pierwszym raportem (bez `c`): liczba akcji wprost (0.17 S0b; od 2026-11-02 zawsze)
         if (i.generated) row.g = { name: i.name, sector: i.sectors.map(s => s[0]), subsector: i.subsector, country: i.country, currency: i.currency, ...(i.parentId ? { par: i.parentId } : {}) };
         issuers[i.id] = row;
     }
@@ -495,9 +508,11 @@ function applyCountriesSnapshot(snapshot) {
         if (Number.isFinite(Number(row.lk))) issuer.leakQ = Number(row.lk);
         if (row.v) issuer.vintage = String(row.v);
         if (row.th) issuer.tradeHalted = true;
+        if (row.hl) issuer.homeListed = true;
         if (Number.isFinite(Number(row.or))) issuer.oversightResale = { until: Number(row.or) };
         issuer.parentPack = Number(row.pp) > 0 && issuer.parentId ? Number(row.pp) : 0;
-        if (Number(row.n) > 0) { issuer.shares = Number(row.n); issuer.statePack = issuer.state ? Math.round(issuer.shares * COUNTRY_RULES.statePct) : 0; issuer.float = issuer.shares - issuer.statePack; }
+        const legacyShares = !row.c && !(Number(row.n) > 0) ? (issuer.giant ? COUNTRY_RULES.giantShares : COUNTRY_RULES.shares) : 0; // stary zapis bez `n` i `c`: wtedy liczba akcji była stała
+        if (Number(row.n) > 0 || legacyShares) { issuer.shares = Number(row.n) || legacyShares; issuer.statePack = issuer.state ? Math.round(issuer.shares * COUNTRY_RULES.statePct) : 0; issuer.float = issuer.shares - issuer.statePack; }
         if (typeof applyForeignCompanySnapshot === 'function') applyForeignCompanySnapshot(issuer, row.c); // zapis v17 (bez `c`): model z ceny
         if (issuer.parentPack > 0) issuer.float = issuer.shares - issuer.statePack - issuer.parentPack;
         issuer.holders = {};
@@ -747,7 +762,7 @@ function buyForeignShares(issuerId, quantity, opts = {}) {
     if (!(quantity > 0)) return { ok: false, reason: 'Podaj liczbę akcji.' };
     if (typeof playerFund !== 'object' || !playerFund) return { ok: false, reason: 'Akcje kupuje fundusz.' };
     const def = COUNTRY_DEFS[issuer.country];
-    if (!canTradeCountry('player', issuer.country)) return { ok: false, reason: `Brak biletu na rynek: ${def?.name || issuer.country}. Bilet kupisz na lotnisku.` };
+    if (!canTradeCountry('player', issuer.country) && !issuer.homeListed) return { ok: false, reason: `Brak biletu na rynek: ${def?.name || issuer.country}. Bilet kupisz na lotnisku.` };
     if (typeof isMarketHalted === 'function' && isMarketHalted()) return { ok: false, reason: 'Handel wstrzymany — zadziałał bezpiecznik giełdowy.' };
     if (issuer.tradeHalted) return { ok: false, reason: 'Notowania spółki są zawieszone.' };
     if (quantity > getGdrFree(issuer)) return { ok: false, reason: 'Nie ma tylu akcji w wolnym obrocie.' };

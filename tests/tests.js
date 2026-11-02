@@ -12025,7 +12025,7 @@ group('0.16.1', () => {
         const savedPick = pickForeignTakeoverTarget, savedExec = executeForeignTakeover;
         pickForeignTakeoverTarget = () => ({ symbol: 'X' });
         executeForeignTakeover = (stock, giant) => ({ symbol: 'X', name: 'X', offer: 1, premium: 0.3, paid: 0, heldByPlayer: false });
-        const savedQ = macro.quarter;
+        const savedQ = macro.quarter, savedJoin = joinCountry; joinCountry = () => null; // statystyka zdarzeń: bez dołączania krajów
         try {
             let total = 0, gdr = 0, runs = 150, minGap = 99;
             for (let run = 0; run < runs; run++) {
@@ -12042,7 +12042,7 @@ group('0.16.1', () => {
             assert(minGap >= GDR_RULES.eventCooldownQuarters, `odstęp między zdarzeniami ≥ 4 kw. (min ${minGap})`);
             assert(perGame >= 2 && perGame <= 4, `zdarzeń w 6,5 roku: ${perGame.toFixed(2)}`);
             assert(share >= 0.6 && share <= 0.8, `udział GDR ${(share * 100).toFixed(0)}%`);
-        } finally { pickForeignTakeoverTarget = savedPick; executeForeignTakeover = savedExec; macro.quarter = savedQ; resetGdrState(); }
+        } finally { pickForeignTakeoverTarget = savedPick; executeForeignTakeover = savedExec; joinCountry = savedJoin; macro.quarter = savedQ; resetGdrState(); }
     }, 4242);
 
     test('G3b: zagraniczne przejęcie — akcjonariusze dostają gotówkę z premią, spółka znika, brak ujemnej gotówki i pieniędzy znikąd', () => {
@@ -12070,7 +12070,56 @@ group('0.16.1', () => {
         assert(paymentJournal.slice(journal0).some(e => e.purpose.startsWith('Przejęcie przez zagranicznego')), 'wpływ z zewnątrz w księdze płatności');
         assert(playerCash >= 0 && aiCompetitors.every(ai => ai.cash >= 0), 'brak ujemnej gotówki');
         assertEq(checkWorldInvariants().length, 0, 'niezmienniki po przejęciu');
-        resetGdrState();
+        resetGdrState(); resetForeignBots();
+    });
+
+    test('Poprawka 2026-11-02: gigant po przejęciu polskiej spółki wchodzi na naszą listę jako zwykłe akcje (nie kwity), z zapisem', () => {
+        initFxState(); resetGdrState();
+        try {
+            resetWorld(Array.from({ length: 12 }, (_, i) => mk156(`T${i}`, { price: 50 + i, financialHealth: 2 })));
+            startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+            const result = processGiantEventQuarterly('takeover');
+            assert(result && result.kind === 'takeover', 'przejęcie');
+            const issuer = foreignIssuers[result.giant];
+            assert(issuer && issuer.kind === 'share' && issuer.homeListed, 'gigant jako akcje spółki, notowany u nas');
+            assertEq(result.listedSymbol, getShareSymbol(issuer), 'symbol akcji, nie kwitu');
+            assert(!/\.GDR$/.test(result.listedSymbol), 'bez kwitów');
+            assert(getForeignTier(issuer).linked, 'na poziomach naszych giełd');
+            const snap = getCountriesSnapshot(); resetGdrState(); applyCountriesSnapshot(snap);
+            assert(foreignIssuers[result.giant]?.homeListed, 'notowanie u nas przetrwało zapis');
+            assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+        } finally { resetGdrState(); resetForeignBots(); }
+    });
+
+    test('Poprawka 2026-11-02: spółki zagraniczne mają różną, stałą liczbę akcji; stary zapis bez liczby akcji wczytuje dawne 10 mln', () => {
+        const de = COUNTRY_DEFS.DE.companies.filter(c => c.kind === 'normal');
+        const counts = de.map(getDefaultIssuerShares);
+        assert(new Set(counts).size >= de.length * 0.8, 'liczby akcji różne');
+        assert(counts.every(n => n >= 3_000_000 && n <= 30_000_000), 'zwykłe: 3–30 mln');
+        assertEq(getDefaultIssuerShares(de[0]), counts[0], 'stała dla spółki');
+        initFxState(); resetGdrState();
+        try {
+            joinCountry('DE');
+            const i = getCountryIssuers('DE').find(x => !x.state && !x.giant);
+            const snap = getCountriesSnapshot(); const row = snap.issuers[i.id];
+            delete row.c; delete row.n; // zapis sprzed poprawki: spółka bez raportu i bez liczby akcji
+            resetGdrState(); applyCountriesSnapshot(snap);
+            assertEq(foreignIssuers[i.id].shares, COUNTRY_RULES.shares, 'stary zapis: 10 mln');
+        } finally { resetGdrState(); resetForeignBots(); }
+    });
+
+    test('Poprawka 2026-11-02: ulubione — gwiazdka dodaje i usuwa spółkę, filtr pokazuje tylko ulubione', () => {
+        const saved = playerProfile;
+        try {
+            playerProfile = { ...(saved || {}), favorites: [] };
+            const sym = stocks[0].symbol, d = displayStocks; displayStocks = () => {};
+            try {
+                toggleFavorite(sym); assert(isFavoriteSymbol(sym), 'dodana');
+                toggleFavorite(sym); assert(!isFavoriteSymbol(sym), 'usunięta');
+                toggleFavorite(sym); favoritesOnlyFilter = true;
+                assert(getListBaseStocks().every(s => isFavoriteSymbol(s.symbol)), 'filtr: tylko ulubione');
+            } finally { displayStocks = d; favoritesOnlyFilter = false; }
+        } finally { playerProfile = saved; }
     });
 
     test('G3: zapis i wczytanie zachowują kwity, ceny obcych emitentów i stan zdarzeń; zapis v15 wczytuje się bez kwitów', () => {
@@ -12922,10 +12971,10 @@ group('0.16.3', () => {
         });
     }
     // --- G12: połączone giełdy ---
-    const withLinks = fn => { startFund(); initFxState(); resetGdrState(); macro.quarter = 10; try { return fn(); } finally { resetGdrState(); initFxState(); } };
+    const withLinks = fn => { startFund(); initFxState(); resetGdrState(); macro.quarter = 30; try { return fn(); } finally { resetGdrState(); initFxState(); } };
     const withRandom = (value, fn) => { const r = Math.random; Math.random = () => value; try { return fn(); } finally { Math.random = r; } };
 
-    test('G12: szansa 1% podwaja się co kwartał do 32%; po wydarzeniu wraca do 1% i są 2 kwartały przerwy', () => withLinks(() => {
+    test('G12: szansa 1% podwaja się co kwartał do 32%; po wydarzeniu wraca do 1% i są 4 kwartały przerwy', () => withLinks(() => {
         assertEq(exchangeLinks.chance, 0.01, 'start 1%');
         const seen = [];
         withRandom(0.999, () => { for (let i = 0; i < 7; i++) { macro.quarter++; processLinksQuarterly(); seen.push(exchangeLinks.chance); } });
@@ -12934,13 +12983,13 @@ group('0.16.3', () => {
         macro.quarter = q;
         const first = withRandom(0, () => processLinksQuarterly());
         assert(first && exchangeLinks.chance === 0.01 && exchangeLinks.lastQ === q, 'wydarzenie: szansa wraca do 1%, kwartał zapisany');
-        for (const k of [1, 2]) { macro.quarter = q + k; assertEq(withRandom(0, () => processLinksQuarterly()), null, `przerwa ${k}. kwartał`); }
-        macro.quarter = q + 3;
-        assert(withRandom(0, () => processLinksQuarterly()) !== null, 'po 2 kwartałach przerwy kolejne wydarzenie możliwe');
+        for (const k of [1, 2, 3, 4]) { macro.quarter = q + k; assertEq(withRandom(0, () => processLinksQuarterly()), null, `przerwa ${k}. kwartał`); }
+        macro.quarter = q + 5;
+        assert(withRandom(0, () => processLinksQuarterly()) !== null, 'po 4 kwartałach przerwy kolejne wydarzenie możliwe');
     }));
 
-    test('G12: brak wydarzeń przed 8. kwartałem', () => withLinks(() => {
-        macro.quarter = 7;
+    test('G12: brak wydarzeń przed 24. kwartałem (7. rok)', () => withLinks(() => {
+        macro.quarter = 23;
         assertEq(withRandom(0, () => processLinksQuarterly()), null, 'za wcześnie');
         assertEq(getLinkedCountries().length, 0, 'nic nie dołączyło');
     }));
@@ -13220,8 +13269,8 @@ group('0.16.3', () => {
         airportState.forced = false; assertEq(getEffectiveLinkChance(), 0.01, 'bez lotniska');
         ensureSpecialProjects(); specialProjects.completed.unshift({ templateId: 'seaport', timed: false });
         try { assertEq(getEffectiveLinkChance(), 0.03, 'z portem morskim ×3'); } finally { specialProjects.completed.shift(); }
-        airportState.forced = true; macro.quarter = 7;
-        try { assertEq(withRandom(0, () => processLinksQuarterly()), null, 'przed 8. kwartałem nic'); } finally { airportState.forced = false; }
+        airportState.forced = true; macro.quarter = 23;
+        try { assertEq(withRandom(0, () => processLinksQuarterly()), null, 'przed 24. kwartałem nic'); } finally { airportState.forced = false; }
     }));
 
     // --- 0.16.4: zawieszanie przebiegów — okno połączenia giełd pauzuje grę, symulacja musi ją wznawiać ---
@@ -14070,7 +14119,7 @@ group('0.16.9 Lombard w Internecie, rynek połączony na giełdzie', () => {
         displayStocks();
         const de = getCountryIssuers('DE')[0], row = body.querySelector(`tr.foreign-row[data-symbol="${getGdrSymbol(de)}"]`);
         assert(row && row.dataset.country === 'DE', 'wiersz spółki DE na liście');
-        assert(row.textContent.includes(formatZl(toPln(de.price, de.currency), 2)) && /DE · EUR/.test(row.querySelector('.stock-meta').textContent), 'cena w PLN i kraj/waluta tekstem');
+        assert(row.textContent.includes(formatZl(toPln(de.price, de.currency), 2)) && /Niemcy · EUR/.test(row.querySelector('.stock-meta').textContent) && !row.querySelector('.stock-meta .flag-ic'), 'cena w PLN i kraj/waluta tekstem (bez flagi)');
         const before = getGdrHeld(de); toggleStockDrawer(getShareSymbol(de)); // 0.16.9 W3: szuflada handlu jak u krajowych
         assert(document.getElementById(`drawer-${getShareSymbol(de)}`), 'szuflada handlu spółki zagranicznej');
         document.getElementById(`mkt-qty-${de.id}`).value = '10'; marketsUiTrade(de.id, 'buy'); closeOpenStockDrawer();
@@ -14113,7 +14162,7 @@ group('0.16.9 Lombard w Internecie, rynek połączony na giełdzie', () => {
                 assert(news.some(t => /W miejsce .+ wchodzi na giełdę .+ \(.+\), sektor: /.test(t)), 'news o debiucie');
                 assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
             } finally { pushNews = saved; }
-        } finally { macro.quarter = q0; resetGdrState(); }
+        } finally { macro.quarter = q0; resetGdrState(); resetForeignBots(); }
     });
 
     test('0.16.10 S0: kraj startowy — DE/US/CZ dołączone od 1. dnia, gracz bez biletu (boty z biletem), PL bez zmian, nieznany kraj = PL', () => {
@@ -14261,7 +14310,7 @@ group('0.16.9 W3 Spółki zagraniczne jak krajowe', () => {
         const count = list.filter(i => getForeignTier(i).key === 'EMERALD').length; assert(count <= ELITE_EXCHANGES.EMERALD.limit, 'limit Szmaragdu');
     }));
 
-    test('Karta spółki zagranicznej: wszystkie zakładki renderują się (nagłówek z walutą spółki i krajem, wskaźniki w PLN), wykres ceny w Przeglądzie z historii tygodniowej', () => withWorld(() => {
+    test('Karta spółki zagranicznej: wszystkie zakładki renderują się (nagłówek z walutą spółki i krajem, wskaźniki w PLN), układ jak u krajowej (Grupa tylko w koncernie, bez osobnego wykresu ceny)', () => withWorld(() => {
         joinCountry('DE'); countryState.DE.link = 'intl';
         const i = getCountryIssuers('DE')[0]; i.history = [30, 31, 33, 32, 35, 34, i.price];
         const sym = symOf(i); companyCardView.symbol = sym;
@@ -14273,10 +14322,14 @@ group('0.16.9 W3 Spółki zagraniczne jak krajowe', () => {
         const head = document.getElementById('company-card-header').innerHTML;
         assert(head.includes(sym) && head.includes('EUR') && head.includes(formatZl(toPln(i.price, 'EUR')).replace(/\s/g, ' ')) , 'nagłówek: symbol, cena w PLN i w walucie spółki');
         assert(/Kapitalizacja/.test(document.getElementById('company-card-kpis').innerHTML) && !/NaN/.test(document.getElementById('company-card-kpis').innerHTML), 'kafelki wskaźników');
-        assert(document.getElementById('company-card-tabs').textContent.includes('Grupa') && !document.getElementById('company-card-tabs').textContent.includes('Zatrudnienie'), 'zakładki: Grupa tak, Zatrudnienie nie');
+        const tabs = () => document.getElementById('company-card-tabs').textContent;
+        assert(!hasForeignGroup(i) && !tabs().includes('Grupa') && !tabs().includes('Zatrudnienie'), 'zakładki: bez Grupy (spółka niezależna), bez Zatrudnienia');
+        assert(!document.getElementById('company-card-header').querySelector('.flag-ic'), 'nagłówek bez flagi');
         companyCardView.tab = 'overview'; renderCompanyCard();
-        const area = document.getElementById('cc-foreign-chart'); assert(area, 'miejsce na wykres w Przeglądzie');
-        drawCompanyCardChart(); assertEq(area.querySelectorAll('svg line').length >= i.history.length - 1, true, 'wykres narysowany z historii tygodniowej');
+        assert(!document.getElementById('cc-foreign-chart'), 'Przegląd bez osobnego wykresu ceny (jak u krajowej)');
+        companyCardView.tab = 'owners'; renderCompanyCard();
+        assert(/Wykres akcjonariatu/.test(document.getElementById('company-card-body').innerHTML), 'akcjonariat z wykresem kołowym jak u krajowej');
+        if (i.state) assert(document.getElementById('company-card-body').textContent.includes('Państwo: Niemcy'), 'pakiet państwa należy do Niemiec, nie do Skarbu Państwa');
         companyCardView.tab = 'overview';
     }));
 

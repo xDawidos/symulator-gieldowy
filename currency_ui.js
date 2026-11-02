@@ -223,13 +223,13 @@ function showGiantEventWindow(result) {
     if (!isGamePaused && typeof togglePauseGame === 'function') togglePauseGame();
     const body = document.getElementById('giant-event-body');
     if (result.kind === 'gdr') {
-        body.innerHTML = `<p><strong>${escapeHtml(result.giantName)}</strong> (${flagIcon(result.country, 12)} ${escapeHtml(COUNTRY_NAMES[result.country] || result.country)}) wchodzi na naszą giełdę jako kwity depozytowe <strong>${escapeHtml(result.symbol)}</strong>.</p>
+        body.innerHTML = `<p><strong>${escapeHtml(result.giantName)}</strong> (${escapeHtml(COUNTRY_NAMES[result.country] || result.country)}) wchodzi na naszą giełdę jako kwity depozytowe <strong>${escapeHtml(result.symbol)}</strong>.</p>
             <dl class="bank-card-rates"><div><dt>Cena w ${result.currency}</dt><dd>${formatNumberPl(result.priceForeign, 2)}</dd></div><div><dt>Cena kwitu w PLN</dt><dd>${formatZl(result.pricePln, 2)}</dd></div><div><dt>Spread depozytowy</dt><dd>${formatNumberPl(GDR_RULES.depositSpread * 100, 1)}%</dd></div></dl>
             <p class="text-sm">Kupisz je w oknie Kantor → Obce. Pamiętaj: wynik kwitu to zmiana ceny akcji <em>i</em> kursu ${result.currency}.</p>`;
     } else {
         body.innerHTML = `<p><strong>${escapeHtml(result.giantName)}</strong> przejmuje <strong>${escapeHtml(result.name)}</strong> (${escapeHtml(result.symbol)}).</p>
             <dl class="bank-card-rates"><div><dt>Cena wykupu</dt><dd>${formatZl(result.offer, 2)}</dd></div><div><dt>Premia do kursu</dt><dd>${formatNumberPl(result.premium * 100, 0)}%</dd></div><div><dt>Wypłacono akcjonariuszom</dt><dd>${formatZl(result.paid, 0)}</dd></div></dl>
-            <p class="text-sm">${result.heldByPlayer ? 'Twoje akcje rozliczono gotówką po cenie wykupu.' : 'Nie miałeś akcji tej spółki.'} Spółka znika z giełdy.</p>
+            <p class="text-sm">${result.heldByPlayer ? 'Twoje akcje rozliczono gotówką po cenie wykupu.' : 'Nie miałeś akcji tej spółki.'} Spółka znika z giełdy.${result.listedSymbol ? ` ${escapeHtml(result.giantName)} wchodzi na naszą listę jako zwykłe akcje <strong>${escapeHtml(result.listedSymbol)}</strong>.` : ''}</p>
             <p class="text-sm">W jej miejsce w ciągu 1–4 kwartałów zadebiutuje nowa spółka krajowa${result.replacementSector ? ` z sektora ${escapeHtml(result.replacementSector)}` : ''} (informacja w wiadomościach).${result.listedSymbol ? ` Przejmujący koncern wchodzi do obrotu jako kwity <strong>${escapeHtml(result.listedSymbol)}</strong> (Kantor → Obce).` : ''}</p>`;
     }
     modal.hidden = false;

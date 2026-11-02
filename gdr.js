@@ -219,16 +219,19 @@ function processGiantEventQuarterly(force = null) {
     let result = null;
     if (kind === 'takeover') {
         const target = pickForeignTakeoverTarget();
-        const pool = free.length ? free : FOREIGN_GIANTS; // przejmuje koncern, którego jeszcze nie ma na giełdzie — wchodzi do obrotu jako kwity (GDR)
+        const pool = free.length ? free : FOREIGN_GIANTS; // przejmuje koncern, którego jeszcze nie ma na giełdzie — wchodzi na naszą listę jako zwykłe akcje
         const giant = pool[Math.floor(Math.random() * pool.length)];
         if (target) {
             result = { kind: 'takeover', giant: giant.id, giantName: giant.name, country: giant.country, ...executeForeignTakeover(target, giant) };
-            if (!foreignIssuers[giant.id]) {
-                const issuer = createForeignIssuer(giant.id);
-                const text = `🌍 ${issuer.name} (${issuer.country}) po przejęciu ${result.name} wchodzi na naszą giełdę jako kwity depozytowe ${getGdrSymbol(issuer)}.`;
+            // poprawka z gry 2026-11-02: gigant wchodzi jako zwykłe akcje (nie kwity): giełda jego kraju dołącza do gry, a on sam jest notowany na naszej liście bez biletu
+            if (typeof joinCountry === 'function' && !isCountryJoined(giant.country)) joinCountry(giant.country, 'takeover');
+            const issuer = foreignIssuers[giant.id];
+            if (issuer?.kind === 'share' && !issuer.homeListed && !isIssuerOnHomeList(issuer)) {
+                issuer.homeListed = true;
+                const text = `${issuer.name} (${COUNTRY_DEFS[issuer.country]?.name || issuer.country}) po przejęciu ${result.name} wchodzi na naszą giełdę jako zwykłe akcje ${getShareSymbol(issuer)}.`;
                 logEvent(text, 'market');
                 if (typeof pushNews === 'function') pushNews(text, null);
-                result.listedSymbol = getGdrSymbol(issuer);
+                result.listedSymbol = getShareSymbol(issuer);
             }
         }
         else if (free.length) kind = 'gdr';

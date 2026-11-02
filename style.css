@@ -3242,6 +3242,9 @@ body.dark-mode .info-btn,
 }
 body.dark-mode .info-btn:hover,
 .info-btn:hover { background: var(--color-bg-hover) !important; border-color: var(--color-border-default) !important; color: var(--color-text-primary) !important; }
+.fav-btn .ic { fill: none; stroke: currentColor; stroke-width: 1.6; }
+.fav-btn.is-on, body.dark-mode .fav-btn.is-on { color: var(--color-text-accent) !important; }
+.fav-btn.is-on .ic { fill: currentColor; }
 
 .subsidiary-toggle {
   display: inline-flex;

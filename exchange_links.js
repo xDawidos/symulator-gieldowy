@@ -7,11 +7,11 @@
 //                                                               za notowanie na GPW, kurs GPW spada o 5–15% w 2 kwartały
 // Skutki dołączenia kraju przez połączenie: handel jego spółkami bez biletu i z prowizją krajową, boty kraju, waluta w kantorze,
 // duży malejący bonus Turystyki. Trzy kraje europejskie (DE, CZ, SE, CH, FR) razem tworzą wspólnotę europejską (bot europejski, G14).
-// Szansa startuje od 1%, podwaja się co kwartał do 32%, po wydarzeniu wraca do 1% i jest 2 kwartały przerwy. Zdarzenia od 8. kwartału.
+// Szansa startuje od 1%, podwaja się co kwartał do 32%, po wydarzeniu wraca do 1% i jest 4 kwartały przerwy. Zdarzenia od 24. kwartału (7. rok gry; poprawka z gry 2026-11-02, wcześniej 8. kwartał).
 // =================================================================================
 
 const LINK_RULES = {
-    startChance: 0.01, maxChance: 0.32, gapQ: 2, fromQ: 8,
+    startChance: 0.01, maxChance: 0.32, gapQ: 4, fromQ: 24,
     infraMult: 3,                   // lotnisko albo port morski: szansa połączenia rośnie wyraźnie (×3 przy losowaniu)
     weights: { merged: 0.5, intl: 0.3, taken: 0.2 },
     slowJoinChance: 0.12,           // na kwartał: giełda międzynarodowa przyjmuje kolejny kraj

@@ -292,11 +292,15 @@ const FOREIGN_ELITE_ORDER = ['EMERALD', 'RUBY']; // Diament jest jeden i krajowy
 let foreignEliteCache = { q: -1, size: -1, map: {} };
 
 /** Ranking kapitalizacji (w PLN) spółek krajów połączonych → Szmaragd i Rubin wg progów i limitów giełd elitarnych; odświeżany raz na kwartał. */
+/** Spółka obca na naszej głównej liście: kraj połączony z naszą giełdą albo gigant notowany u nas po przejęciu polskiej spółki (`homeListed`). */
+function isIssuerOnHomeList(i) { return Boolean(i && i.kind === 'share' && (i.homeListed || (typeof isCountryLinked === 'function' && isCountryLinked(i.country)))); }
+function getHomeListedIssuers() { return getForeignIssuerList().filter(isIssuerOnHomeList); }
+
 function getForeignEliteMap() {
     const linked = typeof getLinkedCountries === 'function' ? getLinkedCountries() : [];
     const key = macro.quarter * 1000 + linked.length;
     if (foreignEliteCache.q === key && foreignEliteCache.size === foreignIssuerCount()) return foreignEliteCache.map;
-    const pool = linked.flatMap(c => getCountryIssuers(c)).filter(i => i.kind === 'share' && !i.tradeHalted && toPln(i.price, i.currency) >= exchanges.PLATINUM.minPrice)
+    const pool = getHomeListedIssuers().filter(i => !i.tradeHalted && toPln(i.price, i.currency) >= exchanges.PLATINUM.minPrice)
         .map(i => ({ i, cap: toPln(i.price * i.shares, i.currency) })).sort((a, b) => b.cap - a.cap);
     const map = {};
     let idx = 0;
@@ -311,7 +315,7 @@ function foreignIssuerCount() { return Object.keys(foreignIssuers).length; }
 
 /** Poziom giełdy spółki: kraj połączony → nasze poziomy (Śmieciowa…Platynowa po cenie w PLN, Szmaragd/Rubin po kapitalizacji); inny kraj → własne poziomy giełdy kraju. */
 function getForeignTier(i) {
-    const pln = toPln(i.price, i.currency), linked = typeof isCountryLinked === 'function' && isCountryLinked(i.country);
+    const pln = toPln(i.price, i.currency), linked = isIssuerOnHomeList(i);
     let key = Object.keys(exchanges).find(k => !isEliteExchange(k) && pln >= exchanges[k].minPrice && pln < exchanges[k].maxPrice) || 'PLATINUM';
     if (linked) {
         key = getForeignEliteMap()[i.id] || key;
@@ -324,9 +328,10 @@ function getForeignTier(i) {
 /** Spółki krajów połączonych na danym poziomie naszych giełd (filtry listy jak dla krajowych: sektor, „tylko moje”). */
 function getLinkedIssuersForExchange(key) {
     if (typeof getLinkedCountries !== 'function' || (typeof sectorFilterState === 'object' && ((sectorFilterState.type && sectorFilterState.type !== 'all') || sectorFilterState.subsector))) return [];
-    let list = getLinkedCountries().flatMap(c => getCountryIssuers(c)).filter(i => getForeignTier(i).key === key);
+    let list = getHomeListedIssuers().filter(i => getForeignTier(i).key === key);
     if (typeof sectorFilterState === 'object' && sectorFilterState.sector !== 'all') list = list.filter(i => i.sectors.some(x => x[0] === sectorFilterState.sector));
     if (typeof ownedOnlyFilter !== 'undefined' && ownedOnlyFilter) list = list.filter(i => getGdrHeld(i) > 0);
+    if (typeof favoritesOnlyFilter !== 'undefined' && favoritesOnlyFilter) list = list.filter(i => isFavoriteSymbol(getShareSymbol(i)));
     return list;
 }
 
@@ -476,13 +481,16 @@ function getForeignIssuerBySymbol(symbol) {
     return issuer && issuer.kind === 'share' && getShareSymbol(issuer) === symbol ? issuer : null;
 }
 
+/** Właściciel pakietu państwowego spółki zagranicznej: państwo kraju spółki, nie nasz Skarb Państwa. */
+function getForeignStateOwnerName(i) { return `Państwo: ${COUNTRY_DEFS[i.country]?.name || i.country}`; }
+
 function getForeignShareholders(i) {
     const list = [], add = (id, name, kind, shares, entity = null) => { if (shares >= 1) list.push({ id, name, kind, shares, pct: shares / i.totalShares, entity }); };
     for (const [id, qty] of Object.entries(i.holders || {})) {
         if (id === 'player') add('player', playerProfile?.fundName || 'Twój fundusz', 'player', Number(qty));
         else { const bot = aiCompetitors.find(b => b.id === id); if (bot) add(id, bot.isMafia ? 'Akcjonariusz nieujawniony' : bot.name, 'ai', Number(qty), bot); }
     }
-    if (i.statePack > 0) add('state', 'Skarb Państwa', 'state', i.statePack);
+    if (i.statePack > 0) add('state', getForeignStateOwnerName(i), 'state', i.statePack);
     if (i.parentPack > 0) { const parent = getForeignParent(i); add(`${i.parentId}:stake`, parent?.name || 'Spółka matka', 'company', i.parentPack, parent); }
     return list.sort((a, b) => b.shares - a.shares);
 }
