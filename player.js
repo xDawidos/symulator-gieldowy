@@ -1668,7 +1668,7 @@ function getFundAssets() {
     const ppp = typeof getFundPppValue === 'function' ? getFundPppValue() : 0;                 // projekty miejskie (city.js)
     const bridge = typeof getFundBridgeLoansValue === 'function' ? getFundBridgeLoansValue() : 0; // pożyczki pomostowe (finance.js)
     const projectBonds = typeof getFundProjectBondsValue === 'function' ? getFundProjectBondsValue() : 0; // obligacje projektowe (projects.js)
-    return Math.max(0, Number(playerCash) || 0) + getFundPortfolioValue() + getFundBondsValue() + deposits + ppp + bridge + projectBonds + getFundPoolValue() + (typeof getForeignCashPln === 'function' ? getForeignCashPln('player') : 0) + (typeof getFundGdrValue === 'function' ? getFundGdrValue() : 0) + (typeof getFundMarginValue === 'function' ? getFundMarginValue() : 0) + (typeof getHiddenBalance === 'function' ? getHiddenBalance() : 0); // 0.16.6 S1: rachunek w Waschmabanku liczy się do majątku; 0.16.1 G2b/G3: gotówka w walutach po kursie i kwity GDR; 0.16.4 G21: kapitał pozycji forex
+    return Math.max(0, Number(playerCash) || 0) + getFundPortfolioValue() + getFundBondsValue() + deposits + ppp + bridge + projectBonds + getFundPoolValue() + (typeof getForeignCashPln === 'function' ? getForeignCashPln('player') : 0) + (typeof getFundGdrValue === 'function' ? getFundGdrValue() : 0) + (typeof getFundMarginValue === 'function' ? getFundMarginValue() : 0) + (typeof getFundCommodityValue === 'function' ? getFundCommodityValue() : 0) + (typeof getHiddenBalance === 'function' ? getHiddenBalance() : 0); // 0.16.6 S1: rachunek w Waschmabanku liczy się do majątku; 0.16.1 G2b/G3: gotówka w walutach po kursie i kwity GDR; 0.16.4 G21: kapitał pozycji forex
 }
 
 /** 0.14.1 R2 (błąd B): pula w NAV — niezainwestowana część gracza (nominalnie) + jego wkłady przez pulę w żyjące startupy (po koszcie). */
@@ -2043,6 +2043,7 @@ function processFundWeekly() {
     chargeManagementFee();
     if (typeof stepFxRates === 'function') stepFxRates(); // 0.16.1 G2a: kursy walut co tydzień gry
     if (typeof stepCommodities === 'function') stepCommodities(); // 0.17 S1: ceny surowców co tydzień (przed depozytami)
+    if (typeof stepCommodityMarket === 'function') stepCommodityMarket(); // 0.17 S3: opłaty ETC/ETF, kontrakty botów
     if (typeof stepMarginPositions === 'function') stepMarginPositions(); // 0.16.4 G21: koszt utrzymania i margin call
     if (typeof stepForeignIssuers === 'function') stepForeignIssuers(); // 0.16.1 G3: ceny obcych gigantów (GDR)
     if (typeof stepCountries === 'function') stepCountries(); // 0.16.2 G5: rynki zagraniczne (countries.js)

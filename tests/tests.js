@@ -14866,3 +14866,162 @@ group('0.17 S2 Spółki i koszty wsadu', () => {
         resetGdrState(); initFxState();
     });
 });
+
+group('0.17 S3 Giełda towarowa', () => {
+    const startFund = (cash = 5_000_000) => { resetWorld([mk156('GA', { price: 100 })]); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' }); playerCash = cash; initFxState(); resetGdrState(); macro.quarter = 10; initCommodityState(); };
+    const done = fn => () => { try { return fn(); } finally { resetMarginState(); resetGdrState(); initFxState(); initCommodityState(); } };
+    test('S3 silnik: reguły rynku (dźwignia z instrumentu, spread, bez kosztu utrzymania), zapadalność z rozliczeniem po cenie z tego dnia, zapis `expires`; forex bez zmian', done(() => {
+        startFund();
+        let px = 100;
+        registerMarginMarket('_test', { name: 'test', priceOf: () => px, maxLeverageOf: inst => inst === 'A' ? 3 : 10, holdingCostYear: 0, entrySpread: 0.003, expiresOf: () => fxWeek + 2, settleOf: () => 120 });
+        try {
+            assert(!openMarginPosition({ market: '_test', instrument: 'A', side: 1, notional: 30_000, leverage: 4 }).ok, 'dźwignia ponad regułę instrumentu');
+            const cash0 = playerCash, r = openMarginPosition({ market: '_test', instrument: 'A', side: 1, notional: 30_000, leverage: 3 });
+            assert(r.ok, r.reason); assertEq(Math.round(cash0 - playerCash), 10_000 + 90, 'depozyt + spread 0,3% z reguły rynku');
+            assertEq(r.position.expires, fxWeek + 2, 'pole expires');
+            const snap = JSON.parse(JSON.stringify(getForexSnapshot())); applyForexSnapshot(snap);
+            assertEq(getMarginPositions('_test')[0].expires, r.position.expires, 'expires po wczytaniu');
+            fxWeek++; stepMarginPositions();
+            assertEq(getMarginPositions('_test')[0].accrued, 0, 'bez kosztu utrzymania');
+            const cash1 = playerCash; fxWeek++; stepMarginPositions();
+            assertEq(getMarginPositions('_test').length, 0, 'zamknięcie przy zapadalności');
+            assertEq(Math.round(playerCash - cash1), 10_000 + 6_000, 'rozliczenie po cenie z dnia zapadalności (120 zamiast 100)');
+            assertEq(marginClosedLog.at(-1).reason, 'expiry');
+            // forex: domyślne reguły silnika
+            joinCountry('DE');
+            const f = openForexPosition('EUR/USD', 1, 100_000, 10); assert(f.ok, f.reason);
+            assert(!('expires' in f.position), 'forex bez zapadalności');
+            fxWeek++; stepMarginPositions();
+            assertNear(getMarginPositions('forex')[0].accrued, 100_000 * 0.9 * MARGIN_RULES.holdingCostYear / 52, 'koszt utrzymania forexu jak dotąd', 1e-6);
+            assertEq(checkMarginInvariants().length, 0, 'niezmienniki silnika');
+        } finally { delete marginMarkets._test; }
+    }));
+    test('S3 kontrakty: F z backwardation nad średnią i contango pod nią; nazwa serii z kalendarza; 4 serie w ofercie', done(() => {
+        startFund();
+        assertEq(getContractName('oil', 10), 'OIL-R3Q3', 'Rok 3, kw. 3'); assertEq(parseContractName('OIL-R3Q3').absQ, 10);
+        assertEq(getContractSeries().length, 4, '4 zapadalności'); assertEq(getContractSeries()[0], macro.quarter, 'najbliższa: koniec bieżącego kwartału');
+        const M = getCommodityTarget('oil'), q = macro.quarter + 2;
+        commodityState.prices.oil = M * 1.5;
+        assert(getContractPriceUsd('oil', q) < getCommodityPrice('oil'), 'nad średnią: kontrakt tańszy (backwardation)'); assertEq(getContractStructure('oil', q), 'backwardation');
+        commodityState.prices.oil = M * 0.7;
+        assert(getContractPriceUsd('oil', q) > getCommodityPrice('oil'), 'pod średnią: kontrakt droższy (contango)'); assertEq(getContractStructure('oil', q), 'contango');
+        commodityState.qN = 13; assertNear(getContractPriceUsd('oil', macro.quarter), getCommodityPrice('oil'), 'w dniu zapadalności F = P', 1e-12);
+    }));
+    test('S3 kontrakty: zapadalność rozlicza gotówką po cenie bieżącej; „Przedłuż” przenosi pozycję na następną serię', done(() => {
+        startFund();
+        const series = getContractSeries(), r = openCommodityContract('gold', series[0], 1, 100_000, 5);
+        assert(r.ok, r.reason); assertEq(r.position.expires, fxWeek + getContractWeeksLeft(series[0]));
+        assertEq(Math.round(r.deposit), 20_000, 'depozyt 1:5');
+        const roll = rollCommodityContract(r.position.id); assert(roll.ok, roll.reason);
+        assertEq(roll.position.instrument, getContractName('gold', series[1]), 'następna seria'); assertEq(roll.position.notional, 100_000, 'ta sama wartość');
+        const pos = roll.position, cash0 = playerCash;
+        for (let w = 0; w < 40 && getMarginPositions('commodities').length; w++) { fxWeek++; stepCommodities(); if (commodityState.qN >= 13) { macro.quarter++; processCommoditiesQuarterly(); } stepMarginPositions(); }
+        assertEq(getMarginPositions('commodities').length, 0, 'kontrakt zapadł');
+        const last = marginClosedLog.at(-1); assertEq(last.reason, 'expiry');
+        assert(Math.abs(playerCash - cash0 - (pos.deposit + last.pnl)) < 1, 'gotówka = depozyt + wynik');
+    }));
+    test('S3 kontrakty: dźwignia wg surowca; limit łączny wspólny z forexem; margin call < 50% depozytu bez ujemnej gotówki', done(() => {
+        startFund(2_000_000);
+        const q = getContractSeries()[1];
+        assert(openCommodityContract('gold', q, 1, 50_000, 10).ok, 'złoto 1:10');
+        assert(!openCommodityContract('gas', q, 1, 50_000, 4).ok && openCommodityContract('gas', q, 1, 30_000, 3).ok, 'gaz najwyżej 1:3');
+        assert(!openCommodityContract('oil', q, 1, 50_000, 6).ok, 'ropa najwyżej 1:5');
+        joinCountry('DE');
+        const room = MARGIN_RULES.fundLeverageCap * getFundAssets() - getMarginNotional();
+        assert(openForexPosition('EUR/USD', 1, Math.floor(room) - 10_000, 10).ok, 'forex wypełnia limit');
+        assert(!openCommodityContract('metals', q, 1, 20_000, 5).ok, 'kontrakt ponad wspólny limit odrzucony');
+        for (const p of getMarginPositions()) closeMarginPosition(p.id);
+        const r = openCommodityContract('oil', q, 1, 100_000, 5); assert(r.ok, r.reason);
+        commodityState.prices.oil *= 0.85; // −15% przy 1:5 → kapitał ≈ 25% depozytu
+        stepMarginPositions();
+        assertEq(getMarginPositions('commodities').length, 0, 'zamknięcie automatyczne'); assertEq(marginClosedLog.at(-1).reason, 'margin');
+        assert(playerCash >= 0, 'gotówka nieujemna'); assertEq(checkMarginInvariants().length, 0);
+    }));
+    test('S3 exploit: „kup pod średnią i roluj” (200 przebiegów × 4 lata) ≤ lokata + 6 pp/rok', done(() => {
+        const quiet = {}; for (const k of Object.keys(COMMODITY_EVENTS)) { quiet[k] = COMMODITY_EVENTS[k].yearly; COMMODITY_EVENTS[k].yearly = 0; }
+        let logSum = 0, years = 0;
+        try {
+            for (let r = 0; r < 200; r++) {
+                macro.quarter = 1; initCommodityState();
+                for (let h = 0; h < 8; h++) { // półrocza bez nakładania: seria na koniec następnego kwartału (26 tyg.), rozliczenie po cenie z dnia zapadalności
+                    const buys = COMMODITY_IDS.filter(id => getCommodityPrice(id) < getCommodityTarget(id) * 0.9).map(id => [id, getContractPriceUsd(id, macro.quarter + 1)]);
+                    for (let q = 0; q < 2; q++) { for (let w = 0; w < 13; w++) stepCommodities(); macro.quarter++; processCommoditiesQuarterly(); }
+                    if (buys.length) logSum += buys.reduce((t, [id, f]) => t + Math.log(getCommodityPrice(id) / f), 0) / buys.length; // kapitał 1:1
+                    years += 0.5;
+                }
+            }
+        } finally { for (const k of Object.keys(quiet)) COMMODITY_EVENTS[k].yearly = quiet[k]; macro.quarter = 10; }
+        const annual = Math.exp(logSum / years) - 1, limit = getUsdRate() + 0.06;
+        assert(annual <= limit, `strategia ${(annual * 100).toFixed(2)}%/rok ≤ ${(limit * 100).toFixed(1)}%`);
+    }));
+    test('S3 ETC: wymaga „Eksperta Rynków Globalnych”; traci 0,4% rocznie względem ceny surowca; wchodzi do aktywów, nie do limitu dźwigni', done(() => {
+        startFund();
+        playerProfile.unlockedSkills = { ...(playerProfile.unlockedSkills || {}) }; delete playerProfile.unlockedSkills.etfExpert;
+        const lvl0 = getSkillLevel('etfExpert');
+        if (lvl0 < 1) assert(!buyCommodityFund('gold', 10_000).ok, 'bez umiejętności zablokowane');
+        const saved = getSkillLevel; getSkillLevel = id => id === 'etfExpert' ? 1 : saved(id);
+        try {
+            const assets0 = getFundAssets(), notional0 = getMarginNotional();
+            const r = buyCommodityFund('gold', 100_000); assert(r.ok, r.reason);
+            assertNear(getFundAssets(), assets0 - 200, 'aktywa spadły tylko o spread 0,2%', 1e-6);
+            assertEq(getMarginNotional(), notional0, 'ETC poza limitem dźwigni');
+            for (let w = 0; w < 52; w++) stepCommodityMarket();
+            assertNear(getCommodityFundPriceUsd('gold') / getCommodityPrice('gold'), 1 - 0.004, 'opłata roczna 0,4%', 1e-12);
+            const s = sellCommodityFund('gold', getCommodityFundUnits('gold')); assert(s.ok && getCommodityFundUnits('gold') === 0, 'sprzedaż całości');
+        } finally { getSkillLevel = saved; }
+    }));
+    test('S3 ETF „Koszyk Surowców”: równe wagi po rebalansie, wartość jednostki ciągła, opłata 0,6%/rok; zapis i wczytanie', done(() => {
+        startFund();
+        const saved = getSkillLevel; getSkillLevel = id => id === 'etfExpert' ? 1 : saved(id);
+        try {
+            assert(buyCommodityFund('basket', 50_000).ok, 'kupno koszyka');
+            for (let w = 0; w < 13; w++) { stepCommodities(); stepCommodityMarket(); }
+            const f = ensureCommodityFunds(), before = getCommodityFundPriceUsd('basket');
+            const shares = () => COMMODITY_IDS.map(id => f.bq[id] * getCommodityPrice(id));
+            assert(Math.max(...shares()) / Math.min(...shares()) > 1.001, 'przed rebalansem wagi się rozjechały');
+            rebalanceCommodityBasket();
+            assertNear(getCommodityFundPriceUsd('basket'), before, 'rebalans nie zmienia wartości jednostki', 1e-9);
+            stepCommodities(); macro.quarter++; processCommoditiesQuarterly();
+            assertNear(Math.max(...shares()) / Math.min(...shares()), 1, 'równe wagi po zamknięciu kwartału', 1e-9);
+            assertNear(f.bF, Math.pow(1 - 0.006, 13 / 52), 'opłata naliczana co tydzień (13 tyg.)', 1e-12);
+            const value = getFundCommodityValue(), snap = JSON.parse(JSON.stringify(getCommoditiesSnapshot()));
+            applyCommoditiesSnapshot(snap);
+            assertNear(getFundCommodityValue(), value, 'wartość po wczytaniu', 1e-6);
+            assertEq(JSON.stringify(getCommoditiesSnapshot()), JSON.stringify(snap), 'zapis bez strat');
+        } finally { getSkillLevel = saved; }
+    }));
+    test('S3 boty: agresywne boty krajowe otwierają małe pozycje (≤ 5% gotówki, ≤ 1:3) bez wpływu na ceny i rozliczają je przy zapadalności; pozycje zabezpieczające spółek', done(() => {
+        startFund();
+        const bots = getCommodityBotList();
+        assert(bots.length >= 2 && bots.every(b => COMMODITY_BOTS.personalities.includes(b.personality)), 'dwa boty agresywne');
+        for (const b of bots) b.cash = 1_000_000;
+        const withRandom = (v, fn) => { const r = Math.random; Math.random = () => v; try { return fn(); } finally { Math.random = r; } };
+        for (const id of COMMODITY_IDS) { const h = commodityState.hist[id]; for (let i = 0; i < 20; i++) h.unshift(COMMODITY_DEFS[id].mean * 0.7); } // wyraźny trend wzrostowy
+        const prices = JSON.stringify(commodityState.prices), cash0 = bots.reduce((s, b) => s + b.cash, 0);
+        withRandom(0.01, () => stepCommodityBots());
+        assertEq(JSON.stringify(commodityState.prices), prices, 'boty nie ruszają cenami');
+        const pos = ensureCommodityBots().pos;
+        assert(pos.length >= 1, 'pozycje otwarte');
+        for (const p of pos) { assert(p.deposit <= 0.05 * 1_000_000 + 1e-6 && p.lev <= 3, `mała pozycja (${p.deposit}, 1:${p.lev})`); }
+        const locked = pos.reduce((s, p) => s + p.deposit + p.spread, 0);
+        assertNear(bots.reduce((s, b) => s + b.cash, 0), cash0 - locked, 'depozyt i spread z gotówki botów', 1e-6);
+        for (let w = 0; w < 60 && ensureCommodityBots().pos.length; w++) { stepCommodities(); if (commodityState.qN >= 13) { macro.quarter++; processCommoditiesQuarterly(); } withRandom(0.99, () => stepCommodityBots()); }
+        const st = ensureCommodityBots();
+        assertEq(st.pos.length, 0, 'wszystkie rozliczone'); assertEq(st.stats.closed, st.stats.opened);
+        assertNear(bots.reduce((s, b) => s + b.cash, 0), cash0 + st.stats.pnl, 'gotówka = start + wynik na kontraktach', 1e-6);
+        assert(bots.every(b => b.cash >= 0), 'bez ujemnej gotówki');
+        stocks.push(Object.assign(mk156('CHM', { price: 50 }), { sector: ['Chemia'], segments: undefined }));
+        initializeFundamentals(stocks.at(-1));
+        const hedges = getCompanyHedgePositions();
+        assert(hedges.some(x => x.symbol === 'CHM' && x.id === 'oil' && x.value > 0 && x.h >= 0.3 && x.h <= 0.7), 'zabezpieczenie spółki chemicznej na ropie');
+    }));
+    test('S3 interfejs: zakładka giełdy towarowej (lista, serie, depozyt słowem i liczbą, zabezpieczenia) i ETC/ETF w panelu ETF', done(() => {
+        startFund();
+        const r = openCommodityContract('oil', getContractSeries()[1], 1, 50_000, 5); assert(r.ok, r.reason);
+        const html = renderCommodityTab();
+        for (const word of ['Złoto', 'Uran', 'OIL-', 'Przedłuż', 'bezpieczna', 'Pozycje zabezpieczające']) assert(html.includes(word), `zakładka zawiera: ${word}`);
+        assert(/contango|backwardation/.test(html), 'struktura krzywej słowem');
+        const box = document.createElement('div'); box.id = 'commodity-etf-box'; document.body.appendChild(box);
+        try { renderCommodityFundsBox(); assert(box.innerHTML.includes('Koszyk Surowców') && box.innerHTML.includes('ETC Ropa'), 'ETC i koszyk w panelu ETF'); } finally { box.remove(); }
+    }));
+});

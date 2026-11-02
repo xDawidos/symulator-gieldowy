@@ -1,7 +1,8 @@
 // forex.js: 0.16.4 G21. Ogólny silnik depozytu (marginEngine) i Forex z dźwignią.
 // Silnik jest niezależny od rynku: rynek rejestruje funkcję `priceOf(instrument)`, a pozycje (długie/krótkie, depozyt = wartość / dźwignia)
 // są wyceniane, obciążane kosztem utrzymania i zamykane automatycznie, gdy kapitał pozycji spadnie poniżej 50% depozytu.
-// 0.17 użyje tego samego silnika do kontraktów towarowych (wystarczy zarejestrować rynek).
+// 0.17 S3: kontrakty towarowe na tym samym silniku — rynek może podać `maxLeverageOf`, `holdingCostYear`, `entrySpread`,
+// `expiresOf(instrument)` (tydzień zapadalności → pozycja ma `expires`) i `settleOf(instrument)` (cena rozliczenia).
 // Pozycja nie ma wpływu na akcje; depozyt idzie z gotówki funduszu, a wartość pozycji wchodzi do aktywów (getFundAssets).
 
 const MARGIN_RULES = {
@@ -20,10 +21,13 @@ let marginNextId = 1;
 let marginClosedLog = [];     // ostatnie zamknięcia (do podglądu): { id, instrument, side, pnl, reason, w }
 
 function registerMarginMarket(id, def) { marginMarkets[id] = def; }
+/** 0.17 S3: reguły rynku nadpisują ogólne (`holdingCostYear`, `entrySpread`); dźwignia: `maxLeverageOf(instrument)`, nie więcej niż limit silnika. */
+function getMarginRule(market, key) { const v = marginMarkets[market]?.[key]; return Number.isFinite(v) ? v : MARGIN_RULES[key]; }
+function getMarginMaxLeverage(market, instrument) { const f = marginMarkets[market]?.maxLeverageOf, v = typeof f === 'function' ? Number(f(instrument)) : NaN; return Number.isFinite(v) ? Math.min(MARGIN_RULES.maxLeverage, v) : MARGIN_RULES.maxLeverage; }
 function resetMarginState() { marginPositions = []; marginNextId = 1; marginClosedLog = []; }
 
 function getMarginPositions(market) { return marginPositions.filter(p => !market || p.market === market); }
-function getMarginPrice(pos) { const m = marginMarkets[pos.market]; const price = m ? Number(m.priceOf(pos.instrument)) : NaN; return price > 0 ? price : pos.entry; }
+function getMarginPrice(pos) { if (pos.exit > 0) return pos.exit; const m = marginMarkets[pos.market]; const price = m ? Number(m.priceOf(pos.instrument)) : NaN; return price > 0 ? price : pos.entry; }
 function getMarginPnl(pos) { return pos.side * pos.notional * (getMarginPrice(pos) / pos.entry - 1); }
 /** Kapitał pozycji = depozyt + wynik − naliczony koszt utrzymania (nie spada poniżej 0: strata ograniczona do depozytu). */
 function getMarginEquity(pos) { return Math.max(0, pos.deposit + getMarginPnl(pos) - pos.accrued); }
@@ -38,15 +42,18 @@ function openMarginPosition({ market, instrument, side, notional, leverage }) {
     if (typeof playerFund !== 'object' || !playerFund) return { ok: false, reason: 'Pozycje otwiera fundusz.' };
     if (typeof isMarketHalted === 'function' && isMarketHalted()) return { ok: false, reason: 'Handel wstrzymany — zadziałał bezpiecznik giełdowy.' };
     side = side === -1 ? -1 : 1; notional = Number(notional); leverage = Math.floor(Number(leverage));
-    if (!(leverage >= 1 && leverage <= MARGIN_RULES.maxLeverage)) return { ok: false, reason: `Dźwignia od 1 do ${MARGIN_RULES.maxLeverage}.` };
+    const maxLev = getMarginMaxLeverage(market, instrument);
+    if (!(leverage >= 1 && leverage <= maxLev)) return { ok: false, reason: `Dźwignia od 1 do ${maxLev}.` };
     if (!(notional >= MARGIN_RULES.minNotional)) return { ok: false, reason: `Najmniejsza pozycja to ${MARGIN_RULES.minNotional} zł.` };
     const price = Number(m.priceOf(instrument));
     if (!(price > 0)) return { ok: false, reason: 'Nieznany instrument.' };
     if (getMarginNotional() + notional > MARGIN_RULES.fundLeverageCap * getFundAssets() + 1e-9) return { ok: false, reason: `Limit funduszu: pozycje do ${MARGIN_RULES.fundLeverageCap}× aktywów.` };
-    const deposit = notional / leverage, spread = notional * MARGIN_RULES.entrySpread;
+    const deposit = notional / leverage, spread = notional * getMarginRule(market, 'entrySpread');
     if (deposit + spread > playerCash + 1e-9) return { ok: false, reason: 'Za mało gotówki na depozyt i spread.' };
     playerCash -= deposit + spread;
     const pos = { id: marginNextId++, market, instrument, side, notional, leverage, deposit, entry: price, accrued: 0, warned: false, w: typeof fxWeek === 'number' ? fxWeek : 0 };
+    const expires = typeof m.expiresOf === 'function' ? Number(m.expiresOf(instrument)) : NaN; // 0.17 S3: kontrakt z zapadalnością (tydzień fxWeek)
+    if (Number.isFinite(expires)) pos.expires = expires;
     marginPositions.push(pos);
     if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('dzwigniaMarginCall');
     return { ok: true, position: pos, deposit, spread };
@@ -67,7 +74,15 @@ function closeMarginPosition(id, reason = 'manual') {
 /** Co tydzień: koszt utrzymania, ostrzeżenie o niedoborze depozytu i automatyczne zamknięcie. */
 function stepMarginPositions() {
     for (const pos of marginPositions.slice()) {
-        pos.accrued += pos.notional * (1 - 1 / pos.leverage) * MARGIN_RULES.holdingCostYear / 52;
+        const week = typeof fxWeek === 'number' ? fxWeek : 0, m = marginMarkets[pos.market];
+        if (Number.isFinite(pos.expires) && week >= pos.expires) { // 0.17 S3: zapadalność — rozliczenie gotówkowe po cenie z dnia zapadalności
+            const settle = typeof m?.settleOf === 'function' ? Number(m.settleOf(pos.instrument)) : NaN;
+            if (settle > 0) pos.exit = settle;
+            const res = closeMarginPosition(pos.id, 'expiry');
+            if (typeof logEvent === 'function') logEvent(`📅 Zapadalność: kontrakt ${pos.instrument} (${pos.side > 0 ? 'długi' : 'krótki'}) rozliczony gotówką, wynik ${res.pnl >= 0 ? '+' : ''}${formatZl(res.pnl, 0)}.`, 'review');
+            continue;
+        }
+        pos.accrued += pos.notional * (1 - 1 / pos.leverage) * getMarginRule(pos.market, 'holdingCostYear') / 52;
         const coverage = getMarginCoverage(pos);
         if (coverage < MARGIN_RULES.closeBelow) {
             const res = closeMarginPosition(pos.id, 'margin');
@@ -103,7 +118,7 @@ function applyForexSnapshot(snapshot) {
     if (!snapshot || typeof snapshot !== 'object') return;
     for (const p of Array.isArray(snapshot.p) ? snapshot.p : []) {
         if (!marginMarkets[p?.market] || !(p.deposit > 0) || !(p.entry > 0) || !(p.notional > 0) || !(p.leverage >= 1 && p.leverage <= MARGIN_RULES.maxLeverage)) continue;
-        marginPositions.push({ id: Number(p.id) || marginNextId, market: p.market, instrument: String(p.instrument), side: p.side === -1 ? -1 : 1, notional: Number(p.notional), leverage: Math.floor(p.leverage), deposit: Number(p.deposit), entry: Number(p.entry), accrued: Math.max(0, Number(p.accrued) || 0), warned: Boolean(p.warned), w: Number(p.w) || 0 });
+        marginPositions.push({ id: Number(p.id) || marginNextId, market: p.market, instrument: String(p.instrument), side: p.side === -1 ? -1 : 1, notional: Number(p.notional), leverage: Math.floor(p.leverage), deposit: Number(p.deposit), entry: Number(p.entry), accrued: Math.max(0, Number(p.accrued) || 0), warned: Boolean(p.warned), w: Number(p.w) || 0, ...(Number.isFinite(p.expires) ? { expires: Number(p.expires) } : {}) });
     }
     marginNextId = Math.max(Number(snapshot.n) || 1, 1 + marginPositions.reduce((m, p) => Math.max(m, p.id), 0));
     marginClosedLog = Array.isArray(snapshot.l) ? snapshot.l.slice(-20) : [];
@@ -113,7 +128,7 @@ function checkMarginInvariants() {
     for (const p of marginPositions) {
         if (ids.has(p.id)) problems.push(`pozycja ${p.id} zdublowana`);
         ids.add(p.id);
-        if (!(p.leverage >= 1 && p.leverage <= MARGIN_RULES.maxLeverage)) problems.push(`pozycja ${p.id}: dźwignia ${p.leverage}`);
+        if (!(p.leverage >= 1 && p.leverage <= getMarginMaxLeverage(p.market, p.instrument))) problems.push(`pozycja ${p.id}: dźwignia ${p.leverage}`);
         if (Math.abs(p.deposit - p.notional / p.leverage) > 1e-6) problems.push(`pozycja ${p.id}: depozyt ${p.deposit} ≠ wartość/dźwignia`);
         if (!Number.isFinite(getMarginEquity(p))) problems.push(`pozycja ${p.id}: kapitał nie jest liczbą`);
     }

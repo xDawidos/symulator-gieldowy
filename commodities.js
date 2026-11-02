@@ -50,7 +50,7 @@ const COMMODITY_GOLD_CRISES = ['banking', 'black', 'pandemic'];
 
 let commodityState = null; // { startQ, w, prices, hist, qHist, qSum, qN, events: [{ id, until, shocks: {id: s}, product? }], lastDroughtQ }
 
-function commodityQuarterInYear(q = macro.quarter) { return ((q - 1) % 4 + 4) % 4 + 1; }
+function commodityQuarterInYear(q = macro.quarter) { return ((q % 4) + 4) % 4 + 1; } // kalendarz gry: formatQuarterDate (campaigns.js)
 
 function initCommodityState() {
     const q = typeof macro === 'object' ? macro.quarter : 0;
@@ -172,6 +172,7 @@ function processCommoditiesQuarterly() {
         st.qSum[id] = 0;
     }
     st.qN = 0;
+    if (typeof rebalanceCommodityBasket === 'function' && st.funds) rebalanceCommodityBasket(); // S3
     for (const id of COMMODITY_IDS) { const [lo, hi] = getCommodityBand(id); st.prices[id] = Math.min(hi, Math.max(lo, st.prices[id])); } // widełki rosną z inflacją co kwartał
     st.events = st.events.filter(ev => ev.until > macro.quarter);
     for (const key of ['embargo', 'strike', 'harvest', 'reactor']) {
@@ -193,7 +194,7 @@ function noteCrisisForCommodities(lineId) { return COMMODITY_GOLD_CRISES.include
 function getCommoditiesSnapshot() {
     const st = ensureCommodityState(), r = x => Math.round(x * 1e4) / 1e4, rs = x => Number(x.toPrecision(5));
     const map = f => Object.fromEntries(COMMODITY_IDS.map(id => [id, f(id)]));
-    return { s: st.startQ, w: st.w, p: map(id => st.prices[id]), h: map(id => st.hist[id].map(rs)), q: map(id => st.qHist[id].map(rs)), qs: map(id => r(st.qSum[id] || 0)), qn: st.qN, e: st.events, d: st.lastDroughtQ, r: st.run };
+    return { s: st.startQ, w: st.w, p: map(id => st.prices[id]), h: map(id => st.hist[id].map(rs)), q: map(id => st.qHist[id].map(rs)), qs: map(id => r(st.qSum[id] || 0)), qn: st.qN, e: st.events, d: st.lastDroughtQ, r: st.run, f: st.funds, b: st.bots }; // f, b: S3 (ETC/ETF, kontrakty botów)
 }
 function applyCommoditiesSnapshot(snap) {
     initCommodityState(); // stary zapis bez pola: ceny średnie
@@ -207,6 +208,8 @@ function applyCommoditiesSnapshot(snap) {
         const q = (snap.q?.[id] || []).map(Number).filter(v => v > 0); if (q.length) st.qHist[id] = q.slice(-COMMODITY_RULES.historyQuarters);
         st.qSum[id] = Number(snap.qs?.[id]) || 0;
     }
+    if (snap.f && typeof snap.f === 'object' && snap.f.bq) st.funds = { etcF: Number(snap.f.etcF) || 1, bF: Number(snap.f.bF) || 1, bq: Object.fromEntries(COMMODITY_IDS.map(id => [id, Number(snap.f.bq[id]) > 0 ? Number(snap.f.bq[id]) : COMMODITY_DEFS[id].mean])), units: Object.fromEntries(Object.entries(snap.f.units || {}).filter(([k, u]) => (k === 'basket' || COMMODITY_DEFS[k]) && Number(u) > 0).map(([k, u]) => [k, Number(u)])) };
+    if (snap.b && typeof snap.b === 'object') st.bots = snap.b;
     if (snap.r && typeof snap.r === 'object') st.run = Object.fromEntries(Object.entries(snap.r).filter(([k, v]) => COMMODITY_DEFS[k] && Number.isFinite(v?.n)).map(([k, v]) => [k, { sign: Math.sign(Number(v.sign) || 0), n: v.n }]));
     st.events = (Array.isArray(snap.e) ? snap.e : []).filter(ev => COMMODITY_EVENTS[ev?.id] && Number.isFinite(ev.until) && ev.shocks && typeof ev.shocks === 'object')
         .map(ev => ({ id: ev.id, until: ev.until, shocks: Object.fromEntries(Object.entries(ev.shocks).filter(([k, v]) => COMMODITY_DEFS[k] && Number.isFinite(v))), ...(COMMODITY_DEFS[ev.product] ? { product: ev.product } : {}) }));
