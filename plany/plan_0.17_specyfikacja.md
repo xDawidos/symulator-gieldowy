@@ -139,11 +139,59 @@ Nowy plik `commodities.js` (rejestr, krok tygodniowy, historia, zapis).
 
 ## S5 — Infrastruktura publiczna i PPP
 
-- **Przepustowość** kraju startowego dla rodzajów: morski (porty), lotniczy (lotniska), lądowy (tory i autostrady); start 1,0, spada 2%/rok bez inwestycji (zużycie), widełki 0,7–1,5.
-- **Projekty** (nowe typy w `PPP_PROJECT_TYPES` i katalog inwestycji państwa):
+Zmiany użytkownika 2026-11-03 (decyzja 23): koszty ×2, projekty bez nazw własnych, limity obiektów w kraju, ustawa o finansowaniu infrastruktury (5 poziomów, poglądy partii), autostrady w odcinkach z osobnymi przetargami, test dłuższego czasu budowy.
 
-| Projekt | Rodzaj | Przepustowość | Koszt (jedn. gry) | Budowa |
-|---|---|---|---|---|
+### Przepustowość
+- Kraj startowy ma przepustowość dla trzech rodzajów: morski (porty), lotniczy (lotniska), lądowy (magistrale kolejowe i autostrady). Start 1,0 (tyle S4 przyjmuje dziś na stałe).
+- Zużycie co roku zależy od poziomu ustawy (tabela niżej). Dolna granica 0,7; górna = 1 + limit obiektów × przyrost (morski 1,45, lotniczy 1,30, lądowy 1,88).
+- Przepustowość wchodzi do wzoru indeksu frachtu S4 (`(1/przepustowość)^k`).
+
+### Projekty (nowe typy w katalogu inwestycji państwa; bez nazw własnych)
+
+| Projekt | Rodzaj | Przepustowość | Koszt (jedn. gry) | Budowa | Limit w kraju |
+|---|---|---|---|---|---|
+| Port morski (rozbudowa terminalu) | morski | +0,15 | 3,2 mln | 8–12 kw. | 3 |
+| Lotnisko | lotniczy | +0,15 | 2,8 mln | 8–12 kw. | 2 |
+| Magistrala kolejowa | lądowy | +0,10 | 2,0 mln | 6–10 kw. | 4 |
+| Autostrada (2–5 odcinków) | lądowy | +0,08 (po równo na odcinek) | 1,6 mln (po równo na odcinek, ±10%) | 4–8 kw. na odcinek | 6 (wstępnie) |
+
+- **Limit** liczy obiekty ukończone i w budowie. Po osiągnięciu limitu państwo nie ogłasza już projektu tego typu; przepustowość trzyma wtedy tylko ustawa (zużycie).
+- **Slot budowy:** port, lotnisko i magistrala zajmują po 1 slocie wykonawcy (`constructionStats.maxProjects`); autostrada zajmuje **1 slot na odcinek**.
+- **Przyrost przepustowości** przy ukończeniu obiektu; autostrada podnosi przepustowość po każdym ukończonym odcinku (0,08 / liczba odcinków).
+- **Czas budowy — do testu w serii:** warianty ×1 (tabela) i ×1,5. W raporcie: ukończone projekty na grę, średnio zajęte sloty Budowlanego przez infrastrukturę, deficyt budżetu. Wybór wariantu należy do użytkownika po raporcie.
+
+### Ustawa „Finansowanie infrastruktury” (nowa w `SOCIAL_LAWS`, klucz `infrastructure`, start: Utrzymanie)
+
+| Poziom | Wydatki na infrastrukturę (% wpływów budżetu, co kwartał) | Zużycie przepustowości / rok | Szansa ogłoszenia projektu / rok |
+|---|---|---|---|
+| 0 Porzucenie | 0% | 5% | 0% |
+| 1 Łatanie dziur | 1% | 3,5% | 10% |
+| 2 Utrzymanie (start) | 2% | 2% | 25% |
+| 3 Rozbudowa | 3% | 1% | 45% |
+| 4 Autostrady na wczoraj | 4,5% | 0,5% | 70% |
+
+- Wydatki to nowa linia budżetu (`budget.infrastructureSpending`), wliczana do `budget.spending`, więc podnosi deficyt. Koszt projektów płaci państwo (`governmentTreasury`) w ratach przez czas budowy, część może pokryć PPP gracza.
+- Szansa projektu ×0,5 przy deficycie (`budget.deficitQuarters > 0`). Typ projektu losowany spośród typów poniżej limitu, z wagą tym większą, im niższa przepustowość danego rodzaju.
+- **Poglądy partii** (`PARTY_PROGRAMS.moves`): Blok Państwowy +1 (wielkie inwestycje państwa), Ludowcy +1 (drogi i kolej w regionach), Koalicja Rynkowa −1 (cięcia wydatków; wolą PPP), Socjaldemokraci bez ruchu (wolą wydatki socjalne).
+- **Reakcja kursów na ogłoszenie zmiany** (`LAW_ANNOUNCEMENT_EFFECTS`): +1 → Budowlany +3%, Transport i logistyka +1%; −1 → Budowlany −2%, Transport i logistyka −0,5%.
+- Ustawa w zakładce Państwo → Ustawy jak pozostałe (opis poziomów, kto chce zmiany).
+
+### Przetarg (zamawiający: państwo; kryterium „cena > jakość”)
+- Wagi kryteriów: cena 0,6, jakość (czas i doświadczenie) 0,25, wolne moce 0,15; bez premii „państwowy wykonawca”.
+- **Port, lotnisko, magistrala:** jeden przetarg, jedna oferta na firmę, wygrywa najwyższa ocena (istniejąca ścieżka ofert i ocen przetargów).
+- **Autostrada:** każdy odcinek to osobna pozycja przetargu. Firma budowlana zgłasza ofertę na **od 1 do wszystkich odcinków** (najwyżej tyle, ile ma wolnych slotów), z ceną za każdy odcinek; za pakiet może dać rabat (−2% za każdy odcinek ponad pierwszy).
+- Państwo wybiera **podział odcinków między firmy o najniższym łącznym koszcie ocenionym kryteriami** (pełny przegląd kombinacji, odcinków ≤ 5): jeśli dwie firmy razem wychodzą taniej niż jedna z rabatem pakietowym, dostają po części odcinków. Odcinek bez oferty wraca do przetargu w następnym kwartale.
+- Dziennik: „Autostrada (4 odcinki): odcinki 1–2 — ABL, odcinki 3–4 — [firma]; łącznie X zł”.
+
+### Pozostałe
+- Gracz może współfinansować projekt przez **ofertę PPP** (istniejące `PPP_FUND_LIMIT`, `PPP_RECOVERY`); autostrada jako jedna oferta PPP na cały projekt.
+- **Interwencje państwa 0.15.3:** „program robót publicznych” w Czarnym czwartku i bessie zamawia projekt z tej listy (poniżej limitu) zamiast samej dopłaty dla Budowlanego → **domyka odstępstwo 6** z `kontrola_0.15.3.md`.
+- Po ukończeniu: przepustowość ↑ → niższy indeks frachtu w kraju → niższy koszt transportu sektorów krajowych, a przewoźnicy krajowi +5% wolumenu.
+- Zapis: pola opcjonalne (przepustowość, liczniki obiektów, projekty w toku z odcinkami); nowa ustawa w starym zapisie startuje od Utrzymania.
+
+**Testy S5 (ok. 8):** projekt podnosi przepustowość po ukończeniu (autostrada po każdym odcinku); zużycie zależy od poziomu ustawy; limit obiektów blokuje kolejny projekt typu; ustawa: wydatki w budżecie i ruchy partii; przetarg autostrady dzieli odcinki między dwie firmy, gdy tak taniej, i daje wszystkie jednej, gdy pakiet tańszy; odcinek zajmuje slot wykonawcy; PPP z udziałem gracza rozlicza się jak dotąd; interwencja kryzysowa zamawia projekt; stary zapis wczytuje się z ustawą na Utrzymaniu.
+
+---|---|---|---|---|
 | Port „Wałęsa Shipment” (rozbudowa terminalu) | morski | +0,15 | 1,6 mln | 8–12 kw. |
 | Lotnisko „Chopin Industry Airport” | lotniczy | +0,15 | 1,4 mln | 8–12 kw. |
 | Magistrala kolejowa | lądowy | +0,10 | 1,0 mln | 6–10 kw. |
