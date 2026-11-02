@@ -2823,6 +2823,7 @@ function displayEtfs() {
         };
         actionsCell.appendChild(sellButton);
     });
+    if (typeof renderCommodityFundsBox === 'function') renderCommodityFundsBox(); // 0.17 S3: ETC i ETF koszykowy
 }
 
 function displayMarketIndexes() {

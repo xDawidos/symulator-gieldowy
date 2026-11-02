@@ -15009,4 +15009,13 @@ group('0.17 S3 Giełda towarowa', () => {
         const hedges = getCompanyHedgePositions();
         assert(hedges.some(x => x.symbol === 'CHM' && x.id === 'oil' && x.value > 0 && x.h >= 0.3 && x.h <= 0.7), 'zabezpieczenie spółki chemicznej na ropie');
     }));
+    test('S3 interfejs: zakładka giełdy towarowej (lista, serie, depozyt słowem i liczbą, zabezpieczenia) i ETC/ETF w panelu ETF', done(() => {
+        startFund();
+        const r = openCommodityContract('oil', getContractSeries()[1], 1, 50_000, 5); assert(r.ok, r.reason);
+        const html = renderCommodityTab();
+        for (const word of ['Złoto', 'Uran', 'OIL-', 'Przedłuż', 'bezpieczna', 'Pozycje zabezpieczające']) assert(html.includes(word), `zakładka zawiera: ${word}`);
+        assert(/contango|backwardation/.test(html), 'struktura krzywej słowem');
+        const box = document.createElement('div'); box.id = 'commodity-etf-box'; document.body.appendChild(box);
+        try { renderCommodityFundsBox(); assert(box.innerHTML.includes('Koszyk Surowców') && box.innerHTML.includes('ETC Ropa'), 'ETC i koszyk w panelu ETF'); } finally { box.remove(); }
+    }));
 });

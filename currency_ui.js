@@ -104,7 +104,7 @@ function renderKantor() {
     if (!body || !playerFund) { if (body) body.innerHTML = '<p class="text-muted">Kantor działa po założeniu funduszu.</p>'; return; }
     const ticker = document.getElementById('kantor-ticker');
     if (ticker) ticker.textContent = `Gotówka funduszu: ${formatZl(playerCash, 0)} · waluty: ${formatZl(getForeignCashPln('player'), 0)} · kwity GDR: ${formatZl(getFundGdrValue(), 0)}`;
-    body.innerHTML = kantorTab === 'foreign' ? renderForeignTab() : (kantorTab === 'forex' && typeof renderForexTab === 'function') ? renderForexTab() : (kantorTab === 'markets' && typeof renderMarketsTab === 'function') ? renderMarketsTab() : renderRatesTab();
+    body.innerHTML = kantorTab === 'foreign' ? renderForeignTab() : (kantorTab === 'forex' && typeof renderForexTab === 'function') ? renderForexTab() : (kantorTab === 'markets' && typeof renderMarketsTab === 'function') ? renderMarketsTab() : (kantorTab === 'commodities' && typeof renderCommodityTab === 'function') ? renderCommodityTab() : renderRatesTab();
     if (kantorTab === 'rates') updateKantorQuote();
 }
 
