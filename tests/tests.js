@@ -14973,14 +14973,40 @@ group('0.17 S3 Giełda towarowa', () => {
             const f = ensureCommodityFunds(), before = getCommodityFundPriceUsd('basket');
             const shares = () => COMMODITY_IDS.map(id => f.bq[id] * getCommodityPrice(id));
             assert(Math.max(...shares()) / Math.min(...shares()) > 1.001, 'przed rebalansem wagi się rozjechały');
-            macro.quarter++; processCommoditiesQuarterly();
+            rebalanceCommodityBasket();
             assertNear(getCommodityFundPriceUsd('basket'), before, 'rebalans nie zmienia wartości jednostki', 1e-9);
-            assertNear(Math.max(...shares()) / Math.min(...shares()), 1, 'równe wagi', 1e-9);
-            assertNear(f.bF, Math.pow(1 - 0.006, 13 / 52), 'opłata naliczana co tydzień', 1e-12);
+            stepCommodities(); macro.quarter++; processCommoditiesQuarterly();
+            assertNear(Math.max(...shares()) / Math.min(...shares()), 1, 'równe wagi po zamknięciu kwartału', 1e-9);
+            assertNear(f.bF, Math.pow(1 - 0.006, 13 / 52), 'opłata naliczana co tydzień (13 tyg.)', 1e-12);
             const value = getFundCommodityValue(), snap = JSON.parse(JSON.stringify(getCommoditiesSnapshot()));
             applyCommoditiesSnapshot(snap);
             assertNear(getFundCommodityValue(), value, 'wartość po wczytaniu', 1e-6);
             assertEq(JSON.stringify(getCommoditiesSnapshot()), JSON.stringify(snap), 'zapis bez strat');
         } finally { getSkillLevel = saved; }
+    }));
+    test('S3 boty: agresywne boty krajowe otwierają małe pozycje (≤ 5% gotówki, ≤ 1:3) bez wpływu na ceny i rozliczają je przy zapadalności; pozycje zabezpieczające spółek', done(() => {
+        startFund();
+        const bots = getCommodityBotList();
+        assert(bots.length >= 2 && bots.every(b => COMMODITY_BOTS.personalities.includes(b.personality)), 'dwa boty agresywne');
+        for (const b of bots) b.cash = 1_000_000;
+        const withRandom = (v, fn) => { const r = Math.random; Math.random = () => v; try { return fn(); } finally { Math.random = r; } };
+        for (const id of COMMODITY_IDS) { const h = commodityState.hist[id]; for (let i = 0; i < 20; i++) h.unshift(COMMODITY_DEFS[id].mean * 0.7); } // wyraźny trend wzrostowy
+        const prices = JSON.stringify(commodityState.prices), cash0 = bots.reduce((s, b) => s + b.cash, 0);
+        withRandom(0.01, () => stepCommodityBots());
+        assertEq(JSON.stringify(commodityState.prices), prices, 'boty nie ruszają cenami');
+        const pos = ensureCommodityBots().pos;
+        assert(pos.length >= 1, 'pozycje otwarte');
+        for (const p of pos) { assert(p.deposit <= 0.05 * 1_000_000 + 1e-6 && p.lev <= 3, `mała pozycja (${p.deposit}, 1:${p.lev})`); }
+        const locked = pos.reduce((s, p) => s + p.deposit + p.spread, 0);
+        assertNear(bots.reduce((s, b) => s + b.cash, 0), cash0 - locked, 'depozyt i spread z gotówki botów', 1e-6);
+        for (let w = 0; w < 60 && ensureCommodityBots().pos.length; w++) { stepCommodities(); if (commodityState.qN >= 13) { macro.quarter++; processCommoditiesQuarterly(); } withRandom(0.99, () => stepCommodityBots()); }
+        const st = ensureCommodityBots();
+        assertEq(st.pos.length, 0, 'wszystkie rozliczone'); assertEq(st.stats.closed, st.stats.opened);
+        assertNear(bots.reduce((s, b) => s + b.cash, 0), cash0 + st.stats.pnl, 'gotówka = start + wynik na kontraktach', 1e-6);
+        assert(bots.every(b => b.cash >= 0), 'bez ujemnej gotówki');
+        stocks.push(Object.assign(mk156('CHM', { price: 50 }), { sector: ['Chemia'], segments: undefined }));
+        initializeFundamentals(stocks.at(-1));
+        const hedges = getCompanyHedgePositions();
+        assert(hedges.some(x => x.symbol === 'CHM' && x.id === 'oil' && x.value > 0 && x.h >= 0.3 && x.h <= 0.7), 'zabezpieczenie spółki chemicznej na ropie');
     }));
 });

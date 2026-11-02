@@ -1203,7 +1203,9 @@ const PROBE_017 = `(function () {
             const k = Array.isArray(x.sector) ? x.sector[0] : x.sector, h = x.fundamentals.history.slice(-4), a = sec[k] || (sec[k] = [0, 0, 0]);
             a[0] += h.reduce((t, y) => t + (Number(y.ebitda) || 0), 0); a[1] += h.reduce((t, y) => t + (Number(y.revenue) || 0), 0); a[2]++;
         }
-        r.s017 = { ...T, capPl: Math.round(capPl), capForeign: Math.round(capForeign), secMargin: Object.fromEntries(Object.entries(sec).filter(([, a]) => a[1] > 0).map(([k, a]) => [k, [+(a[0] / a[1]).toFixed(4), a[2]]])) };
+        r.s017 = { ...T, capPl: Math.round(capPl), capForeign: Math.round(capForeign), secMargin: Object.fromEntries(Object.entries(sec).filter(([, a]) => a[1] > 0).map(([k, a]) => [k, [+(a[0] / a[1]).toFixed(4), a[2]]])),
+            // 0.17 S3: surowce na koniec (cena / średnia), wynik botów na kontraktach, otwarte pozycje gracza na towarach
+            com: typeof commodityState === 'object' && commodityState ? { px: Object.fromEntries(COMMODITY_IDS.map(id => [id, +(commodityState.prices[id] / COMMODITY_DEFS[id].mean).toFixed(3)])), bots: commodityState.bots?.stats || null, botOpen: commodityState.bots?.pos?.length || 0, ev: commodityState.events.map(e => e.id), playerPos: typeof getMarginPositions === 'function' ? getMarginPositions('commodities').length : null } : null };
         return r;
     };
 })();`;

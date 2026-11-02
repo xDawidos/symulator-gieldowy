@@ -140,3 +140,62 @@ function rebalanceCommodityBasket() {
     const f = ensureCommodityFunds(), raw = COMMODITY_IDS.reduce((s, id) => s + f.bq[id] * getCommodityPrice(id), 0);
     for (const id of COMMODITY_IDS) f.bq[id] = raw / COMMODITY_IDS.length / getCommodityPrice(id);
 }
+
+// =================================================================================
+// 0.17 S3: BOTY — spekulanci (2 krajowe boty agresywne, małe pozycje) i pozycje zabezpieczające spółek (tylko podgląd)
+// =================================================================================
+// Pozycje botów są w `commodityState.bots` (zapis surowców), nie w silniku gracza; ceny nie zależą od botów.
+const COMMODITY_BOTS = { personalities: ['reckless', 'yolo_trader'], maxPositions: 2, openChance: 0.06, maxCashShare: 0.05, maxLeverage: 3, trendWeeks: 13, trendBand: 0.05, revertBand: 0.1, minDeposit: 500 };
+
+function ensureCommodityBots() { const st = ensureCommodityState(); return st.bots || (st.bots = { pos: [], stats: { opened: 0, closed: 0, margin: 0, pnl: 0 } }); }
+function getCommodityBotList() { return (typeof aiCompetitors !== 'undefined' ? aiCompetitors : []).filter(ai => !ai.isForeignBot && COMMODITY_BOTS.personalities.includes(ai.personality)); }
+function getCommodityBotEquity(p) { const price = marginMarkets.commodities.priceOf(p.inst); return Math.max(0, p.deposit + p.side * p.notional * ((price > 0 ? price : p.entry) / p.entry - 1)); }
+
+/** Sygnał bota: trend 13-tygodniowy, a bez trendu powrót do średniej. 1 = długa, −1 = krótka, 0 = nic. */
+function getCommodityBotSignal(id) {
+    const h = ensureCommodityState().hist[id], P = getCommodityPrice(id), past = h[h.length - 1 - COMMODITY_BOTS.trendWeeks];
+    if (past > 0 && Math.abs(P / past - 1) > COMMODITY_BOTS.trendBand) return Math.sign(P / past - 1);
+    const dev = P / getCommodityTarget(id) - 1;
+    return dev > COMMODITY_BOTS.revertBand ? -1 : dev < -COMMODITY_BOTS.revertBand ? 1 : 0;
+}
+function closeCommodityBotPosition(b, p, reason) {
+    const equity = reason === 'expiry' ? Math.max(0, p.deposit + p.side * p.notional * (marginMarkets.commodities.settleOf(p.inst) / p.entry - 1)) : getCommodityBotEquity(p);
+    const bot = aiCompetitors.find(ai => ai.id === p.bot);
+    if (bot) bot.cash += equity;
+    b.pos = b.pos.filter(x => x !== p);
+    b.stats.closed++; if (reason === 'margin') b.stats.margin++;
+    b.stats.pnl += equity - p.deposit - p.spread;
+}
+function stepCommodityBots() {
+    const b = ensureCommodityBots();
+    for (const p of b.pos.slice()) {
+        const c = parseContractName(p.inst);
+        if (!c || !aiCompetitors.some(ai => ai.id === p.bot)) { b.pos = b.pos.filter(x => x !== p); continue; }
+        if (getContractWeeksLeft(c.absQ) <= 0 || macro.quarter > c.absQ) closeCommodityBotPosition(b, p, 'expiry');
+        else if (getCommodityBotEquity(p) < MARGIN_RULES.closeBelow * p.deposit) closeCommodityBotPosition(b, p, 'margin');
+    }
+    for (const bot of getCommodityBotList()) {
+        if (b.pos.filter(p => p.bot === bot.id).length >= COMMODITY_BOTS.maxPositions || !(Math.random() < COMMODITY_BOTS.openChance)) continue;
+        const id = getRandomElement(COMMODITY_IDS), side = getCommodityBotSignal(id);
+        const deposit = Math.floor((Number(bot.cash) || 0) * COMMODITY_BOTS.maxCashShare * getRandomInRange(0.3, 1));
+        if (!side || !(deposit >= COMMODITY_BOTS.minDeposit)) continue;
+        const absQ = getRandomElement(getContractSeries().slice(0, 3)), inst = getContractName(id, absQ);
+        const lev = 1 + Math.floor(Math.random() * Math.min(COMMODITY_BOTS.maxLeverage, COMMODITY_MARKET.leverage[id])), notional = deposit * lev;
+        const spread = notional * COMMODITY_MARKET.entrySpread, entry = marginMarkets.commodities.priceOf(inst);
+        if (!(entry > 0) || deposit + spread > bot.cash) continue;
+        bot.cash -= deposit + spread;
+        b.pos.push({ bot: bot.id, inst, side, notional, lev, deposit, spread, entry });
+        b.stats.opened++;
+    }
+}
+
+/** Pozycje zabezpieczające spółek krajowych (h z S2, tylko informacja): wartość = h × udział wsadu × przychód kwartału. */
+function getCompanyHedgePositions(limit = 12) {
+    const out = [];
+    for (const s of stocks) {
+        if (s.assetType || s.isBankrupt || !s.fundamentals) continue;
+        const prof = getStockCommodityProfile(s), h = getStockCommodityHedge(s), rev = Number(s.fundamentals.revenue) || 0;
+        for (const [id, share] of Object.entries(prof.input)) if (share > 0 && rev > 0) out.push({ symbol: s.symbol, name: s.name, id, h, value: h * share * rev, series: getContractName(id, macro.quarter + 3) });
+    }
+    return out.sort((a, b) => b.value - a.value).slice(0, limit);
+}
