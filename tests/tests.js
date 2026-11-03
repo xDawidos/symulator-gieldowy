@@ -15427,3 +15427,112 @@ group('0.17 S5 Lotnisko i port S5 zamiast megaprojektów miasta (decyzja 24)', (
         assert(hasLinkInfrastructure(), 'infrastruktura jest');
     }));
 });
+
+group('0.17 S6 Zbrojenia, surowce i bezpieczeństwo państwa', () => {
+    const withRandom = (v, fn) => { const r = Math.random; Math.random = () => v; try { return fn(); } finally { Math.random = r; } };
+    const withDefense = fn => () => {
+        const def0 = society.defense, t0 = governmentTreasury, budget0 = JSON.parse(JSON.stringify(society.budget)), el0 = JSON.parse(JSON.stringify(macro.election));
+        const police0 = oversight.police.level, budgetP0 = oversight.police.budget, corr0 = oversight.corruption, ev0 = ensureCommodityState().events;
+        try {
+            society.defense = undefined; ensureDefense(); governmentTreasury = 50_000_000;
+            macro.election.ruling = 'market'; macro.election.coalition = null;
+            return fn();
+        } finally {
+            society.defense = def0; governmentTreasury = t0; society.budget = budget0; macro.election = el0;
+            oversight.police.level = police0; oversight.police.budget = budgetP0; oversight.corruption = corr0; ensureCommodityState().events = ev0;
+        }
+    };
+    const police = () => getInstitutionEffectiveness(oversight.police);
+
+    test('S6: udział obronny partii (2% / 3,5% / 2% / 1,5%), koalicja średnia ważona, ×1,5 po embargu', withDefense(() => {
+        const share = ruling => { macro.election.ruling = ruling; return getDefenseShare(); };
+        assertEq([share('market'), share('state'), share('people'), share('social')].join(','), '0.02,0.035,0.02,0.015', 'udziały partii');
+        macro.election.ruling = 'state'; macro.election.coalition = { partner: 'social', weights: { state: 1, social: 1 } };
+        assertNear(getDefenseShare(), 0.025, 'koalicja 1:1 — średnia', 1e-12);
+        macro.election.coalition = null;
+        withRandom(0.5, () => noteGeopoliticalShock());
+        assert(isDefenseBoosted(), 'po szoku geopolitycznym podbicie');
+        assertNear(getDefenseShare(), 0.0525, 'Blok ×1,5', 1e-12);
+        society.defense.boostUntil = macro.quarter;
+        assertNear(getDefenseShare(), 0.035, 'po 4–8 kw. wraca', 1e-12);
+    }));
+
+    test('S6: budżet obronny — linia budżetu wliczona w wydatki (deficyt), skarb płaci, zamówienia proporcjonalnie do kapitalizacji ponad poziom 2%', withDefense(() => {
+        const A = makeCompany('ZBA', { sector: ['Obronność'] }), B = makeCompany('ZBB', { sector: ['Obronność'] }), C = makeCompany('CIV');
+        B.totalShares = 30000;
+        resetWorld([A, B, C]);
+        macro.election.ruling = 'state';
+        const t0 = governmentTreasury;
+        assertNear(settleDefenseBudget(1_000_000), 35_000, '3,5% przychodów', 1e-6);
+        assertNear(governmentTreasury, t0 - 35_000, 'skarb płaci', 1e-6);
+        assertNear(society.defense.orders.ZBA + society.defense.orders.ZBB, 15_000, 'zamówienia = (3,5% − 2%) × przychody', 1);
+        assertNear(society.defense.orders.ZBB / society.defense.orders.ZBA, 3, 'proporcjonalnie do kapitalizacji', 0.01);
+        assert(!society.defense.orders.CIV, 'spółka cywilna bez zamówień');
+        macro.election.ruling = 'market';
+        settleDefenseBudget(1_000_000);
+        assertEq(Object.values(society.defense.orders).filter(Boolean).length, 0, 'przy 2% zamówienia ponad bazę = 0 (średnio zero)');
+        society.budget.citQuarter = 1_000_000; society.budget.publicServices = 0;
+        settleSocialBudget();
+        assert(society.budget.defense > 0, 'linia budget.defense');
+        assert(society.budget.spending >= society.budget.defense + society.budget.infrastructureSpending - 1e-6, 'defense wliczone do spending');
+        assertNear(getDefenseGrowthBonus(A), police() * 0.002, 'bonus od policji o połowę mniejszy', 1e-12);
+    }));
+
+    test('S6: zamówienia podnoszą przychód kwartału zbrojeniówki; Półprzewodniki +1% przy 3,5%', withDefense(() => {
+        const A = makeCompany('ZBA', { sector: ['Obronność'] }), S = makeCompany('SEMI', { sector: ['Technologia'] });
+        S.segments = [{ sector: 'Technologia', subsector: 'Półprzewodniki', share: 1 }];
+        resetWorld([A, S]);
+        macro.election.ruling = 'state';
+        society.defense.orders = { ZBA: 50_000 };
+        assertNear(getDefenseRevenueFactor(A, 1_000_000), 1.05, 'zamówienie 5% przychodu', 1e-9);
+        assertNear(getDefenseRevenueFactor(S, 1_000_000), 1.01, 'Półprzewodniki +1% przy 3,5%', 1e-9);
+        macro.election.ruling = 'market';
+        assertNear(getDefenseRevenueFactor(S, 1_000_000), 1, 'przy 2% zero', 1e-12);
+        assertEq(getDefenseRevenueFactor({ ...A, country: 'DE' }, 1_000_000), 1, 'spółki obce bez zamówień');
+    }));
+
+    test('S6: poziom bezpieczeństwa ze wzoru; szoki geopolityczne go obniżają; wpływa na szansę embarga', withDefense(() => {
+        macro.election.ruling = 'state';
+        assertNear(getHomeSecurityLevel(), 50 + 600 * 0.015 + 10 * police(), 'S = 50 + 600·(udział − 2%) + 10·policja', 1e-9);
+        society.defense.shocks = [{ v: 10, until: macro.quarter + 2 }];
+        assertNear(getHomeSecurityLevel(), 50 + 9 + 10 * police() - 10, 'szok −10', 1e-9);
+        society.defense.shocks = [];
+        const embargoStarts = s => {
+            const orig = window.getHomeSecurityLevel; window.getHomeSecurityLevel = () => s;
+            try { ensureCommodityState().events = []; withRandom(0.012, () => processCommoditiesQuarterly()); return ensureCommodityState().events.some(e => e.id === 'embargo'); }
+            finally { window.getHomeSecurityLevel = orig; }
+        };
+        assert(embargoStarts(0), 'S = 0: szansa ×1,5 (1,5% > 1,2%) — embargo');
+        assert(!embargoStarts(100), 'S = 100: szansa ×0,5 (0,5%) — bez embarga');
+        ensureCommodityState().events = []; society.defense.shocks = []; society.defense.boostUntil = -1;
+        withRandom(0.5, () => startCommodityEvent('embargo'));
+        assert(society.defense.shocks.length === 1 && isDefenseBoosted(), 'start embarga = szok geopolityczny');
+    }));
+
+    test('S6: kraje obce mają stałe S (spada tylko przy szokach); indeks zbrojeń świata podnosi cel metali', withDefense(() => {
+        assertEq(['DE', 'US', 'CZ', 'SE', 'CH', 'FR', 'JP', 'TW', 'CN', 'IN'].map(getCountrySecurityLevel).join(','), '70,80,65,70,85,70,70,40,60,55', 'S krajów obcych');
+        macro.election.ruling = 'state';
+        assertEq(getCountrySecurityLevel('DE'), 70, 'partia kraju startowego nie zmienia S obcych');
+        const n = Object.keys(COUNTRY_DEFS).filter(id => id !== 'PL').length;
+        assertNear(getGlobalDefenseIndex(), (0.035 + n * 0.025) / (n + 1) / 0.025, 'indeks = średni udział / 2,5%', 1e-12);
+        const metals0 = getCommodityTarget('metals');
+        withRandom(0.5, () => noteGeopoliticalShock());
+        assertEq(getCountrySecurityLevel('DE'), 70 - society.defense.shocks[0].v, 'szok obniża S obcych');
+        assert(getGlobalDefenseIndex() > 1.4, 'zbrojenia ×1,5 na świecie');
+        assert(getCommodityTarget('metals') > metals0 * 1.2, 'cel metali w górę (β_z 0,5)');
+    }));
+
+    test('S6: skutki S — premia za ryzyko ±2% wyceny, popyt ±0,5 pp przy odchyleniu 25, boty zagraniczne ×(0,8 + 0,4·S/100)', withDefense(() => {
+        const orig = window.getHomeSecurityLevel;
+        try {
+            window.getHomeSecurityLevel = () => 100;
+            assertNear(getSecurityValuationFactor({}), 1.02, 'S = 100: +2%', 1e-12);
+            assertNear(getSecurityBotFactor(), 1.2, 'boty ×1,2', 1e-12);
+            window.getHomeSecurityLevel = () => 25;
+            assertNear(getSecurityDemandAdj(), -0.005, 'S = 25: popyt −0,5 pp', 1e-12);
+            window.getHomeSecurityLevel = () => 0;
+            assertNear(getSecurityValuationFactor({}), 0.98, 'S = 0: −2%', 1e-12);
+            assertNear(getSecurityValuationFactor({ country: 'CH' }), 1 + 0.02 * 35 / 50, 'spółka obca: S swojego kraju', 1e-12);
+        } finally { window.getHomeSecurityLevel = orig; }
+    }));
+});
