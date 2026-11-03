@@ -9153,6 +9153,17 @@ group('0.15.2: Kochaj i zarabiaj (kalendarz, kampanie, lock-up, gwarancja, manda
         assertEq(formatQuarterDate(0), 'Rok 1 · kw. 1', 'termin kwartalny');
     });
 
+    test('Design 0.15.x: karty kampanii — formularz bez emoji, postęp kampanii, IR z segmentem i miernikami', () => {
+        world();
+        let html = renderCampaignCards();
+        assert(html.includes('class="camp-form"') && html.includes('id="camp-cost"') && html.includes('0,5% zebranej'), 'formularz z podglądem kosztu');
+        assert(!/<option[^>]*>[^<]*\p{Extended_Pictographic}/u.test(html), 'opcje bez emoji');
+        assert(html.includes('class="seg"') && html.includes('aria-pressed="true"'), 'przełącznik poziomów IR');
+        assert(startSubscriptionCampaign({ duration: 'quarter', targetPct: 0.1 }).ok, 'start');
+        html = renderCampaignCards();
+        assert(html.includes('role="progressbar"') && !html.includes('camp-form'), 'trwająca kampania: postęp zamiast formularza');
+    });
+
     test('K2: koszt kampanii = 0,2% celu na start + 0,5% zebranej kwoty', () => {
         world();
         const cash0 = playerCash;
@@ -9750,6 +9761,7 @@ group('0.15.3: Wielkie Kryzysy (szoki sektorowe, silnik linii, 5 linii, reakcje 
         startCrisisLine('pandemic', { forced: true, skipSpark: true });
         const html = renderCrisisSection();
         assert(/Pandemia/.test(html) && /Wybuch/.test(html) && /Turystyka/.test(html), 'etap i sektory w sekcji');
+        assert(html.includes('crisis-axis') && html.includes('aria-current="step"') && /−50%<\/strong> traci mocno/.test(html), 'oś etapów, znak, liczba i słowo');
         assertEq(getCrisisExposureLabel(b), 'wysoki', 'turystyka w pandemii: wysokie wystawienie');
         assertEq(getCrisisExposureLabel(stocks[0]), 'niski', 'technologia w pandemii: niskie wystawienie');
     });

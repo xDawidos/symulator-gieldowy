@@ -888,53 +888,81 @@ function renderCampaignCards() {
     const q = currentQuarter();
 
     const mandateOptions = ['<option value="">brak</option>',
-        ...Object.keys(MANDATES).filter(k => k !== 'sector').map(k => `<option value="${k}">${MANDATES[k].icon} ${MANDATES[k].label}</option>`),
-        ...SECTOR_GROUPS.map(g => `<option value="sector:${g.id}">${MANDATES.sector.icon} Sektorowy: ${escapeHtml(g.name)}</option>`)].join('');
+        ...Object.keys(MANDATES).filter(k => k !== 'sector').map(k => `<option value="${k}">${MANDATES[k].label}</option>`),
+        ...SECTOR_GROUPS.map(g => `<option value="sector:${g.id}">Sektorowy: ${escapeHtml(g.name)}</option>`)].join('');
     const durationOptions = Object.entries(SUBSCRIPTION_DURATIONS).map(([id, d]) => `<option value="${id}">${d.label}</option>`).join('');
     const maxPct = Math.round(getCampaignMaxTargetPct() * 100);
 
     const offer = getEmissionOffer();
     const offerHtml = offer ? `<p class="text-sm"><strong>${escapeHtml(offer.name)}</strong> chce wejść do funduszu (ok. ${formatNumberPl(offer.units, 0)} udziałów, oferta do ${formatQuarterDate(offer.expiresQ)}). <button class="btn-primary btn-sm" onclick="const r = acceptEmissionOffer(); showToast(r.ok ? 'Kampania na ofertę klienta rozpoczęta.' : r.reason, r.ok ? 'success' : 'warning'); renderJuMarket();">Przyjmij: kampania na tę liczbę udziałów</button></p>` : '';
-    const campaignBody = offerHtml + (sub
-        ? `<p class="text-sm">Trwa: cel ${formatNumberPl(sub.targetUnits, 0)} udziałów, zebrano ${formatNumberPl(sub.raisedUnits, 1)} (${(sub.raisedUnits / Math.max(1, sub.targetUnits) * 100).toFixed(0)}%), zostało ${sub.weeksLeft} tyg. Start: ${escapeHtml(sub.startDate)}.</p>`
-        : `<p class="text-sm">Koszt: 0,2% celu na start i 0,5% zebranej kwoty. Udziały z lock-upem nie wrócą do Ciebie przed terminem (bramka umorzeń nadal działa). Kampania liczy się jako emisja (${playerFund.current.emissions}/${MAX_EMISSIONS_PER_PERIOD} w okresie).</p>
-           <div class="bank-card-form" style="flex-wrap:wrap; gap:6px">
-             <label>Czas <select id="camp-duration">${durationOptions}</select></label>
-             <label>Cel % NAV <input type="number" id="camp-target" min="5" max="${maxPct}" value="${Math.min(10, maxPct)}" style="width:64px"></label>
-             <label>Lock-up <select id="camp-lock"><option value="0">brak</option><option value="1">1 rok</option><option value="2">2 lata</option><option value="3">3 lata</option></select></label>
-             <label><input type="checkbox" id="camp-guarantee"> Gwarancja kapitału</label>
-             <label>Mandat <select id="camp-mandate">${mandateOptions}</select></label>
-             <button onclick="handleStartCampaign()">Rozpocznij kampanię</button>
-           </div><p class="text-xs text-muted" id="camp-info">${escapeHtml(getCampaignBlockReason({ duration: 'quarter', targetPct: 0.1, lockYears: 0 }) || 'Gwarancja wymaga lock-upu ≥ 1 rok; transze z gwarancją ≤ 30% udziałów.')}</p>`);
+    let campaignBody;
+    if (sub) {
+        const pct = sub.raisedUnits / Math.max(1, sub.targetUnits) * 100;
+        campaignBody = `<div class="camp-running"><p class="text-sm"><strong>Kampania trwa</strong> · start: ${escapeHtml(sub.startDate)}</p>
+            <div class="camp-progress" role="progressbar" aria-label="Zebrano z celu kampanii" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.min(100, Math.round(pct))}"><span style="width:${Math.min(100, pct).toFixed(0)}%"></span></div>
+            <p class="camp-progress-text"><strong>${formatNumberPl(sub.raisedUnits, 1)}</strong> z ${formatNumberPl(sub.targetUnits, 0)} udziałów (${pct.toFixed(0)}%) · do końca: <strong>${sub.weeksLeft} tyg.</strong></p></div>`;
+    } else {
+        const reason = getCampaignBlockReason({ duration: 'quarter', targetPct: 0.1, lockYears: 0 });
+        const defCost = getFundNav() * getCampaignTargetUnits(Math.min(10, maxPct) / 100) * CAMPAIGN_COST_TARGET;
+        campaignBody = `<p class="text-sm text-muted">Udziały z lock-upem nie wrócą do Ciebie przed terminem (bramka umorzeń nadal działa). Kampania liczy się jako emisja (${playerFund.current.emissions}/${MAX_EMISSIONS_PER_PERIOD} w okresie).</p>
+           <div class="camp-form" oninput="campPreview()" onchange="campPreview()">
+             <label class="camp-field">Czas<select id="camp-duration">${durationOptions}</select></label>
+             <label class="camp-field">Cel (% NAV, 5–${maxPct})<input type="number" id="camp-target" inputmode="numeric" min="5" max="${maxPct}" value="${Math.min(10, maxPct)}"></label>
+             <label class="camp-field">Lock-up<select id="camp-lock"><option value="0">brak</option><option value="1">1 rok</option><option value="2">2 lata</option><option value="3">3 lata</option></select></label>
+             <label class="camp-field">Mandat<select id="camp-mandate">${mandateOptions}</select></label>
+             <label class="camp-check"><input type="checkbox" id="camp-guarantee"> Gwarancja kapitału <span class="text-xs text-muted">(lock-up ≥ 1 rok; transze z gwarancją ≤ 30% udziałów)</span></label>
+           </div>
+           <p class="camp-cost">Koszt na start (0,2% celu): <strong id="camp-cost">${formatZl(defCost, 0)}</strong> <span class="text-xs text-muted">+ 0,5% zebranej kwoty</span></p>
+           <button class="camp-submit" onclick="handleStartCampaign()">Rozpocznij kampanię</button>
+           <p class="camp-info${reason ? ' is-blocked' : ''}" id="camp-info" role="status">${escapeHtml(reason || 'Kampanię można rozpocząć.')}</p>`;
+    }
+    campaignBody = offerHtml + campaignBody;
 
     const lockedUnits = getLockedFundUnits(), liability = getGuaranteeLiability(), loan = getLiquidityLoanPrincipal();
+    const kpi = (label, value, hint) => `<div class="cc-kpi camp-kpi" title="${escapeHtml(hint)}"><span>${label}</span><strong>${value}</strong></div>`;
+    const stateKpis = `<div class="cc-kpis camp-kpis">${kpi('Udziały w lock-upie', formatNumberPl(lockedUnits, 0), 'Udziały, których klienci nie umorzą przed końcem lock-upu.')}${kpi('Zobowiązanie z gwarancji', formatZl(liability, 0), 'Kwota, którą fundusz dopłaci, jeśli gwarancja kapitału zostanie uruchomiona.')}${loan > 0 ? kpi('Kredyt płynnościowy', formatZl(loan, 0), 'Kredyt zaciągnięty na wypłaty z gwarancji; do spłaty z odsetkami.') : ''}</div>`;
     const history = (playerFund.campaignHistory || []).slice(0, 3).map(h => `<li class="text-xs">${formatQuarterDate(h.startQ)}: ${(h.fill * 100).toFixed(0)}% celu, ${formatZl(h.raisedValue, 0)}, koszt ${formatZl(h.cost, 0)}, lock-up ${h.lockYears} lat</li>`).join('');
-    const campaignCard = `<article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${icon('megafon')}</span><div><h4>Kampania emisyjna</h4><span class="bank-card-type">${formatGameDate()}</span></div></header>
+    const campaignCard = `<article class="bank-card camp-card"><header class="bank-card-head"><span class="bank-card-icon">${icon('megafon')}</span><div><h4>Kampania emisyjna</h4><span class="bank-card-type">${formatGameDate()}</span></div></header>
         ${campaignBody}
-        <p class="text-sm">Udziały w lock-upie: <strong>${formatNumberPl(lockedUnits, 0)}</strong> · zobowiązanie z gwarancji: <strong>${formatZl(liability, 0)}</strong>${loan > 0 ? ` · kredyt płynnościowy: <strong>${formatZl(loan, 0)}</strong>` : ''}</p>
+        ${stateKpis}
         ${history ? `<ul class="list-plain">${history}</ul>` : ''}</article>`;
 
     const ir = playerFund.ir, level = getIrLevel();
+    const groupIcons = { retail: 'klienci', institution: 'bank', wealthy: 'diament' };
     const groupRows = Object.entries(INVESTOR_GROUPS).map(([id, g]) => {
-        if (level < 1) return `<li class="text-sm">${g.icon} ${g.label}: <span class="text-muted">wymaga analityka IR</span></li>`;
-        const mood = getGroupMood(id);
+        const head = `<span class="ir-name">${icon(groupIcons[id] || 'grupa', 16)} ${g.label}</span>`;
+        if (level < 1) return `<li class="ir-group">${head}<span class="text-muted text-sm">wymaga analityka IR (L1)</span></li>`;
+        const mood = getGroupMood(id), v = mood.value;
         const mission = level >= 2 ? ir.missions?.[id] : null;
         const causes = level >= 3 ? getGroupCauses(id) : [];
-        return `<li class="text-sm">${g.icon} <strong>${g.label}</strong>: ${mood.value === null ? '—' : `${mood.value >= 0 ? '+' : ''}${mood.value.toFixed(0)}`} · ${getMoodWord(mood.value)}${mission ? `<br><span class="text-xs">Misja do ${formatQuarterDate(mission.dueQ)}: ${escapeHtml(mission.text)}</span>` : ''}${causes.length ? `<br><span class="text-xs text-muted">Powody: ${causes.join(', ')}</span>` : ''}</li>`;
+        const meter = v === null ? '' : `<div class="ir-meter ${v >= 0 ? 'up' : 'down'}" role="img" aria-label="Nastrój ${v.toFixed(0)} w skali od −50 do +50"><span style="left:${v >= 0 ? 50 : 50 + Math.max(-50, v)}%;width:${Math.min(50, Math.abs(v))}%"></span></div>`;
+        return `<li class="ir-group">${head}<span class="ir-mood"><strong class="${v === null ? '' : v >= 0 ? 'text-up' : 'text-down'}">${v === null ? '—' : `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(0)}`}</strong> <span class="text-sm">${getMoodWord(v)}</span></span>${meter}${mission ? `<p class="ir-note"><strong>Misja</strong> do ${formatQuarterDate(mission.dueQ)}: ${escapeHtml(mission.text)}</p>` : ''}${causes.length ? `<p class="ir-note text-muted"><strong>Powody:</strong> ${causes.join(', ')}</p>` : ''}</li>`;
     }).join('');
-    const irButtons = IR_LEVELS.map(l => `<button class="${l.level === level ? '' : 'btn-secondary'}" onclick="setIrLevel(${l.level}); renderJuMarket();">${l.level === 0 ? 'Brak' : 'L' + l.level}</button>`).join('');
-    const irCard = `<article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${icon('teczka')}</span><div><h4>Relacje inwestorskie</h4><span class="bank-card-type">${level ? `${IR_LEVELS[level].label} · ${formatZl(getIrQuarterCost(), 0)} na kwartał` : 'bez analityka'}</span></div></header>
-        <ul class="list-plain">${groupRows}</ul>
-        <div class="bank-card-form">${irButtons}</div>
-        <p class="text-xs text-muted">L1: nastroje grup · L2: misje · L3: przyczyny. Koszt 0,05 / 0,10 / 0,15% aktywów na kwartał.</p></article>`;
+    const irButtons = IR_LEVELS.map(l => `<button type="button" class="seg-btn${l.level === level ? ' active' : ''}" aria-pressed="${l.level === level}" title="${escapeHtml(l.label + (l.gives ? ': ' + l.gives : ''))}" onclick="setIrLevel(${l.level}); renderJuMarket();">${l.level === 0 ? 'Brak' : 'L' + l.level}</button>`).join('');
+    const irCard = `<article class="bank-card ir-card"><header class="bank-card-head"><span class="bank-card-icon">${icon('teczka')}</span><div><h4>Relacje inwestorskie</h4><span class="bank-card-type">${level ? `${IR_LEVELS[level].label} · ${formatZl(getIrQuarterCost(), 0)} na kwartał` : 'bez analityka'}</span></div></header>
+        <ul class="list-plain ir-groups">${groupRows}</ul>
+        <div class="seg" role="group" aria-label="Poziom analityka IR">${irButtons}</div>
+        <p class="text-xs text-muted">L1: nastroje grup · L2: misje · L3: powody. Koszt 0,05 / 0,10 / 0,15% aktywów na kwartał.</p></article>`;
 
     const vip = playerFund.vip;
     const offers = (vip?.offers || []).filter(o => o.expiresQ > q).map(o => {
         const p = VIP_PROFILES.find(x => x.id === o.profile);
-        return `<p class="text-sm">${p?.icon || ''} <strong>${escapeHtml(o.name)}</strong> (do ${formatQuarterDate(o.expiresQ)}): ${Object.entries(VIP_ARGUMENTS).map(([k, a]) => `<button class="btn-secondary btn-sm" title="${escapeHtml(a.hint)}" onclick="pitchVip(${o.id}, '${k}'); renderJuMarket();">${a.label}</button>`).join(' ')}</p>`;
+        return `<div class="vip-offer"><p class="vip-who">${icon('osoba', 16)} <strong>${escapeHtml(o.name)}</strong>${p ? ` · ${p.name}` : ''} <span class="text-xs text-muted">do ${formatQuarterDate(o.expiresQ)}</span></p>${p ? `<p class="text-xs text-muted">${p.name} ${p.blurb}.</p>` : ''}
+            <div class="vip-args">${Object.entries(VIP_ARGUMENTS).map(([k, a]) => `<button type="button" class="btn-secondary vip-arg" title="${escapeHtml(a.hint)}" onclick="pitchVip(${o.id}, '${k}'); renderJuMarket();"><strong>${a.label}</strong><span>${escapeHtml(a.hint)}</span></button>`).join('')}</div></div>`;
     }).join('');
-    const vipCard = (vip && (offers || vip.won || vip.lost)) ? `<article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${icon('diament')}</span><div><h4>Inwestorzy VIP</h4><span class="bank-card-type">pozyskani ${vip.won} · odrzuceni ${vip.lost}</span></div></header>${offers || '<p class="text-sm text-muted">Brak aktywnych ofert.</p>'}</article>` : '';
+    const vipCard = (vip && (offers || vip.won || vip.lost)) ? `<article class="bank-card vip-card"><header class="bank-card-head"><span class="bank-card-icon">${icon('diament')}</span><div><h4>Inwestorzy VIP</h4><span class="bank-card-type">pozyskani ${vip.won} · odrzuceni ${vip.lost}</span></div></header>${offers || '<p class="text-sm text-muted">Brak aktywnych ofert.</p>'}<p class="text-xs text-muted">Argument musi pasować do profilu i być poparty danymi funduszu.</p></article>` : '';
     return campaignCard + irCard + vipCard;
+}
+
+/** Podgląd kosztu i powodu blokady na żywo (pola formularza kampanii -> #camp-cost, #camp-info). */
+function campPreview() {
+    const val = id => document.getElementById(id);
+    const targetPct = (Number(val('camp-target')?.value) || 10) / 100;
+    const terms = { duration: val('camp-duration')?.value, targetPct, lockYears: Number(val('camp-lock')?.value) || 0, guarantee: Boolean(val('camp-guarantee')?.checked), mandate: val('camp-mandate')?.value || null };
+    const costEl = val('camp-cost'), infoEl = val('camp-info'), reason = getCampaignBlockReason(terms);
+    if (costEl) costEl.textContent = formatZl(getFundNav() * getCampaignTargetUnits(targetPct) * CAMPAIGN_COST_TARGET, 0);
+    if (infoEl) infoEl.textContent = reason || 'Kampanię można rozpocząć.';
+    infoEl?.classList.toggle('is-blocked', Boolean(reason));
 }
 
 function handleStartCampaign() {

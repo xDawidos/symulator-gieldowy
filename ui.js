@@ -7907,7 +7907,7 @@ function renderMailPreview(message) {
     if (message.action?.type === 'vip') { // 0.15.2 K7: rozmowa z inwestorem VIP (3 argumenty sprawdzane danymi funduszu)
         const offer = playerFund?.vip?.offers.find(o => o.id === message.action.vipId && o.expiresQ > currentQuarter());
         action = offer
-            ? `<div class="mail-action"><p>Wybierz argument — gra sprawdzi go na danych funduszu:</p>${Object.entries(VIP_ARGUMENTS).map(([k, a]) => `<button class="btn-secondary" title="${escapeHtml(a.hint)}" onclick="mailAction(pitchVip, ${offer.id}, '${k}')">${a.label}</button>`).join(' ')}<p class="text-xs text-muted">${Object.values(VIP_ARGUMENTS).map(a => `${a.label}: ${a.hint}`).join(' · ')}</p></div>`
+            ? `<div class="mail-action"><p>Wybierz argument — gra sprawdzi go na danych funduszu:</p><div class="vip-args">${Object.entries(VIP_ARGUMENTS).map(([k, a]) => `<button type="button" class="btn-secondary vip-arg" title="${escapeHtml(a.hint)}" onclick="mailAction(pitchVip, ${offer.id}, '${k}')"><strong>${a.label}</strong><span>${escapeHtml(a.hint)}</span></button>`).join('')}</div></div>`
             : '<p class="fund-muted">Oferta VIP została już rozstrzygnięta albo wygasła.</p>';
     }
     if (message.action?.type === 'pppRestructure') {

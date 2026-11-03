@@ -5375,3 +5375,69 @@ td.sc-actions button { white-space: normal; margin: 0; }
 .te-intro-row input[aria-invalid="true"] { border-color: var(--color-down); }
 #teamedup-nav .intro-hint { margin-top: 8px; }
 #teamedup-nav .mail-folder:disabled { opacity: .55; cursor: not-allowed; }
+
+
+/* 0.15.2: kampanie emisyjne, relacje inwestorskie, VIP (okno rynku udziałów) */
+.camp-form { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2) var(--space-3); }
+.camp-field { display: flex; flex-direction: column; gap: var(--space-1); font-size: var(--text-caption-size); color: var(--color-text-muted); min-width: 0; }
+.camp-field select, .camp-field input { width: 100%; min-height: 40px; box-sizing: border-box; }
+.camp-check { grid-column: 1 / -1; display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); min-height: 40px; font-size: var(--text-body-sm-size); }
+.camp-check input { width: 20px; height: 20px; }
+.camp-cost { margin: var(--space-2) 0; font-size: var(--text-body-sm-size); }
+.camp-cost strong { font-family: var(--font-family-mono); }
+.camp-submit { width: 100%; min-height: 40px; }
+.camp-info { margin: var(--space-2) 0 0; padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); background: var(--color-bg-raised); border: 1px solid var(--color-border-subtle); font-size: var(--text-caption-size); color: var(--color-text-secondary); }
+.camp-info.is-blocked { border-color: var(--color-border-warn); color: var(--color-text-warn); }
+.camp-info.is-blocked::before { content: 'Blokada: '; font-weight: 600; }
+.camp-progress { height: 10px; border-radius: var(--radius-sm); background: var(--color-bg-sunken); border: 1px solid var(--color-border-subtle); overflow: hidden; }
+.camp-progress span { display: block; height: 100%; background: var(--color-bg-accent); }
+.camp-progress-text { margin: var(--space-2) 0 0; font-size: var(--text-body-sm-size); }
+.camp-kpis { margin: var(--space-3) 0 0; }
+.camp-kpi { cursor: default; }
+.ir-groups { display: flex; flex-direction: column; gap: var(--space-3); }
+.ir-group { display: grid; grid-template-columns: 1fr auto; gap: var(--space-1) var(--space-3); align-items: center; }
+.ir-name { display: inline-flex; align-items: center; gap: var(--space-2); font-weight: 600; font-size: var(--text-body-sm-size); }
+.ir-mood { text-align: right; font-family: var(--font-family-mono); }
+.ir-mood .text-sm { font-family: var(--font-family-sans); }
+.ir-note { grid-column: 1 / -1; margin: 0; font-size: var(--text-caption-size); }
+.ir-meter { grid-column: 1 / -1; position: relative; height: 8px; border-radius: var(--radius-sm); background: var(--color-bg-sunken); border: 1px solid var(--color-border-subtle); overflow: hidden; }
+.ir-meter::after { content: ''; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--color-text-muted); }
+.ir-meter span { position: absolute; top: 0; bottom: 0; background: var(--color-text-up); }
+.ir-meter.down span { background: var(--color-text-down); }
+.seg { display: flex; gap: 2px; margin-top: var(--space-3); padding: 2px; background: var(--color-bg-raised); border: 1px solid var(--color-border-default); border-radius: var(--radius-sm); }
+.seg-btn { flex: 1; min-height: 40px; border: 0 !important; background: transparent !important; color: var(--color-text-secondary) !important; font-family: var(--font-family-mono); border-radius: var(--radius-xs) !important; }
+.seg-btn:hover { background: var(--color-bg-hover) !important; }
+.seg-btn.active { background: var(--color-bg-accent-soft) !important; color: var(--color-text-primary) !important; box-shadow: inset 0 0 0 1px var(--color-border-accent); font-weight: 600; }
+.seg-btn.active::before { content: '✓ '; }
+.vip-offer { display: flex; flex-direction: column; gap: var(--space-2); }
+.vip-offer p { margin: 0; }
+.vip-who { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
+.vip-args { display: grid; grid-template-columns: 1fr; gap: var(--space-2); }
+.vip-arg { flex-direction: column; align-items: flex-start !important; justify-content: flex-start !important; height: auto; padding: var(--space-2) var(--space-3) !important; line-height: 1.3; text-align: left; min-height: 40px; }
+.vip-arg span { font-size: var(--text-caption-size); font-weight: 400; color: var(--color-text-muted); }
+@media (max-width: 600px) {
+  .camp-form { grid-template-columns: 1fr; }
+}
+
+.mail-action .vip-args { width: 100%; }
+
+/* 0.15.3: sekcja „Kryzys” w oknie „Rynek”, mail VIP */
+.crisis-section { display: flex; flex-direction: column; gap: var(--space-3); }
+.crisis-title { display: flex; align-items: center; gap: var(--space-2); margin: 0; }
+.crisis-calm { margin: 0; }
+.crisis-axis { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--space-1); }
+.crisis-axis li { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: var(--space-2); background: var(--color-bg-raised); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-sm); font-size: var(--text-caption-size); color: var(--color-text-muted); min-width: 0; }
+.crisis-axis li.done { color: var(--color-text-secondary); }
+.crisis-axis li.current { background: var(--color-bg-accent-soft); border-color: var(--color-border-accent); color: var(--color-text-primary); font-weight: 600; }
+.crisis-axis em { font-style: normal; color: var(--color-text-secondary); }
+.crisis-step-no { font-family: var(--font-family-mono); font-size: var(--text-label-size); }
+.crisis-cols { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
+.crisis-col h5 { display: flex; align-items: center; gap: var(--space-2); margin: 0 0 var(--space-2); font-size: var(--text-body-sm-size); }
+.crisis-col li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-1) var(--space-3); padding: var(--space-1) 0; border-bottom: 1px solid var(--color-border-subtle); font-size: var(--text-body-sm-size); }
+.crisis-premium { font-family: var(--font-family-mono); white-space: nowrap; }
+.crisis-foot { display: flex; flex-direction: column; gap: var(--space-1); padding-top: var(--space-2); border-top: 1px solid var(--color-border-subtle); }
+.crisis-foot p { margin: 0; display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+@media (max-width: 600px) {
+  .crisis-axis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .crisis-cols { grid-template-columns: 1fr; }
+}

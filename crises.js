@@ -667,18 +667,28 @@ function renderCrisisCountries() {
 }
 
 function renderCrisisSectionBase() {
-    const stateRows = (items, sign) => items.filter(i => i.premium).map(i => `<li>${escapeHtml(i.subsector ? `${i.sector} / ${i.subsector}` : i.sector)} <strong class="${sign < 0 ? 'text-down' : 'text-up'}">${i.premium > 0 ? '+' : ''}${Math.round(i.premium * 100)}%</strong> <span class="text-muted">${sign < 0 ? 'traci' : 'zyskuje'}</span></li>`).join('');
+    const icon = (name, size = 16) => (typeof uiIcon === 'function' ? uiIcon(name, size) : '');
+    // Premia sektora: znak, liczba z % i słowo (kolor tylko wzmacnia).
+    const strength = p => (Math.abs(p) >= 0.3 ? 'mocno' : Math.abs(p) >= 0.15 ? 'wyraźnie' : 'lekko');
+    const column = (items, sign) => {
+        const rows = items.filter(i => i.premium).map(i => `<li><span class="crisis-sector">${escapeHtml(i.subsector ? `${i.sector} / ${i.subsector}` : i.sector)}</span><span class="crisis-premium ${sign < 0 ? 'text-down' : 'text-up'}"><strong>${i.premium > 0 ? '+' : '−'}${Math.abs(Math.round(i.premium * 100))}%</strong> ${sign < 0 ? 'traci' : 'zyskuje'} ${strength(i.premium)}</span></li>`).join('');
+        return `<section class="crisis-col"><h5>${icon(sign < 0 ? 'spadek' : 'wzrost')} ${sign < 0 ? 'Tracą' : 'Zyskują'}</h5>${rows ? `<ul class="list-plain">${rows}</ul>` : '<p class="text-sm text-muted">Brak sektorów w tej linii.</p>'}</section>`;
+    };
     if (!crisisLine) {
         const last = crisisState.history[crisisState.history.length - 1];
-        return `<div><h4 class="bank-section-title">Kryzys</h4><p class="text-muted">${last ? `Ostatnia linia: ${CRISIS_LINES[last.id].icon} ${CRISIS_LINES[last.id].name} (${formatQuarterDate(last.startQ)}). ` : ''}Rynek jest w normalnym cyklu — kryzys nie trwa.${crisisState.scenario ? ` Scenariusz: ${CRISIS_LINES[crisisState.scenario].name} (start w ${formatQuarterDate(crisisState.scenarioStartQ)}).` : ''}</p></div>`;
+        return `<div class="crisis-section"><h4 class="bank-section-title">Kryzys</h4><p class="alert crisis-calm">${icon('ok', 18)}<span>Rynek jest w normalnym cyklu — kryzys nie trwa.${last ? ` Ostatnia linia: ${escapeHtml(CRISIS_LINES[last.id].name)} (${formatQuarterDate(last.startQ)}).` : ''}${crisisState.scenario ? ` Scenariusz: ${escapeHtml(CRISIS_LINES[crisisState.scenario].name)} (start w ${formatQuarterDate(crisisState.scenarioStartQ)}).` : ''}</span></p></div>`;
     }
     const def = CRISIS_LINES[crisisLine.id];
-    const axis = CRISIS_STAGES.map(stage => `<li class="${stage === crisisLine.stage ? 'current' : ''}" ${stage === crisisLine.stage ? 'aria-current="step"' : ''}>${CRISIS_STAGE_NAMES[stage]}${stage === crisisLine.stage ? ' (teraz)' : ''}</li>`).join('');
+    const currentIdx = CRISIS_STAGES.indexOf(crisisLine.stage);
+    const axis = CRISIS_STAGES.map((stage, n) => {
+        const now = stage === crisisLine.stage;
+        return `<li class="${now ? 'current' : n < currentIdx ? 'done' : ''}" ${now ? 'aria-current="step"' : ''}><span class="crisis-step-no">${n < currentIdx ? '✓' : n + 1}</span>${CRISIS_STAGE_NAMES[stage]}${now ? ' <em>(teraz)</em>' : ''}</li>`;
+    }).join('');
     const reaction = crisisState.rate ? `Bank centralny: ${crisisState.rate.kind === 'hike' ? 'podwyżki' : 'cięcia'} stóp w toku.` : (crisisState.lastRate ? `Bank centralny zmienił stopy łącznie o ${(crisisState.lastRate.total * 100).toFixed(1)} pp.` : 'Reakcja banku centralnego jeszcze nie ruszyła.');
-    return `<div><h4 class="bank-section-title">Kryzys: ${def.icon} ${escapeHtml(def.name)}</h4>
-        <ol class="phase-history" aria-label="Etapy kryzysu">${axis}</ol>
-        <div class="market-grid"><ul class="list-plain">${stateRows(def.lose, -1)}</ul><ul class="list-plain">${stateRows(def.gain, 1)}</ul></div>
-        <p class="text-sm">${escapeHtml(reaction)} Upadłości: ${crisisLine.bankrupted.length}, ratunki państwa: ${crisisLine.rescued.length}.</p></div>`;
+    return `<div class="crisis-section"><h4 class="bank-section-title crisis-title">${icon(def.svg, 20)} Kryzys: ${escapeHtml(def.name)}</h4>
+        <ol class="crisis-axis" aria-label="Etapy kryzysu">${axis}</ol>
+        <div class="crisis-cols">${column(def.lose, -1)}${column(def.gain, 1)}</div>
+        <div class="crisis-foot"><p class="text-sm">${icon('bank', 16)} ${escapeHtml(reaction)}</p><p class="text-sm"><strong>Upadłości:</strong> ${crisisLine.bankrupted.length} · <strong>ratunki państwa:</strong> ${crisisLine.rescued.length}</p></div></div>`;
 }
 
 function renderCrisisSection() { return renderCrisisSectionBase() + renderCrisisCountries(); } // 0.16.2 G9: sekcja „Kryzys” z krajami i opóźnieniem zarażenia
