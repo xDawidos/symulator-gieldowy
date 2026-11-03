@@ -61,7 +61,7 @@ W pierwszej serii (`s6a`) zamówienia obronne i premia Półprzewodników nie dz
 - **S5 bez zmian:** pierwsze lotnisko w 22/24 grach (ok. 17 kw.), 3,9 otwartego kraju na grę.
 
 ## Do uwagi
-- **Deficyt rośnie:** z 55% do 60% kwartałów, bo linia obronna to nowy wydatek ok. 2,5% wpływów, nie przesunięcie z usług publicznych. W 7/24 grach dwa lata deficytu podnoszą CIT o 2 pp. Spec mówi „wliczana do wydatków (deficyt)”, więc tak zostawiłem. Alternatywa: finansować obronę z `publicServices` (bez wzrostu deficytu).
+- **Deficyt rośnie:** z 55% do 60% kwartałów, bo linia obronna to nowy wydatek ok. 2,5% wpływów, nie przesunięcie z usług publicznych. W 7/24 grach dwa lata deficytu podnoszą CIT o 2 pp. **Decyzja użytkownika: zostaje jak w spec** (nowy wydatek wliczany do deficytu).
 - **Marże względem bazy:** −0,38 pp, nadal poza widełkami. Większość odchyłki pochodzi z S5, bo S6 względem S5 ×1 to +0,21 pp. Chemia znów niżej (−1,2 pp), Media −1,8 pp, Usługi −1,4 pp. To szum rzędu 1–1,5 SE.
 - **Skutki są małe z założenia:**
   - przy 3,5% zamówienia dają zbrojeniówce ok. +0,7% przychodu kwartału, a Półprzewodnikom +1%;
