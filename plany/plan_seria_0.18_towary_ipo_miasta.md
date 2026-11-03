@@ -244,4 +244,4 @@ Starsze pomysły z notatek (`roadmap.txt`, dawny „plany poprawione przez ai.tx
 - **Firma „Boss”** jako warunek zwycięstwa (pkt 2.6 starego planu, nigdzie nierozpisany).
 - **Zdefiniowanie celu gry** (pkt 1.2 starego planu): nadal otwarte.
 
-Do rozpisania w osobnym planie przed 0.18.0: ścieżka CEO (progi stanowisk z CV, szansa na fotel prezesa), przejęcie funduszu (jednostki uczestnictwa, kontrola zarządu, reakcja botów i KNF), warunki porażki, długość gry (6,5 roku / 20 lat) i tryb symulowanych funduszy.
+**Rozpisane w `plan_cel_gry.md`** (uwaga: cel CEO/przejęcie istnieje już w kodzie, plan opisuje jego rozwinięcie). Zakres: ścieżka CEO (progi stanowisk z CV, szansa na fotel prezesa), przejęcie funduszu (jednostki uczestnictwa, kontrola zarządu, reakcja botów i KNF), warunki porażki, długość gry (6,5 roku / 20 lat) i tryb symulowanych funduszy.
