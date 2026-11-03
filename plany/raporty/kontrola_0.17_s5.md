@@ -44,7 +44,7 @@ Gałąź `claude/impl-017-s0b-891539` (po scaleniu `zmiany-AI` do 9594eb6; nie s
 | Indeks frachtu na koniec (mediana) | — | morski 102, lotniczy 102, lądowy 111 |
 
 ## Test czasu budowy ×1 vs ×1,5 (po decyzji 24 i poprawce odbiorów; po 24 gry PL, ta sama baza 24 gier)
-Wariant ×1,5 przez `--patch` (`INFRA_RULES.timeMult = 1.5`). **W kodzie zostaje ×1 — wybiera użytkownik.**
+Wariant ×1,5 przez `--patch` (`INFRA_RULES.timeMult = 1.5`). **Decyzja użytkownika: zostaje ×1** (`INFRA_RULES.timeMult = 1`).
 
 | Miara | Baza | ×1 | ×1,5 |
 |---|---|---|---|
