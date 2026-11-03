@@ -1062,7 +1062,7 @@ function runForeignBot(bot) {
         const premium = marketRegimes[bot.homeCountry]?.premium || 0;
         const buyBelow = def.style === 'gambler' ? 0.55 : def.style === 'banker' && premium < 0 ? 0.95 : 0.8; // hazardzista sprzedaje częściej, Gutzwiller w bessie dokupuje
         if (def.style === 'confucius') done = confuciusTrade(bot);
-        else if (def.enterHome && bot.fx.enteredHome && roll < 0.35) done = botTradeHome(bot, def);
+        else if (def.enterHome && bot.fx.enteredHome && roll < 0.35 * (typeof getSecurityBotFactor === 'function' ? getSecurityBotFactor() : 1)) done = botTradeHome(bot, def); // S6: bezpieczeństwo
         else if (roll < buyBelow) done = foreignBotBuy(bot, def);
         else if (def.style === 'banker' && premium < 0) done = false; // neutralność: nie sprzedaje w panice
         else done = foreignBotSell(bot);

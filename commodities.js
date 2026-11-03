@@ -74,7 +74,7 @@ function getCommodityIndustryDemand() {
     const phase = typeof macro === 'object' ? macro?.sectorCycles?.['Przemysł']?.phase : null;
     return COMMODITY_RULES.cyclePhaseDemand[phase] ?? 1;
 }
-/** Zbrojenia: średni udział wydatków obronnych / 2,5% — do czasu S6 stale 1. */
+/** Zbrojenia: średni udział wydatków obronnych / 2,5% (security.js). */
 function getCommodityArmsDemand() { return typeof getGlobalDefenseIndex === 'function' ? getGlobalDefenseIndex() : 1; }
 
 function getCommodityShock(id) {
@@ -151,6 +151,7 @@ function startCommodityEvent(key, opts = {}) {
         st.prices[id] = Math.min(hi, Math.max(lo, st.prices[id] * Math.sqrt(1 + s))); // jednorazowy skok o połowę szoku (w logarytmie)
     }
     st.events.push(ev);
+    if (key === 'embargo' && typeof noteGeopoliticalShock === 'function') noteGeopoliticalShock(); // 0.17 S6
     if (key === 'drought') st.lastDroughtQ = macro.quarter;
     if (key === 'reactor' && typeof applyPriceEffect === 'function') {
         for (const stock of stocks) if (!stock.assetType && !stock.isBankrupt && getStockSegments(stock).some(seg => seg.subsector === 'Energetyka jądrowa')) applyPriceEffect(stock.symbol, -0.05, 'negative', 'market');

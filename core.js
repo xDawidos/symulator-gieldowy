@@ -3611,7 +3611,7 @@ function getValuationMultiplier(stock) {
     const interest = typeof getAristocratValuationFactor === 'function' ? getAristocratValuationFactor(stock) : 1; // zainteresowanie arystokratą
     const projects = typeof getSpecialProjectValuation === 'function' ? getSpecialProjectValuation(stock) : 1; // projekty specjalne
     const starMult = stock.marketStar?.type === 'unicorn' ? 1.25 : (stock.marketStar?.type === 'fading_star' ? 0.80 : 1);
-    return Math.max(0.4, Math.min(2.0, cycleMult * rateMult * sectorMult * interest * projects * starMult * getDominanceFactor(stock)));
+    return Math.max(0.4, Math.min(2.0, cycleMult * rateMult * sectorMult * interest * projects * starMult * getDominanceFactor(stock) * (typeof getSecurityValuationFactor === 'function' ? getSecurityValuationFactor(stock) : 1))); // S6: premia za ryzyko kraju
 }
 
 /** Szansa na zdarzenie pozytywne zależnie od fazy (eventy rynkowe). */
@@ -4833,11 +4833,11 @@ const SECTOR_CYCLE_PHASES = {
 };
 
 const RULING_PARTIES = {
-    market: { name: 'Koalicja Rynkowa', privatization: 1.6, nationalization: 0.5, subsidies: 0.7, stateMood: -0.02 },
-    state:  { name: 'Blok Państwowy',   privatization: 0.4, nationalization: 1.6, subsidies: 1.5, stateMood: 0.03 },
-    people: { name: 'Ludowcy',          privatization: 0.8, nationalization: 1.0, subsidies: 1.3, stateMood: 0.01 }, // 0.13: płaca minimalna, zasiłki, mieszkania
+    market: { name: 'Koalicja Rynkowa', privatization: 1.6, nationalization: 0.5, subsidies: 0.7, stateMood: -0.02, defenseShare: 0.02 },
+    state:  { name: 'Blok Państwowy',   privatization: 0.4, nationalization: 1.6, subsidies: 1.5, stateMood: 0.03, defenseShare: 0.035 },
+    people: { name: 'Ludowcy',          privatization: 0.8, nationalization: 1.0, subsidies: 1.3, stateMood: 0.01, defenseShare: 0.02 }, // 0.13: płaca minimalna, zasiłki, mieszkania
     // 0.15.1: lubią nacjonalizacje, nie lubią koncernów (ustawa antymonopolowa), wspierają małe firmy (progi CIT)
-    social: { name: 'Socjaldemokraci',  privatization: 0.5, nationalization: 1.4, subsidies: 1.2, stateMood: 0.015 }
+    social: { name: 'Socjaldemokraci',  privatization: 0.5, nationalization: 1.4, subsidies: 1.2, stateMood: 0.015, defenseShare: 0.015 } // 0.17 S6: defenseShare — udział budżetu obronnego w przychodach budżetu
 };
 
 let macro = createMacroState();
@@ -5627,7 +5627,7 @@ function advanceSocietyQuarter() {
 
     const poorUp = typeof getLawPoorMobility === 'function' ? getLawPoorMobility() : 0;
     applyClassMobility(society, getClassMobilityShift(), poorUp);
-    society.demandIndex = getDemandIndex();
+    society.demandIndex = getDemandIndex() + (typeof getSecurityDemandAdj === 'function' ? getSecurityDemandAdj() : 0); // 0.17 S6: bezpieczeństwo
     advanceEducation();
 
     const growth = before > 0 ? society.population / before - 1 : 0;
@@ -5921,7 +5921,8 @@ function settleSocialBudget() {
     if (!(budget.publicServices > 0)) budget.publicServices = baseline * 0.97;
     budget.revenue = revenue;
     budget.infrastructureSpending = typeof settleInfraBudget === 'function' ? settleInfraBudget(revenue) : 0; // 0.17 S5: ustawa + raty projektów
-    budget.spending = budget.publicServices + benefits + extra + budget.infrastructureSpending;
+    budget.defense = typeof settleDefenseBudget === 'function' ? settleDefenseBudget(revenue) : 0; // 0.17 S6: budżet obronny
+    budget.spending = budget.publicServices + benefits + extra + budget.infrastructureSpending + budget.defense;
     budget.balance = revenue - budget.spending;
     budget.hasBalance = true;
     budget.publicServices = budget.publicServices * 0.8 + baseline * 0.97 * 0.2; // usługi publiczne: sztywne, z opóźnieniem
@@ -6072,6 +6073,7 @@ function getRulingParty() {
         nationalization: Math.round(mix('nationalization') * 100) / 100,
         subsidies: Math.round(mix('subsidies') * 100) / 100,
         stateMood: mix('stateMood'),
+        defenseShare: mix('defenseShare'),
         coalition: true
     };
 }

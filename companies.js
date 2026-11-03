@@ -3167,7 +3167,7 @@ function computeQuarterResults(stock) {
     const quarterFactor = (typeof getStrikeRevenueFactor === 'function' ? getStrikeRevenueFactor(stock) : 1) * (typeof getSocietyRevenueFactor === 'function' ? getSocietyRevenueFactor(stock) : 1) * consumeNicheRevenueFactor(stock) * getCooperationShockFactor(stock) * (typeof getCrisisRevenueFactor === 'function' ? getCrisisRevenueFactor(stock) : 1); // T3: sezon TV/Rozrywka; T5: strajk kooperanta (połowa szoku)
     const commodityAdj = typeof getCommodityResultAdj === 'function' ? getCommodityResultAdj(stock) : { revenueFactor: 1, marginAdj: 0 }; // 0.17 S2: produkt i wsad względem Ś8
     const baseRevenue = fundamentals.revenue;
-    const revenue = baseRevenue * quarterFactor * commodityAdj.revenueFactor;
+    const revenue = baseRevenue * quarterFactor * commodityAdj.revenueFactor * (typeof getDefenseRevenueFactor === 'function' ? getDefenseRevenueFactor(stock, baseRevenue) : 1); // 0.17 S6: zamówienia obronne
     const lostRevenue = baseRevenue - revenue; // dźwignia operacyjna: 40% kosztów jest sztywnych w krótkim terminie
     const inflationSqueeze = Math.max(0, inflation - 0.04) * 0.5; // wysoka inflacja zjada marże
     // 0.13: marża = marża_0.12 + udział_kosztu_pracy × (1 − indeks); neutralnie (indeks 1,0) bez zmian.
@@ -9905,7 +9905,7 @@ function processDefenseQuarterly() {
 /** Bonus wzrostu spółek zbrojeniowych od siły policji (computeQuarterResults). */
 function getDefenseGrowthBonus(stock) {
     if (!isDefenseCompany(stock) || typeof getInstitutionEffectiveness !== 'function') return 0;
-    return getInstitutionEffectiveness(oversight.police) * 0.004;
+    return getInstitutionEffectiveness(oversight.police) * 0.002; // 0.17 S6: połowa (było 0,004), resztę dają zamówienia z budżetu obronnego
 }
 
 // #################################################################################
