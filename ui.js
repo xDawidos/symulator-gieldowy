@@ -6201,7 +6201,7 @@ function renderConstructionProjectsList() {
         const progress = Math.max(0, Math.min(1, Number(project.progress) || 0));
         const remainingWork = getProjectedRemainingMs(project) + Math.max(0, Number(project.pauseRemainingMs) || 0);
         const timeLeft = getProjectTimeLeftMs(project);
-        const nextMilestone = CONSTRUCTION_RULES.milestones[project.milestonesPaid];
+        const nextMilestone = (Array.isArray(project.milestones) ? project.milestones : CONSTRUCTION_RULES.milestones)[project.milestonesPaid];
 
         card.append(
             createConstructionInfoRow('Zamawiający', project.tender?.clientCompany?.name || 'Brak danych'),

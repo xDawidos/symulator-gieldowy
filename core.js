@@ -1032,7 +1032,7 @@ function releaseEscrowToBuilder(project, amount, purpose) {
 }
 
 function payDueMilestones(project) {
-    const milestones = CONSTRUCTION_RULES.milestones;
+    const milestones = Array.isArray(project.milestones) ? project.milestones : CONSTRUCTION_RULES.milestones; // 0.17 S5: odbiory co 10% przy infrastrukturze
 
     while (
         project.milestonesPaid < milestones.length &&
@@ -1144,6 +1144,7 @@ function startConstructionProject(tender, winningBid) {
         plannedDurationMs: durationDays * dayMs,
         dayMs,
         advanceRate: Number(tender.advanceRate) > 0 ? Number(tender.advanceRate) : CONSTRUCTION_RULES.advanceRate,
+        ...(Array.isArray(tender.milestones) ? { milestones: tender.milestones.slice() } : {}),
         technologyBonuses: { ...technologyBonuses },
         speedMultiplier: getBuilderSpeedMultiplier(builder),
         performanceFactor,

@@ -28,6 +28,9 @@ const INFRA_RULES = {
     capMin: 0.7,
     timeMult: 1,             // test serii: ×1 (tabela) albo ×1,5
     advanceRate: 0.30,       // zaliczka państwa na start budowy (z depozytu)
+    // odbiory co 10% postępu: z zaliczką 30% wypłaty wyprzedzają koszty wykonawcy (przy odbiorach co 25% wykonawca
+    // finansował kredytem setki tysięcy przy etapie 75% i na końcu — 1/3 budów zrywana z braku finansowania)
+    milestones: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
     weights: { price: 0.6, quality: 0.25, capacity: 0.15, reputation: 0, exchangeLevel: 0, isStateOwned: 0 },
     budgetMult: 1.3,         // budżet przetargu × koszt
     packageDiscount: 0.02,   // rabat za każdy odcinek ponad pierwszy
@@ -118,7 +121,7 @@ function createInfraTender(p, seg) {
         budget: Math.round(seg.cost * INFRA_RULES.budgetMult), criteriaWeights: normalizeTenderWeights(INFRA_RULES.weights),
         bids: [], evaluatedBy: [], status: 'open', createdAt: Date.now(), biddingDurationMs: duration, remainingGameMs: duration, elapsedGameMs: 0,
         closedAt: null, awardedAt: null, winner: null, projectId: null, startDate: null, completionDate: null, cancelReason: null,
-        infra: { pid: p.id, seg: seg.n, highway }, advanceRate: INFRA_RULES.advanceRate
+        infra: { pid: p.id, seg: seg.n, highway }, advanceRate: INFRA_RULES.advanceRate, milestones: INFRA_RULES.milestones
     };
     activeTenders.push(tender);
     return tender.id;
@@ -309,6 +312,10 @@ function onInfraProjectCancelled(project) {
     inf.stats.cancels++; seg.instLeft = 0;
     const why = String(project.cancelReason || '?').slice(0, 60);
     (inf.stats.cancelWhy = inf.stats.cancelWhy || {})[why] = (inf.stats.cancelWhy[why] || 0) + 1;
+    const b = project.builder, sh = b?.balanceSheet || {}; // ostatnie 10 zerwań: stan wykonawcy (diagnostyka serii)
+    (inf.stats.cancelLog = inf.stats.cancelLog || []).push({ why, sym: b?.symbol, bankrupt: Boolean(b?.isBankrupt), lev: Math.round((Number(sh.liabilities) || 0) / Math.max(1, Number(sh.assets) || 0) * 100) / 100,
+        cash: Math.round(Number(b?.cash) || 0), active: b ? getActiveProjectsForBuilder(b).length : 0, prog: Math.round(project.progress * 100) / 100, price: Math.round(project.price), q: macro.quarter });
+    if (inf.stats.cancelLog.length > 10) inf.stats.cancelLog.shift();
     if (p.type === 'highway') seg.status = 'wait';
     else { seg.status = 'cancelled'; p.status = 'cancelled'; }
     sweepInfraCash();

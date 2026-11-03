@@ -15303,6 +15303,9 @@ group('0.17 S5 Infrastruktura publiczna i PPP', () => {
         assertEq(bs.reduce((s, b) => s + getActiveProjectsForBuilder(b).length, 0), built.length, 'odcinek = 1 slot');
         const proj = constructionProjects.find(x => x.tender.infra?.seg === built[0].n);
         assertNear(proj.paidToBuilder / proj.price, 0.30, 'zaliczka 30%', 1e-9);
+        assertEq(proj.milestones.join(','), '0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9', 'odbiory co 10% postępu');
+        proj.progress = 0.1; payDueMilestones(proj);
+        assertNear(proj.paidToBuilder / proj.price, 0.30 + 0.6 * 0.1, 'po 10% postępu: zaliczka + 10% części za roboty', 1e-9);
         assertEq(proj.tender.clientCompany, INFRA_CLIENT, 'zamawiający: Skarb Państwa (inwestycje)');
         const waiting = road.segs.filter(s => s.status === 'wait').length;
         assertEq(waiting, 5 - built.length, 'reszta czeka');
