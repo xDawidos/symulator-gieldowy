@@ -19,3 +19,8 @@ const lv = {}; for (const g of games) for (const x of g.inf.q) lv[x.law] = (lv[x
 const tot = Object.values(lv).reduce((s, v) => s + v, 0);
 console.log('poziom ustawy (udział kwartałów): ' + Object.keys(lv).sort().map(k => `${k}: ${f2(lv[k] / tot * 100)}%`).join(', ') + `; na koniec średnio ${f2(mean(games.map(g => g.inf.q.at(-1).law)))}`);
 for (const m of ['sea', 'air', 'land']) { const v = games.map(g => g.inf.cap?.[m]).filter(Number.isFinite); console.log(`przepustowość ${m} na koniec: mediana ${f2(q(v, 0.5))}, p10 ${f2(q(v, 0.1))}, p90 ${f2(q(v, 0.9))}`); }
+// decyzja 24: lotnisko S5, kraje i połączenia giełd; przyczyny zerwanych budów
+const fq = games.map(g => g.inf.stats?.firstQ?.airport).filter(Number.isFinite);
+console.log(`pierwsze lotnisko: w ${fq.length}/${n} gier, kwartał średnio ${f2(mean(fq))} (mediana ${q(fq, 0.5) ?? '—'}); otwarte kraje na grę ${f2(mean(games.map(g => g.joinedN || 0)))}; połączenia giełd na grę ${f2(mean(games.map(g => (g.linkMerged || 0) + (g.linkIntl || 0))))} (przejęcia ${f2(mean(games.map(g => g.linkTaken || 0)))})`);
+const why = {}; for (const g of games) for (const [k, v] of Object.entries(g.inf.stats?.cancelWhy || {})) why[k] = (why[k] || 0) + v;
+console.log('zerwane budowy — przyczyny: ' + (Object.entries(why).map(([k, v]) => `${k} ${v}`).join('; ') || '—'));
