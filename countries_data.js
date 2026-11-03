@@ -7,7 +7,7 @@
 // =================================================================================
 
 COUNTRY_DEFS.DE = {
-    id: 'DE', name: 'Niemcy', currency: 'EUR', region: 'EU', rho: 0.75, rateMean: 0.025,
+    id: 'DE', name: 'Niemcy', currency: 'EUR', region: 'EU', rho: 0.75, rateMean: 0.025, security: 70,
     operator: { id: 'DAX', name: 'Frankfurter Börsenhaus (DAX)', commission: 0.006 },
     oversight: { name: 'BaFin', callThreshold: 0.75, level: 3 },
     labour: { wages: 1.6, rights: 'ochronne', unionMult: 1.2, shadow: 0, note: 'współdecydowanie' },
@@ -61,7 +61,7 @@ COUNTRY_DEFS.DE = {
 };
 
 COUNTRY_DEFS.US = {
-    id: 'US', name: 'USA', currency: 'USD', region: 'AM', rho: 0.6, rateMean: 0.04,
+    id: 'US', name: 'USA', currency: 'USD', region: 'AM', rho: 0.6, rateMean: 0.04, security: 80,
     operator: { id: 'WSE', name: 'Wall Street Exchange', commission: 0.006 },
     oversight: { name: 'SEC', callThreshold: 0.66, level: 3 },
     labour: { wages: 1.7, rights: 'liberalne', unionMult: 0.5, shadow: 2, note: 'niska szansa związku' },
@@ -95,7 +95,7 @@ COUNTRY_DEFS.US = {
 
 
 COUNTRY_DEFS.CZ = {
-    id: 'CZ', name: 'Czechy', currency: 'CZK', region: 'EU', rho: 0.7, rateMean: 0.04,
+    id: 'CZ', name: 'Czechy', currency: 'CZK', region: 'EU', rho: 0.7, rateMean: 0.04, security: 65,
     operator: { id: 'PX', name: 'Burza Praha (PX)', commission: 0.006 },
     oversight: { name: 'ČNB', callThreshold: 0.66, level: 2 },
     labour: { wages: 0.9, rights: 'standard', unionMult: 0.8, shadow: 2, note: 'standard' },
@@ -120,7 +120,7 @@ COUNTRY_DEFS.CZ = {
 // =================================================================================
 
 COUNTRY_DEFS.SE = {
-    id: 'SE', name: 'Szwecja', currency: 'SEK', region: 'EU', rho: 0.7, rateMean: 0.03,
+    id: 'SE', name: 'Szwecja', currency: 'SEK', region: 'EU', rho: 0.7, rateMean: 0.03, security: 70,
     operator: { id: 'SSE', name: 'Stockholmska Börsen (SSE)', commission: 0.006 },
     oversight: { name: 'Finansinspektionen', callThreshold: 0.9, level: 2 },
     labour: { wages: 1.5, rights: 'ochronne', unionMult: 1.5, shadow: 0, note: 'zadowolenie +5' },
@@ -139,7 +139,7 @@ COUNTRY_DEFS.SE = {
 };
 
 COUNTRY_DEFS.CH = {
-    id: 'CH', name: 'Szwajcaria', currency: 'CHF', region: 'EU', rho: 0.65, rateMean: 0.01,
+    id: 'CH', name: 'Szwajcaria', currency: 'CHF', region: 'EU', rho: 0.65, rateMean: 0.01, security: 85,
     operator: { id: 'SWX', name: 'Giełda Zurychska (SWX)', commission: 0.006 },
     oversight: { name: 'FINMA', callThreshold: 0.9, level: 3 },
     labour: { wages: 1.9, rights: 'standard', unionMult: 0.6, shadow: 0, note: 'standard' },
@@ -157,7 +157,7 @@ COUNTRY_DEFS.CH = {
 };
 
 COUNTRY_DEFS.FR = {
-    id: 'FR', name: 'Francja', currency: 'EUR', region: 'EU', rho: 0.75, rateMean: 0.025,
+    id: 'FR', name: 'Francja', currency: 'EUR', region: 'EU', rho: 0.75, rateMean: 0.025, security: 70,
     operator: { id: 'CAC', name: 'Bourse de Paris (CAC)', commission: 0.006 },
     oversight: { name: 'AMF', callThreshold: 0.75, level: 3 },
     labour: { wages: 1.5, rights: 'ochronne', unionMult: 2.0, shadow: 0, note: 'częste strajki' },
@@ -180,7 +180,7 @@ COUNTRY_DEFS.FR = {
 };
 
 COUNTRY_DEFS.JP = {
-    id: 'JP', name: 'Japonia', currency: 'JPY', region: 'AS', rho: 0.6, rateMean: 0.005,
+    id: 'JP', name: 'Japonia', currency: 'JPY', region: 'AS', rho: 0.6, rateMean: 0.005, security: 70,
     operator: { id: 'TSE', name: 'Giełda w Tokio (TSE)', commission: 0.005 },
     oversight: { name: 'FSA', callThreshold: 0.75, level: 3 },
     labour: { wages: 1.3, rights: 'standard', unionMult: 0.4, shadow: 0, note: 'lojalność wobec firmy' },
@@ -206,7 +206,7 @@ COUNTRY_DEFS.JP = {
 };
 
 COUNTRY_DEFS.TW = {
-    id: 'TW', name: 'Tajwan', currency: 'TWD', region: 'AS', rho: 0.55, rateMean: 0.02,
+    id: 'TW', name: 'Tajwan', currency: 'TWD', region: 'AS', rho: 0.55, rateMean: 0.02, security: 40,
     operator: { id: 'TWS', name: 'Giełda Tajpejska (TWSE)', commission: 0.005 },
     oversight: { name: 'FSC', callThreshold: 0.75, level: 2 },
     labour: { wages: 0.9, rights: 'standard', unionMult: 0.4, shadow: 0, note: 'standard' },
@@ -222,7 +222,7 @@ COUNTRY_DEFS.TW = {
 };
 
 COUNTRY_DEFS.CN = {
-    id: 'CN', name: 'Chiny', currency: 'CNY', region: 'AS', rho: 0.45, rateMean: 0.03,
+    id: 'CN', name: 'Chiny', currency: 'CNY', region: 'AS', rho: 0.45, rateMean: 0.03, security: 60,
     operator: { id: 'SHG', name: 'Giełda w Szanghaju (SHG)', commission: 0.005 },
     oversight: { name: 'CSRC', callThreshold: 0.66, level: 1 },
     labour: { wages: 0.6, rights: 'liberalne', unionMult: 0.2, shadow: 5, note: 'związki państwowe' },
@@ -250,7 +250,7 @@ COUNTRY_DEFS.CN = {
 };
 
 COUNTRY_DEFS.IN = {
-    id: 'IN', name: 'Indie', currency: 'INR', region: 'AS', rho: 0.5, rateMean: 0.065,
+    id: 'IN', name: 'Indie', currency: 'INR', region: 'AS', rho: 0.5, rateMean: 0.065, security: 55,
     operator: { id: 'BSE', name: 'Giełda w Bombaju (BSE)', commission: 0.005 },
     oversight: { name: 'SEBI', callThreshold: 0.66, level: 2 },
     labour: { wages: 0.3, rights: 'liberalne', unionMult: 0.8, shadow: 10, note: 'duża szara strefa' },

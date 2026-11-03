@@ -12,7 +12,7 @@
 
 const LINK_RULES = {
     startChance: 0.01, maxChance: 0.32, gapQ: 4, fromQ: 24,
-    infraMult: 3,                   // lotnisko albo port morski: szansa połączenia rośnie wyraźnie (×3 przy losowaniu)
+    infraMult: 3,                   // pierwsze lotnisko S5: szansa połączenia ×3; porty, magistrale i drugie lotnisko dokładają (getLinkInfraMult)
     weights: { merged: 0.5, intl: 0.3, taken: 0.2 },
     slowJoinChance: 0.12,           // na kwartał: giełda międzynarodowa przyjmuje kolejny kraj
     maxIntlAtStart: 2,              // z nami i krajem X najwyżej 2 inne
@@ -40,11 +40,17 @@ function getLinkCandidates() { return Object.keys(COUNTRY_DEFS).filter(id => !is
 function countEuropeanJoined() { return LINK_RULES.europe.filter(id => isCountryJoined(id)).length; }
 function isEuropeanCommunity() { return Boolean(exchangeLinks.community); }
 /** Wariant B: GPW pobiera od notowanych spółek podwyższone opłaty (mnożnik do opłaty z finance.js). */
-/** Lotnisko albo port morski (megaprojekty miasta) już stoją. */
-function hasLinkInfrastructure() {
-    return (typeof isAirportBuilt === 'function' && isAirportBuilt()) || (typeof specialProjects === 'object' && Boolean(specialProjects?.completed?.some(p => !p.timed && p.templateId === 'seaport')));
+/**
+ * 0.17 S5 (decyzja 24): mnożnik szansy połączenia z infrastruktury S5 — 1 + 2 (pierwsze lotnisko) + 0,5 (drugie)
+ * + 0,2 za port + 0,1 za magistralę (autostrady bez wpływu); najwyżej ×4,5.
+ */
+function getLinkInfraMult() {
+    const done = type => typeof countInfraDone === 'function' ? countInfraDone(type) : 0;
+    const airports = Math.max(done('airport'), typeof isAirportBuilt === 'function' && isAirportBuilt() ? 1 : 0);
+    return 1 + (airports >= 1 ? LINK_RULES.infraMult - 1 : 0) + (airports >= 2 ? 0.5 : 0) + 0.2 * done('port') + 0.1 * done('rail');
 }
-function getEffectiveLinkChance() { return Math.min(1, exchangeLinks.chance * (hasLinkInfrastructure() ? LINK_RULES.infraMult : 1)); }
+function hasLinkInfrastructure() { return getLinkInfraMult() > 1; }
+function getEffectiveLinkChance() { return Math.min(1, exchangeLinks.chance * getLinkInfraMult()); }
 function getListingFeeBoost() { return exchangeLinks.takenBy ? LINK_RULES.listingFeeMult : 1; }
 
 /** Podpina kraj do naszej giełdy (kraj niedołączony najpierw dołącza). Zwraca true, gdy kraj jest teraz połączony. */

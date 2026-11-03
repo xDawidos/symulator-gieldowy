@@ -443,7 +443,7 @@ function startCrisisReactions(line, def) {
         const total = rangeFloat(rate.total);
         crisisState.rate = { lineId: def.id, perQuarter: total / rate.quarters, quartersLeft: rate.quarters, delay: rate.delay || 0, floor: rate.floor ?? 0.005, total: 0, kind: rate.kind };
     }
-    const handlers = { fuelSubsidy: () => crisisSubsidy(['Transport i logistyka'], 0.03, 'Dopłaty do paliw'), publicWorks: () => crisisSubsidy(['Budowlany'], 0.03, 'Program robót publicznych'),
+    const handlers = { fuelSubsidy: () => crisisSubsidy(['Transport i logistyka'], 0.03, 'Dopłaty do paliw'), publicWorks: () => typeof orderPublicWorksProject === 'function' ? orderPublicWorksProject() : crisisSubsidy(['Budowlany'], 0.03, 'Program robót publicznych'), // 0.17 S5: projekt infrastruktury (odstępstwo 6)
         relief: () => crisisSubsidy(['Turystyka', 'Usługi'], 0.03, 'Program pomocowy'), bankRescue: () => rescueDistressedBanks() };
     if (def.state && handlers[def.state]) handlers[def.state]();
     if (typeof addMail === 'function') addMail({

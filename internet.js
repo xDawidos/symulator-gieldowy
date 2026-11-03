@@ -159,7 +159,7 @@ function renderFeriePage() {
     const root = document.getElementById('net-ferie-body');
     if (!root) return;
     const built = isAirportBuilt(), building = isAirportInProgress();
-    const status = built ? ['Stoi', 'Lotnisko miasta działa — bilety są w sprzedaży.'] : building ? ['W budowie', 'Lotnisko to megaprojekt miasta; wykonawcą jest spółka budowlana. Do ukończenia bilety są niedostępne.'] : ['Brak lotniska', 'Lotnisko jeszcze nie powstało. Miasto może je zlecić przez przetarg budowlany; bez niego nie kupisz biletów.'];
+    const status = built ? ['Stoi', 'Lotnisko miasta działa — bilety są w sprzedaży.'] : building ? ['W budowie', 'Lotnisko to projekt państwa; wykonawcą jest spółka budowlana. Do ukończenia bilety są niedostępne.'] : ['Brak lotniska', 'Lotnisko jeszcze nie powstało. Państwo może je zlecić przez przetarg budowlany; bez niego nie kupisz biletów.'];
     const order = !built && !building ? '<button class="btn-primary btn-sm" onclick="airportUiOrder()">Zleć budowę lotniska</button>' : '';
     const c = internetState.country, owns = c && canTradeCountry('player', c);
     const defs = Object.values(COUNTRY_DEFS);

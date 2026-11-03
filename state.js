@@ -313,7 +313,7 @@ function changeReputationWithMayor(amount) {
 function processCityQuarterly() {
     ensureCityModel();
     if (!festival && nextFestivalCountdown <= 0) updateCity();
-    if (ensurePpp().offers.length < 2) generatePppOffer(); // nowy projekt PPP co kwartał
+    if (ensurePpp().offers.filter(o => o.payer !== 'state').length < 2) generatePppOffer(); // nowy projekt PPP co kwartał
 }
 
 function updateCity() {
@@ -527,9 +527,10 @@ function investInPpp(offerId, amount) {
     if (amount > getFundPppCapacity() + 1e-6) { showToast(`Limit PPP: ${(PPP_FUND_LIMIT * 100).toFixed(0)}% aktywów funduszu.`, 'error'); return null; }
 
     playerCash -= amount;
-    city.budget += amount;
+    if (offer.payer === 'state') { governmentTreasury += amount; if (typeof noteInfraPpp === 'function') noteInfraPpp(offer, amount); } // 0.17 S5: projekt państwa
+    else city.budget += amount;
     offer.raised += amount;
-    const stake = { id: `${offer.id}_${playerFund.ppp.length + 1}`, name: offer.name, icon: offer.icon, principal: amount, rate: offer.rate, weeksLeft: offer.termWeeks, termWeeks: offer.termWeeks, unpaid: 0, extensions: 0 };
+    const stake = { id: `${offer.id}_${playerFund.ppp.length + 1}`, name: offer.name, icon: offer.icon, principal: amount, rate: offer.rate, weeksLeft: offer.termWeeks, termWeeks: offer.termWeeks, unpaid: 0, extensions: 0, ...(offer.payer === 'state' ? { payer: 'state' } : {}) };
     playerFund.ppp.push(stake);
     recordPayment('player-fund', 'external:miasto', amount, `PPP: ${offer.name}`);
     if (typeof noteCorporateGoal === 'function') noteCorporateGoal('project');
@@ -544,6 +545,7 @@ const PPP_EARLY_BUYOUT_PREMIUM = 0.03;
 
 /** Zwraca true, gdy udział zniknął (wykup). */
 function processPppEvents(stake) {
+    if (stake.payer === 'state') return false; // 0.17 S5: projekt państwa — bez wykupu i restrukturyzacji miasta
     if (city.budget > stake.principal * 4 && stake.weeksLeft > 8 && Math.random() < 0.01) {
         const paid = stake.principal * (1 + PPP_EARLY_BUYOUT_PREMIUM);
         city.budget -= paid;
@@ -583,6 +585,10 @@ function respondPppRestructure(stakeId, accept) {
     return true;
 }
 
+// 0.17 S5: PPP projektu państwa spłaca Skarb Państwa (governmentTreasury), pozostałe — miasto
+function pppPayerFunds(stake) { return stake.payer === 'state' ? governmentTreasury : city.budget; }
+function pppPayerSpend(stake, amount) { if (stake.payer === 'state') governmentTreasury -= amount; else city.budget -= amount; }
+
 /** Co tydzień: odsetki i spłaty PPP z budżetu miasta, wygasanie ofert. */
 function processPppWeekly() {
     const ppp = ensurePpp();
@@ -593,8 +599,8 @@ function processPppWeekly() {
     if (!playerFund) return;
     for (const stake of [...playerFund.ppp]) {
         const interest = stake.principal * stake.rate / FUND_WEEKS_PER_YEAR + (stake.unpaid || 0);
-        if (city.budget >= interest) {
-            city.budget -= interest;
+        if (pppPayerFunds(stake) >= interest) {
+            pppPayerSpend(stake, interest);
             playerCash += interest;
             if (stake.unpaid > 0) logEvent(`🏙️ Miasto nadrabia zaległe odsetki PPP ${stake.name}.`, 'review');
             stake.unpaid = 0;
@@ -606,8 +612,8 @@ function processPppWeekly() {
         stake.weeksLeft--;
         if (stake.weeksLeft > 0) continue;
 
-        if (city.budget >= stake.principal) {
-            city.budget -= stake.principal;
+        if (pppPayerFunds(stake) >= stake.principal) {
+            pppPayerSpend(stake, stake.principal);
             playerCash += stake.principal;
             playerFund.ppp = playerFund.ppp.filter(item => item !== stake);
             logEvent(`🏙️ Miasto spłaca udział funduszu w PPP ${stake.icon} ${stake.name}: ${formatZl(stake.principal, 0)}.`, 'review');
@@ -693,12 +699,11 @@ const MAX_TIMED_BONUS_QUARTERS = 20;       // 5 lat gry
 const MAX_ACTIVE_PROJECTS = 2;
 const MAX_MEMBER_SHARE = 0.6;              // jedna spółka finansuje najwyżej 60% — konsorcjum ma ≥ 2 uczestników
 
+// 0.17 S5 (decyzja 24): lotnisko i port morski to projekty infrastruktury S5 (infrastructure.js), nie megaprojekty miasta
 const MEGA_PROJECTS = [
     { id: 'stadium',    name: 'Stadion Narodowy',              icon: '🏟️', cost: 30e6, quarters: 6, sectors: ['Usługi', 'Turystyka', 'Media'],        bonus: { growth: 0.006, valuation: 0.03, health: 0.3 } },
-    { id: 'airport',    name: 'Port lotniczy',                 icon: '✈️', cost: 60e6, quarters: 8, sectors: ['Transport i logistyka', 'Turystyka'], bonus: { growth: 0.010, valuation: 0.05, health: 0.4 } },
     { id: 'nuclear',    name: 'Elektrownia jądrowa',           icon: '☢️', cost: 80e6, quarters: 10, sectors: ['Energia', 'Przemysł'],                 bonus: { growth: 0.010, valuation: 0.06, health: 0.6 } },
     { id: 'metro',      name: 'Metro',                         icon: '🚇', cost: 50e6, quarters: 8, sectors: ['Transport i logistyka', 'Nieruchomości'],          bonus: { growth: 0.008, valuation: 0.04, health: 0.3 } },
-    { id: 'seaport',    name: 'Port morski',                   icon: '⚓', cost: 45e6, quarters: 7, sectors: ['Transport i logistyka', 'Przemysł'],   bonus: { growth: 0.008, valuation: 0.04, health: 0.4 } },
     { id: 'research',   name: 'Centrum badawcze',              icon: '🔬', cost: 25e6, quarters: 5, sectors: ['Badania', 'Medycyna', 'Technologia'],  bonus: { growth: 0.006, valuation: 0.05, health: 0.3 } },
     { id: 'bridge',     name: 'Most nad rzeką',                icon: '🌉', cost: 20e6, quarters: 5, sectors: ['Transport i logistyka', 'Budowlany'],  bonus: { growth: 0.004, valuation: 0.02, health: 0.2 } },
     { id: 'hospital',   name: 'Szpital kliniczny',             icon: '🏥', cost: 35e6, quarters: 6, sectors: ['Medycyna', 'Usługi'],                  bonus: { growth: 0.006, valuation: 0.04, health: 0.4 } },
@@ -910,6 +915,7 @@ function completeProject(project) {
     specialProjects.completed.unshift(project);
     logEvent(`🎉 Ukończono ${project.icon} ${project.name}! Bonusy dla: ${members.map(m => m.name).join(', ')}${project.timed ? ` (do ${MAX_TIMED_BONUS_QUARTERS / 4} lat)` : ''}.`, 'city');
     createSuperprojectCompany(project);
+    if (typeof migrateLegacyInfraMegaProjects === 'function') migrateLegacyInfraMegaProjects(); // 0.17 S5: stare lotnisko / port w budowie → obiekt S5
 }
 
 // 0.16.6 S2: szpital, kampus i centrum wystawiennicze po ukończeniu stają się spółkami państwowymi na GPW (bez IPO).

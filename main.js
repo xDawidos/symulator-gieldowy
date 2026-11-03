@@ -471,7 +471,7 @@ function restoreSavedTenders(snapshot, bySymbol, report) {
             delete tender.winner.bidderSymbol;
         }
 
-        const spec = typeof getConstructionSpec === 'function' ? getConstructionSpec(tender.buildingType?.id) : null;
+        const spec = tender.infra ? tender.buildingType : typeof getConstructionSpec === 'function' ? getConstructionSpec(tender.buildingType?.id) : null; // 0.17 S5: spec projektu państwa w przetargu
         if (!spec) {
             tender.status = 'cancelled';
             tender.cancelReason = 'Pozycja katalogu nie jest już inwestycją budowlaną.';
@@ -577,6 +577,7 @@ function applySaveSnapshot(snapshot) {
     restoredStocks.forEach(company => sanitizeCompanyNumbers(company, report.warnings));
 
     // --- Przetargi ---
+    if (typeof INFRA_CLIENT === 'object') bySymbol.set(INFRA_CLIENT.symbol, INFRA_CLIENT); // 0.17 S5: zamawiający projektów państwa
     const restoredTenders = restoreSavedTenders(snapshot, bySymbol, report);
 
     const tenderById = new Map(restoredTenders.map(tender => [tender.id, tender]));
@@ -738,6 +739,7 @@ function applySaveSnapshot(snapshot) {
     // v13: kraj i zatrudnienie (starsze zapisy: kraj od zera, populacja miasta bez zmian).
     society = snapshot.society && typeof snapshot.society === 'object' ? snapshot.society : createSocietyState();
     ensureSocietyState();
+    if (typeof migrateLegacyInfraMegaProjects === 'function') migrateLegacyInfraMegaProjects(); // 0.17 S5: ukończone stare lotnisko / port = obiekt S5
     if (!snapshot.society) report.warnings.push('Zapis bez danych kraju — utworzono społeczeństwo i zatrudnienie w spółkach (migracja v13).');
     stocks.forEach(stock => { if (typeof ensureWorkforce === 'function') ensureWorkforce(stock); });
     if (snapshot.economyCycle && ECONOMY_PHASES[snapshot.economyCycle.phase]) {

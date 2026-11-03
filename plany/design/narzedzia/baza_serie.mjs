@@ -34,7 +34,8 @@ export function perGame(r) {
     d3: r.s017?.d3?.n, d3DomAcq: r.s017?.d3?.domAcq, d3DomTgt: r.s017?.d3?.domTgt,
     earnIdx: r.earningsIndexCagr, secMargin: r.s017?.secMargin || null, // 0.17 S2: kryterium kalibracji
     cbOpened: r.s017?.com?.bots?.opened, cbClosed: r.s017?.com?.bots?.closed, cbMargin: r.s017?.com?.bots?.margin, cbPnl: r.s017?.com?.bots?.pnl, // 0.17 S3: boty na kontraktach
-    fr: r.s017?.com?.fr, frEv: r.s017?.frEv // 0.17 S4: indeks frachtu na koniec, zakłócenia
+    fr: r.s017?.com?.fr, frEv: r.s017?.frEv, // 0.17 S4: indeks frachtu na koniec, zakłócenia
+    inf: r.s017?.inf // 0.17 S5: infrastruktura (kwartały, projekty, przepustowość)
   };
 }
 

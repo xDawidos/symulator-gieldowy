@@ -20,8 +20,8 @@ function renderAirportWindow(targetId = 'city-content-airport', { tickets = fals
     if (!root) return;
     const built = isAirportBuilt(), building = isAirportInProgress();
     const status = built ? 'Lotnisko stoi — bilety są w sprzedaży.'
-        : building ? 'Lotnisko jest w budowie (megaprojekt miasta, wykonawca: spółka budowlana).'
-            : 'Lotnisko jeszcze nie powstało. Miasto może je zlecić przez przetarg budowlany; bez niego nie kupisz biletów.';
+        : building ? 'Lotnisko jest w budowie (projekt państwa, przetarg dla firm budowlanych).'
+            : 'Lotnisko jeszcze nie powstało. Państwo może je zlecić przez przetarg budowlany; bez niego nie kupisz biletów.';
     const orderBtn = !built && !building ? `<button class="btn-primary" onclick="airportUiOrder()">Zleć budowę lotniska</button>` : '';
     const rows = !tickets ? '' : Object.values(COUNTRY_DEFS).map(def => {
         const has = hasTicket('player', def.id), price = getTicketPrice(def.id), joined = isCountryJoined(def.id);
@@ -37,7 +37,7 @@ function renderAirportWindow(targetId = 'city-content-airport', { tickets = fals
 
 function airportUiOrder() {
     const r = orderAirport();
-    showToast(r.ok ? 'Miasto ogłasza budowę lotniska.' : r.reason, r.ok ? 'success' : 'warning');
+    showToast(r.ok ? 'Państwo ogłasza przetarg na lotnisko.' : r.reason, r.ok ? 'success' : 'warning');
     refreshAirportViews();
 }
 
