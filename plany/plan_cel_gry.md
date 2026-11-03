@@ -60,8 +60,8 @@ Dziś `completeFundTakeover` dodaje symbol do `acquiredFunds`. Przejęcie ma zos
 ## 6. Porażka, koniec gry, start
 
 - **Porażka:** (a) fundusz poniżej progu zaufania klientów przez N okresów i aktywa poniżej progu ⇒ likwidacja funduszu; (b) degradacja do najniższego stanowiska i utrata miejsca po kolejnych słabych ocenach (`WEAK_SCORE`, dziś tylko kara stanowiskiem); (c) bankructwo konta prywatnego nie kończy gry. Porażka jest tylko w trybach z celem.
-- **Długość gry:** limit w latach gry (propozycja 20 lat = 400 tygodni, do potwierdzenia z użytkownikiem; w notatce padło też 6,5 roku). Po limicie: ranking końcowy vs rywale (symulowane fundusze), bez zwycięzcy, jeśli nikt nie spełnił warunku.
-- **Menu startowe:** wybór ścieżki (A / B / C / Piaskownica), liczby symulowanych funduszy (0–5), długości gry. Cel widoczny stale w zakładce Firma (rozszerzenie `getPlayerTargets` o pasek „do zwycięstwa”).
+- **Długość gry (decyzja 2026-11-03):** **bez limitu czasu**, gra trwa tyle, ile chce gracz. Nie ma końcowego rankingu po N latach. Koniec gry to tylko zwycięstwo (z opcją „graj dalej”) albo porażka z tego punktu. Rok = 20 tygodni służy tylko do liczenia okresów (oceny, premie), nie jako licznik końca.
+- **Menu startowe:** wybór ścieżki (A / B / C / Piaskownica), liczby symulowanych funduszy (0–5); bez wyboru długości gry. Cel widoczny stale w zakładce Firma (rozszerzenie `getPlayerTargets` o pasek „do zwycięstwa”).
 - **Nowa gra+:** po zwycięstwie opcja „kontynuuj” zostaje, ale cel nie liczy się drugi raz.
 
 ## 7. Dawne pomysły: rozstrzygnięcie
@@ -88,11 +88,30 @@ Cel gry nie dostaje własnej wersji, bo większość elementów pasuje do planow
 
 ## 10. Otwarte pytania do użytkownika
 
-1. Długość gry w latach gry: 20 lat, 6,5 roku czy bez limitu?
+Rozstrzygnięte 2026-11-03: **brak limitu czasu gry**; dochodzą **losowane cele poboczne** (pkt 11).
+
 2. Czy porażka ma być w każdym trybie z celem, czy tylko w „trudnym”?
 3. Czy ścieżka C (CEO + przejęcia) ma wejść do 0.19.3, czy zostaje na później?
 4. Ile symulowanych funduszy domyślnie (propozycja 3)?
 
-## 11. Co nie zostało sprawdzone
+## 11. Losowane cele poboczne
+
+Dziś `getPlayerTargets` zwraca **te same 5 celów** w każdym okresie (pobij GIG, powyżej lokaty i inflacji, zaufanie ≥ 60, ocena ≥ 60, przejęcia). Stąd powtarzalność. Propozycja:
+
+- **Pula celów** w tabeli danych (`id`, nazwa, warunek jako funkcja stanu, postęp 0–1, nagroda, trudność, wymagania). Stałe zostają tylko dwa cele „rdzeniowe” (pobij GIG; ocena zarządu), reszta jest losowana.
+- **Losowanie na początku każdego okresu** (3 kwartały): 3 cele poboczne z puli, bez powtórzenia z poprzedniego okresu; wagi wg stanowiska i dostępnych mechanik (cel o danej mechanice tylko, gdy gracz ją odblokował, np. ropa dopiero po 0.17, IPO dopiero po 0.18.11). Losowanie na ziarnie gry, żeby zapis wczytany w połowie okresu dawał te same cele.
+- **Nagrody** małe i niezależne od wygranej: premia do budżetu/konta prywatnego, relacje, zaufanie klientów, wpis do CV (wchodzi do oceny zarządu wg pkt 4.1). Cel poboczny nie może być jedyną drogą do awansu.
+- **Przykładowa pula (do rozszerzania razem z kolejnymi wersjami):**
+  - Rynek: portfel w ≥ 3 sektorach; zysk na jednym towarze; trafiony kontrakt/ETF; wyjście z pozycji przed spadkiem ≥ 15%.
+  - Fundusz: napływ nowych udziałów od klientów; zero umorzeń w okresie; zmienność poniżej GIG.
+  - Spółki: IPO spółki do portfela (po 0.18.11); dywidenda z prezesa przez rozmowę (po 0.17.3); inwestycja w startup.
+  - Korporacja: relacja z botem ≥ +40; udana rozmowa z zarządem; wniosek o przejęcie bez komplikacji.
+  - Świat: pozycja w kraju obcym (po wersjach krajów); zarobek w czasie kryzysu.
+- **Zasada uczciwości:** wszystkie cele sprawdzają wynik gracza, nie ruch ceny (cena egzogeniczna nie może „dawać” celu przypadkiem); żaden cel nie wymaga losowego zdarzenia.
+- **UI:** pasek celów w zakładce Firma, stan słowem („3 z 5 sektorów”), nie samym kolorem; ikony SVG.
+- **Test:** każdy cel z puli ma test warunku (spełniony/niespełniony), losowanie nie powtarza celów, zapis zachowuje bieżące cele; przebieg ×200 sprawdza, że żaden cel nie jest spełniany przez pasywnego gracza ani niemożliwy.
+- **Wersja:** mechanizm i ~10 celów w 0.19.3 razem z celem gry; kolejne cele dopisuje każda następna wersja do swojej mechaniki (wpis w jej planie).
+
+## 12. Co nie zostało sprawdzone
 
 Stan celu opisałem z kodu (`player.js` career.js, `ai.js` zakładka Firma, `ui.js` ekran zwycięstwa). Nie uruchamiałem gry, więc nie wiem, ile okresów zajmuje dziś awans do CEO ani jak często gracz wygrywa; progi N, K, długość gry i odsetki sukcesu to propozycje do pomiaru. Czy bot-zarządca ma dziś kod wniosku o przejęcie, nie sprawdzałem.
