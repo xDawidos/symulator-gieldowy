@@ -190,6 +190,18 @@ Zmiany użytkownika 2026-11-03 (decyzja 23): koszty ×2, projekty bez nazw włas
 - **Ustalenia z sesją kodu (2026-11-03):** zamawiający to podmiot „Skarb Państwa (inwestycje)”, który przy podpisaniu umowy wpłaca całą cenę na depozyt z `governmentTreasury`; do budżetu koszt wchodzi w ratach (cena / kwartały budowy). `infrastructureSpending` = % wpływów z ustawy + raty projektów w toku. Państwo wypłaca wykonawcy **zaliczkę 30% ceny** projektu lub odcinka na start (mniej kredytu obrotowego). Przewoźnicy krajowi: przychód × (1 + 0,05 · (przepustowość − 1) / 0,15). PPP: jedna oferta na 25% kosztu, spłata ze skarbu, oprocentowanie obligacji skarbowych + 1 pp, termin = budowa + 4 kw., wpłata gracza zmniejsza raty państwa. Przetarg bez reputacji. Czas: kwartał = 35 dni budowy. W serii: zerwane budowy infrastruktury na grę.
 - Zapis: pola opcjonalne (przepustowość, liczniki obiektów, projekty w toku z odcinkami); nowa ustawa w starym zapisie startuje od Utrzymania.
 
+### Lotnisko S5 zamiast starego lotniska miasta (decyzja 24, 2026-11-03)
+- **Usuwamy stary typ:** megaprojekt miasta `airport` („Port lotniczy”, `MEGA_PROJECTS` w `state.js`, 60 mln, konsorcjum) znika z listy megaprojektów. Jedynym lotniskiem w grze jest projekt S5 „Lotnisko”.
+- **Mechaniki starego lotniska przechodzą na pierwsze ukończone lotnisko S5:**
+  - `isAirportBuilt()` = co najmniej jedno ukończone lotnisko S5 (albo `airportState.forced`); `isAirportInProgress()` = lotnisko S5 w budowie;
+  - bilety na rynki zagraniczne (`buyTicket`), boty kupujące bilety i otwierające kraje (`processAirportQuarterly`), cel gracza „Wejdź na rynek zagraniczny”, premia Turystyki za bilet — bez zmian, tylko warunek z S5;
+  - premia sektorowa starego megaprojektu (Transport i logistyka, Turystyka: wzrost +1,0%, wycena +5%, kondycja +0,4) przy ukończeniu pierwszego lotniska S5;
+  - **samo zlecenie lotniska:** reguła `TICKET_RULES.autoOrderFromQ` (od 4. kwartału) i `autoOrderChance` (30%/kw.) zostaje — gdy kraj nie ma żadnego lotniska ani lotniska w budowie, państwo ogłasza projekt S5 „Lotnisko” niezależnie od poziomu ustawy (inaczej przy „Porzuceniu” gra nie otwarłaby rynków zagranicznych);
+  - przycisk „Zleć budowę lotniska” (okno lotniska, Internet → Ferie i wakacje) zleca państwu projekt S5 „Lotnisko” (poniżej limitu, gdy żadne nie jest w budowie).
+- **Stare zapisy:** ukończony megaprojekt `airport` = 1 ukończone lotnisko S5 (przepustowość lotnicza +0,15, licznik limitu 1); megaprojekt `airport` w budowie kończy się po staremu i wtedy zamienia w lotnisko S5.
+- **Łączenie giełd** (`hasLinkInfrastructure` / `LINK_RULES.infraMult` w `exchange_links.js`) liczy infrastrukturę S5 zamiast megaprojektów: mnożnik szansy = 1 + 2 (pierwsze lotnisko; jak dotychczasowe ×3) + 0,5 (drugie lotnisko) + 0,2 za każdy port + 0,1 za każdą magistralę kolejową (autostrady bez wpływu); najwyżej 1 + 2 + 0,5 + 0,6 + 0,4 = ×4,5.
+- **Testy:** bilet wymaga lotniska S5; autoOrder ogłasza lotnisko S5 przy „Porzuceniu”; stary zapis z ukończonym megaprojektem lotniska = 1 lotnisko S5; mnożnik łączenia giełd z lotnisk, portów i magistral.
+
 **Testy S5 (ok. 8):** projekt podnosi przepustowość po ukończeniu (autostrada po każdym odcinku); zużycie zależy od poziomu ustawy; limit obiektów blokuje kolejny projekt typu; ustawa: wydatki w budżecie i ruchy partii; przetarg autostrady dzieli odcinki między dwie firmy, gdy tak taniej, i daje wszystkie jednej, gdy pakiet tańszy; odcinek zajmuje slot wykonawcy; PPP z udziałem gracza rozlicza się jak dotąd; interwencja kryzysowa zamawia projekt; stary zapis wczytuje się z ustawą na Utrzymaniu.
 
 ---
