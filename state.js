@@ -699,12 +699,11 @@ const MAX_TIMED_BONUS_QUARTERS = 20;       // 5 lat gry
 const MAX_ACTIVE_PROJECTS = 2;
 const MAX_MEMBER_SHARE = 0.6;              // jedna spółka finansuje najwyżej 60% — konsorcjum ma ≥ 2 uczestników
 
+// 0.17 S5 (decyzja 24): lotnisko i port morski to projekty infrastruktury S5 (infrastructure.js), nie megaprojekty miasta
 const MEGA_PROJECTS = [
     { id: 'stadium',    name: 'Stadion Narodowy',              icon: '🏟️', cost: 30e6, quarters: 6, sectors: ['Usługi', 'Turystyka', 'Media'],        bonus: { growth: 0.006, valuation: 0.03, health: 0.3 } },
-    { id: 'airport',    name: 'Port lotniczy',                 icon: '✈️', cost: 60e6, quarters: 8, sectors: ['Transport i logistyka', 'Turystyka'], bonus: { growth: 0.010, valuation: 0.05, health: 0.4 } },
     { id: 'nuclear',    name: 'Elektrownia jądrowa',           icon: '☢️', cost: 80e6, quarters: 10, sectors: ['Energia', 'Przemysł'],                 bonus: { growth: 0.010, valuation: 0.06, health: 0.6 } },
     { id: 'metro',      name: 'Metro',                         icon: '🚇', cost: 50e6, quarters: 8, sectors: ['Transport i logistyka', 'Nieruchomości'],          bonus: { growth: 0.008, valuation: 0.04, health: 0.3 } },
-    { id: 'seaport',    name: 'Port morski',                   icon: '⚓', cost: 45e6, quarters: 7, sectors: ['Transport i logistyka', 'Przemysł'],   bonus: { growth: 0.008, valuation: 0.04, health: 0.4 } },
     { id: 'research',   name: 'Centrum badawcze',              icon: '🔬', cost: 25e6, quarters: 5, sectors: ['Badania', 'Medycyna', 'Technologia'],  bonus: { growth: 0.006, valuation: 0.05, health: 0.3 } },
     { id: 'bridge',     name: 'Most nad rzeką',                icon: '🌉', cost: 20e6, quarters: 5, sectors: ['Transport i logistyka', 'Budowlany'],  bonus: { growth: 0.004, valuation: 0.02, health: 0.2 } },
     { id: 'hospital',   name: 'Szpital kliniczny',             icon: '🏥', cost: 35e6, quarters: 6, sectors: ['Medycyna', 'Usługi'],                  bonus: { growth: 0.006, valuation: 0.04, health: 0.4 } },
@@ -916,6 +915,7 @@ function completeProject(project) {
     specialProjects.completed.unshift(project);
     logEvent(`🎉 Ukończono ${project.icon} ${project.name}! Bonusy dla: ${members.map(m => m.name).join(', ')}${project.timed ? ` (do ${MAX_TIMED_BONUS_QUARTERS / 4} lat)` : ''}.`, 'city');
     createSuperprojectCompany(project);
+    if (typeof migrateLegacyInfraMegaProjects === 'function') migrateLegacyInfraMegaProjects(); // 0.17 S5: stare lotnisko / port w budowie → obiekt S5
 }
 
 // 0.16.6 S2: szpital, kampus i centrum wystawiennicze po ukończeniu stają się spółkami państwowymi na GPW (bez IPO).

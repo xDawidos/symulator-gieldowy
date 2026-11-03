@@ -12528,19 +12528,21 @@ group('0.16.2', () => {
     // --- G7: lotnisko i bilety ---
     const withTickets = fn => withZZ(() => {
         startFund(10_000_000); airportState.forced = false;
+        const infra0 = society.infra; society.infra = initInfraState(); // 0.17 S5: lotnisko to projekt S5
         START_COUNTRIES.push({ id: 'ZZ', name: 'Zetland', flag: '', available: false, passCost: 40000 });
-        try { return fn(); } finally { START_COUNTRIES.pop(); resetTicketsState(); }
+        try { return fn(); } finally { START_COUNTRIES.pop(); resetTicketsState(); society.infra = infra0; activeTenders = []; }
     });
 
-    test('G7: lotnisko zleca miasto jako megaprojekt (wykonawca budowlany); po ukończeniu stoi, drugi raz zlecić nie można', () => withTickets(() => {
+    test('G7 (0.17 S5): lotnisko zleca państwo jako projekt S5 „Lotnisko” (przetarg budowlany); po odbiorze stoi, drugi raz zlecić nie można', () => withTickets(() => {
         assert(!isAirportBuilt(), 'na starcie brak lotniska');
         ensureSpecialProjects(); specialProjects.active.length = 0; specialProjects.completed = specialProjects.completed.filter(p => p.templateId !== 'airport');
+        assert(!MEGA_PROJECTS.some(p => p.id === 'airport' || p.id === 'seaport'), 'lotnisko i port morski nie są już megaprojektami');
         const r = orderAirport();
         assert(r.ok && isAirportInProgress(), `zlecenie: ${r.reason}`); assert(!orderAirport().ok, 'drugie zlecenie odrzucone');
-        const project = specialProjects.active.find(p => p.templateId === 'airport');
-        completeProject(project);
-        assert(isAirportBuilt() && !isAirportInProgress(), 'lotnisko stoi po ukończeniu megaprojektu');
-        specialProjects.completed = specialProjects.completed.filter(p => p.templateId !== 'airport');
+        const project = society.infra.projects.find(p => p.type === 'airport');
+        assert(activeTenders.some(t => t.infra?.pid === project.id && t.clientCompany === INFRA_CLIENT), 'przetarg państwa');
+        onInfraProjectCompleted({ tender: activeTenders.find(t => t.infra?.pid === project.id) });
+        assert(isAirportBuilt() && !isAirportInProgress(), 'lotnisko stoi po odbiorze');
     }));
 
     test('G7: bilet gracza — od 1000 zł (5% przepustki), tylko po wybudowaniu lotniska, z gotówki funduszu; pierwszy bilet otwiera giełdę kraju i daje bonus Turystyce', () => withTickets(() => {
@@ -12606,8 +12608,10 @@ group('0.16.2', () => {
         const q0 = macro.quarter, rnd = Math.random;
         try {
             macro.quarter = 20; Math.random = () => 0.01;
+            society.laws.infrastructure = 0; // „Porzucenie”: lotnisko i tak powstaje (0.17 S5)
             processAirportQuarterly();
-            assert(isAirportInProgress(), 'miasto samo zleciło lotnisko');
+            assert(isAirportInProgress() && countInfraActive('airport') === 1, 'państwo samo zleciło lotnisko S5 mimo „Porzucenia”');
+            society.laws.infrastructure = SOCIAL_LAWS.infrastructure.start;
             airportState.forced = true; specialProjects.active.length = 0;
             for (const ai of aiCompetitors) ai.cash = Math.max(ai.cash, 500_000);
             const before = getJoinedCountries().length;
@@ -13259,14 +13263,14 @@ group('0.16.3', () => {
         try { assert(botStakeCap(foreignIssuers.PIV, bot) <= 0.54 + 1e-9, 'bot poniżej progu kraju'); } finally { COUNTRY_DEFS.CZ.oversight.callThreshold = saved; }
         assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
     }));
-    test('G12: lotnisko albo port morski zwiększa szansę połączenia giełd (×3), przed 8. kwartałem dalej nic', () => withLinks(() => {
+    test('G12 (0.17 S5): lotnisko zwiększa szansę połączenia giełd (×3), przed 8. kwartałem dalej nic', () => withLinks(() => {
         const base = getEffectiveLinkChance();
         assertEq(base, 0.01, 'bez infrastruktury');
         airportState.forced = true;
         assertEq(getEffectiveLinkChance(), 0.03, 'z lotniskiem ×3');
         airportState.forced = false; assertEq(getEffectiveLinkChance(), 0.01, 'bez lotniska');
         ensureSpecialProjects(); specialProjects.completed.unshift({ templateId: 'seaport', timed: false });
-        try { assertEq(getEffectiveLinkChance(), 0.03, 'z portem morskim ×3'); } finally { specialProjects.completed.shift(); }
+        try { assertEq(getEffectiveLinkChance(), 0.01, 'stary megaprojekt portu już nie mnoży szansy'); } finally { specialProjects.completed.shift(); }
         airportState.forced = true; macro.quarter = 23;
         try { assertEq(withRandom(0, () => processLinksQuarterly()), null, 'przed 24. kwartałem nic'); } finally { airportState.forced = false; }
     }));
@@ -15353,5 +15357,70 @@ group('0.17 S5 Infrastruktura publiczna i PPP', () => {
         assert(applySaveSnapshot(snap).ok, 'stary zapis');
         assertEq(society.laws.infrastructure, 2, 'ustawa na Utrzymaniu');
         assert(INFRA_MODES.every(m => getInfraCapacity(m) === 1), 'przepustowość 1,0');
+    }));
+});
+
+group('0.17 S5 Lotnisko i port S5 zamiast megaprojektów miasta (decyzja 24)', () => {
+    const withInfra = fn => () => {
+        const soc0 = society, inf0 = society.infra, sp0 = specialProjects, forced0 = airportState.forced, t0 = governmentTreasury;
+        try { society.infra = initInfraState(); airportState.forced = false; specialProjects = createSpecialProjects(); return fn(); }
+        finally { society = soc0; society.infra = inf0; specialProjects = sp0; airportState.forced = forced0; governmentTreasury = t0; activeTenders = []; constructionProjects = []; }
+    };
+    const done = (type, n = 1) => { for (let i = 0; i < n; i++) society.infra.projects.push({ id: `d${type}${i}${Math.random()}`, type, status: 'done', cost: 1, ppp: 0, segs: [] }); };
+
+    test('S5: bilet wymaga ukończonego lotniska S5 (projekt w budowie nie wystarcza)', withInfra(() => {
+        assert(!isAirportBuilt() && /lotnisko/i.test(buyTicket('CZ').reason || ''), 'bez lotniska bilet odrzucony');
+        society.infra.projects.push({ id: 'a1', type: 'airport', status: 'build', cost: 1, ppp: 0, segs: [] });
+        assert(!isAirportBuilt() && isAirportInProgress(), 'w budowie: bilety jeszcze niedostępne');
+        society.infra.projects[0].status = 'done';
+        assert(isAirportBuilt() && !isAirportInProgress(), 'ukończone lotnisko S5 sprzedaje bilety');
+    }));
+
+    test('S5: pierwsze lotnisko S5 daje premię dawnego megaprojektu Turystyce i Transportowi (drugie już nie)', withInfra(() => {
+        resetWorld([makeCompany('TUR', { sector: ['Turystyka'] }), makeCompany('TEC', { sector: ['Technologia'] }), makeCompany('BD0', { sector: ['Budowlany'], experience: 40 })]);
+        const fire = () => { const p = announceInfraProject('airport'); onInfraProjectCompleted({ tender: activeTenders.find(t => t.infra?.pid === p.id) }); };
+        fire();
+        const tur = stocks.find(s => s.symbol === 'TUR'), tec = stocks.find(s => s.symbol === 'TEC');
+        assert(tur.specialBonuses?.length === 1 && Math.abs(tur.specialBonuses[0].growth - 0.010) < 1e-12 && tur.specialBonuses[0].valuation === 0.05, 'Turystyka: wzrost +1,0 pkt, wycena +5%');
+        assert(!tec.specialBonuses?.length, 'Technologia bez premii');
+        fire();
+        assertEq(tur.specialBonuses.length, 1, 'drugie lotnisko bez premii');
+        assertNear(getInfraCapacity('air'), 1.3, 'dwa lotniska +0,30', 1e-9);
+    }));
+
+    test('S5: stary zapis — ukończony megaprojekt lotniska / portu morskiego = 1 obiekt S5 (+0,15, licznik limitu 1); w budowie kończy się po staremu', withInfra(() => {
+        specialProjects.completed.push({ templateId: 'airport', timed: false }, { templateId: 'seaport', timed: false });
+        assertEq(migrateLegacyInfraMegaProjects(), 2, 'dwa obiekty przeniesione');
+        assertEq(migrateLegacyInfraMegaProjects(), 0, 'migracja raz');
+        assert(isAirportBuilt() && countInfraDone('airport') === 1 && countInfraDone('port') === 1, 'lotnisko i port S5');
+        assertNear(getInfraCapacity('air'), 1.15, 'lotniczy +0,15', 1e-12); assertNear(getInfraCapacity('sea'), 1.15, 'morski +0,15', 1e-12);
+        society.infra = initInfraState(); specialProjects = createSpecialProjects();
+        resetWorld([makeCompany('TUR', { sector: ['Turystyka'] })]);
+        const legacy = { id: 'old', templateId: 'airport', timed: false, name: 'Port lotniczy', icon: '', participants: [], builder: null, bonus: { growth: 0.01, valuation: 0.05, health: 0.4 }, status: 'building' };
+        specialProjects.active.push(legacy);
+        assert(isAirportInProgress() && !isAirportBuilt(), 'stary megaprojekt w budowie = lotnisko w budowie');
+        completeProject(legacy);
+        assert(isAirportBuilt() && countInfraDone('airport') === 1, 'po ukończeniu zamienia się w lotnisko S5');
+    }));
+
+    test('S5: stary zapis z ukończonym megaprojektem lotniska wczytuje się jako lotnisko S5', withInfra(() => {
+        resetWorld([makeCompany('BD0', { sector: ['Budowlany'] })]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        specialProjects.completed.push({ id: 'x', templateId: 'airport', timed: false, name: 'Port lotniczy', participants: [] });
+        const snap = JSON.parse(JSON.stringify(buildSaveSnapshot()));
+        delete snap.society.infra;
+        assert(applySaveSnapshot(snap).ok, 'wczytanie');
+        assert(isAirportBuilt() && countInfraDone('airport') === 1, 'lotnisko S5 po wczytaniu');
+        assertNear(getInfraCapacity('air'), 1.15, 'przepustowość lotnicza 1,15', 1e-12);
+    }));
+
+    test('S5: łączenie giełd — mnożnik 1 + 2 (pierwsze lotnisko) + 0,5 (drugie) + 0,2 za port + 0,1 za magistralę; autostrady bez wpływu, najwyżej ×4,5', withInfra(() => {
+        assertEq(getLinkInfraMult(), 1, 'bez infrastruktury');
+        done('highway', 6); assertEq(getLinkInfraMult(), 1, 'autostrady bez wpływu');
+        done('port'); assertNear(getLinkInfraMult(), 1.2, 'port +0,2', 1e-12);
+        done('airport'); assertNear(getLinkInfraMult(), 3.2, 'pierwsze lotnisko +2', 1e-12);
+        done('airport'); done('port', 2); done('rail', 4);
+        assertNear(getLinkInfraMult(), 4.5, 'pełna infrastruktura ×4,5', 1e-12);
+        assert(hasLinkInfrastructure(), 'infrastruktura jest');
     }));
 });

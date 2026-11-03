@@ -528,7 +528,7 @@ function applyCountriesSnapshot(snapshot) {
 // 0.16.2 G7: LOTNISKO I BILETY
 // Warstwa danych (bez DOM): lotnisko, bilety, dostęp do rynku, handel akcjami zagranicznymi. Wyświetlanie jest osobno (countries_ui.js:
 // `renderAirportWindow`), żeby w 0.16.5 przenieść je na stronę „Ferie i wakacje” w Internecie bez zmian w logice.
-// Lotnisko to megaprojekt „Port lotniczy” (state.js): miasto ogłasza go przez istniejący mechanizm, a wykonawcą jest spółka budowlana.
+// Lotnisko to projekt S5 „Lotnisko” (infrastructure.js, decyzja 24): państwo ogłasza przetarg, wykonawcą jest spółka budowlana.
 // Bilet = licencja na rynek kraju, każdy inwestor osobno (gracz z gotówki funduszu, boty z własnej gotówki). Kupno spółek kraju przez
 // kantor z prowizją 0,6% (zamiast 0,25% na rynku krajowym). Pierwszy bilet do kraju niedołączonego otwiera jego giełdę.
 // =================================================================================
@@ -538,7 +538,7 @@ const TICKET_RULES = {
     min: 1000,
     tourismBonus: 0.015,     // premia Turystyki za sprzedany bilet (malejąca w 2 kw.)
     botChance: 0.25,         // na kwartał i kraj: bot kupuje bilet (po ukończeniu lotniska)
-    autoOrderChance: 0.30,   // na kwartał: miasto samo zleca lotnisko (od kwartału autoOrderFromQ)
+    autoOrderChance: 0.30,   // na kwartał: państwo samo zleca lotnisko S5, niezależnie od ustawy (od kwartału autoOrderFromQ)
     autoOrderFromQ: 4,
     joinCooldownQ: 2         // odstęp między otwarciami krajów
 };
@@ -557,20 +557,19 @@ function applyTicketsSnapshot(snapshot) {
     airportState = { orderedQ: a.orderedQ ?? null, forced: Boolean(a.forced), lastJoinQ: Number(a.lastJoinQ) || -99 };
 }
 
-function isAirportBuilt() {
-    return airportState.forced || (typeof specialProjects === 'object' && Boolean(specialProjects?.completed?.some(p => !p.timed && p.templateId === 'airport')));
+// 0.17 S5 (decyzja 24): lotnisko to projekt S5 „Lotnisko” (megaprojekt miasta usunięty; stary w budowie kończy się po staremu).
+function isAirportBuilt() { return airportState.forced || (typeof countInfraDone === 'function' && countInfraDone('airport') > 0); }
+function isAirportInProgress() {
+    return (typeof countInfraActive === 'function' && countInfraActive('airport') > 0)
+        || (typeof specialProjects === 'object' && Boolean(specialProjects?.active?.some(p => !p.timed && p.templateId === 'airport')));
 }
-function isAirportInProgress() { return typeof specialProjects === 'object' && Boolean(specialProjects?.active?.some(p => !p.timed && p.templateId === 'airport')); }
 
-/** Miasto zleca budowę lotniska (megaprojekt z wykonawcą budowlanym). Zwraca { ok, reason }. */
+/** Państwo zleca budowę lotniska (projekt S5 z przetargiem). Zwraca { ok, reason }. */
 function orderAirport() {
     if (isAirportBuilt()) return { ok: false, reason: 'Lotnisko już stoi.' };
     if (isAirportInProgress()) return { ok: false, reason: 'Lotnisko jest w budowie.' };
-    if (typeof ensureSpecialProjects === 'function') ensureSpecialProjects();
-    if (specialProjects.active.length >= MAX_ACTIVE_PROJECTS) return { ok: false, reason: 'Miasto prowadzi już maksymalną liczbę megaprojektów.' };
-    const def = MEGA_PROJECTS.find(p => p.id === 'airport');
-    if (!def || isMegaProjectTaken('airport')) return { ok: false, reason: 'Lotnisko nie jest dostępne.' };
-    createProject(def);
+    const project = typeof announceInfraProject === 'function' ? announceInfraProject('airport', 'zlecenie lotniska') : null;
+    if (!project) return { ok: false, reason: 'Lotnisko nie jest dostępne (limit lotnisk w kraju).' };
     airportState.orderedQ = macro.quarter;
     return { ok: true };
 }

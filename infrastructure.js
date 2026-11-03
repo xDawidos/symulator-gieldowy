@@ -8,8 +8,11 @@
 // najtańszy podział. Stan w `society.infra` (zapisywany razem ze społeczeństwem; stary zapis: przepustowość 1,0).
 
 const INFRA_TYPES = {
-    port:    { name: 'Port morski (rozbudowa terminalu)', mode: 'sea',  gain: 0.15, cost: 3_200_000, quarters: [8, 12], limit: 3 },
-    airport: { name: 'Lotnisko',                          mode: 'air',  gain: 0.15, cost: 2_800_000, quarters: [8, 12], limit: 2 },
+    // firstBonus: premia dawnego megaprojektu miasta (decyzja 24) przy ukończeniu pierwszego obiektu typu; legacy: id megaprojektu ze starych zapisów
+    port:    { name: 'Port morski (rozbudowa terminalu)', mode: 'sea',  gain: 0.15, cost: 3_200_000, quarters: [8, 12], limit: 3, legacy: 'seaport',
+               firstBonus: { sectors: ['Transport i logistyka', 'Przemysł'], growth: 0.008, valuation: 0.04, health: 0.4 } },
+    airport: { name: 'Lotnisko',                          mode: 'air',  gain: 0.15, cost: 2_800_000, quarters: [8, 12], limit: 2, legacy: 'airport',
+               firstBonus: { sectors: ['Transport i logistyka', 'Turystyka'], growth: 0.010, valuation: 0.05, health: 0.4 } },
     rail:    { name: 'Magistrala kolejowa',               mode: 'land', gain: 0.10, cost: 2_000_000, quarters: [6, 10], limit: 4 },
     highway: { name: 'Autostrada',                        mode: 'land', gain: 0.08, cost: 1_600_000, quarters: [4, 8],  limit: 6, segments: [2, 5] }
 };
@@ -62,6 +65,8 @@ function getInfraCapacity(mode) { return typeof society === 'object' && society?
 function getInfraCapUpper(mode) { return 1 + Object.values(INFRA_TYPES).filter(t => t.mode === mode).reduce((s, t) => s + t.limit * t.gain, 0); }
 function getInfraLevel() { return INFRA_LEVELS[Number(society?.laws?.infrastructure ?? 2)] || INFRA_LEVELS[2]; }
 function countInfraObjects(type) { return ensureInfra().projects.filter(p => p.type === type && p.status !== 'cancelled').length; }
+function countInfraDone(type) { return typeof society === 'object' && society?.infra ? society.infra.projects.filter(p => p.type === type && p.status === 'done').length : 0; }
+function countInfraActive(type) { return typeof society === 'object' && society?.infra ? society.infra.projects.filter(p => p.type === type && (p.status === 'tender' || p.status === 'build')).length : 0; }
 function getInfraOpenTypes() { return Object.keys(INFRA_TYPES).filter(t => countInfraObjects(t) < INFRA_TYPES[t].limit); }
 /** Przewoźnicy krajowi: mnożnik przychodu z przepustowości (1 przy 1,0). */
 function getInfraCarrierFactor(mode) { return 1 + INFRA_RULES.carrierBoost * (getInfraCapacity(mode) - 1) / 0.15; }
@@ -260,10 +265,41 @@ function onInfraProjectCompleted(project) {
     seg.status = 'done'; seg.instLeft = 0; inf.stats.segs++;
     inf.cap[def.mode] = Math.min(getInfraCapUpper(def.mode), inf.cap[def.mode] + def.gain / p.segs.length);
     if (p.segs.every(s => s.status === 'done')) {
-        p.status = 'done';
+        p.status = 'done'; p.doneQ = macro.quarter;
         inf.stats.done[p.type] = (inf.stats.done[p.type] || 0) + 1;
+        if (inf.stats.firstQ?.[p.type] === undefined) (inf.stats.firstQ = inf.stats.firstQ || {})[p.type] = macro.quarter;
         logSociety(`🏗️ Ukończono: ${def.name} — przepustowość (${FREIGHT_MODES[def.mode].name.toLowerCase()}) ${formatNumberPl(inf.cap[def.mode], 2)}.`);
+        if (def.firstBonus && countInfraDone(p.type) === 1) applyInfraFirstBonus(p, def);
     }
+}
+
+/** Premia sektorowa dawnego megaprojektu przy pierwszym lotnisku / porcie S5: spółki krajowe z sektorów premii. */
+function applyInfraFirstBonus(p, def) {
+    const b = def.firstBonus;
+    for (const stock of stocks) {
+        if (stock.assetType || stock.isBankrupt || !(stock.sector || []).some(s => b.sectors.includes(s))) continue;
+        if (!Array.isArray(stock.specialBonuses)) stock.specialBonuses = [];
+        stock.specialBonuses.push({ projectId: p.id, name: def.name, icon: p.type === 'airport' ? '✈️' : '⚓', growth: b.growth, valuation: b.valuation, until: null });
+        stock.financialHealth = Math.min(5, (Number(stock.financialHealth) || 0) + b.health);
+    }
+    logEvent(`🎉 Pierwsze ${p.type === 'airport' ? 'lotnisko' : 'port'} w kraju: spółki z sektorów ${b.sectors.join(', ')} dostają premię (przychody +${(b.growth * 100).toFixed(1)} pkt proc./kw., wycena +${(b.valuation * 100).toFixed(0)}%).`, 'city');
+}
+
+/** Stare zapisy (decyzja 24): ukończony megaprojekt „Port lotniczy” / „Port morski” = 1 ukończone lotnisko / port S5 (premia została przy megaprojekcie). */
+function migrateLegacyInfraMegaProjects() {
+    if (typeof specialProjects !== 'object' || !specialProjects?.completed || typeof society !== 'object' || !society) return 0;
+    const inf = ensureInfra();
+    inf.legacy = inf.legacy || {};
+    let n = 0;
+    for (const [type, def] of Object.entries(INFRA_TYPES)) {
+        if (!def.legacy || inf.legacy[def.legacy] || !specialProjects.completed.some(p => !p.timed && p.templateId === def.legacy)) continue;
+        inf.legacy[def.legacy] = true;
+        inf.projects.push({ id: `infra_legacy_${def.legacy}`, type, status: 'done', cost: def.cost, ppp: 0, segs: [{ n: 1, cost: def.cost, days: 0, status: 'done' }], q: macro.quarter, legacy: true });
+        inf.stats.done[type] = (inf.stats.done[type] || 0) + 1;
+        inf.cap[def.mode] = Math.min(getInfraCapUpper(def.mode), inf.cap[def.mode] + def.gain);
+        n++;
+    }
+    return n;
 }
 /** Zerwana budowa: odcinek autostrady wraca do przetargu, inny projekt przepada (zwalnia limit). */
 function onInfraProjectCancelled(project) {
@@ -271,6 +307,8 @@ function onInfraProjectCancelled(project) {
     if (!p || !seg) return;
     const inf = ensureInfra();
     inf.stats.cancels++; seg.instLeft = 0;
+    const why = String(project.cancelReason || '?').slice(0, 60);
+    (inf.stats.cancelWhy = inf.stats.cancelWhy || {})[why] = (inf.stats.cancelWhy[why] || 0) + 1;
     if (p.type === 'highway') seg.status = 'wait';
     else { seg.status = 'cancelled'; p.status = 'cancelled'; }
     sweepInfraCash();
@@ -298,7 +336,7 @@ function processInfraQuarterly() {
     sweepInfraCash();
     const chance = level.chance / 4 * ((Number(society.budget?.deficitQuarters) || 0) > 0 ? 0.5 : 1);
     if (Math.random() < chance) announceInfraProject();
-    if (inf.projects.length > 40) inf.projects = inf.projects.filter((p, i) => i >= inf.projects.length - 40 || !['done', 'cancelled'].includes(p.status));
+    if (inf.projects.length > 40) inf.projects = inf.projects.filter((p, i) => i >= inf.projects.length - 40 || p.status !== 'cancelled'); // ukończone zostają (limit, lotnisko)
 }
 
 /** Interwencja 0.15.3 „program robót publicznych”: projekt z listy (poniżej limitu); bez wolnego typu — dopłata jak dotąd. */
