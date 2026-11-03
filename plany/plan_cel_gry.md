@@ -59,7 +59,7 @@ Dziś `completeFundTakeover` dodaje symbol do `acquiredFunds`. Przejęcie ma zos
 
 ## 6. Porażka, koniec gry, start
 
-- **Porażka:** (a) fundusz poniżej progu zaufania klientów przez N okresów i aktywa poniżej progu ⇒ likwidacja funduszu; (b) degradacja do najniższego stanowiska i utrata miejsca po kolejnych słabych ocenach (`WEAK_SCORE`, dziś tylko kara stanowiskiem); (c) bankructwo konta prywatnego nie kończy gry. Porażka jest tylko w trybach z celem.
+- **Porażka (decyzja 2026-11-03):** gracz **traci wszystkie pieniądze i wszystkie akcje**, czyli gotówka i wartość pozycji (fundusz i konto prywatne) spadają do zera. Jedna prosta zasada, bez progów zaufania i bez porażki za słabe oceny (degradacja zostaje tylko karą stanowiskiem, jak dziś). Do dopisania w specyfikacji: czy liczą się łącznie fundusz i konto prywatne, czy kończy grę już fundusz (propozycja: fundusz, bo konto prywatne jest dodatkiem), oraz ekran porażki z „zacznij od nowa / wczytaj zapis”. Porażka jest tylko w trybach z celem, w piaskownicy zero oznacza tylko pusty portfel.
 - **Długość gry (decyzja 2026-11-03):** **bez limitu czasu**, gra trwa tyle, ile chce gracz. Nie ma końcowego rankingu po N latach. Koniec gry to tylko zwycięstwo (z opcją „graj dalej”) albo porażka z tego punktu. Rok = 20 tygodni służy tylko do liczenia okresów (oceny, premie), nie jako licznik końca.
 - **Menu startowe:** wybór ścieżki (A / B / C / Piaskownica), liczby symulowanych funduszy (0–5); bez wyboru długości gry. Cel widoczny stale w zakładce Firma (rozszerzenie `getPlayerTargets` o pasek „do zwycięstwa”).
 - **Nowa gra+:** po zwycięstwie opcja „kontynuuj” zostaje, ale cel nie liczy się drugi raz.
@@ -72,6 +72,13 @@ Dziś `completeFundTakeover` dodaje symbol do `acquiredFunds`. Przejęcie ma zos
 
 ## 8. Tryb symulowanych funduszy
 
+**Ile ich jest dziś (z kodu, nie z pomiaru w grze):**
+- **Boty-zarządcy w korporacji:** losowo **3–5** (`createCorporation`), każdy z własnym funduszem (8–30 tys. na start) i osobowością; to oni są rywalami o fotel CEO.
+- **Fundusze zewnętrzne** (holdingi, `getExternalFunds`): holdingów jest 9 w `companies.js`, z czego 3 to media (PULS, FLESZ, OBSER), więc około **6** to cele przejęć. Nie mają zarządcy, nie rywalizują o fotel.
+- **Boty-inwestorzy** (`aiCompetitors` w `ai.js`): **9**, bez funduszy (gotówka i portfel), to rywale rynkowi i partnerzy relacji.
+
+„Symulowany fundusz” w trybie dodatkowym = bot-zarządca z pierwszego punktu. Liczba jest dziś losowa (3–5) i niezmienna w menu; plan zmienia to na wybór gracza.
+
 - Boty-zarządcy (istniejące) mają już fundusze; „symulowany fundusz” = bot z własną nazwą, osobowością i trasą rozwoju, który może zdobyć fotel CEO albo przejąć fundusze, jeśli gracz nie zdąży.
 - Wymaga, żeby bot-zarządca umiał wykonać wniosek o przejęcie (dziś robi to tylko gracz). Reguły identyczne jak dla gracza, bez bonusów (zasada „średnio zero”).
 - Wynik rywali widoczny w rankingu korporacji (istniejąca tabela Firma).
@@ -80,19 +87,21 @@ Dziś `completeFundTakeover` dodaje symbol do `acquiredFunds`. Przejęcie ma zos
 ## 9. Podział na wersje
 
 Cel gry nie dostaje własnej wersji, bo większość elementów pasuje do planowanych:
-- **0.18.0:** nic (wydajność); w razie potrzeby tylko ustalenie długości gry i pole `goal` w stanie gry (zapis opcjonalny).
+- **0.18.0:** nic (wydajność); w razie potrzeby tylko pole `goal` w stanie gry (zapis opcjonalny).
 - **0.18.11 (Audyt/oceny/IPO):** ocena AAA jako bramka giełdy DIAMOND; podstawa wariantu C.
 - **0.19.1 (Społeczeństwo 2):** rozmowy z zarządem (0.17.3) mogą korzystać z relacji.
 - **0.19.3 (bramka testowa):** menu startowe ze ścieżką celu, porażka i koniec gry, przejęcie ze skutkami (pkt 5), symulowane fundusze. Jeśli to za dużo, wydzielić **0.19.4 „Cel gry”**.
-- Testy: macierz „ścieżka × wynik” (zwycięstwo A/B/C, porażka, limit czasu), niezmiennik „brak wygranej przed K okresami”, przebiegi ×200 na ścieżkę (cel: 40–60% sukcesu dla gracza, który gra sensownie).
+- Testy: macierz „ścieżka × wynik” (zwycięstwo A/B/C, porażka przy zerowym majątku), niezmiennik „brak wygranej przed K okresami”, przebiegi ×200 na ścieżkę (cel: 40–60% sukcesu dla gracza, który gra sensownie).
 
 ## 10. Otwarte pytania do użytkownika
 
 Rozstrzygnięte 2026-11-03: **brak limitu czasu gry**; dochodzą **losowane cele poboczne** (pkt 11).
 
-2. Czy porażka ma być w każdym trybie z celem, czy tylko w „trudnym”?
-3. Czy ścieżka C (CEO + przejęcia) ma wejść do 0.19.3, czy zostaje na później?
-4. Ile symulowanych funduszy domyślnie (propozycja 3)?
+Rozstrzygnięte 2026-11-03: **porażka = brak pieniędzy i akcji** (pkt 6).
+
+1. Czy do porażki liczy się sam fundusz, czy fundusz i konto prywatne łącznie (propozycja: sam fundusz).
+2. Czy ścieżka C (CEO + przejęcia) ma wejść do 0.19.3, czy zostaje na później?
+3. Ile symulowanych funduszy domyślnie: dziś jest 3–5 botów-zarządców z funduszami, plus ~6 funduszy zewnętrznych do przejęcia (pkt 8). Propozycja: domyślnie 3 rywali-zarządców, do wyboru 0–5.
 
 ## 11. Losowane cele poboczne
 
