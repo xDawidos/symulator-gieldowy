@@ -15192,3 +15192,166 @@ group('0.17 S4 Transport i indeks frachtu', () => {
         assert(/[▲▼]/.test(html), 'kierunek nie tylko kolorem');
     }));
 });
+
+group('0.17 S5 Infrastruktura publiczna i PPP', () => {
+    const withRandom = (v, fn) => { const r = Math.random; Math.random = () => v; try { return fn(); } finally { Math.random = r; } };
+    // świat: wykonawcy z gotówką, świeży stan infrastruktury; po teście przywrócenie skarbu, ustaw i budżetu
+    const withInfra = fn => () => {
+        const soc0 = society, t0 = governmentTreasury, inf0 = society.infra, laws0 = { ...society.laws }, budget0 = JSON.parse(JSON.stringify(society.budget));
+        const rules0 = { ...INFRA_RULES }, seg0 = INFRA_TYPES.highway.segments;
+        try { society.infra = initInfraState(); governmentTreasury = 50_000_000; return fn(); }
+        finally {
+            society = soc0; society.infra = inf0; society.laws = laws0; society.budget = budget0; governmentTreasury = t0;
+            Object.assign(INFRA_RULES, rules0); INFRA_TYPES.highway.segments = seg0; activeTenders = []; constructionProjects = [];
+        }
+    };
+    const builders = (n, o = {}) => Array.from({ length: n }, (_, i) => makeCompany(`BD${i}`, { sector: ['Budowlany'], cash: 4_000_000, experience: o.experience ?? 40 }));
+    const weeks = (pred, max = 400) => runUntil(pred, max, BASE_DELAYS.weekly);
+    const inf = () => ensureInfra();
+
+    test('S5: ukończony port podnosi przepustowość morską o 0,15; autostrada po każdym odcinku o 0,08/odcinków', withInfra(() => {
+        resetWorld(builders(3));
+        INFRA_TYPES.highway.segments = [2, 2]; INFRA_RULES.joinChance = 1;
+        const port = announceInfraProject('port'), road = announceInfraProject('highway');
+        assert(port && road && road.segs.length === 2, 'projekty ogłoszone');
+        assert(weeks(() => port.status === 'build' && road.segs.every(s => s.status === 'build')) >= 0, `umowy podpisane (port ${port.status}, odcinki ${road.segs.map(s => s.status)})`);
+        assertNear(getInfraCapacity('sea'), 1, 'przed odbiorem bez zmian', 1e-12);
+        assert(weeks(() => road.segs.some(s => s.status === 'done')) >= 0, 'pierwszy odcinek ukończony');
+        const doneSegs = road.segs.filter(s => s.status === 'done').length;
+        assertNear(getInfraCapacity('land'), 1 + 0.04 * doneSegs, 'lądowy +0,04 za odcinek', 1e-9);
+        assert(weeks(() => port.status === 'done' && road.status === 'done', 800) >= 0, 'oba projekty ukończone');
+        assertNear(getInfraCapacity('sea'), 1.15, 'port +0,15', 1e-9);
+        assertNear(getInfraCapacity('land'), 1.08, 'autostrada razem +0,08', 1e-9);
+        assert(getFreightFundamental('sea') < 100 * Math.pow(getCommodityPrice('oil') / getCommodityTrend('oil'), 0.3) * Math.pow(getCommodityIndustryDemand(), 1.5), 'niższy indeks frachtu morskiego');
+        assertEq(inf().stats.done.port, 1, 'licznik ukończonych portów');
+    }));
+
+    test('S5: zużycie przepustowości zależy od ustawy (Porzucenie 5%/rok … Autostrady na wczoraj 0,5%/rok), dolna granica 0,7', withInfra(() => withRandom(0.99, () => {
+        society.laws.infrastructure = 0;
+        for (let q = 0; q < 4; q++) processInfraQuarterly();
+        assertNear(getInfraCapacity('land'), 0.95, 'Porzucenie: −5% w roku', 1e-9);
+        society.infra = initInfraState(); society.laws.infrastructure = 4;
+        for (let q = 0; q < 4; q++) processInfraQuarterly();
+        assertNear(getInfraCapacity('sea'), 0.995, 'Autostrady na wczoraj: −0,5% w roku', 1e-9);
+        society.laws.infrastructure = 0;
+        for (let q = 0; q < 40; q++) processInfraQuarterly();
+        assertNear(getInfraCapacity('air'), 0.7, 'dolna granica 0,7', 1e-12);
+        assertEq(checkInfraInvariants().length, 0, 'niezmienniki');
+    })));
+
+    test('S5: limit obiektów (ukończone + w budowie) blokuje kolejny projekt typu; przepadły nie liczy się', withInfra(() => {
+        resetWorld(builders(1));
+        const fake = status => ({ id: `f${Math.random()}`, type: 'airport', status, cost: 1, ppp: 0, segs: [] });
+        inf().projects.push(fake('done'), fake('build'));
+        assertEq(announceInfraProject('airport'), null, '2 lotniska = limit');
+        assert(!getInfraOpenTypes().includes('airport') && getInfraOpenTypes().includes('port'), 'losowanie typu pomija lotnisko');
+        inf().projects[1].status = 'cancelled';
+        assert(announceInfraProject('airport'), 'po zerwanej budowie można ogłosić');
+        assertNear(getInfraCapUpper('land'), 1.88, 'górna granica lądowego 1 + 4·0,10 + 6·0,08', 1e-12);
+    }));
+
+    test('S5: ustawa „Finansowanie infrastruktury” — 5 poziomów, start Utrzymanie; wydatki w budżecie (deficyt); ruchy partii', withInfra(() => {
+        assertEq(SOCIAL_LAWS.infrastructure.levels.length, 5, '5 poziomów');
+        assertEq(SOCIAL_LAWS.infrastructure.start, 2, 'start: Utrzymanie');
+        const move = party => (PARTY_PROGRAMS[party].moves.find(([law]) => law === 'infrastructure') || [null, 0])[1];
+        assertEq([move('state'), move('people'), move('market'), move('social')].join(','), '1,1,-1,0', 'Blok +1, Ludowcy +1, Koalicja −1, Socjaldemokraci bez ruchu');
+        assertEq(LAW_ANNOUNCEMENT_EFFECTS.infrastructure[1]['Budowlany'], 0.03, 'zapowiedź +1: Budowlany +3%');
+        society.laws.infrastructure = 2;
+        const t0 = governmentTreasury;
+        inf().projects.push({ id: 'p1', type: 'rail', status: 'build', cost: 1_000_000, ppp: 250_000, segs: [{ n: 1, status: 'build', price: 1_000_000, instN: 4, instLeft: 4 }] });
+        assertNear(settleInfraBudget(1_000_000), 20_000 + 750_000 / 4, '2% wpływów + rata (po PPP)', 1e-6);
+        assertNear(governmentTreasury, t0 - 20_000, 'skarb płaci tylko % z ustawy (cena już w depozycie)', 1e-6);
+        assertEq(inf().projects[0].segs[0].instLeft, 3, 'rata odliczona');
+        society.laws.infrastructure = 4;
+        assertNear(settleInfraBudget(1_000_000) - 750_000 / 4, 45_000, 'Autostrady na wczoraj: 4,5%', 1e-6);
+        society.budget.citQuarter = 1_000_000; society.budget.publicServices = 0;
+        settleSocialBudget();
+        assert(society.budget.infrastructureSpending > 0, 'linia budget.infrastructureSpending');
+        assert(society.budget.spending >= society.budget.infrastructureSpending, 'infrastructureSpending wliczone do spending');
+    }));
+
+    test('S5: przetarg autostrady — dwie firmy dostają po części odcinków, gdy tak taniej; jedna wszystkie, gdy pakiet tańszy', withInfra(() => {
+        const [A, B] = builders(2);
+        resetWorld([A, B]);
+        const p = { id: 'h1', type: 'highway', status: 'tender', cost: 400, ppp: 0, segs: [1, 2, 3, 4].map(n => ({ n, cost: 100, days: 140, status: 'wait' })) };
+        inf().projects.push(p); openInfraTenders(p);
+        const tenders = p.segs.map(s => activeTenders.find(t => t.id === s.tenderId));
+        const offer = (bidder, segs, price) => ({ bidder, items: Object.fromEntries(segs.map(n => [tenders[n - 1].id, { price, time: 140 }])) });
+        let plan = allocateHighwaySegments(tenders, [offer(A, [1, 2, 3, 4], 100), offer(B, [3, 4], 80)]);
+        assertEq(tenders.map(t => plan.get(t.id).bidder.symbol).join(','), 'BD0,BD0,BD1,BD1', 'podział: A 1–2, B 3–4');
+        assertNear(plan.get(tenders[0].id).price, 98, 'A: 2 odcinki, rabat 2%', 0.5);
+        plan = allocateHighwaySegments(tenders, [offer(A, [1, 2, 3, 4], 100), offer(B, [3, 4], 95)]);
+        assertEq(tenders.map(t => plan.get(t.id).bidder.symbol).join(','), 'BD0,BD0,BD0,BD0', 'pakiet A taniej (rabat 6%)');
+        assertNear(plan.get(tenders[3].id).price, 94, 'A: 4 odcinki, rabat 6%', 0.5);
+        plan = allocateHighwaySegments(tenders, [offer(B, [3, 4], 80)]);
+        assert(!plan.has(tenders[0].id) && plan.has(tenders[3].id), 'odcinek bez oferty zostaje bez wykonawcy');
+    }));
+
+    test('S5: odcinek zajmuje slot wykonawcy, zaliczka państwa 30% z depozytu; odcinek bez oferty wraca w następnym kwartale', withInfra(() => {
+        const bs = builders(2, { experience: 15 }); // 2 sloty na firmę
+        resetWorld(bs);
+        INFRA_TYPES.highway.segments = [5, 5]; INFRA_RULES.joinChance = 1;
+        const road = announceInfraProject('highway');
+        assert(weeks(() => road.segs.every(s => s.status !== 'tender')) >= 0, 'przetarg rozstrzygnięty');
+        const built = road.segs.filter(s => s.status === 'build');
+        assert(built.length >= 1 && built.length <= 4, `najwyżej 4 odcinki przy 2×2 slotach (${built.length})`);
+        for (const b of bs) assert(getActiveProjectsForBuilder(b).length <= b.constructionStats.maxProjects, `${b.symbol}: w granicach slotów`);
+        assertEq(bs.reduce((s, b) => s + getActiveProjectsForBuilder(b).length, 0), built.length, 'odcinek = 1 slot');
+        const proj = constructionProjects.find(x => x.tender.infra?.seg === built[0].n);
+        assertNear(proj.paidToBuilder / proj.price, 0.30, 'zaliczka 30%', 1e-9);
+        assertEq(proj.tender.clientCompany, INFRA_CLIENT, 'zamawiający: Skarb Państwa (inwestycje)');
+        const waiting = road.segs.filter(s => s.status === 'wait').length;
+        assertEq(waiting, 5 - built.length, 'reszta czeka');
+        withRandom(0.99, () => processInfraQuarterly());
+        assertEq(road.segs.filter(s => s.status === 'tender').length, waiting, 'wracają do przetargu');
+        assertNear(INFRA_CLIENT.cash, 0, 'depozyty rozliczone, gotówka zamawiającego w skarbie', 1e-6);
+    }));
+
+    test('S5: PPP gracza przy projekcie państwa — 25% kosztu, odsetki i spłata ze skarbu, mniejsze raty państwa', withInfra(() => {
+        resetWorld([mk156('GA', { price: 100 }), ...builders(1)]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        playerCash = 5_000_000; society.infra = initInfraState(); governmentTreasury = 50_000_000; ensurePpp().offers = [];
+        const p = announceInfraProject('rail');
+        const offer = ensurePpp().offers.find(o => o.infraId === p.id);
+        assert(offer && offer.payer === 'state' && Math.abs(offer.total - p.cost * 0.25) <= 500, 'oferta PPP na 25% kosztu');
+        assertNear(offer.rate, getBondMarketRate({ isStateBond: true }) + getDeficitBondPremium() + 0.01, 'obligacje skarbowe + 1 pp', 1e-12);
+        const t0 = governmentTreasury, cash0 = playerCash;
+        const stake = investInPpp(offer.id, 100_000);
+        assert(stake && stake.payer === 'state', 'udział gracza');
+        assertNear(governmentTreasury, t0 + 100_000, 'wpłata do skarbu', 1e-6);
+        assertEq(p.ppp, 100_000, 'udział zapisany w projekcie');
+        const t1 = governmentTreasury;
+        processPppWeekly();
+        assertNear(t1 - governmentTreasury, 100_000 * stake.rate / FUND_WEEKS_PER_YEAR, 'odsetki ze skarbu', 1e-6);
+        stake.weeksLeft = 1;
+        processPppWeekly();
+        assert(!playerFund.ppp.includes(stake), 'spłata w terminie');
+        assert(playerCash > cash0 - 1, 'gracz odzyskał kapitał z odsetkami');
+    }));
+
+    test('S5: program robót publicznych (kryzys) zamawia projekt z listy; bez wolnego typu — dopłata dla Budowlanego', withInfra(() => {
+        resetWorld(builders(2));
+        const p = orderPublicWorksProject();
+        assert(p && p.id && inf().stats.announced === 1, 'projekt ogłoszony');
+        assert(activeTenders.some(t => t.infra?.pid === p.id && t.clientCompany === INFRA_CLIENT), 'przetarg państwa');
+        for (const [type, def] of Object.entries(INFRA_TYPES)) while (countInfraObjects(type) < def.limit) inf().projects.push({ id: `x${Math.random()}`, type, status: 'done', cost: 1, ppp: 0, segs: [] });
+        const r = orderPublicWorksProject();
+        assert(typeof r === 'number', 'limit wszystkich typów: dopłata');
+    }));
+
+    test('S5: zapis — przepustowość, projekty i przetargi państwa wracają; stary zapis: ustawa na Utrzymaniu, przepustowość 1,0', withInfra(() => {
+        resetWorld(builders(2));
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        society.infra = initInfraState(); society.infra.cap.sea = 1.1;
+        const p = announceInfraProject('port');
+        const snap = JSON.parse(JSON.stringify(buildSaveSnapshot()));
+        assert(applySaveSnapshot(JSON.parse(JSON.stringify(snap))).ok, 'wczytanie');
+        assertNear(getInfraCapacity('sea'), 1.1, 'przepustowość z zapisu', 1e-12);
+        const t = activeTenders.find(x => x.infra?.pid === p.id);
+        assert(t && t.status === 'open' && t.clientCompany === INFRA_CLIENT, 'przetarg państwa po wczytaniu');
+        delete snap.society.infra; delete snap.society.laws.infrastructure;
+        assert(applySaveSnapshot(snap).ok, 'stary zapis');
+        assertEq(society.laws.infrastructure, 2, 'ustawa na Utrzymaniu');
+        assert(INFRA_MODES.every(m => getInfraCapacity(m) === 1), 'przepustowość 1,0');
+    }));
+});
