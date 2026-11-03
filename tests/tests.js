@@ -13458,6 +13458,14 @@ group('0.16.3', () => {
         assert(!openForexPosition('EUR/USD', 1, 1_000_000, 1).ok, 'za mało gotówki na depozyt');
     }));
 
+    test('Design 0.16: animacja lotu — rysuje scenę, klik pomija', () => {
+        const el = playTicketFlight({ country: 'DE', durationMs: 20 });
+        assert(document.querySelector('.ticket-flight') === el && /Niemcy/.test(el.textContent) && /pominąć/.test(el.textContent), 'scena z nazwą kraju');
+        assertEq(el.getAttribute('aria-hidden'), 'true', 'bez fokusu i bez wejścia do drzewa dostępności');
+        el.click();
+        assert(!document.querySelector('.ticket-flight'), 'klik pomija');
+    });
+
     test('G21: margin call — ostrzeżenie poniżej 70%, zamknięcie automatyczne poniżej 50% depozytu, strata ograniczona do depozytu', () => withLinks(() => {
         startFund(2_000_000); joinCountry('DE');
         const r = openForexPosition('EUR/USD', 1, 200_000, 10).position, cash0 = playerCash, e0 = fxRates.EUR;

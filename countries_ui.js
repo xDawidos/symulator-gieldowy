@@ -5,7 +5,7 @@
 // „Ferie i wakacje” w Internecie: wystarczy wywołać `renderAirportWindow(id)` z innym kontenerem.
 // =================================================================================
 
-/** Haczyk animacji po zakupie biletu: samolot startuje w chmury (ok. 2 s, pomijalna, wyłączona przy prefers-reduced-motion) — wykonanie przez czat designu. */
+/** Haczyk animacji po zakupie biletu: samolot startuje w chmury (ok. 2 s, pomijalna, wyłączona przy prefers-reduced-motion); rysuje `playTicketFlight`. */
 function onTicketPurchased(country, opened) {
     const def = COUNTRY_DEFS[country];
     if (typeof showToast === 'function') showToast(`Bilet na rynek: ${def?.name || country}${opened ? ' — giełda kraju się otwiera.' : '.'}`, 'success');
@@ -13,6 +13,27 @@ function onTicketPurchased(country, opened) {
     try { reduced = Boolean(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { reduced = false; }
     if (!reduced && typeof document !== 'undefined') document.dispatchEvent(new CustomEvent('ticket-flight', { detail: { country, durationMs: 2000, skippable: true } }));
 }
+
+/** Animacja lotu po zakupie biletu: scena nad grą, znika sama po `durationMs`; klik lub Esc/Enter/Spacja pomija. Bez fokusu i pauzy gry; toast zapowiada zakup czytnikom ekranu. */
+function playTicketFlight({ country, durationMs = 2000 } = {}) {
+    document.querySelector('.ticket-flight')?.remove();
+    const el = document.createElement('div');
+    el.className = 'ticket-flight'; el.setAttribute('aria-hidden', 'true'); el.style.setProperty('--flight-ms', `${durationMs}ms`);
+    el.innerHTML = `<div class="ticket-flight-scene"><svg viewBox="0 0 360 130" width="100%">
+            <g class="tf-cloud tf-cloud-a"><ellipse cx="300" cy="34" rx="30" ry="9"/><ellipse cx="288" cy="27" rx="15" ry="9"/></g>
+            <g class="tf-cloud tf-cloud-b"><ellipse cx="190" cy="56" rx="24" ry="7"/><ellipse cx="200" cy="50" rx="12" ry="7"/></g>
+            <line class="tf-runway" x1="0" y1="112" x2="360" y2="112"/>
+            <g class="tf-plane"><path d="M2 15 8 5h5l7 8h19c6 0 11 1 11 3s-5 3-11 3H12c-5 0-10-1-10-4zM26 19 17 29h6l13-10zM24 13l-6-8h5l11 8z"/></g>
+        </svg><p>Lot: ${escapeHtml(getHomeCityLabel())} → ${escapeHtml(COUNTRY_DEFS[country]?.name || country)}</p><small>Kliknij, aby pominąć</small></div>`;
+    const end = () => { clearTimeout(timer); el.remove(); document.removeEventListener('keydown', onKey); };
+    const onKey = e => { if (['Escape', 'Enter', ' '].includes(e.key)) end(); };
+    const timer = setTimeout(end, durationMs);
+    el.addEventListener('click', end);
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(el);
+    return el;
+}
+if (typeof document !== 'undefined') document.addEventListener('ticket-flight', e => { if (document.getElementById('toast-notification')) playTicketFlight(e.detail); }); // poza testami (bez paska powiadomień)
 
 /** Okno lotniska: stan budowy, ceny biletów, zakup. `targetId`: kontener (domyślnie zakładka Miasto → Lotnisko). */
 function renderAirportWindow(targetId = 'city-content-airport', { tickets = false } = {}) {
@@ -70,19 +91,22 @@ function renderCountryCard(id) {
     const rate = fxRates[def.currency], change = typeof getFxChange === 'function' ? getFxChange(def.currency) : 0;
     const crisis = typeof crisisState === 'object' && crisisState.pendingImport?.origin === id ? 'kryzys wybuchł tutaj i zmierza do Polski'
         : (typeof crisisLine === 'object' && crisisLine?.origin === id ? 'kryzys zaczął się tutaj' : (crisisLine ? 'odczuwa kryzys z Polski' : 'bez kryzysu'));
-    return `<div class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${flagIcon(id, 22)}</span><div><h4>${escapeHtml(def.name)}</h4><span class="bank-card-type">${escapeHtml(def.operator.name)} · ${currencyIcon(def.currency, 14)} ${def.currency}</span></div></header>
-        <dl class="bank-card-rates">
-            <div><dt>Nastrój rynku</dt><dd>${uiIcon(phase.icon, 14)} ${phase.name}, premia ${premium > 0 ? '▲ +' : premium < 0 ? '▼ ' : '■ '}${formatNumberPl(premium * 100, 0)}%</dd></div>
-            <div><dt>Stopa w kraju</dt><dd>${formatNumberPl(st.rate * 100, 2)}%</dd></div>
-            <div><dt>Kurs ${def.currency}</dt><dd>${fmtRate(getFxRate(def.currency) / getBaseScale(), def.currency)} ${getBaseCurrency()} (${fxArrow(change)} ${fxPct(change)} w roku)</dd></div>
-            <div><dt>Powiązanie z Polską</dt><dd>${formatNumberPl(def.rho * 100, 0)}%</dd></div>
-            <div><dt>Kryzys</dt><dd>${crisis}</dd></div>
-            <div><dt>Spółki państwowe</dt><dd>${stateIssuers.length ? stateIssuers.map(i => escapeHtml(i.name)).join(', ') : 'brak'}${stateIssuers.length ? ` · skarb kraju (licznik): ${formatNumberPl(st.treasury, 0)} ${def.currency}` : ''}</dd></div>
-            <div><dt>Pracownicy (profil kraju)</dt><dd>prawa ${escapeHtml(def.labour.rights)}, szansa związku ×${formatNumberPl(def.labour.unionMult, 1)}${def.labour.shadow ? `, szara strefa +${def.labour.shadow} pp` : ''}</dd></div>
-            <div><dt>Nadzór</dt><dd>${escapeHtml(getOversight(id).name)} (poziom ${getOversight(id).level}/3), próg wezwania ${Math.round(getCallThreshold(id) * 100)}% głosów</dd></div>
-            <div><dt>Spółek na giełdzie</dt><dd>${getCountryIssuers(id).length} z limitu ${getCountryLimit(id)} (wielkość rynku ×${formatNumberPl(getCountryLimitMult(id), 2)} liczby startowej)</dd></div>
+    const kpi = (label, value) => `<div class="cc-kpi"><span>${label}</span><strong>${value}</strong></div>`;
+    return `<div class="bank-card country-card"><header class="bank-card-head"><span class="bank-card-icon">${flagIcon(id, 22)}</span><div><h4>${escapeHtml(def.name)}</h4><span class="bank-card-type">${escapeHtml(def.operator.name)} · ${currencyIcon(def.currency, 14)} ${def.currency}</span></div></header>
+        <div class="cc-kpis">
+            ${kpi('Nastrój rynku', `${uiIcon(phase.icon, 14)} ${phase.name}, ${premium > 0 ? '▲ +' : premium < 0 ? '▼ ' : '■ '}${formatNumberPl(premium * 100, 0)}%`)}
+            ${kpi('Stopa w kraju', `${formatNumberPl(st.rate * 100, 2)}%`)}
+            ${kpi(`Kurs ${def.currency}`, `${fmtRate(getFxRate(def.currency) / getBaseScale(), def.currency)} ${getBaseCurrency()} ${fxArrow(change)} ${fxPct(change)}`)}
+            ${kpi('Powiązanie z Polską', `${formatNumberPl(def.rho * 100, 0)}%`)}
+        </div>
+        <dl class="country-facts">
+            <div><dt>Kryzys</dt><dd>${uiIcon(crisis === 'bez kryzysu' ? 'ok' : 'alert', 14)} ${crisis}</dd></div>
             <div><dt>Sesja</dt><dd>${typeof getMarketStatus === 'function' ? getMarketStatus(id).text : '—'}</dd></div>
             <div><dt>Prowizja operatora</dt><dd>${formatNumberPl(getCountryCommission(id) * 100, 1)}% (z biletem)</dd></div>
+            <div><dt>Spółek na giełdzie</dt><dd>${getCountryIssuers(id).length} z limitu ${getCountryLimit(id)} (wielkość rynku ×${formatNumberPl(getCountryLimitMult(id), 2)} liczby startowej)</dd></div>
+            <div><dt>Nadzór</dt><dd>${escapeHtml(getOversight(id).name)} (poziom ${getOversight(id).level}/3), próg wezwania ${Math.round(getCallThreshold(id) * 100)}% głosów</dd></div>
+            <div><dt>Pracownicy (profil kraju)</dt><dd>prawa ${escapeHtml(def.labour.rights)}, szansa związku ×${formatNumberPl(def.labour.unionMult, 1)}${def.labour.shadow ? `, szara strefa +${def.labour.shadow} pp` : ''}</dd></div>
+            <div><dt>Spółki państwowe</dt><dd>${stateIssuers.length ? stateIssuers.map(i => escapeHtml(i.name)).join(', ') : 'brak'}${stateIssuers.length ? ` · skarb kraju (licznik): ${formatNumberPl(st.treasury, 0)} ${def.currency}` : ''}</dd></div>
         </dl></div>`;
 }
 
@@ -181,10 +205,10 @@ function renderLinksCard() {
     const hint = chance >= 0.16 ? 'wysoka' : chance >= 0.04 ? 'rośnie' : 'niska';
     const rows = linked.map(id => `<li>${flagIcon(id, 12)} <strong>${escapeHtml(COUNTRY_DEFS[id].name)}</strong> — ${LINK_KIND_LABELS[countryState[id].link]}; bez biletu, prowizja ${formatNumberPl(LINK_RULES.domesticCommission * 100, 2)}%</li>`).join('');
     const intl = exchangeLinks.intl ? `<p class="text-sm">Giełda międzynarodowa: ${['PL', ...exchangeLinks.intl.members.filter(m => m !== 'PL')].map(m => escapeHtml(m === 'PL' ? 'Polska' : COUNTRY_DEFS[m]?.name || m)).join(', ')}.</p>` : '';
-    const taken = exchangeLinks.takenBy ? `<p class="text-sm text-warn">Wariant B: nasza giełda należy do ${escapeHtml(COUNTRY_DEFS[exchangeLinks.takenBy].name)} — opłaty za notowanie na ${getMarketLabel('GPW')} ×${LINK_RULES.listingFeeMult}.</p>` : '';
+    const taken = exchangeLinks.takenBy ? `<p class="alert alert--warn">${uiIcon('alert', 16)}<span>Wariant B: nasza giełda należy do ${escapeHtml(COUNTRY_DEFS[exchangeLinks.takenBy].name)} — opłaty za notowanie na ${getMarketLabel('GPW')} ×${LINK_RULES.listingFeeMult}.</span></p>` : '';
     const community = isEuropeanCommunity() ? '<p class="text-sm">Wspólnota europejska giełd działa — na rynku gra europejski hazardzista.</p>' : `<p class="text-sm text-muted">Wspólnota europejska powstanie, gdy na giełdzie będą ${LINK_RULES.communityMin} kraje europejskie (teraz ${countEuropeanJoined()}).</p>`;
     return `<div class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('rynek', 20)}</span><div><h4>Połączone giełdy</h4><span class="bank-card-type">szansa na kolejne połączenie: ${hint}</span></div></header>
-        ${linked.length ? `<ul class="text-sm">${rows}</ul>` : '<p class="text-sm text-muted">Żadna giełda nie jest jeszcze połączona z naszą. Połączenie (przejęcie, giełda międzynarodowa albo przejęcie nas) zdarza się samo, od drugiego roku gry.</p>'}
+        ${linked.length ? `<ul class="list-plain link-list text-sm">${rows}</ul>` : '<p class="text-sm text-muted">Żadna giełda nie jest jeszcze połączona z naszą. Połączenie (przejęcie, giełda międzynarodowa albo przejęcie nas) zdarza się samo, od drugiego roku gry.</p>'}
         ${intl}${taken}${community}</div>`;
 }
 

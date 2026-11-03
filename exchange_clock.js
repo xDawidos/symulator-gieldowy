@@ -65,13 +65,13 @@ function renderAnalogClock(market, size = 78) {
 
 /** Pas sesji na osi 24 h w czasie Warszawy: pełny pasek = sesja, linia „teraz”; stan tekstem po prawej. */
 function renderSessionBand(markets) {
-    const w = 560, row = 20, left = 92, plot = w - left - 8, base = MARKET_SESSIONS.PL, nowWarsaw = getMarketLocalHour('PL');
+    const w = 560, row = 20, left = 92, plot = w - left - 70, base = MARKET_SESSIONS.PL, nowWarsaw = getMarketLocalHour('PL');
     const toX = hr => left + (((hr % 24) + 24) % 24) / 24 * plot;
     const rows = markets.map((m, k) => {
         const def = MARKET_SESSIONS[m], shift = (base.utc + (isMarketDst(base) ? 1 : 0)) - (def.utc + (isMarketDst(def) ? 1 : 0)), a = def.open + shift, b = def.close + shift, y = 24 + k * row;
-        const seg = (x1, x2) => `<rect x="${x1.toFixed(1)}" y="${y}" width="${Math.max(1, x2 - x1).toFixed(1)}" height="12" rx="2" fill="currentColor" opacity="${getMarketStatus(m).open ? 0.85 : 0.35}"/>`;
+        const seg = (x1, x2) => `<rect x="${x1.toFixed(1)}" y="${y}" width="${Math.max(1, x2 - x1).toFixed(1)}" height="12" rx="2" fill="${getMarketStatus(m).open ? 'var(--color-text-up)' : 'currentColor'}" opacity="${getMarketStatus(m).open ? 1 : 0.35}"/>`;
         const x1 = toX(a), x2 = toX(b), bars = x2 > x1 ? seg(x1, x2) : seg(x1, left + plot) + seg(left, x2); // sesja przechodzi przez północ w czasie Warszawy
-        return `<text x="0" y="${y + 10}" font-size="11" fill="currentColor">${def.city}</text>${bars}<text x="${left + plot - 2}" y="${y + 10}" font-size="10" text-anchor="end" fill="currentColor" opacity="0.8">${getMarketStatus(m).open ? 'otwarta' : 'zamknięta'}</text>`;
+        return `<text x="0" y="${y + 10}" font-size="11" fill="currentColor">${def.city}</text>${bars}<text x="${w}" y="${y + 10}" font-size="10" text-anchor="end" fill="currentColor" opacity="0.8">${getMarketStatus(m).open ? 'otwarta' : 'zamknięta'}</text>`;
     }).join('');
     const axis = [0, 6, 12, 18, 24].map(hr => `<text x="${toX(hr === 24 ? 23.999 : hr)}" y="12" font-size="10" text-anchor="middle" fill="currentColor" opacity="0.7">${String(hr % 24).padStart(2, '0')}:00</text>`).join('');
     const nx = toX(nowWarsaw), H = 30 + markets.length * row;

@@ -5441,3 +5441,48 @@ td.sc-actions button { white-space: normal; margin: 0; }
   .crisis-axis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .crisis-cols { grid-template-columns: 1fr; }
 }
+
+/* 0.16: kantor, karta kraju, połączenia giełd, forex (plany/design/08_zaleglosci_0.16_0.17.md) */
+#kantor-body .asset-mini-table td.text-right:not(:has(input, button)) { white-space: nowrap; }
+.country-card .cc-kpis { margin: 0; }
+.country-card .cc-kpi strong { display: flex; align-items: center; gap: var(--space-1); flex-wrap: wrap; }
+.country-facts { margin: 0; }
+.country-facts > div { display: grid; grid-template-columns: minmax(120px, 200px) 1fr; gap: var(--space-1) var(--space-3); padding: var(--space-2) 0; border-bottom: 1px solid var(--color-border-subtle); }
+.country-facts > div:last-child { border-bottom: 0; }
+.country-facts dt { font-size: var(--text-body-sm-size); color: var(--color-text-muted); }
+.country-facts dd { margin: 0; font-size: var(--text-body-sm-size); color: var(--color-text-primary); min-width: 0; }
+.country-facts dd .ic { vertical-align: -2px; }
+.link-list li { padding: var(--space-2) 0; border-bottom: 1px solid var(--color-border-subtle); }
+.link-list li:last-child { border-bottom: 0; }
+.fx-form { display: grid; grid-template-columns: auto auto 1fr auto; align-items: end; gap: var(--space-2) var(--space-3); }
+.fx-form input { width: 100%; box-sizing: border-box; }
+.fx-field { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
+.fx-field label { color: var(--color-text-muted); }
+.fx-pair { display: inline-flex; align-items: center; gap: var(--space-1); }
+.fx-preview { grid-column: 1 / -1; margin: 0; }
+.fx-form .btn-row { grid-column: 1 / -1; }
+.fx-cover { min-width: 130px; }
+#kantor-body td.fx-rate { white-space: normal; }
+.fx-cover .ic { vertical-align: -2px; }
+.fx-cover .limit-meter { max-width: 170px; }
+@media (max-width: 640px) {
+  #kantor-body .asset-mini-table { display: block; overflow-x: auto; }
+  .country-facts > div { grid-template-columns: 1fr; }
+  .fx-form { grid-template-columns: 1fr; }
+}
+
+/* 0.16: animacja lotu po zakupie biletu (playTicketFlight) */
+.ticket-flight { position: fixed; inset: 0; z-index: 2000; display: grid; place-items: center; background: color-mix(in srgb, var(--color-bg-base) 70%, transparent); cursor: pointer; animation: tf-fade var(--flight-ms, 2000ms) ease both; }
+.ticket-flight-scene { width: min(420px, calc(100vw - 32px)); padding: var(--space-3) var(--space-4); text-align: center; overflow: hidden; background: var(--color-bg-raised); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); }
+.ticket-flight-scene svg { display: block; overflow: hidden; }
+.ticket-flight-scene p { margin: var(--space-2) 0 0; font-size: var(--text-body-sm-size); color: var(--color-text-primary); }
+.ticket-flight-scene small { font-size: var(--text-caption-size); color: var(--color-text-muted); }
+.tf-runway { stroke: var(--color-text-muted); stroke-width: 2; stroke-dasharray: 16 10; animation: tf-runway calc(var(--flight-ms, 2000ms) * .5) linear forwards; }
+.tf-cloud { fill: var(--color-text-muted); opacity: .35; animation: tf-cloud var(--flight-ms, 2000ms) linear both; }
+.tf-cloud-b { animation-duration: calc(var(--flight-ms, 2000ms) * 1.4); }
+.tf-plane { fill: var(--color-text-accent); transform-box: fill-box; transform-origin: center; animation: tf-plane var(--flight-ms, 2000ms) cubic-bezier(.45, 0, .7, 1) both; }
+@keyframes tf-plane { 0% { transform: translate(-40px, 83px); } 40% { transform: translate(120px, 83px); } 100% { transform: translate(380px, -20px) rotate(-16deg); } }
+@keyframes tf-cloud { to { transform: translateX(-90px); } }
+@keyframes tf-runway { to { stroke-dashoffset: -130; } }
+@keyframes tf-fade { 0% { opacity: 0; } 10%, 85% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .ticket-flight { display: none; } }
