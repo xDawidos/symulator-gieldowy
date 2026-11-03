@@ -70,8 +70,10 @@ function getGlobalDefenseIndex() {
 }
 
 function getHomeDefenseCompanies() {
-    return typeof stocks !== 'undefined' ? stocks.filter(s => !s.country && !s.isBankrupt && typeof isDefenseCompany === 'function' && isDefenseCompany(s)) : [];
+    return typeof stocks !== 'undefined' ? stocks.filter(s => !s.isBankrupt && typeof isDefenseCompany === 'function' && isDefenseCompany(s)) : [];
 }
+/** Spółka rynku krajowego (krajowe mają country 'PL' jako kraj pochodzenia, więc decyduje lista `stocks`, nie pole). */
+function isHomeIssuer(stock) { return typeof stocks !== 'undefined' && stocks.includes(stock); }
 
 /** Rozliczenie kwartału (settleSocialBudget): linia budżetu, skarb, zamówienia na następny kwartał. Zwraca wydatek. */
 function settleDefenseBudget(revenue) {
@@ -89,7 +91,7 @@ function settleDefenseBudget(revenue) {
 
 /** Mnożnik przychodu kwartału (computeQuarterResults): zamówienia obronne, premia Półprzewodników. Tylko spółki krajowe. */
 function getDefenseRevenueFactor(stock, baseRevenue) {
-    if (typeof society !== 'object' || !society?.defense || stock.country) return 1;
+    if (typeof society !== 'object' || !society?.defense || !isHomeIssuer(stock)) return 1;
     let f = 1;
     const order = Number(society.defense.orders[stock.symbol]) || 0;
     if (order && baseRevenue > 0) f += Math.max(-0.5, Math.min(0.5, order / baseRevenue));
@@ -101,7 +103,7 @@ function getDefenseRevenueFactor(stock, baseRevenue) {
 /** Premia za ryzyko kraju: ±2% wyceny przy S = 100 / 0. */
 function getSecurityValuationFactor(stock) {
     if (typeof society !== 'object' || !society) return 1;
-    return 1 + DEFENSE_RULES.peRange * (getCountrySecurityLevel(stock?.country) - 50) / 50;
+    return 1 + DEFENSE_RULES.peRange * (getCountrySecurityLevel(isHomeIssuer(stock) ? null : stock?.country) - 50) / 50;
 }
 /** Popyt konsumentów: ±0,5 pp przy odchyleniu S o 25 od 50. */
 function getSecurityDemandAdj() { return DEFENSE_RULES.demandRange * (getHomeSecurityLevel() - 50) / 25; }

@@ -15459,7 +15459,7 @@ group('0.17 S6 Zbrojenia, surowce i bezpieczeństwo państwa', () => {
 
     test('S6: budżet obronny — linia budżetu wliczona w wydatki (deficyt), skarb płaci, zamówienia proporcjonalnie do kapitalizacji ponad poziom 2%', withDefense(() => {
         const A = makeCompany('ZBA', { sector: ['Obronność'] }), B = makeCompany('ZBB', { sector: ['Obronność'] }), C = makeCompany('CIV');
-        B.totalShares = 30000;
+        B.totalShares = 30000; A.country = B.country = 'PL'; // w grze spółki krajowe mają kraj pochodzenia PL
         resetWorld([A, B, C]);
         macro.election.ruling = 'state';
         const t0 = governmentTreasury;
@@ -15481,6 +15481,7 @@ group('0.17 S6 Zbrojenia, surowce i bezpieczeństwo państwa', () => {
     test('S6: zamówienia podnoszą przychód kwartału zbrojeniówki; Półprzewodniki +1% przy 3,5%', withDefense(() => {
         const A = makeCompany('ZBA', { sector: ['Obronność'] }), S = makeCompany('SEMI', { sector: ['Technologia'] });
         S.segments = [{ sector: 'Technologia', subsector: 'Półprzewodniki', share: 1 }];
+        A.country = S.country = 'PL';
         resetWorld([A, S]);
         macro.election.ruling = 'state';
         society.defense.orders = { ZBA: 50_000 };
@@ -15526,7 +15527,8 @@ group('0.17 S6 Zbrojenia, surowce i bezpieczeństwo państwa', () => {
         const orig = window.getHomeSecurityLevel;
         try {
             window.getHomeSecurityLevel = () => 100;
-            assertNear(getSecurityValuationFactor({}), 1.02, 'S = 100: +2%', 1e-12);
+            resetWorld([makeCompany('DOM')]); stocks[0].country = 'PL';
+            assertNear(getSecurityValuationFactor(stocks[0]), 1.02, 'S = 100: +2% (spółka krajowa)', 1e-12);
             assertNear(getSecurityBotFactor(), 1.2, 'boty ×1,2', 1e-12);
             window.getHomeSecurityLevel = () => 25;
             assertNear(getSecurityDemandAdj(), -0.005, 'S = 25: popyt −0,5 pp', 1e-12);

@@ -1205,7 +1205,7 @@ const PROBE_017 = `(function () {
             T.inf.q.push({ law: society.laws.infrastructure, bal: Math.round(Number(society.budget.balance) || 0), rev: Math.round(Number(society.budget.revenue) || 0), infSp: Math.round(Number(society.budget.infrastructureSpending) || 0), def: society.budget.deficitQuarters || 0, slots, infraBusy, busy, cap: society.infra ? { ...society.infra.cap } : null,
                 // 0.17 S6: udział obronny, bezpieczeństwo, linia budżetu, indeks zbrojeń, przychód kwartału krajowej zbrojeniówki, CIT z deficytu
                 ...(typeof getDefenseShare === 'function' ? { dsh: getDefenseShare(), S: +getHomeSecurityLevel().toFixed(1), dsp: Math.round(Number(society.budget.defense) || 0), gidx: +getGlobalDefenseIndex().toFixed(3), boost: isDefenseBoosted() } : {}),
-                defRev: Math.round(stocks.filter(x => !x.isBankrupt && !x.country && typeof isDefenseCompany === 'function' && isDefenseCompany(x)).reduce((a, x) => a + (Number(x.fundamentals?.history?.at(-1)?.revenue) || 0), 0)), cit: society.budget.citAdd || 0 });
+                defRev: Math.round(stocks.filter(x => !x.isBankrupt && typeof isDefenseCompany === 'function' && isDefenseCompany(x)).reduce((a, x) => a + (Number(x.fundamentals?.history?.at(-1)?.revenue) || 0), 0)), cit: society.budget.citAdd || 0 });
         }
         return r;
     };
