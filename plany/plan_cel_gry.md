@@ -61,7 +61,7 @@ Dziś `completeFundTakeover` dodaje symbol do `acquiredFunds`. Przejęcie ma zos
 
 - **Porażka (decyzja 2026-11-03):** gracz **traci wszystkie pieniądze i wszystkie akcje**, czyli gotówka i wartość pozycji (fundusz i konto prywatne) spadają do zera. Jedna prosta zasada, bez progów zaufania i bez porażki za słabe oceny (degradacja zostaje tylko karą stanowiskiem, jak dziś). Do dopisania w specyfikacji: czy liczą się łącznie fundusz i konto prywatne, czy kończy grę już fundusz (propozycja: fundusz, bo konto prywatne jest dodatkiem), oraz ekran porażki z „zacznij od nowa / wczytaj zapis”. Porażka jest tylko w trybach z celem, w piaskownicy zero oznacza tylko pusty portfel.
 - **Długość gry (decyzja 2026-11-03):** **bez limitu czasu**, gra trwa tyle, ile chce gracz. Nie ma końcowego rankingu po N latach. Koniec gry to tylko zwycięstwo (z opcją „graj dalej”) albo porażka z tego punktu. Rok = 20 tygodni służy tylko do liczenia okresów (oceny, premie), nie jako licznik końca.
-- **Menu startowe:** wybór ścieżki (A / B / C / Piaskownica), liczby symulowanych funduszy (0–5); bez wyboru długości gry. Cel widoczny stale w zakładce Firma (rozszerzenie `getPlayerTargets` o pasek „do zwycięstwa”).
+- **Menu startowe:** wybór ścieżki (A / B / C / Piaskownica), bez wyboru liczby rywali (3–5 zarządców w firmie) i bez wyboru długości gry. Cel widoczny stale w zakładce Firma (rozszerzenie `getPlayerTargets` o pasek „do zwycięstwa”).
 - **Nowa gra+:** po zwycięstwie opcja „kontynuuj” zostaje, ale cel nie liczy się drugi raz.
 
 ## 7. Dawne pomysły: rozstrzygnięcie
@@ -77,7 +77,9 @@ Dziś `completeFundTakeover` dodaje symbol do `acquiredFunds`. Przejęcie ma zos
 - **Fundusze zewnętrzne** (holdingi, `getExternalFunds`): holdingów jest 9 w `companies.js`, z czego 3 to media (PULS, FLESZ, OBSER), więc około **6** to cele przejęć. Nie mają zarządcy, nie rywalizują o fotel.
 - **Boty-inwestorzy** (`aiCompetitors` w `ai.js`): **9**, bez funduszy (gotówka i portfel), to rywale rynkowi i partnerzy relacji.
 
-„Symulowany fundusz” w trybie dodatkowym = bot-zarządca z pierwszego punktu. Liczba jest dziś losowa (3–5) i niezmienna w menu; plan zmienia to na wybór gracza.
+„Symulowany fundusz” w trybie dodatkowym = bot-zarządca z pierwszego punktu. **Decyzja 2026-11-03: w firmie ma ich być 3–5** (jak dziś, losowo), bez wyboru w menu.
+
+**Media (PULS, FLESZ, OBSER) do przejęcia (decyzja 2026-11-03):** dziś `getExternalFunds` je wyklucza (`MEDIA_HOLDINGS`), więc nie da się ich przejąć. Zmiana: media **są dostępne do przejęcia** jak inne holdingi (dotąd tylko jako źródła maili; po przejęciu kontynuują pracę jako źródła, zmienia się właściciel). Do **celu zwycięstwa B nie liczą się** (liczą się tylko fundusze). **Jedno** z nich jest celem **misji pobocznej** (pkt 11): losowane z mediów, które jeszcze istnieją i nie są przejęte. Gdy żadne nie istnieje (upadek, już przejęte), misja się nie pojawia.
 
 - Boty-zarządcy (istniejące) mają już fundusze; „symulowany fundusz” = bot z własną nazwą, osobowością i trasą rozwoju, który może zdobyć fotel CEO albo przejąć fundusze, jeśli gracz nie zdąży.
 - Wymaga, żeby bot-zarządca umiał wykonać wniosek o przejęcie (dziś robi to tylko gracz). Reguły identyczne jak dla gracza, bez bonusów (zasada „średnio zero”).
@@ -101,7 +103,7 @@ Rozstrzygnięte 2026-11-03: **porażka = brak pieniędzy i akcji** (pkt 6).
 
 1. Czy do porażki liczy się sam fundusz, czy fundusz i konto prywatne łącznie (propozycja: sam fundusz).
 2. Czy ścieżka C (CEO + przejęcia) ma wejść do 0.19.3, czy zostaje na później?
-3. Ile symulowanych funduszy domyślnie: dziś jest 3–5 botów-zarządców z funduszami, plus ~6 funduszy zewnętrznych do przejęcia (pkt 8). Propozycja: domyślnie 3 rywali-zarządców, do wyboru 0–5.
+Rozstrzygnięte 2026-11-03: rywali-zarządców jest **3–5** w firmie; media do przejęcia, jedno z nich jako misja poboczna (pkt 8, 11).
 
 ## 11. Losowane cele poboczne
 
@@ -114,6 +116,7 @@ Dziś `getPlayerTargets` zwraca **te same 5 celów** w każdym okresie (pobij GI
   - Rynek: portfel w ≥ 3 sektorach; zysk na jednym towarze; trafiony kontrakt/ETF; wyjście z pozycji przed spadkiem ≥ 15%.
   - Fundusz: napływ nowych udziałów od klientów; zero umorzeń w okresie; zmienność poniżej GIG.
   - Spółki: IPO spółki do portfela (po 0.18.11); dywidenda z prezesa przez rozmowę (po 0.17.3); inwestycja w startup.
+  - **Przejmij media:** przejmij jedno wskazane medium (PULS, FLESZ albo OBSER; losowane spośród istniejących i nieprzejętych). Gdy żadnego nie ma, cel nie trafia do losowania. Nagroda: kontrola nad źródłem wiadomości (np. wcześniejszy dostęp do własnych maili rynkowych), do ustalenia przy wdrożeniu.
   - Korporacja: relacja z botem ≥ +40; udana rozmowa z zarządem; wniosek o przejęcie bez komplikacji.
   - Świat: pozycja w kraju obcym (po wersjach krajów); zarobek w czasie kryzysu.
 - **Zasada uczciwości:** wszystkie cele sprawdzają wynik gracza, nie ruch ceny (cena egzogeniczna nie może „dawać” celu przypadkiem); żaden cel nie wymaga losowego zdarzenia.
