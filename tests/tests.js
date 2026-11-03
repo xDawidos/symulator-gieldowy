@@ -13458,6 +13458,10 @@ group('0.16.3', () => {
         assert(!openForexPosition('EUR/USD', 1, 1_000_000, 1).ok, 'za mało gotówki na depozyt');
     }));
 
+    test('Design 0.17: ikony SVG 7 surowców, 3 rodzajów transportu, umiejętności i linii kryzysu', () => {
+        for (const name of [...COMMODITY_IDS.map(id => `surowiec-${id}`), ...FREIGHT_IDS.map(id => `transport-${id}`), 'umiejetnosc-opcje', ...Object.values(CRISIS_LINES).map(l => l.svg)]) assert(uiIcon(name).includes('<path'), `ikona ${name}`);
+    });
+
     test('Design 0.16: animacja lotu — rysuje scenę, klik pomija', () => {
         const el = playTicketFlight({ country: 'DE', durationMs: 20 });
         assert(document.querySelector('.ticket-flight') === el && /Niemcy/.test(el.textContent) && /pominąć/.test(el.textContent), 'scena z nazwą kraju');

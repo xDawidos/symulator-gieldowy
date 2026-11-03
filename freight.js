@@ -147,7 +147,7 @@ function renderFreightSection() {
         const v = getFreightIndex(id), dev = getFreightTrendRatio(id) - 1, [a, b] = getFreightDelivery(id);
         const ev = ensureFreightState().e.find(e => FREIGHT_EVENTS[e.id].mode === id);
         return `<div class="bank-ticker-item">
-            <span>Fracht ${escapeHtml(FREIGHT_MODES[id].name.toLowerCase())}</span>
+            <span>${uiIcon(`transport-${id}`, 14)} Fracht ${escapeHtml(FREIGHT_MODES[id].name.toLowerCase())}</span>
             <strong>${formatNumberPl(v, 0)}</strong>
             <small class="text-muted">${pct(dev)} vs średnia 8 kw. · dostawa ${a === b ? a : `${a}–${b}`} tyg. · przepustowość ${formatNumberPl(getFreightCapacity(id), 2)}${ev ? ` · ${escapeHtml(FREIGHT_EVENTS[ev.id].name)}` : ''}</small>
         </div>`;

@@ -5486,3 +5486,24 @@ td.sc-actions button { white-space: normal; margin: 0; }
 @keyframes tf-runway { to { stroke-dashoffset: -130; } }
 @keyframes tf-fade { 0% { opacity: 0; } 10%, 85% { opacity: 1; } 100% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .ticket-flight { display: none; } }
+
+/* 0.17: giełda towarowa, fracht, bezpieczeństwo, ustawa, autostrada (projekt: plany/design/09_ui_0.17.md) */
+.cm-name { display: inline-flex; align-items: center; gap: var(--space-2); }
+.freight-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: var(--space-2); }
+.freight-card { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-3); background: var(--color-bg-raised); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); min-width: 0; }
+.freight-card-head { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-body-sm-size); color: var(--color-text-secondary); }
+.freight-card strong { font-family: var(--font-family-mono); font-size: var(--text-num-strong-size); font-weight: 600; }
+.freight-card small { font-size: var(--text-caption-size); color: var(--color-text-muted); }
+.freight-card .limit-meter { max-width: none; margin: var(--space-1) 0 0; }
+.law-steps { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.law-steps small { font-weight: 400; color: var(--color-text-muted); }
+.hw-strip { display: flex; gap: 2px; margin: var(--space-2) 0; }
+.hw-strip > span { flex: 1; min-width: 0; padding: var(--space-1) var(--space-2); background: var(--color-bg-raised); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-sm); font-size: var(--text-caption-size); color: var(--color-text-muted); }
+.hw-strip > span.is-won { color: var(--color-text-primary); }
+.hw-strip > span.is-here { background: var(--color-bg-accent-soft); border-color: var(--color-border-accent); color: var(--color-text-primary); font-weight: 600; }
+.hw-strip b { display: block; font-weight: 600; }
+.hw-strip .limit-meter { margin: var(--space-1) 0 0; }
+@media (max-width: 640px) {
+  .law-steps { grid-template-columns: 1fr; }
+  .hw-strip { flex-direction: column; }
+}
