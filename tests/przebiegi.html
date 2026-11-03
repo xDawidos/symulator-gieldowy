@@ -1194,8 +1194,25 @@ const PROBE_017 = `(function () {
     const s = window.__sim, T = s.s017 = { d3: { n: 0, domAcq: 0, domTgt: 0 } };
     T.frEv = {}; if (typeof startFreightEvent === 'function') { const o = startFreightEvent; startFreightEvent = function (k) { T.frEv[k] = (T.frEv[k] || 0) + 1; return o.apply(this, arguments); }; } // 0.17 S4: zakłócenia frachtu
     if (typeof executeIssuerTakeover === 'function') { const o = executeIssuerTakeover; executeIssuerTakeover = function (a, t) { const r = o.apply(this, arguments); if (r && r.ok) { T.d3.n++; if (!acqForeignOf(a)) T.d3.domAcq++; if (!acqForeignOf(t)) T.d3.domTgt++; } return r; }; }
+    // 0.17 S5: co kwartał — sloty Budowlanego zajęte przez infrastrukturę, saldo budżetu, poziom ustawy; zerwane budowy
+    T.inf = { q: [] };
+    const origSample = s.sample; s.sample = function () {
+        const r = origSample.apply(this, arguments);
+        if (typeof society === 'object' && society?.infra !== undefined || typeof ensureInfra === 'function') {
+            const bs = stocks.filter(x => !x.isBankrupt && x.constructionStats && isConstructionCompany(x));
+            const slots = bs.reduce((a, x) => a + (Number(x.constructionStats.maxProjects) || 0), 0);
+            const infraBusy = constructionProjects.filter(p => !p.settled && p.tender?.infra).length, busy = constructionProjects.filter(p => !p.settled).length;
+            T.inf.q.push({ law: society.laws.infrastructure, bal: Math.round(Number(society.budget.balance) || 0), rev: Math.round(Number(society.budget.revenue) || 0), infSp: Math.round(Number(society.budget.infrastructureSpending) || 0), def: society.budget.deficitQuarters || 0, slots, infraBusy, busy, cap: society.infra ? { ...society.infra.cap } : null });
+        }
+        return r;
+    };
     const origFinish = s.finish; s.finish = function () {
         const r = origFinish.apply(this, arguments);
+        if (typeof society === 'object' && society?.infra) { // 0.17 S5: projekty państwa na koniec gry
+            const inf = society.infra;
+            T.inf.stats = inf.stats; T.inf.cap = inf.cap;
+            T.inf.projects = inf.projects.map(p => ({ type: p.type, status: p.status, segs: p.segs.length, done: p.segs.filter(x => x.status === 'done').length, firms: new Set(p.segs.map(x => x.builder).filter(Boolean)).size, ppp: p.ppp }));
+        }
         const capPl = stocks.filter(x => !x.isBankrupt && x.assetType !== 'Startup' && x.price > 0).reduce((a, x) => a + x.price * (x.totalShares || 0), 0);
         const capForeign = typeof getForeignIssuerList === 'function' ? getForeignIssuerList().filter(i => i.kind === 'share').reduce((a, i) => a + toPln(i.price * i.shares, i.currency), 0) : 0;
         const sec = {}; // 0.17 S2: marża sektora = EBITDA / przychód z 4 ostatnich kwartałów (spółki krajowe, sektor główny)
