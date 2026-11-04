@@ -138,7 +138,7 @@ function checkFreightInvariants() {
     return FREIGHT_IDS.filter(id => !(fr.idx[id] > 0) || !Number.isFinite(fr.idx[id])).map(id => `fracht ${id}: indeks ${fr.idx[id]}`);
 }
 
-// --- Okno „Rynek”: wiersz frachtu (roboczo; pełny wygląd przy designie przed S7) ---
+// --- Okno „Rynek”: wiersz frachtu ---
 function renderFreightSection() {
     if (typeof commodityState === 'undefined' || !commodityState) return '';
     ensureFreightState();

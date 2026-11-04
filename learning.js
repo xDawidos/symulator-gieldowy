@@ -1185,6 +1185,11 @@ function checkAcademyTriggers() {
         if (society.budget?.deficitQuarters >= 2) unlockAcademyEntry('deficyt');
         if (playerFund.clients?.some(c => c.type === 'ethical')) unlockAcademyEntry('esg');
     }
+    if (typeof commodityState === 'object' && commodityState) { // 0.17 S7
+        if (COMMODITY_IDS.some(id => Math.abs(getCommodityTrendRatio(id) - 1) > 0.2)) { unlockAcademyEntry('cyklSurowcowy'); unlockAcademyEntry('kosztWsadu'); }
+        if (FREIGHT_IDS.some(id => Math.abs(getFreightTrendRatio(id) - 1) > 0.2)) unlockAcademyEntry('frachtWaskieGardla');
+        if (typeof isDefenseBoosted === 'function' && isDefenseBoosted()) unlockAcademyEntry('bezpieczenstwoZbrojenia');
+    }
 }
 
 /** Zdarzenia z podpowiedzią po błędzie gracza. */

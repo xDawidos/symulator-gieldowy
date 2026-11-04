@@ -101,6 +101,7 @@ function renderCountryCard(id) {
         </div>
         <dl class="country-facts">
             <div><dt>Kryzys</dt><dd>${uiIcon(crisis === 'bez kryzysu' ? 'ok' : 'alert', 14)} ${crisis}</dd></div>
+            <div><dt>Bezpieczeństwo państwa</dt><dd>${getSecurityLabel(getCountrySecurityLevel(id))}</dd></div>
             <div><dt>Sesja</dt><dd>${typeof getMarketStatus === 'function' ? getMarketStatus(id).text : '—'}</dd></div>
             <div><dt>Prowizja operatora</dt><dd>${formatNumberPl(getCountryCommission(id) * 100, 1)}% (z biletem)</dd></div>
             <div><dt>Spółek na giełdzie</dt><dd>${getCountryIssuers(id).length} z limitu ${getCountryLimit(id)} (wielkość rynku ×${formatNumberPl(getCountryLimitMult(id), 2)} liczby startowej)</dd></div>
