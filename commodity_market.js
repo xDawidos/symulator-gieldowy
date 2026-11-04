@@ -219,10 +219,10 @@ function getCompanyHedgePositions(limit = 12) {
 }
 
 // =================================================================================
-// 0.17 S3: INTERFEJS ROBOCZY (decyzja 20: z komponentów okna forexu; ostateczny wygląd przed S7)
+// 0.17: INTERFEJS giełdy towarowej (z komponentów okna forexu; projekt: plany/design/09_ui_0.17.md)
 // =================================================================================
 let commodityForm = { id: 'oil', q: null, side: 1, notional: 50000, leverage: 2 };
-const commodityStructureLabel = s => s === 'contango' ? 'contango (kontrakt droższy od ceny bieżącej)' : 'backwardation (kontrakt tańszy od ceny bieżącej)';
+const commodityCurveBadge = s => s === 'contango' ? '<span class="badge badge--neutral">↗ contango</span>' : '<span class="badge badge--info">↘ backwardation</span>';
 function getCommodityChange(id, weeks = WEEKS_PER_QUARTER) { const h = ensureCommodityState().hist[id], past = h[Math.max(0, h.length - 1 - weeks)]; return past > 0 ? getCommodityPrice(id) / past - 1 : 0; }
 const commodityArrow = v => v > 0.0005 ? '▲ +' : v < -0.0005 ? '▼ ' : '■ ';
 function fmtCommodityUsd(v) { return `${formatNumberPl(v, v >= 100 ? 0 : 2)} USD`; }
@@ -240,38 +240,41 @@ function renderCommodityTab() {
     const list = COMMODITY_IDS.map(id => {
         const def = COMMODITY_DEFS[id], ch = getCommodityChange(id);
         return `<tr class="${id === f.id ? 'row-selected' : ''}" onclick="commodityUiPick('${id}')" tabindex="0" onkeydown="if(event.key==='Enter')commodityUiPick('${id}')">
-            <td>${escapeHtml(def.name)} <span class="text-muted">(${def.unit})</span></td><td class="text-right">${fmtCommodityUsd(getCommodityPrice(id))}</td>
+            <td><span class="cm-name">${uiIcon(`surowiec-${id}`, 16)} ${escapeHtml(def.name)} <span class="text-muted">(${def.unit})</span></span></td><td class="text-right">${fmtCommodityUsd(getCommodityPrice(id))}</td>
             <td class="text-right">${commodityArrow(ch)}${commodityPct(ch)}%<span class="text-muted"> w kwartale</span></td>
-            <td>${getContractStructure(id, near)}</td><td class="text-right">1:${skill ? getContractMaxLeverage(id) : COMMODITY_MARKET.leverage[id]}</td></tr>`;
+            <td>${commodityCurveBadge(getContractStructure(id, near))}</td><td class="text-right">1:${skill ? getContractMaxLeverage(id) : COMMODITY_MARKET.leverage[id]}</td></tr>`;
     }).join('');
-    const seriesRows = series.map(q => `<tr><td>${getContractName(f.id, q)}</td><td class="text-right">${getContractWeeksLeft(q)} tyg.</td><td class="text-right">${fmtCommodityUsd(getContractPriceUsd(f.id, q))}</td><td>${commodityStructureLabel(getContractStructure(f.id, q))}</td></tr>`).join('');
+    const seriesRows = series.map(q => `<tr class="${q === f.q ? 'row-selected' : ''}"><td>${getContractName(f.id, q)}</td><td class="text-right">${getContractWeeksLeft(q)} tyg.</td><td class="text-right">${fmtCommodityUsd(getContractPriceUsd(f.id, q))}</td><td>${commodityCurveBadge(getContractStructure(f.id, q))}</td></tr>`).join('');
     const rows = getMarginPositions('commodities').map(p => {
         const equity = getMarginEquity(p), cover = getMarginCoverage(p), pnl = equity - p.deposit, c = parseContractName(p.instrument);
+        const warn = cover < MARGIN_RULES.warnBelow, coverPct = Math.round(cover * 100), limit = Math.round(MARGIN_RULES.warnBelow * 100);
         return `<tr><td>${escapeHtml(p.instrument)}</td><td>${p.side > 0 ? 'długa' : 'krótka'}</td><td class="text-right">${formatZl(p.notional, 0)}</td><td class="text-right">1:${p.leverage}</td>
             <td class="text-right">${formatZl(p.deposit, 0)}</td><td class="text-right">${pnl >= 0 ? '▲ +' : '▼ '}${formatZl(pnl, 0)}</td>
-            <td class="text-right">${Math.round(cover * 100)}% (${commodityCoverWord(cover)})</td><td class="text-right">${c ? getContractWeeksLeft(c.absQ) : '—'} tyg.</td>
+            <td class="fx-cover"><span class="${warn ? 'tone-warn' : ''}">${uiIcon(warn ? 'alert' : 'ok', 14)} ${coverPct}% (${commodityCoverWord(cover)})</span>${renderLimitMeter(coverPct, limit, `Kapitał ${coverPct}% depozytu, ostrzeżenie poniżej ${limit}%`, warn)}</td><td class="text-right">${c ? getContractWeeksLeft(c.absQ) : '—'} tyg.</td>
             <td>${c && !getContractSkillBlock(c.id, p.side, p.leverage) ? `<button class="btn-ghost" onclick="commodityUiRoll(${p.id})">Przedłuż</button> ` : ''}<button class="btn-ghost" onclick="commodityUiClose(${p.id})">Zamknij</button></td></tr>`;
     }).join('');
     const hedges = getCompanyHedgePositions(8).map(x => `<tr><td>${escapeHtml(x.name)} (${escapeHtml(x.symbol)})</td><td>${escapeHtml(COMMODITY_DEFS[x.id].name)}</td><td class="text-right">${Math.round(x.h * 100)}%</td><td class="text-right">${formatZl(x.value, 0)}</td></tr>`).join('');
     const notional = getMarginNotional(), cap = MARGIN_RULES.fundLeverageCap * getFundAssets();
-    return `<p class="text-sm text-muted">Ceny surowców są światowe (w USD) i nie zależą od Twoich transakcji. Kontrakt zapada na koniec kwartału i rozlicza się gotówką po cenie z tego dnia. Cena kontraktu zawiera oczekiwany powrót ceny do średniej i koszt przechowania: nad średnią kontrakty są tańsze (backwardation), pod nią droższe (contango). Wynik w złotych zawiera zmianę kursu USD.</p>
+    return `<p class="text-sm text-muted">Ceny surowców są światowe (w USD) i nie zależą od Twoich transakcji. Kontrakt zapada na koniec kwartału i rozlicza się gotówką po cenie z tego dnia. Cena kontraktu zawiera oczekiwany powrót ceny do średniej i koszt przechowania: nad średnią kontrakty są tańsze (backwardation), pod nią droższe (contango). Wynik w ${getBaseCurrency()} zawiera zmianę kursu USD.</p>
         <table class="asset-mini-table w-full"><thead><tr><th>Surowiec</th><th class="text-right">Cena</th><th class="text-right">Zmiana</th><th>Krzywa</th><th class="text-right">Dźwignia</th></tr></thead><tbody>${list}</tbody></table>
         <h4 class="mt-3">${escapeHtml(COMMODITY_DEFS[f.id].name)}: cena z ${hist.length} tyg.</h4>
         <div class="commodity-chart">${renderSparkline(hist, { width: 640, height: 96 })}</div>
         <p class="text-sm text-muted">Najniżej ${fmtCommodityUsd(Math.min(...hist))}, najwyżej ${fmtCommodityUsd(Math.max(...hist))}, teraz ${fmtCommodityUsd(getCommodityPrice(f.id))}.</p>
         <h4 class="mt-3">${escapeHtml(COMMODITY_DEFS[f.id].name)}: serie kontraktów</h4>
         <table class="asset-mini-table w-full"><thead><tr><th>Seria</th><th class="text-right">Do zapadalności</th><th class="text-right">Cena kontraktu</th><th>Struktura</th></tr></thead><tbody>${seriesRows}</tbody></table>
-        ${skill < 1 ? `<p class="text-sm" role="status">Kontrakty otworzysz po zakupie umiejętności „Mistrz Opcji”: poziom 1 to pozycje długie do 1:3, poziom 2 to krótkie i pełna dźwignia.</p>` : `<div class="kantor-form"><label for="cm-q" class="text-sm">Seria</label><select id="cm-q" onchange="commodityUiSet()">${series.map(q => `<option value="${q}" ${q === f.q ? 'selected' : ''}>${getContractName(f.id, q)}</option>`).join('')}</select>
-            <label for="cm-side" class="text-sm">Kierunek</label><select id="cm-side" onchange="commodityUiSet()"><option value="1" ${f.side > 0 ? 'selected' : ''}>długa</option>${skill >= 2 ? `<option value="-1" ${f.side < 0 ? 'selected' : ''}>krótka</option>` : ''}</select>
-            <label for="cm-notional" class="text-sm">Wartość pozycji (zł)</label><input id="cm-notional" type="number" min="${MARGIN_RULES.minNotional}" step="1000" value="${f.notional}" onchange="commodityUiSet()">
-            <label for="cm-leverage" class="text-sm">Dźwignia</label><select id="cm-leverage" onchange="commodityUiSet()">${Array.from({ length: maxLev }, (_, i) => `<option value="${i + 1}" ${i + 1 === f.leverage ? 'selected' : ''}>1:${i + 1}</option>`).join('')}</select>
-            <p class="text-sm" aria-live="polite">Depozyt ${formatZl(f.notional / f.leverage, 0)}, spread ${formatZl(f.notional * COMMODITY_MARKET.entrySpread, 0)}; bez kosztu utrzymania (koszt przechowania jest w cenie kontraktu).</p>
+        ${skill < 1 ? `<p class="notice-inline" role="status">${uiIcon('klodka', 14)}<span>Kontrakty otworzysz po zakupie umiejętności „Mistrz Opcji”: poziom 1 to pozycje długie do 1:3, poziom 2 to krótkie i pełna dźwignia.</span></p>` : `<div class="kantor-form fx-form">
+            <div class="fx-field"><label for="cm-q" class="text-sm">Seria</label><select id="cm-q" onchange="commodityUiSet()">${series.map(q => `<option value="${q}" ${q === f.q ? 'selected' : ''}>${getContractName(f.id, q)}</option>`).join('')}</select></div>
+            <div class="fx-field"><label for="cm-side" class="text-sm">Kierunek</label><select id="cm-side" onchange="commodityUiSet()" ${skill < 2 ? 'disabled' : ''}><option value="1" ${f.side > 0 ? 'selected' : ''}>długa</option>${skill >= 2 ? `<option value="-1" ${f.side < 0 ? 'selected' : ''}>krótka</option>` : ''}</select></div>
+            <div class="fx-field"><label for="cm-notional" class="text-sm">Wartość pozycji (${getBaseCurrency()})</label><input id="cm-notional" type="number" min="${MARGIN_RULES.minNotional}" step="1000" value="${f.notional}" onchange="commodityUiSet()"></div>
+            <div class="fx-field"><label for="cm-leverage" class="text-sm">Dźwignia</label><select id="cm-leverage" onchange="commodityUiSet()">${Array.from({ length: maxLev }, (_, i) => `<option value="${i + 1}" ${i + 1 === f.leverage ? 'selected' : ''}>1:${i + 1}</option>`).join('')}</select></div>
+            <p class="text-sm fx-preview" aria-live="polite">Depozyt ${formatZl(f.notional / f.leverage, 0)}, spread ${formatZl(f.notional * COMMODITY_MARKET.entrySpread, 0)}; bez kosztu utrzymania (koszt przechowania jest w cenie kontraktu).</p>
+            ${skill < 2 ? `<p class="notice-inline fx-preview">${uiIcon('klodka', 14)}<span>Pozycje krótkie i pełna dźwignia od poziomu 2 „Mistrza Opcji”.</span></p>` : ''}
             <div class="btn-row"><button class="btn-primary" onclick="commodityUiOpen()">Otwórz pozycję</button></div></div>`}
         <p class="text-sm text-muted">Pozycje z dźwignią (forex i towary razem): ${formatZl(notional, 0)} z limitu ${formatZl(cap, 0)} (${MARGIN_RULES.fundLeverageCap}× aktywa funduszu). Poniżej ${Math.round(MARGIN_RULES.warnBelow * 100)}% depozytu: margin call; poniżej ${Math.round(MARGIN_RULES.closeBelow * 100)}%: zamknięcie.</p>
         ${rows ? `<table class="asset-mini-table w-full"><thead><tr><th>Kontrakt</th><th>Kierunek</th><th class="text-right">Wartość</th><th class="text-right">Dźwignia</th><th class="text-right">Depozyt</th><th class="text-right">Wynik</th><th class="text-right">Kapitał / depozyt</th><th class="text-right">Zostało</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : '<p class="text-muted">Brak otwartych kontraktów.</p>'}
         <h4 class="mt-3">Pozycje zabezpieczające spółek (informacyjnie)</h4>
         ${hedges ? `<table class="asset-mini-table w-full"><thead><tr><th>Spółka</th><th>Wsad</th><th class="text-right">Zabezpieczone</th><th class="text-right">Wartość kwartału</th></tr></thead><tbody>${hedges}</tbody></table>` : '<p class="text-muted">Brak.</p>'}
-        ${getSkillLevel('etfExpert') >= 1 ? getCommodityFundsHtml('cmfund') : `<h3 class="mt-3">Surowce: ETC i ETF koszykowy</h3><p class="text-sm" role="status">Wymaga umiejętności „Ekspert Rynków Globalnych”.</p>`}`;
+        ${getSkillLevel('etfExpert') >= 1 ? getCommodityFundsHtml('cmfund') : `<h3 class="mt-3">Surowce: ETC i ETF koszykowy</h3><p class="notice-inline" role="status">${uiIcon('klodka', 14)}<span>Wymaga umiejętności „Ekspert Rynków Globalnych”.</span></p>`}`;
 }
 function commodityUiRerender() { if (typeof renderKantor === 'function') renderKantor(); if (typeof updateUI === 'function') updateUI(); }
 function commodityUiPick(id) { if (COMMODITY_DEFS[id]) commodityForm.id = id; commodityUiRerender(); }
@@ -294,20 +297,20 @@ function renderCommodityFundsBox() {
     if (!box) return;
     box.innerHTML = playerFund ? getCommodityFundsHtml('cfund') : '';
 }
-/** ETC i koszyk: ta sama tabela w panelu ETF i w oknie giełdy towarowej (prefix = osobne pola kwoty). */
+/** ETC i koszyk: te same karty w panelu ETF i w oknie giełdy towarowej (prefix = osobne pola kwoty). */
 function getCommodityFundsHtml(prefix) {
-    const row = (key, name, note) => {
+    const card = (key, icon, name, note) => {
         const units = getCommodityFundUnits(key), price = getCommodityFundPrice(key);
-        return `<tr><td><strong>${escapeHtml(name)}</strong><span class="text-xs text-muted d-block">${escapeHtml(note)}</span></td><td class="text-right">${formatNumberPl(price, 2)}</td>
-            <td class="text-right">${units > 0 ? `${formatNumberPl(units, 2)} (${formatZl(units * price, 0)})` : '—'}</td>
-            <td><input type="number" min="100" step="1000" value="10000" class="w-xs" id="${prefix}-${key}" aria-label="Kwota: ${escapeHtml(name)}"> <button onclick="commodityFundUi('${key}', 1, '${prefix}')">Kup</button> <button onclick="commodityFundUi('${key}', -1, '${prefix}')">Sprzedaj</button></td></tr>`;
+        return `<article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon(icon, 20)}</span><div><h4>${escapeHtml(name)}</h4><span class="bank-card-type">${escapeHtml(note)}</span></div></header>
+            <p class="text-sm">Cena ${formatZl(price, 2)} · ${units > 0 ? `masz ${formatNumberPl(units, 2)} jedn. (${formatZl(units * price, 0)})` : 'nie masz jednostek'}</p>
+            <div class="kantor-form"><input type="number" min="100" step="1000" value="10000" id="${prefix}-${key}" aria-label="Kwota: ${escapeHtml(name)}"> <button onclick="commodityFundUi('${key}', 1, '${prefix}')">Kup</button> <button onclick="commodityFundUi('${key}', -1, '${prefix}')">Sprzedaj</button></div></article>`;
     };
     return `<h3 class="mt-3">Surowce: ETC i ETF koszykowy</h3>
         <p class="text-sm text-muted">Bez dźwigni i depozytu: cena podąża za ceną surowca (w USD, przeliczona po kursie), pomniejszona o opłatę roczną. Kwota w polu: kupno za tę kwotę albo sprzedaż jednostek o tej wartości.</p>
-        <table class="asset-mini-table w-full"><thead><tr><th>Instrument</th><th class="text-right">Cena</th><th class="text-right">Posiadane</th><th>Kwota</th></tr></thead><tbody>
-        ${row('basket', `ETF „${COMMODITY_BASKET_NAME}”`, `7 surowców po równo, rebalans co kwartał, opłata ${commodityPct(COMMODITY_FUNDS.basketFee)}%/rok`)}
-        ${COMMODITY_IDS.map(id => row(id, `ETC ${COMMODITY_DEFS[id].name}`, `opłata ${commodityPct(COMMODITY_FUNDS.etcFee)}%/rok, spread ${commodityPct(COMMODITY_FUNDS.spread)}%`)).join('')}
-        </tbody></table>`;
+        <div class="bank-grid">
+        ${card('basket', 'surowiec-metals', `ETF „${COMMODITY_BASKET_NAME}”`, `7 surowców po równo, rebalans co kwartał, opłata ${commodityPct(COMMODITY_FUNDS.basketFee)}%/rok`)}
+        ${COMMODITY_IDS.map(id => card(id, `surowiec-${id}`, `ETC ${COMMODITY_DEFS[id].name}`, `opłata ${commodityPct(COMMODITY_FUNDS.etcFee)}%/rok, spread ${commodityPct(COMMODITY_FUNDS.spread)}%`)).join('')}
+        </div>`;
 }
 function commodityFundUi(key, dir, prefix = 'cfund') {
     const amount = Number(document.getElementById(`${prefix}-${key}`)?.value) || 0;

@@ -4,7 +4,7 @@
 // (≈3,2 MB); globus jest niszczony i usuwany z DOM po wyborze. To osobny ekran: `showCountryGlobe(onPick)` woła `onPick(kraj)` po potwierdzeniu.
 // Lista krajów obok globusa jest pełnoprawnym wyborem: bez WebGL, bez sieci lub w testach (`__GAME_TEST_MODE__`) ekran działa tylko jako lista.
 // Dwukierunkowa synchronizacja: lista, pinezki i obrysy krajów → `selectGlobeCountry` → `syncCountryPicker`.
-// Kolor nigdy jedynym nośnikiem: kraje gry mają pinezkę z flagą i nazwą, wybrany ma obrys i podpis w karcie.
+// Kolor nigdy jedynym nośnikiem: kraje gry mają pinezkę z nazwą, wybrany ma obrys i podpis w karcie.
 // =================================================================================
 
 /** Kraje gry na globusie: kod ADM0_A3 (pole geojson), stolica i współrzędne pinezki. */
@@ -53,7 +53,7 @@ function toRgba(color, alpha) {
 /** Karta kraju: stolica, waluta, giełda, godziny sesji, status (grywalny / wkrótce). */
 function renderGlobeCard(id) {
     const info = GLOBE_COUNTRIES[id], def = COUNTRY_DEFS[id], playable = START_PLAYABLE.includes(id);
-    const name = FLAG_NAMES[id] || id, cur = id === 'PL' ? 'PLN' : def?.currency;
+    const name = COUNTRY_NAMES[id] || id, cur = id === 'PL' ? 'PLN' : def?.currency;
     const exchange = id === 'PL' ? 'Giełda Papierów Wartościowych (GPW)' : def?.operator?.name || '—';
     const s = MARKET_SESSIONS[id], hh = x => String(Math.floor(x)).padStart(2, '0') + ':' + String(Math.round((x % 1) * 60)).padStart(2, '0');
     const hours = s ? `${hh(s.open)}–${hh(s.close)} (${s.city}, czas lokalny)` : '—';
@@ -62,7 +62,7 @@ function renderGlobeCard(id) {
     if (def?.labour) rows.push(['Pracownicy', `prawa ${def.labour.rights}, ${def.labour.note}`]);
     const note = !playable ? 'Rynek do dołączenia w trakcie gry (bilet na lotnisku) — nie jest dostępny jako kraj startowy.'
         : id === 'PL' ? 'Kraj startowy: pełny rynek macierzysty gry.' : 'Kraj startowy: jego giełda działa od pierwszego dnia i jest dla Ciebie rynkiem domowym (bez biletu). Rynek macierzysty gry pozostaje polski.';
-    return `<h3>${flagIcon(id, 18)} ${escapeHtml(name)}</h3><dl class="cg-dl">${rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${escapeHtml(v)}</dd></div>`).join('')}</dl><p class="cg-note">${note}</p>`;
+    return `<h3>${escapeHtml(name)}</h3><dl class="cg-dl">${rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${escapeHtml(v)}</dd></div>`).join('')}</dl><p class="cg-note">${note}</p>`;
 }
 
 /** Zaznaczenie kraju (z listy intro albo z globusa): karta, lot kamery, odświeżenie obrysu. Bez otwartego globusa nic nie robi. */
@@ -112,7 +112,7 @@ async function showCountryGlobe(onPick) {
         <div class="cg-head"><h2 id="cg-title">Wybierz kraj startowy</h2></div>
         <div class="cg-body"><div id="cg-stage" class="cg-stage"><p class="cg-loading" id="cg-status" role="status">Wczytywanie globusa (ok. 3 MB)…</p></div>
         <div class="cg-side"><div id="cg-card" class="cg-card" aria-live="polite"></div>
-        <div class="cg-list" role="group" aria-label="Kraje">${ids.map(id => `<button type="button" class="cg-item" data-country="${id}" aria-pressed="false">${flagIcon(id, 12)} ${escapeHtml(FLAG_NAMES[id])}${START_PLAYABLE.includes(id) ? '' : ' (wkrótce)'}</button>`).join('')}</div>
+        <div class="cg-list" role="group" aria-label="Kraje">${ids.map(id => `<button type="button" class="cg-item" data-country="${id}" aria-pressed="false">${escapeHtml(COUNTRY_NAMES[id])}${START_PLAYABLE.includes(id) ? '' : ' (wkrótce)'}</button>`).join('')}</div>
         <div class="cg-actions"><button type="button" class="btn-ghost" id="cg-rotate" aria-pressed="true"></button><button type="button" class="btn-ghost" id="cg-reset">Reset widoku</button><button type="button" class="btn-primary" id="cg-confirm">Wybieram ten kraj</button></div></div></div></div>`;
     document.body.appendChild(globeOverlay);
     globeOverlay.querySelector('#cg-confirm').onclick = () => { const id = globeCurrent, cb = globeOnPick; if (!START_PLAYABLE.includes(id)) return; closeCountryGlobe(); if (cb) cb(id); };
@@ -140,7 +140,7 @@ async function showCountryGlobe(onPick) {
             .polygonAltitude(f => { const id = idOf(f); return id === selectedId() ? 0.04 : id ? 0.015 : 0.003; })
             .onPolygonClick(f => { const id = idOf(f); if (id) selectGlobeCountry(id); })
             .htmlElementsData(ids.map(id => ({ id, ...GLOBE_COUNTRIES[id] })))
-            .htmlElement(d => { const el = document.createElement('div'); el.className = 'cg-pin'; el.setAttribute('aria-hidden', 'true'); el.innerHTML = `${flagIcon(d.id, 12)}<span>${escapeHtml(FLAG_NAMES[d.id])}</span>`; el.style.pointerEvents = 'auto'; el.onclick = () => selectGlobeCountry(d.id); return el; })
+            .htmlElement(d => { const el = document.createElement('div'); el.className = 'cg-pin'; el.setAttribute('aria-hidden', 'true'); el.innerHTML = `<span>${escapeHtml(COUNTRY_NAMES[d.id])}</span>`; el.style.pointerEvents = 'auto'; el.onclick = () => selectGlobeCountry(d.id); return el; })
             .pointOfView(GLOBE_HOME_VIEW);
         const c = globeInstance.controls(); c.autoRotateSpeed = 0.6; c.autoRotate = globeAutoRotate;
         window.addEventListener('resize', resizeGlobe);

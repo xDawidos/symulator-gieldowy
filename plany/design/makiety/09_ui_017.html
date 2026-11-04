@@ -1,0 +1,112 @@
+<!doctype html><html lang="pl"><head><meta charset="utf-8"><title>Makieta UI 0.17 — giełda towarowa, fracht, bezpieczeństwo, ustawa, autostrada</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../../../tokens.css"><link rel="stylesheet" href="../../../style.css">
+<style>
+html, body { overflow: auto !important; height: auto !important; }
+body { display: block !important; padding: 24px !important; }
+.demo { max-width: 900px; margin: 0 auto 32px; padding: 24px; background: var(--color-bg-base); border: 1px solid var(--color-border-subtle); border-radius: 6px; }
+.demo-title { margin: 0 0 4px; font-size: 20px; }
+.demo-sub { margin: 0 0 16px; color: var(--color-text-muted); font-size: 13px; }
+.sheet { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.sheet div { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+</style></head><body class="dark-mode">
+<svg style="display:none" id="ic-defs"></svg>
+<script>
+// Wstawia sprite do dokumentu i rozwija <i data-ic="nazwa" data-s="16"> w <svg class="ic">; w grze to samo robi uiIcon(nazwa, 16).
+fetch('../../../img/ikony/sprite.svg').then(r => r.text()).then(t => {
+  document.getElementById('ic-defs').outerHTML = t;
+  document.querySelectorAll('i[data-ic]').forEach(el => { const s = el.dataset.s || 16; el.outerHTML = `<svg class="ic" width="${s}" height="${s}" viewBox="0 0 24 24" aria-hidden="true"><use href="#ic-${el.dataset.ic}"/></svg>`; });
+});
+</script>
+
+<section class="demo"><h2 class="demo-title">0. Ikony 0.17</h2><p class="demo-sub">24×24, kreska 1,8, currentColor. Nazwy = identyfikatory z danych: <code>uiIcon(`surowiec-${id}`)</code>, <code>uiIcon(`transport-${id}`)</code>.</p>
+<div class="sheet">
+  <div><i data-ic="surowiec-gold" data-s="24"></i><i data-ic="surowiec-gold"></i> Złoto</div>
+  <div><i data-ic="surowiec-oil" data-s="24"></i><i data-ic="surowiec-oil"></i> Ropa</div>
+  <div><i data-ic="surowiec-gas" data-s="24"></i><i data-ic="surowiec-gas"></i> Gaz</div>
+  <div><i data-ic="surowiec-coal" data-s="24"></i><i data-ic="surowiec-coal"></i> Węgiel</div>
+  <div><i data-ic="surowiec-metals" data-s="24"></i><i data-ic="surowiec-metals"></i> Metale</div>
+  <div><i data-ic="surowiec-grain" data-s="24"></i><i data-ic="surowiec-grain"></i> Zboże</div>
+  <div><i data-ic="surowiec-uranium" data-s="24"></i><i data-ic="surowiec-uranium"></i> Uran</div>
+  <div><i data-ic="transport-sea" data-s="24"></i><i data-ic="transport-sea"></i> Morski</div>
+  <div><i data-ic="transport-air" data-s="24"></i><i data-ic="transport-air"></i> Lotniczy</div>
+  <div><i data-ic="transport-land" data-s="24"></i><i data-ic="transport-land"></i> Lądowy</div>
+  <div><i data-ic="umiejetnosc-opcje" data-s="24"></i><i data-ic="umiejetnosc-opcje"></i> Mistrz Opcji</div>
+  <div><i data-ic="kryzys-bank" data-s="24"></i><i data-ic="kryzys-bank"></i> Kryzys bankowy</div>
+</div></section>
+
+<section class="demo"><h2 class="demo-title">1. Giełda towarowa (zakładka Kantora)</h2><p class="demo-sub">Lista z ikoną i słowem krzywej, wykres, serie, formularz jak forex, pozycje z miernikiem depozytu, ETC i ETF.</p>
+<table class="asset-mini-table w-full"><thead><tr><th>Surowiec</th><th class="text-right">Cena</th><th class="text-right">Zmiana</th><th>Krzywa</th><th class="text-right">Dźwignia</th></tr></thead><tbody>
+<tr><td><span class="cm-name"><i data-ic="surowiec-gold"></i> Złoto <span class="text-muted">(uncja)</span></span></td><td class="text-right">2 012,40 USD</td><td class="text-right">▲ +1,2% <span class="text-muted">w kwartale</span></td><td><span class="badge badge--neutral">↗ contango</span></td><td class="text-right">1:10</td></tr>
+<tr class="row-selected"><td><span class="cm-name"><i data-ic="surowiec-oil"></i> Ropa <span class="text-muted">(baryłka)</span></span></td><td class="text-right">82,10 USD</td><td class="text-right">▲ +9,4% <span class="text-muted">w kwartale</span></td><td><span class="badge badge--info">↘ backwardation</span></td><td class="text-right">1:5</td></tr>
+<tr><td><span class="cm-name"><i data-ic="surowiec-gas"></i> Gaz <span class="text-muted">(MMBtu)</span></span></td><td class="text-right">3,42 USD</td><td class="text-right">▼ −3,1% <span class="text-muted">w kwartale</span></td><td><span class="badge badge--neutral">↗ contango</span></td><td class="text-right">1:3</td></tr>
+<tr><td><span class="cm-name"><i data-ic="surowiec-uranium"></i> Uran <span class="text-muted">(funt)</span></span></td><td class="text-right">61,00 USD</td><td class="text-right">■ 0,0% <span class="text-muted">w kwartale</span></td><td><span class="badge badge--neutral">↗ contango</span></td><td class="text-right">1:3</td></tr>
+</tbody></table>
+<h4 class="mt-3">Ropa: serie kontraktów</h4>
+<table class="asset-mini-table w-full"><thead><tr><th>Seria</th><th class="text-right">Do zapadalności</th><th class="text-right">Cena kontraktu</th><th>Struktura</th></tr></thead><tbody>
+<tr class="row-selected"><td>OIL-R2K2</td><td class="text-right">4 tyg.</td><td class="text-right">81,40 USD</td><td><span class="badge badge--info">↘ backwardation</span></td></tr>
+<tr><td>OIL-R2K3</td><td class="text-right">9 tyg.</td><td class="text-right">80,20 USD</td><td><span class="badge badge--info">↘ backwardation</span></td></tr>
+</tbody></table>
+<div class="kantor-form fx-form mt-3">
+  <div class="fx-field"><label class="text-sm">Seria</label><select><option>OIL-R2K2</option></select></div>
+  <div class="fx-field"><label class="text-sm">Kierunek</label><select disabled><option>długa</option></select></div>
+  <div class="fx-field"><label class="text-sm">Wartość pozycji (PLN)</label><input type="number" value="50000"></div>
+  <div class="fx-field"><label class="text-sm">Dźwignia</label><select><option>1:3</option></select></div>
+  <p class="notice-inline fx-preview"><i data-ic="klodka" data-s="14"></i><span>Pozycje krótkie i pełna dźwignia od poziomu 2 „Mistrza Opcji”.</span></p>
+  <p class="text-sm fx-preview">Depozyt 16 667 PLN, spread 100 PLN; bez kosztu utrzymania (koszt przechowania jest w cenie kontraktu).</p>
+  <div class="btn-row"><button class="btn-primary">Otwórz pozycję</button></div>
+</div>
+<table class="asset-mini-table w-full mt-3"><thead><tr><th>Kontrakt</th><th>Kierunek</th><th class="text-right">Depozyt</th><th class="text-right">Wynik</th><th>Kapitał / depozyt</th><th class="text-right">Zostało</th></tr></thead><tbody>
+<tr><td>OIL-R2K2</td><td>długa</td><td class="text-right">16 667 PLN</td><td class="text-right">▼ −5 100 PLN</td><td class="fx-cover"><span class="tone-warn"><i data-ic="alert" data-s="14"></i> 69% (margin call)</span><span class="limit-meter is-warn" role="img" aria-label="Kapitał 69% depozytu, ostrzeżenie poniżej 70%" style="--v:69;--limit:70"><i></i><b></b></span></td><td class="text-right">4 tyg.</td></tr>
+</tbody></table>
+<div class="bank-grid mt-3">
+  <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon"><i data-ic="surowiec-gold" data-s="20"></i></span><div><h4>ETC: złoto</h4><span class="bank-card-type">bez dźwigni · opłata w cenie</span></div></header><p class="text-sm">Kurs śledzi cenę surowca. Masz 0 szt.</p></article>
+  <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon"><i data-ic="surowiec-metals" data-s="20"></i></span><div><h4>ETF koszykowy</h4><span class="bank-card-type">7 surowców · bez dźwigni</span></div></header><p class="text-sm">Jedna pozycja na cały koszyk.</p></article>
+</div>
+</section>
+
+<section class="demo"><h2 class="demo-title">2. Indeks frachtu i przepustowość (okno „Rynek”)</h2><p class="demo-sub">Karta na rodzaj transportu: ikona, liczba, kierunek, dostawa, przepustowość z miernikiem do górnej granicy kraju. Czas dostaw tylko widoczny (0.17).</p>
+<div class="freight-cards">
+  <div class="freight-card"><span class="freight-card-head"><i data-ic="transport-sea"></i> Fracht morski</span><strong>112</strong><small>▲ +12% vs średnia 8 kw. · dostawa 4–6 tyg.</small><span class="limit-meter" role="img" aria-label="Przepustowość 1,15 z 1,45" style="--v:79"><i></i></span><small>przepustowość 1,15 z 1,45</small></div>
+  <div class="freight-card"><span class="freight-card-head"><i data-ic="transport-air"></i> Fracht lotniczy</span><strong>97</strong><small>▼ −3% vs średnia 8 kw. · dostawa 1 tyg.</small><span class="limit-meter" role="img" aria-label="Przepustowość 1,00 z 1,30" style="--v:77"><i></i></span><small>przepustowość 1,00 z 1,30</small></div>
+  <div class="freight-card"><span class="freight-card-head"><i data-ic="transport-land"></i> Fracht lądowy</span><strong>104</strong><small>▲ +4% vs średnia 8 kw. · dostawa 1–2 tyg.</small><span class="limit-meter" role="img" aria-label="Przepustowość 1,08 z 1,48" style="--v:73"><i></i></span><small>przepustowość 1,08 z 1,48</small><span class="badge badge--warn">Strajk kolejarzy</span></div>
+  <div class="freight-card"><span class="freight-card-head"><i data-ic="surowiec-oil"></i> Ropa (paliwo)</span><strong>82,1 USD</strong><small>▲ +9% vs średnia 8 kw.</small></div>
+</div></section>
+
+<section class="demo"><h2 class="demo-title">3. Bezpieczeństwo państwa w karcie kraju</h2><p class="demo-sub">Wiersz listy faktów: ikona, słowo z liczbą, miernik. Poniżej 45 tonacja ostrzegawcza i ikona alertu.</p>
+<dl class="country-facts">
+  <div><dt>Kryzys</dt><dd><i data-ic="ok" data-s="14"></i> bez kryzysu</dd></div>
+  <div><dt>Bezpieczeństwo państwa</dt><dd><i data-ic="sektor-obronnosc" data-s="14"></i> umiarkowane (57/100)<span class="limit-meter" role="img" aria-label="Bezpieczeństwo 57 na 100" style="--v:57"><i></i></span></dd></div>
+  <div><dt>Bezpieczeństwo państwa</dt><dd class="tone-warn"><i data-ic="alert" data-s="14"></i> niskie (38/100)<span class="limit-meter is-warn" role="img" aria-label="Bezpieczeństwo 38 na 100" style="--v:38"><i></i></span></dd></div>
+</dl></section>
+
+<section class="demo"><h2 class="demo-title">4. Ustawa „Finansowanie infrastruktury” (Państwo → Prawa)</h2><p class="demo-sub">Karta pod tabelą ustaw: 5 kroków z nazwą i skutkami. Obecny: <code>aria-current</code> + „(teraz)”; zapowiedź w wierszu statusu.</p>
+<div class="crisis-section">
+  <h4 class="bank-section-title">Finansowanie infrastruktury</h4>
+  <ol class="crisis-axis law-steps" aria-label="Poziomy ustawy">
+    <li class="done"><span class="crisis-step-no">1</span>Porzucenie<small>wydatki 0% · zużycie 5,0%</small></li>
+    <li class="done"><span class="crisis-step-no">2</span>Łatanie dziur<small>wydatki 1% · zużycie 3,5%</small></li>
+    <li class="current" aria-current="step"><span class="crisis-step-no">3</span>Utrzymanie <em>(teraz)</em><small>wydatki 2% · zużycie 2,0%</small></li>
+    <li><span class="crisis-step-no">4</span>Rozbudowa<small>wydatki 3% · zużycie 1,0%</small></li>
+    <li><span class="crisis-step-no">5</span>Autostrady na wczoraj<small>wydatki 4,5% · zużycie 0,5%</small></li>
+  </ol>
+  <p class="text-sm text-muted">Wyższy poziom: większe wydatki, mniejsze zużycie przepustowości, więcej projektów państwa.</p>
+</div></section>
+
+<section class="demo"><h2 class="demo-title">5. Przetarg autostrady z odcinkami</h2><p class="demo-sub">W oknie przetargu nad rankingiem: pasek wszystkich odcinków. Bieżący wyróżniony tłem i słowem, rozstrzygnięty z wykonawcą, w budowie z postępem. Odcinek = 1 slot.</p>
+<article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon"><i data-ic="transport-land" data-s="20"></i></span><div><h4>Autostrada: odcinek 3 z 4</h4><span class="bank-card-type">zamawiający: Skarb Państwa (inwestycje) · cena &gt; jakość</span></div></header>
+<div class="hw-strip" role="list" aria-label="Odcinki autostrady">
+  <span role="listitem" class="is-won"><b>Odcinek 1</b>ABL · w budowie 40%<span class="limit-meter" role="img" aria-label="Postęp 40%" style="--v:40"><i></i></span></span>
+  <span role="listitem" class="is-won"><b>Odcinek 2</b>ABL · w budowie 25%<span class="limit-meter" role="img" aria-label="Postęp 25%" style="--v:25"><i></i></span></span>
+  <span role="listitem" class="is-here"><b>Odcinek 3</b>przetarg (ten)</span>
+  <span role="listitem"><b>Odcinek 4</b>przetarg</span>
+</div>
+<p class="notice-inline"><i data-ic="info" data-s="14"></i><span>Oferta na kilka odcinków: 2% rabatu za każdy odcinek ponad pierwszy. Każdy odcinek zajmuje 1 slot firmy (wolne: 2).</span></p>
+<p class="text-sm">Rozstrzygnięcie: odcinki 1–2 — ABL, odcinki 3–4 — Nordbud S.A.; łącznie 1 552 000 PLN.</p>
+</article></section>
+
+<section class="demo"><h2 class="demo-title">6. Gwiazdka i filtr Ulubione</h2><p class="demo-sub">Zostaje jak w grze: kontur → wypełnienie (nie sam kolor), filtr jak chip „Posiadane”. Dochodzi pusty stan.</p>
+<p><button type="button" class="info-btn fav-btn" aria-pressed="false" aria-label="Dodaj do ulubionych"><i data-ic="gwiazdka"></i></button> <button type="button" class="info-btn fav-btn is-on" aria-pressed="true" aria-label="Usuń z ulubionych"><i data-ic="gwiazdka"></i></button></p>
+<p class="alert"><i data-ic="gwiazdka" data-s="18"></i><span>Nie masz jeszcze ulubionych spółek. Gwiazdka przy nazwie spółki dodaje ją do tej listy.</span></p>
+</section>
+</body></html>

@@ -9153,6 +9153,17 @@ group('0.15.2: Kochaj i zarabiaj (kalendarz, kampanie, lock-up, gwarancja, manda
         assertEq(formatQuarterDate(0), 'Rok 1 · kw. 1', 'termin kwartalny');
     });
 
+    test('Design 0.15.x: karty kampanii — formularz bez emoji, postęp kampanii, IR z segmentem i miernikami', () => {
+        world();
+        let html = renderCampaignCards();
+        assert(html.includes('class="camp-form"') && html.includes('id="camp-cost"') && html.includes('0,5% zebranej'), 'formularz z podglądem kosztu');
+        assert(!/<option[^>]*>[^<]*\p{Extended_Pictographic}/u.test(html), 'opcje bez emoji');
+        assert(html.includes('class="seg"') && html.includes('aria-pressed="true"'), 'przełącznik poziomów IR');
+        assert(startSubscriptionCampaign({ duration: 'quarter', targetPct: 0.1 }).ok, 'start');
+        html = renderCampaignCards();
+        assert(html.includes('role="progressbar"') && !html.includes('camp-form'), 'trwająca kampania: postęp zamiast formularza');
+    });
+
     test('K2: koszt kampanii = 0,2% celu na start + 0,5% zebranej kwoty', () => {
         world();
         const cash0 = playerCash;
@@ -9750,6 +9761,7 @@ group('0.15.3: Wielkie Kryzysy (szoki sektorowe, silnik linii, 5 linii, reakcje 
         startCrisisLine('pandemic', { forced: true, skipSpark: true });
         const html = renderCrisisSection();
         assert(/Pandemia/.test(html) && /Wybuch/.test(html) && /Turystyka/.test(html), 'etap i sektory w sekcji');
+        assert(html.includes('crisis-axis') && html.includes('aria-current="step"') && /−50%<\/strong> traci mocno/.test(html), 'oś etapów, znak, liczba i słowo');
         assertEq(getCrisisExposureLabel(b), 'wysoki', 'turystyka w pandemii: wysokie wystawienie');
         assertEq(getCrisisExposureLabel(stocks[0]), 'niski', 'technologia w pandemii: niskie wystawienie');
     });
@@ -12191,12 +12203,9 @@ group('0.16.1', () => {
         initFxState(); resetGdrState();
     });
 
-    test('G4: flagi 10 krajów i UE oraz ikony 10 walut istnieją jako SVG z podpisem, bez emoji', () => {
-        for (const c of ['PL', 'DE', 'FR', 'CZ', 'SE', 'CH', 'JP', 'CN', 'IN', 'TW', 'US', 'EU']) {
-            const svg = flagIcon(c); assert(svg.startsWith('<svg') && svg.includes('aria-label="Flaga:') && svg.includes('<title>'), `flaga ${c}`); assert(!/[\u{1F1E6}-\u{1F1FF}]/u.test(svg), 'bez emoji');
-        }
-        for (const code of Object.keys(CURRENCIES)) { assert(currencyIcon(code).includes('<text'), `ikona ${code}`); assert(CURRENCY_FLAG[code], `flaga waluty ${code}`); }
-        assertEq(flagIcon('XX'), '', 'nieznany kraj bez flagi');
+    test('G4: ikony 10 walut jako SVG, bez flag krajów (decyzja użytkownika)', () => {
+        assert(typeof flagIcon === 'undefined', 'funkcja flag usunięta');
+        for (const code of Object.keys(CURRENCIES)) { assert(currencyIcon(code).includes('<text'), `ikona ${code}`); }
     });
 
     test('G5: TIG5 zniknął; SIG40 i BSIG80 uruchamia Bank Centralny dopiero przy dość dużym rynku (BSIG80 po SIG40), decyzja zapisuje się i wraca po wczytaniu', () => {
@@ -12636,7 +12645,7 @@ group('0.16.2', () => {
         const host = document.createElement('div'); host.id = 'airport-test-host'; document.body.appendChild(host);
         try {
             renderAirportWindow('airport-test-host', { tickets: true });
-            assert(host.innerHTML.includes('Zleć budowę lotniska') && host.innerHTML.includes('Zetland') && host.innerHTML.includes('aria-label="Flaga:'), 'stan, wiersz kraju, flaga');
+            assert(host.innerHTML.includes('Zleć budowę lotniska') && host.innerHTML.includes('Zetland') && !host.innerHTML.includes('flag-ic'), 'stan, wiersz kraju, bez flagi');
             assert(host.querySelectorAll('button[disabled]').length >= 1, 'bilety zablokowane bez lotniska');
             airportState.forced = true; renderAirportWindow('airport-test-host', { tickets: true });
             assert(host.innerHTML.includes('Kup bilet za') && !/[\u{1F300}-\u{1FAFF}]/u.test(host.innerHTML), 'przyciski zakupu, bez emoji');
@@ -13445,6 +13454,18 @@ group('0.16.3', () => {
         assert(!openForexPosition('EUR/USD', 1, 100, 10).ok, 'za mała pozycja');
         assert(!openForexPosition('EUR/USD', 1, 1_000_000, 1).ok, 'za mało gotówki na depozyt');
     }));
+
+    test('Design 0.17: ikony SVG 7 surowców, 3 rodzajów transportu, umiejętności i linii kryzysu', () => {
+        for (const name of [...COMMODITY_IDS.map(id => `surowiec-${id}`), ...FREIGHT_IDS.map(id => `transport-${id}`), 'umiejetnosc-opcje', ...Object.values(CRISIS_LINES).map(l => l.svg)]) assert(uiIcon(name).includes('<path'), `ikona ${name}`);
+    });
+
+    test('Design 0.16: animacja lotu — rysuje scenę, klik pomija', () => {
+        const el = playTicketFlight({ country: 'DE', durationMs: 20 });
+        assert(document.querySelector('.ticket-flight') === el && /Niemcy/.test(el.textContent) && /pominąć/.test(el.textContent), 'scena z nazwą kraju');
+        assertEq(el.getAttribute('aria-hidden'), 'true', 'bez fokusu i bez wejścia do drzewa dostępności');
+        el.click();
+        assert(!document.querySelector('.ticket-flight'), 'klik pomija');
+    });
 
     test('G21: margin call — ostrzeżenie poniżej 70%, zamknięcie automatyczne poniżej 50% depozytu, strata ograniczona do depozytu', () => withLinks(() => {
         startFund(2_000_000); joinCountry('DE');
@@ -14263,7 +14284,7 @@ group('0.16.9 Lombard w Internecie, rynek połączony na giełdzie', () => {
             assert(/^data:image\/jpeg;base64,/.test(window.GLOBE_TEXTURES.night) && /^data:image\/jpeg;base64,/.test(window.GLOBE_TEXTURES.bump), 'tekstury jako data-URI');
         } finally { delete window.GLOBE_GEO; delete window.GLOBE_TEXTURES; }
         for (const id of START_PLAYABLE) assert(GLOBE_COUNTRIES[id], `${id}: dane globusu`);
-        for (const id of Object.keys(GLOBE_COUNTRIES)) assert(START_COUNTRIES.some(c => c.id === id) && FLAG_NAMES[id], `${id}: kraj gry z flagą`);
+        for (const id of Object.keys(GLOBE_COUNTRIES)) assert(START_COUNTRIES.some(c => c.id === id) && COUNTRY_NAMES[id], `${id}: kraj gry z nazwą`);
         const de = renderGlobeCard('DE'), jp = renderGlobeCard('JP'), pl = renderGlobeCard('PL');
         assert(/Berlin/.test(de) && /EUR/.test(de) && /DAX/.test(de) && /09:00–17:30/.test(de), 'karta DE: stolica, waluta, giełda, sesja');
         assert(/wkrótce|nie jest dostępny/.test(jp) && /GPW/.test(pl), 'JP niegrywalny, PL = GPW');
@@ -15079,6 +15100,7 @@ group('0.17 S3 Giełda towarowa', () => {
         const html = renderCommodityTab();
         for (const word of ['Złoto', 'Uran', 'OIL-', 'Przedłuż', 'bezpieczna', 'Pozycje zabezpieczające']) assert(html.includes(word), `zakładka zawiera: ${word}`);
         assert(/contango|backwardation/.test(html), 'struktura krzywej słowem');
+        assert(html.includes('cm-name') && html.includes('fx-cover') && html.includes('fx-field'), 'ikona surowca, stan depozytu z paskiem, pola jak w forexie');
         const box = document.createElement('div'); box.id = 'commodity-etf-box'; document.body.appendChild(box);
         try { renderCommodityFundsBox(); assert(box.innerHTML.includes('Koszyk Surowców') && box.innerHTML.includes('ETC Ropa'), 'ETC i koszyk w panelu ETF'); } finally { box.remove(); }
     }));
@@ -15194,6 +15216,7 @@ group('0.17 S4 Transport i indeks frachtu', () => {
         const html = renderFreightSection();
         assert(['Fracht morski', 'Fracht lotniczy', 'Fracht lądowy', 'dostawa', 'Statek utknął w kanale', 'Ropa'].every(t => html.includes(t)), 'treść sekcji');
         assert(/[▲▼]/.test(html), 'kierunek nie tylko kolorem');
+        assert((html.match(/class="freight-card"/g) || []).length === 4 && html.includes('badge--warn') && /przepustowość \d/.test(html) && html.includes('role="img"'), 'karty frachtu z paskiem, przepustowość liczbą, zakłócenie jako znacznik');
     }));
 });
 
@@ -15303,6 +15326,8 @@ group('0.17 S5 Infrastruktura publiczna i PPP', () => {
         assertEq(bs.reduce((s, b) => s + getActiveProjectsForBuilder(b).length, 0), built.length, 'odcinek = 1 slot');
         const proj = constructionProjects.find(x => x.tender.infra?.seg === built[0].n);
         assertNear(proj.paidToBuilder / proj.price, 0.30, 'zaliczka 30%', 1e-9);
+        const strip = renderHighwayStrip(proj.tender);
+        assert(strip.includes(`odcinek ${built[0].n} z 5`) && (strip.match(/role="listitem"/g) || []).length === 5 && strip.includes('w budowie 0%') && strip.includes('rabatu') && strip.includes('Rozstrzygnięcie:'), 'pasek 5 odcinków, postęp słowem, rabat, rozstrzygnięcie');
         assertEq(proj.milestones.join(','), '0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9', 'odbiory co 10% postępu');
         proj.progress = 0.1; payDueMilestones(proj);
         assertNear(proj.paidToBuilder / proj.price, 0.30 + 0.6 * 0.1, 'po 10% postępu: zaliczka + 10% części za roboty', 1e-9);

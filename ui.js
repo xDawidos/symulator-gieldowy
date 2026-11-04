@@ -324,7 +324,23 @@ const UI_ICON_PATHS = {
     serwer: 'M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01M12 7h4M12 17h4',
     magazyn: 'M3 21V9l9-5 9 5v12M7 21v-8h10v8M7 17h10',
     wiatrak: 'M12 9l-1 12h2zM12 9V2M12 9l6 4M12 9l-6 4M8 21h8M12 9h.01',
-    slonce: 'M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4'
+    slonce: 'M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4',
+    'kryzys-bank': 'M3 9l9-5 9 5M5 9v7M9 9v7M15 9v7M19 9v7M3 20h18',
+    'kryzys-internet': 'M3 5h18v11H3zM9 20h6M12 16v4M6 8l3 3 3-2 5 4M17 13h-3M17 13v-3',
+    'kryzys-ropa': 'M12 3c4 5 6 8 6 11a6 6 0 0 1-12 0c0-3 2-6 6-11zM9 15a3 3 0 0 0 3 3',
+    'kryzys-czwartek': 'M3 4v16h18M6 7l4 4 3-2 6 8M19 17h-4M19 17v-4',
+    'kryzys-pandemia': 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 2v4M12 18v4M2 12h4M18 12h4M5 5l3 3M16 16l3 3M19 5l-3 3M8 16l-3 3',
+    'surowiec-gold': 'M9 5h6l2 5H7zM4 14h6l2 6H2zM14 14h6l2 6H12z',
+    'surowiec-oil': 'M7 3h10c1 3 1 15 0 18H7C6 18 6 6 7 3zM6.4 9h11.2M6.4 15h11.2',
+    'surowiec-gas': 'M12 3c1 4 6 6 6 12a6 6 0 0 1-12 0c0-3 2-4 3-7 1 1 2 2 2 3 1-2 1-5 1-8zM12 21a2.5 2.5 0 0 1-2.5-2.5c0-1.5 1.5-2 2.5-4 1 2 2.5 2.5 2.5 4A2.5 2.5 0 0 1 12 21z',
+    'surowiec-coal': 'M4 15l3-7 6-3 6 4 2 7-5 4H8zM7 8l4 5 2-8M11 13l-3 7M11 13l8-4',
+    'surowiec-metals': 'M5 5h14v3h-5v8h5v3H5v-3h5V8H5z',
+    'surowiec-grain': 'M12 21V8M12 8c-2-1-2-3 0-5 2 2 2 4 0 5zM12 13c-1-3-4-3-6-3 0 3 3 4 6 3zM12 13c1-3 4-3 6-3 0 3-3 4-6 3zM12 18c-1-3-4-3-6-3 0 3 3 4 6 3zM12 18c1-3 4-3 6-3 0 3-3 4-6 3z',
+    'surowiec-uranium': 'M12 10.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM9.8 8.3 7 3.5A10 10 0 0 0 2 12h5.5a4.5 4.5 0 0 1 2.3-3.7zM14.2 8.3 17 3.5a10 10 0 0 1 5 8.5h-5.5a4.5 4.5 0 0 0-2.3-3.7zM9.8 15.7 7 20.5a10 10 0 0 0 10 0l-2.8-4.8a4.5 4.5 0 0 1-4.4 0z',
+    'transport-sea': 'M2 15h20l-2.5 6h-15zM5 15v-4h6v4M11 15V8h5v7M12 5h3M16 15v-3h4v3',
+    'transport-air': 'M21 15l-8-4V5a1 1 0 0 0-2 0v6l-8 4v2l8-2v4l-2 2h6l-2-2v-4l8 2z',
+    'transport-land': 'M2 7h12v9H2zM14 10h4l4 3v3h-8zM6.5 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM17.5 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4z',
+    'umiejetnosc-opcje': 'M3 3v18h18M6 17h6l7-10M12 17v4M12 3v2M12 8v2M12 13v2'
 };
 
 const SECTOR_ICON_PATHS = {
@@ -1087,6 +1103,7 @@ function updateTopbarBrand() {
         // 0.15.2 K1: „Rok 3 · kw. 2 · tydz. 4” (na telefonie „R3 · K2 · T4”)
         const label = typeof formatGameDate === 'function' ? formatGameDate(getGameCalendar(), window.innerWidth < 600) : `Rok ${Math.floor(quarter / 4) + 1} · kw. ${(quarter % 4) + 1}`;
         if (dateEl.textContent !== label) dateEl.textContent = label;
+        dateEl.setAttribute('aria-label', typeof formatGameDate === 'function' ? formatGameDate(getGameCalendar()) : label);
         const started = typeof playerProfile !== 'undefined' && playerProfile?.startedAt ? new Date(playerProfile.startedAt).toLocaleDateString('pl-PL') : '';
         dateEl.title = `Rok · kwartał (5 tygodni) · tydzień${started ? ` · gra rozpoczęta ${started}` : ''}`;
     }
@@ -2294,6 +2311,11 @@ function displayStocks(previousInputValues = {}) {
 
   const countryBtn = document.getElementById('table-country-sort');
   if (countryBtn) { countryBtn.textContent = countrySortState === 'asc' ? 'Kraj ▲' : countrySortState === 'desc' ? 'Kraj ▼' : 'Kraj'; countryBtn.setAttribute('aria-pressed', String(countrySortState !== 'none')); }
+  if (favoritesOnlyFilter && !playerProfile?.favorites?.length) {
+    const cell = stockTableBody.insertRow().insertCell();
+    cell.colSpan = STOCK_TABLE_COLS;
+    cell.innerHTML = `<p class="alert">${uiIcon('gwiazdka', 18)}<span>Nie masz jeszcze ulubionych spółek. Gwiazdka przy nazwie spółki dodaje ją do tej listy.</span></p>`;
+  }
   liveStockTableBody.replaceChildren(...stockTableBody.childNodes);
   const shownCount = document.getElementById('mkpi-active');
   if (shownCount) shownCount.textContent = liveStockTableBody.querySelectorAll('tr.stock-row').length; // 0.15.4 P1: licznik = wiersze listy
@@ -4295,7 +4317,7 @@ function renderCompanyCard() {
         tile('Zadłużenie', debtRatio === null ? '—' : `${formatNumberPl(debtRatio * 100, 0)}%`, 'Zobowiązania / aktywa. Powyżej ~70% spółka jest mocno zadłużona.', debtRatio > 0.7 ? 'text-down' : '', vs(debtRatio, med?.debt, { format: pctFmt, labels: ['niższe', 'wyższe'] })),
         tile('Kondycja', `${formatNumberPl(health, 1)} · ${healthLabel}`, 'Kondycja finansowa od −5 (bankructwo) do +5.', health >= 1 ? 'text-up' : health <= -2 ? 'text-down' : ''),
         sectorPremiumTile(),
-        typeof isCrisisActive === 'function' && isCrisisActive() ? tile('Wystawienie na kryzys', getCrisisExposureLabel(stock), `Udział segmentów spółki w sektorach tracących w linii „${CRISIS_LINES[crisisLine.id].name}”.`, getCrisisExposure(stock) >= 0.6 ? 'text-down' : '') : ''
+        typeof isCrisisActive === 'function' && isCrisisActive() ? tile('Wystawienie na kryzys', (label => `${uiIcon({ wysoki: 'alert', 'średni': 'info', niski: 'ok' }[label], 14)} ${label}`)(getCrisisExposureLabel(stock)), `Udział segmentów spółki w sektorach tracących w linii „${CRISIS_LINES[crisisLine.id].name}”.`, getCrisisExposure(stock) >= 0.6 ? 'text-down' : '') : ''
     ].filter(Boolean).join('') + renderSubsectorMedianLine(stock, med);
 
     document.getElementById('company-card-tabs').innerHTML = COMPANY_CARD_TABS
@@ -5951,6 +5973,8 @@ function renderTendersList() {
             ));
         }
 
+        if (tender.infra?.highway) card.insertAdjacentHTML('beforeend', renderHighwayStrip(tender));
+
         const details = document.createElement('details');
         details.dataset.tenderId = tender.id;
         details.open = expandedIds.has(tender.id);
@@ -7192,7 +7216,7 @@ function renderCvPanel() {
         const reqMsg = next?.requires?.level === 4 ? 'Wymaga poziomu 4 „Nastroje rynku”' : 'Wymaga wcześniejszego szkolenia';
 
         return `<article class="cv-training">
-            <h4>${escapeHtml(stripEmoji(skill.name))} ${medal ? `<span class="cv-medal cv-medal-${medal.id}" title="${medal.label}">${uiIcon('medal', 14)}<span class="sr-only">${medal.label}</span></span>` : ''}</h4>
+            <h4>${id === 'optionsMaster' ? `${uiIcon('umiejetnosc-opcje', 20)} ` : ''}${escapeHtml(stripEmoji(skill.name))} ${medal ? `<span class="cv-medal cv-medal-${medal.id}" title="${medal.label}">${uiIcon('medal', 14)}<span class="sr-only">${medal.label}</span></span>` : ''}</h4>
             <p class="fund-muted">Poziom ${level}/${skill.levels.length}</p>
             <div class="level-steps">${steps}</div>
             ${next ? `<p>${escapeHtml(next.description || '')}</p>` : '<p><strong>Ukończone w pełni.</strong></p>'}
@@ -7901,7 +7925,7 @@ function renderMailPreview(message) {
     if (message.action?.type === 'vip') { // 0.15.2 K7: rozmowa z inwestorem VIP (3 argumenty sprawdzane danymi funduszu)
         const offer = playerFund?.vip?.offers.find(o => o.id === message.action.vipId && o.expiresQ > currentQuarter());
         action = offer
-            ? `<div class="mail-action"><p>Wybierz argument — gra sprawdzi go na danych funduszu:</p>${Object.entries(VIP_ARGUMENTS).map(([k, a]) => `<button class="btn-secondary" title="${escapeHtml(a.hint)}" onclick="mailAction(pitchVip, ${offer.id}, '${k}')">${a.label}</button>`).join(' ')}<p class="text-xs text-muted">${Object.values(VIP_ARGUMENTS).map(a => `${a.label}: ${a.hint}`).join(' · ')}</p></div>`
+            ? `<div class="mail-action"><p>Wybierz argument — gra sprawdzi go na danych funduszu:</p><div class="vip-args">${Object.entries(VIP_ARGUMENTS).map(([k, a]) => `<button type="button" class="btn-secondary vip-arg" title="${escapeHtml(a.hint)}" onclick="mailAction(pitchVip, ${offer.id}, '${k}')"><strong>${a.label}</strong><span>${escapeHtml(a.hint)}</span></button>`).join('')}</div></div>`
             : '<p class="fund-muted">Oferta VIP została już rozstrzygnięta albo wygasła.</p>';
     }
     if (message.action?.type === 'pppRestructure') {
@@ -9204,7 +9228,8 @@ function renderCountryPanel() {
             <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('glosowanie', 20)}</span><div><h4>Partie</h4><span class="bank-card-type">${escapeHtml(getRulingParty().name)} · wybory za ${macro.election.quartersLeft} kw.</span></div></header>
                 ${renderPartyBars(support)}
                 <p class="text-xs text-muted">Sondaż: poparcie liczone z klas (biedni wolą Ludowców, zamożni Koalicję Rynkową), plus zmęczenie władzą, koniunktura i szum. Zwycięzca poniżej 40% rządzi w koalicji z drugą partią.</p></article>
-        </div>`;
+        </div>
+        ${renderInfraLawSteps()}`;
 }
 
 // ---------- Karta spółki: Zatrudnienie ----------

@@ -2489,10 +2489,22 @@ button {
 }
 
 .topbar-date {
-  font-size: var(--text-body-sm-size);
-  color: var(--color-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 var(--space-3);
+  background: var(--color-bg-raised);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-family-mono);
+  font-size: var(--text-num-sm-size);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-primary);
   white-space: nowrap;
+  cursor: help;
 }
+.topbar-date:empty { display: none; }
+@media (max-width: 600px) { .topbar-date { margin-right: auto; } }
 
 .speed-segmented {
   display: inline-flex;
@@ -5121,7 +5133,7 @@ button.mood-kpi:hover { background: var(--color-bg-hover) !important; border-col
 .text-right { text-align: right; }
 #internet-modal tr.row-selected { background: var(--bg-elevated-2); outline: 1px solid var(--accent-info); }
 #internet-modal tbody tr[onclick] { cursor: pointer; }
-.flag-ic, .cur-ic { vertical-align: -2px; flex: none; }
+.cur-ic { vertical-align: -2px; flex: none; }
 .cur-ic { color: var(--accent-info); }
 
 
@@ -5181,7 +5193,6 @@ body #internet-modal { background: var(--net-bg-base) !important; color: var(--n
 .net-dest { --dest: #f59e0b; display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: 14px; background: linear-gradient(160deg, color-mix(in srgb, var(--dest) 14%, var(--net-card)), var(--net-card)); border: 1px solid color-mix(in srgb, var(--dest) 45%, var(--net-line)); }
 .net-dest.selected { outline: 2px solid var(--dest); }
 .net-dest header { display: flex; align-items: center; gap: 12px; } .net-dest header > div { flex: 1; min-width: 0; } .net-dest h4 { margin: 0; }
-.net-dest-flag { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 12px; background: #0e0a16; flex: none; }
 .net-dest-row { display: flex; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: 10px; background: #0e0a16; border: 1px solid var(--net-line); }
 .net-dest-row > span { display: flex; flex-direction: column; gap: 2px; }
 .net-dest footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
@@ -5203,7 +5214,7 @@ body #internet-modal { background: var(--net-bg-base) !important; color: var(--n
 .net-msg { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--net-line); } .net-msg.unread { border-left: 3px solid var(--net-red); padding-left: 8px; } .net-msg > div { min-width: 0; }
 .net-count { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; background: #38bdf8; color: #0e0a16; font-size: 12px; font-weight: 700; }
 .net-empty { padding: 24px; text-align: center; color: var(--net-muted); border: 1px dashed var(--net-line); border-radius: 14px; }
-/* tło okna w barwach kraju (Ferie i wakacje, Kantory24) — kraj podaje też nazwa i flaga w pasku adresu */
+/* tło okna w barwach kraju (Ferie i wakacje, Kantory24) — kraj podaje też nazwa w pasku adresu */
 body #internet-modal[data-country] { background: var(--net-bg) !important; border-top: 5px solid var(--net-accent) !important; }
 body #internet-modal[data-country] .net-hero, body #internet-modal[data-country] .bank-card { border-left: 4px solid var(--net-accent) !important; }
 body #internet-modal[data-country] .tab-btn.active { border-color: var(--net-accent) !important; }
@@ -5364,3 +5375,138 @@ td.sc-actions button { white-space: normal; margin: 0; }
 .te-intro-row input[aria-invalid="true"] { border-color: var(--color-down); }
 #teamedup-nav .intro-hint { margin-top: 8px; }
 #teamedup-nav .mail-folder:disabled { opacity: .55; cursor: not-allowed; }
+
+
+/* 0.15.2: kampanie emisyjne, relacje inwestorskie, VIP (okno rynku udziałów) */
+.camp-form { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2) var(--space-3); }
+.camp-field { display: flex; flex-direction: column; gap: var(--space-1); font-size: var(--text-caption-size); color: var(--color-text-muted); min-width: 0; }
+.camp-field select, .camp-field input { width: 100%; min-height: 40px; box-sizing: border-box; }
+.camp-check { grid-column: 1 / -1; display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); min-height: 40px; font-size: var(--text-body-sm-size); }
+.camp-check input { width: 20px; height: 20px; }
+.camp-cost { margin: var(--space-2) 0; font-size: var(--text-body-sm-size); }
+.camp-cost strong { font-family: var(--font-family-mono); }
+.camp-submit { width: 100%; min-height: 40px; }
+.camp-info { margin: var(--space-2) 0 0; padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); background: var(--color-bg-raised); border: 1px solid var(--color-border-subtle); font-size: var(--text-caption-size); color: var(--color-text-secondary); }
+.camp-info.is-blocked { border-color: var(--color-border-warn); color: var(--color-text-warn); }
+.camp-info.is-blocked::before { content: 'Blokada: '; font-weight: 600; }
+.camp-progress { height: 10px; border-radius: var(--radius-sm); background: var(--color-bg-sunken); border: 1px solid var(--color-border-subtle); overflow: hidden; }
+.camp-progress span { display: block; height: 100%; background: var(--color-bg-accent); }
+.camp-progress-text { margin: var(--space-2) 0 0; font-size: var(--text-body-sm-size); }
+.camp-kpis { margin: var(--space-3) 0 0; }
+.camp-kpi { cursor: default; }
+.ir-groups { display: flex; flex-direction: column; gap: var(--space-3); }
+.ir-group { display: grid; grid-template-columns: 1fr auto; gap: var(--space-1) var(--space-3); align-items: center; }
+.ir-name { display: inline-flex; align-items: center; gap: var(--space-2); font-weight: 600; font-size: var(--text-body-sm-size); }
+.ir-mood { text-align: right; font-family: var(--font-family-mono); }
+.ir-mood .text-sm { font-family: var(--font-family-sans); }
+.ir-note { grid-column: 1 / -1; margin: 0; font-size: var(--text-caption-size); }
+.ir-meter { grid-column: 1 / -1; position: relative; height: 8px; border-radius: var(--radius-sm); background: var(--color-bg-sunken); border: 1px solid var(--color-border-subtle); overflow: hidden; }
+.ir-meter::after { content: ''; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--color-text-muted); }
+.ir-meter span { position: absolute; top: 0; bottom: 0; background: var(--color-text-up); }
+.ir-meter.down span { background: var(--color-text-down); }
+.seg { display: flex; gap: 2px; margin-top: var(--space-3); padding: 2px; background: var(--color-bg-raised); border: 1px solid var(--color-border-default); border-radius: var(--radius-sm); }
+.seg-btn { flex: 1; min-height: 40px; border: 0 !important; background: transparent !important; color: var(--color-text-secondary) !important; font-family: var(--font-family-mono); border-radius: var(--radius-xs) !important; }
+.seg-btn:hover { background: var(--color-bg-hover) !important; }
+.seg-btn.active { background: var(--color-bg-accent-soft) !important; color: var(--color-text-primary) !important; box-shadow: inset 0 0 0 1px var(--color-border-accent); font-weight: 600; }
+.seg-btn.active::before { content: '✓ '; }
+.vip-offer { display: flex; flex-direction: column; gap: var(--space-2); }
+.vip-offer p { margin: 0; }
+.vip-who { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
+.vip-args { display: grid; grid-template-columns: 1fr; gap: var(--space-2); }
+.vip-arg { flex-direction: column; align-items: flex-start !important; justify-content: flex-start !important; height: auto; padding: var(--space-2) var(--space-3) !important; line-height: 1.3; text-align: left; min-height: 40px; }
+.vip-arg span { font-size: var(--text-caption-size); font-weight: 400; color: var(--color-text-muted); }
+@media (max-width: 600px) {
+  .camp-form { grid-template-columns: 1fr; }
+}
+
+.mail-action .vip-args { width: 100%; }
+
+/* 0.15.3: sekcja „Kryzys” w oknie „Rynek”, mail VIP */
+.crisis-section { display: flex; flex-direction: column; gap: var(--space-3); }
+.crisis-title { display: flex; align-items: center; gap: var(--space-2); margin: 0; }
+.crisis-calm { margin: 0; }
+.crisis-axis { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--space-1); }
+.crisis-axis li { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: var(--space-2); background: var(--color-bg-raised); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-sm); font-size: var(--text-caption-size); color: var(--color-text-muted); min-width: 0; }
+.crisis-axis li.done { color: var(--color-text-secondary); }
+.crisis-axis li.current { background: var(--color-bg-accent-soft); border-color: var(--color-border-accent); color: var(--color-text-primary); font-weight: 600; }
+.crisis-axis em { font-style: normal; color: var(--color-text-secondary); }
+.crisis-step-no { font-family: var(--font-family-mono); font-size: var(--text-label-size); }
+.crisis-cols { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
+.crisis-col h5 { display: flex; align-items: center; gap: var(--space-2); margin: 0 0 var(--space-2); font-size: var(--text-body-sm-size); }
+.crisis-col li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-1) var(--space-3); padding: var(--space-1) 0; border-bottom: 1px solid var(--color-border-subtle); font-size: var(--text-body-sm-size); }
+.crisis-premium { font-family: var(--font-family-mono); white-space: nowrap; }
+.crisis-foot { display: flex; flex-direction: column; gap: var(--space-1); padding-top: var(--space-2); border-top: 1px solid var(--color-border-subtle); }
+.crisis-foot p { margin: 0; display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+@media (max-width: 600px) {
+  .crisis-axis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .crisis-cols { grid-template-columns: 1fr; }
+}
+
+/* 0.16: kantor, karta kraju, połączenia giełd, forex (plany/design/08_zaleglosci_0.16_0.17.md) */
+#kantor-body .asset-mini-table td.text-right:not(:has(input, button)) { white-space: nowrap; }
+.country-card .cc-kpis { margin: 0; }
+.country-card .cc-kpi strong { display: flex; align-items: center; gap: var(--space-1); flex-wrap: wrap; }
+.country-facts { margin: 0; }
+.country-facts > div { display: grid; grid-template-columns: minmax(120px, 200px) 1fr; gap: var(--space-1) var(--space-3); padding: var(--space-2) 0; border-bottom: 1px solid var(--color-border-subtle); }
+.country-facts > div:last-child { border-bottom: 0; }
+.country-facts dt { font-size: var(--text-body-sm-size); color: var(--color-text-muted); }
+.country-facts dd { margin: 0; font-size: var(--text-body-sm-size); color: var(--color-text-primary); min-width: 0; }
+.country-facts dd .ic { vertical-align: -2px; }
+.link-list li { padding: var(--space-2) 0; border-bottom: 1px solid var(--color-border-subtle); }
+.link-list li:last-child { border-bottom: 0; }
+.fx-form { display: grid; grid-template-columns: auto auto 1fr auto; align-items: end; gap: var(--space-2) var(--space-3); }
+.fx-form input { width: 100%; box-sizing: border-box; }
+.fx-field { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
+.fx-field label { color: var(--color-text-muted); }
+.fx-pair { display: inline-flex; align-items: center; gap: var(--space-1); }
+.fx-preview { grid-column: 1 / -1; margin: 0; }
+.fx-form .btn-row { grid-column: 1 / -1; }
+.fx-cover { min-width: 130px; }
+#kantor-body td.fx-rate { white-space: normal; }
+.fx-cover .ic { vertical-align: -2px; }
+.fx-cover .limit-meter { max-width: 170px; }
+@media (max-width: 640px) {
+  #kantor-body .asset-mini-table { display: block; overflow-x: auto; }
+  .country-facts > div { grid-template-columns: 1fr; }
+  .fx-form { grid-template-columns: 1fr; }
+}
+
+/* 0.16: animacja lotu po zakupie biletu (playTicketFlight) */
+.ticket-flight { position: fixed; inset: 0; z-index: 2000; display: grid; place-items: center; background: color-mix(in srgb, var(--color-bg-base) 70%, transparent); cursor: pointer; animation: tf-fade var(--flight-ms, 2000ms) ease both; }
+.ticket-flight-scene { width: min(420px, calc(100vw - 32px)); padding: var(--space-3) var(--space-4); text-align: center; overflow: hidden; background: var(--color-bg-raised); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); }
+.ticket-flight-scene svg { display: block; overflow: hidden; }
+.ticket-flight-scene p { margin: var(--space-2) 0 0; font-size: var(--text-body-sm-size); color: var(--color-text-primary); }
+.ticket-flight-scene small { font-size: var(--text-caption-size); color: var(--color-text-muted); }
+.tf-runway { stroke: var(--color-text-muted); stroke-width: 2; stroke-dasharray: 16 10; animation: tf-runway calc(var(--flight-ms, 2000ms) * .5) linear forwards; }
+.tf-cloud { fill: var(--color-text-muted); opacity: .35; animation: tf-cloud var(--flight-ms, 2000ms) linear both; }
+.tf-cloud-b { animation-duration: calc(var(--flight-ms, 2000ms) * 1.4); }
+.tf-plane { fill: var(--color-text-accent); transform-box: fill-box; transform-origin: center; animation: tf-plane var(--flight-ms, 2000ms) cubic-bezier(.45, 0, .7, 1) both; }
+@keyframes tf-plane { 0% { transform: translate(-40px, 83px); } 40% { transform: translate(120px, 83px); } 100% { transform: translate(380px, -20px) rotate(-16deg); } }
+@keyframes tf-cloud { to { transform: translateX(-90px); } }
+@keyframes tf-runway { to { stroke-dashoffset: -130; } }
+@keyframes tf-fade { 0% { opacity: 0; } 10%, 85% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .ticket-flight { display: none; } }
+
+/* 0.17: giełda towarowa, fracht, bezpieczeństwo, ustawa, autostrada (projekt: plany/design/09_ui_0.17.md) */
+.cm-name { display: inline-flex; align-items: center; gap: var(--space-2); }
+.bank-grid .kantor-form { flex-wrap: nowrap; gap: var(--space-2); }
+.bank-grid .kantor-form input { flex: 1; width: auto; min-width: 0; }
+.bank-card-icon { flex: none; }
+.freight-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: var(--space-2); }
+.freight-card { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-3); background: var(--color-bg-raised); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); min-width: 0; }
+.freight-card-head { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-body-sm-size); color: var(--color-text-secondary); }
+.freight-card strong { font-family: var(--font-family-mono); font-size: var(--text-num-strong-size); font-weight: 600; }
+.freight-card small { font-size: var(--text-caption-size); color: var(--color-text-muted); }
+.freight-card .limit-meter { max-width: none; margin: var(--space-1) 0 0; }
+.law-steps { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.law-steps small { font-weight: 400; color: var(--color-text-muted); }
+.hw-strip { display: flex; gap: 2px; margin: var(--space-2) 0; }
+.hw-strip > span { flex: 1; min-width: 0; padding: var(--space-1) var(--space-2); background: var(--color-bg-raised); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-sm); font-size: var(--text-caption-size); color: var(--color-text-muted); }
+.hw-strip > span.is-won { color: var(--color-text-primary); }
+.hw-strip > span.is-here { background: var(--color-bg-accent-soft); border-color: var(--color-border-accent); color: var(--color-text-primary); font-weight: 600; }
+.hw-strip b { display: block; font-weight: 600; }
+.hw-strip .limit-meter { margin: var(--space-1) 0 0; }
+@media (max-width: 640px) {
+  .law-steps { grid-template-columns: 1fr; }
+  .hw-strip { flex-direction: column; }
+}

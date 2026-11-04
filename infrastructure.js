@@ -181,15 +181,41 @@ function awardInfraTender(tender) {
         s.status = 'wait';
     }
     if (parts.length) {
-        const groups = [];
-        for (const x of parts.sort((a, b) => a.n - b.n)) {
-            const last = groups[groups.length - 1];
-            if (last && last.name === x.name && last.to === x.n - 1) last.to = x.n; else groups.push({ from: x.n, to: x.n, name: x.name });
-        }
-        const total = parts.reduce((s, x) => s + x.price, 0);
-        logEvent(`🛣️ Autostrada (${p.segs.length} odcinków): ${groups.map(g => `${g.from === g.to ? `odcinek ${g.from}` : `odcinki ${g.from}–${g.to}`} — ${g.name}`).join(', ')}; łącznie ${formatZl(total, 0)}.`, 'construction');
+        logEvent(`🛣️ Autostrada (${p.segs.length} odcinków): ${describeHighwayAward(parts)}.`, 'construction');
     }
     return parts.length > 0;
+}
+
+/** „odcinki 1–2 — ABL, odcinek 3 — Nordbud; łącznie X”: dziennik i pasek odcinków w oknie przetargu. */
+function describeHighwayAward(parts) {
+    const groups = [];
+    for (const x of [...parts].sort((a, b) => a.n - b.n)) {
+        const last = groups[groups.length - 1];
+        if (last && last.name === x.name && last.to === x.n - 1) last.to = x.n; else groups.push({ from: x.n, to: x.n, name: x.name });
+    }
+    const total = parts.reduce((s, x) => s + x.price, 0);
+    return `${groups.map(g => `${g.from === g.to ? `odcinek ${g.from}` : `odcinki ${g.from}–${g.to}`} — ${g.name}`).join(', ')}; łącznie ${formatZl(total, 0)}`;
+}
+/** Okno przetargu: wszystkie odcinki autostrady, ten wyróżniony tłem i słowem. */
+function renderHighwayStrip(tender) {
+    const { p, seg: here } = findInfraSegment(tender);
+    if (!p || !here) return '';
+    const builderName = s => stocks.find(c => getEntityKey(c) === s.builder)?.name || s.builder;
+    const cells = p.segs.map(s => {
+        if (s.status === 'done') return `<span role="listitem" class="is-won"><b>Odcinek ${s.n}</b>${escapeHtml(builderName(s))} · gotowy</span>`;
+        if (s.status === 'build') {
+            const pct = Math.round((Number(constructionProjects.find(x => x.id === s.projectId)?.progress) || 0) * 100);
+            return `<span role="listitem" class="is-won"><b>Odcinek ${s.n}</b>${escapeHtml(builderName(s))} · w budowie ${pct}%${renderLimitMeter(pct, null, `Postęp ${pct}%`)}</span>`;
+        }
+        return s === here ? `<span role="listitem" class="is-here"><b>Odcinek ${s.n}</b>przetarg (ten)</span>` : `<span role="listitem"><b>Odcinek ${s.n}</b>przetarg</span>`;
+    }).join('');
+    const player = stocks.find(c => c.isPlayer && isConstructionCompany(c) && c.constructionStats);
+    const free = player ? Math.max(0, Number(player.constructionStats.maxProjects) - getActiveProjectsForBuilder(player).length - getOpenBidsForBuilder(player).length) : null;
+    const won = p.segs.filter(s => s.price > 0 && s.status !== 'tender').map(s => ({ n: s.n, name: builderName(s), price: s.price }));
+    return `<h5>Autostrada: odcinek ${here.n} z ${p.segs.length}</h5>
+        <div class="hw-strip" role="list" aria-label="Odcinki autostrady">${cells}</div>
+        <p class="notice-inline">${uiIcon('info', 14)}<span>Oferta na kilka odcinków: ${Math.round(INFRA_RULES.packageDiscount * 100)}% rabatu za każdy odcinek ponad pierwszy. Każdy odcinek zajmuje 1 slot firmy${free === null ? '' : ` (wolne: ${free})`}.</span></p>
+        ${won.length ? `<p class="text-sm">Rozstrzygnięcie: ${escapeHtml(describeHighwayAward(won))}.</p>` : ''}`;
 }
 
 /** Oferty na autostradę: oferty złożone na pojedyncze odcinki (np. gracza) i pakiety wykonawców AI (1–wolne sloty, ciągłe odcinki). */
@@ -371,4 +397,11 @@ function checkInfraInvariants() {
     if (typeof society !== 'object' || !society?.infra) return [];
     return INFRA_MODES.filter(m => { const c = society.infra.cap[m]; return !Number.isFinite(c) || c < INFRA_RULES.capMin - 1e-9 || c > getInfraCapUpper(m) + 1e-9; })
         .map(m => `infrastruktura ${m}: przepustowość ${society.infra.cap[m]}`);
+}
+
+/** Państwo → Prawa: poziomy ustawy „Finansowanie infrastruktury” z wydatkami i zużyciem przepustowości. */
+function renderInfraLawSteps() {
+    const law = SOCIAL_LAWS.infrastructure, now = Number(society.laws.infrastructure);
+    const steps = law.levels.map((name, i) => `<li class="${i === now ? 'current' : i < now ? 'done' : ''}"${i === now ? ' aria-current="step"' : ''}><span class="crisis-step-no">${i + 1}</span>${escapeHtml(name)}${i === now ? ' <em>(teraz)</em>' : ''}<small>wydatki ${formatNumberPl(INFRA_LEVELS[i].spend * 100, 1)}% · zużycie ${formatNumberPl(INFRA_LEVELS[i].wear * 100, 1)}%</small></li>`).join('');
+    return `<div class="crisis-section mt-3"><h4 class="bank-section-title">${escapeHtml(law.name)}</h4><ol class="crisis-axis law-steps" aria-label="Poziomy ustawy">${steps}</ol></div>`;
 }

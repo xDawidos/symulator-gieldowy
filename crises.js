@@ -124,7 +124,7 @@ const CRISIS_MAX_VICTIMS = 3;
 
 const CRISIS_LINES = {
     banking: {
-        id: 'banking', name: 'Kryzys bankowy', icon: '🏦', year: 2008, recoveryQ: [6, 10], shape: 'U',
+        id: 'banking', name: 'Kryzys bankowy', icon: '🏦', svg: 'kryzys-bank', year: 2008, recoveryQ: [6, 10], shape: 'U',
         spark: { macro: 'housing', news: 'Analitycy ostrzegają: kredyty hipoteczne rosną szybciej niż zarobki, a banki oddają je coraz słabszym klientom.' },
         lose: [
             { sector: 'Bankowość', premium: -0.35, revenue: -0.12 }, { sector: 'Finanse', premium: -0.40, revenue: -0.15 },
@@ -139,7 +139,7 @@ const CRISIS_LINES = {
         eligible: regime => ['bull', 'euphoria', 'distribution'].includes(regime.phase)
     },
     dotcom: {
-        id: 'dotcom', name: 'Bańka internetowa', icon: '💻', year: 2000, recoveryQ: [8, 12], shape: 'U',
+        id: 'dotcom', name: 'Bańka internetowa', icon: '💻', svg: 'kryzys-internet', year: 2000, recoveryQ: [8, 12], shape: 'U',
         spark: { macro: 'techboom', news: 'Spółki technologiczne wyceniane są na wielokrotności przychodów, których jeszcze nie mają. Ostrożni analitycy mówią o bańce.' },
         lose: [
             { sector: 'Technologia', premium: -0.45, revenue: -0.10 }, { sector: 'Technologia', subsector: 'Sztuczna inteligencja', premium: -0.10 },
@@ -154,7 +154,7 @@ const CRISIS_LINES = {
         eligible: regime => ['bull', 'euphoria', 'distribution'].includes(regime.phase) && (activeSectorBubble ? ['Technologia', 'Gaming', 'Finanse'].includes(activeSectorBubble.sector) : regime.premium > 0.1)
     },
     oil: {
-        id: 'oil', name: 'Szok naftowy', icon: '🛢️', year: 1973, recoveryQ: [4, 8], shape: 'U',
+        id: 'oil', name: 'Szok naftowy', icon: '🛢️', svg: 'kryzys-ropa', year: 1973, recoveryQ: [4, 8], shape: 'U',
         spark: { macro: 'oil', news: 'Napięcie na Bliskim Wschodzie: ropa drożeje, a odbiorcy paliw szykują się na wyższe rachunki.' },
         lose: [
             { sector: 'Transport i logistyka', premium: -0.30, revenue: -0.10 }, { sector: 'Transport i logistyka', subsector: 'Lotnictwo', premium: -0.15, revenue: -0.08 },
@@ -168,7 +168,7 @@ const CRISIS_LINES = {
         eligible: regime => !['bear', 'capitulation'].includes(regime.phase)
     },
     black: {
-        id: 'black', name: 'Czarny czwartek', icon: '🖤', year: 1929, recoveryQ: [10, 16], shape: 'L',
+        id: 'black', name: 'Czarny czwartek', icon: '🖤', svg: 'kryzys-czwartek', year: 1929, recoveryQ: [10, 16], shape: 'L',
         spark: { macro: null, news: 'Komisja nadzoru ostrzega: dźwignia funduszy i pożyczki na zakup akcji sięgają rekordów, a wyceny odleciały od zysków.' },
         lose: [
             { sector: 'Bankowość', premium: -0.30, revenue: -0.10 }, { sector: 'Finanse', premium: -0.25, revenue: -0.10 }, { sector: 'Przemysł', premium: -0.20, revenue: -0.10 },
@@ -182,7 +182,7 @@ const CRISIS_LINES = {
         eligible: regime => regime.phase === 'euphoria' && regime.premium > 0.25
     },
     pandemic: {
-        id: 'pandemic', name: 'Pandemia', icon: '🦠', year: 2020, recoveryQ: [2, 4], shape: 'V',
+        id: 'pandemic', name: 'Pandemia', icon: '🦠', svg: 'kryzys-pandemia', year: 2020, recoveryQ: [2, 4], shape: 'V',
         spark: { macro: 'pandemic', news: 'Nowy wirus w wielu krajach naraz: epidemiolodzy ostrzegają przed szybkim rozprzestrzenianiem.' },
         lose: [
             { sector: 'Turystyka', premium: -0.50, revenue: -0.30 }, { sector: 'Usługi', premium: -0.25, revenue: -0.20 },
@@ -660,25 +660,35 @@ function renderCrisisCountries() {
     if (typeof getContagionSummary !== 'function') return '';
     const sum = getContagionSummary();
     if (!sum.countries.length && !sum.pending) return '';
-    const pending = sum.pending ? `<p class="text-sm" role="status"><strong>${escapeHtml(sum.pending.line)}</strong> wybuchła w kraju ${escapeHtml(sum.pending.countryName || sum.pending.origin)} i dotrze do Polski ${sum.pending.delayLeft ? `za ${sum.pending.delayLeft} kw.` : 'w tym kwartale'}.</p>` : '';
+    const pending = sum.pending ? `<p class="alert alert--warn" role="status">${typeof uiIcon === 'function' ? uiIcon('alert', 16) : ''}<span><strong>${escapeHtml(sum.pending.line)}</strong> wybuchła w kraju ${escapeHtml(sum.pending.countryName || sum.pending.origin)} i dotrze do Polski ${sum.pending.delayLeft ? `za ${sum.pending.delayLeft} kw` : 'w tym kwartale'}.</span></p>` : '';
     const origin = sum.origin && sum.origin !== 'PL' ? `<p class="text-sm">Linia przyszła z kraju ${escapeHtml(COUNTRY_DEFS[sum.origin]?.name || sum.origin)}${sum.delayQ ? ` z opóźnieniem ${sum.delayQ} kw.` : ' bez opóźnienia'}.</p>` : '';
-    const rows = sum.countries.map(c => `<tr><td>${flagIcon(c.id, 12)} ${escapeHtml(c.name)}</td><td class="text-right">${formatNumberPl(c.link * 100, 0)}%</td><td class="text-right">${c.premium > 0 ? '▲ +' : c.premium < 0 ? '▼ ' : '■ '}${formatNumberPl(c.premium * 100, 0)}%</td><td>${c.cap === null ? 'brak ograniczenia' : `cel premii ≤ ${formatNumberPl(c.cap * 100, 0)}%`}</td></tr>`).join('');
-    return `<div><h4 class="bank-section-title">Zarażanie między krajami</h4>${pending}${origin}${rows ? `<table class="asset-mini-table w-full"><thead><tr><th>Kraj</th><th class="text-right">Powiązanie</th><th class="text-right">Premia rynku</th><th>Stan</th></tr></thead><tbody>${rows}</tbody></table>` : ''}<p class="text-sm text-muted">Kryzys z jednego kraju dochodzi do innych z opóźnieniem 0–2 kw. Siła zależy od powiązania krajów i od tego, czy dany sektor jest w linii.</p></div>`;
+    const rows = sum.countries.map(c => `<tr><td>${escapeHtml(c.name)}</td><td class="text-right">${formatNumberPl(c.link * 100, 0)}%</td><td class="text-right">${c.premium > 0 ? '▲ +' : c.premium < 0 ? '▼ ' : '■ '}${formatNumberPl(c.premium * 100, 0)}%</td><td>${c.cap === null ? 'brak ograniczenia' : `cel premii ≤ ${formatNumberPl(c.cap * 100, 0)}%`}</td></tr>`).join('');
+    return `<div class="crisis-section"><h4 class="bank-section-title">Zarażanie między krajami</h4>${pending}${origin}${rows ? `<table class="asset-mini-table w-full"><thead><tr><th>Kraj</th><th class="text-right">Powiązanie</th><th class="text-right">Premia rynku</th><th>Stan</th></tr></thead><tbody>${rows}</tbody></table>` : ''}<p class="text-sm text-muted">Kryzys z jednego kraju dochodzi do innych z opóźnieniem 0–2 kw. Siła zależy od powiązania krajów i od tego, czy dany sektor jest w linii.</p></div>`;
 }
 
 function renderCrisisSectionBase() {
-    const stateRows = (items, sign) => items.filter(i => i.premium).map(i => `<li>${escapeHtml(i.subsector ? `${i.sector} / ${i.subsector}` : i.sector)} <strong class="${sign < 0 ? 'text-down' : 'text-up'}">${i.premium > 0 ? '+' : ''}${Math.round(i.premium * 100)}%</strong> <span class="text-muted">${sign < 0 ? 'traci' : 'zyskuje'}</span></li>`).join('');
+    const icon = (name, size = 16) => (typeof uiIcon === 'function' ? uiIcon(name, size) : '');
+    // Premia sektora: znak, liczba z % i słowo (kolor tylko wzmacnia).
+    const strength = p => (Math.abs(p) >= 0.3 ? 'mocno' : Math.abs(p) >= 0.15 ? 'wyraźnie' : 'lekko');
+    const column = (items, sign) => {
+        const rows = items.filter(i => i.premium).map(i => `<li><span class="crisis-sector">${escapeHtml(i.subsector ? `${i.sector} / ${i.subsector}` : i.sector)}</span><span class="crisis-premium ${sign < 0 ? 'text-down' : 'text-up'}"><strong>${i.premium > 0 ? '+' : '−'}${Math.abs(Math.round(i.premium * 100))}%</strong> ${sign < 0 ? 'traci' : 'zyskuje'} ${strength(i.premium)}</span></li>`).join('');
+        return `<section class="crisis-col"><h5>${icon(sign < 0 ? 'spadek' : 'wzrost')} ${sign < 0 ? 'Tracą' : 'Zyskują'}</h5>${rows ? `<ul class="list-plain">${rows}</ul>` : '<p class="text-sm text-muted">Brak sektorów w tej linii.</p>'}</section>`;
+    };
     if (!crisisLine) {
         const last = crisisState.history[crisisState.history.length - 1];
-        return `<div><h4 class="bank-section-title">Kryzys</h4><p class="text-muted">${last ? `Ostatnia linia: ${CRISIS_LINES[last.id].icon} ${CRISIS_LINES[last.id].name} (${formatQuarterDate(last.startQ)}). ` : ''}Rynek jest w normalnym cyklu — kryzys nie trwa.${crisisState.scenario ? ` Scenariusz: ${CRISIS_LINES[crisisState.scenario].name} (start w ${formatQuarterDate(crisisState.scenarioStartQ)}).` : ''}</p></div>`;
+        return `<div class="crisis-section"><h4 class="bank-section-title">Kryzys</h4><p class="alert crisis-calm">${icon('ok', 18)}<span>Rynek jest w normalnym cyklu — kryzys nie trwa.${last ? ` Ostatnia linia: ${escapeHtml(CRISIS_LINES[last.id].name)} (${formatQuarterDate(last.startQ)}).` : ''}${crisisState.scenario ? ` Scenariusz: ${escapeHtml(CRISIS_LINES[crisisState.scenario].name)} (start w ${formatQuarterDate(crisisState.scenarioStartQ)}).` : ''}</span></p></div>`;
     }
     const def = CRISIS_LINES[crisisLine.id];
-    const axis = CRISIS_STAGES.map(stage => `<li class="${stage === crisisLine.stage ? 'current' : ''}" ${stage === crisisLine.stage ? 'aria-current="step"' : ''}>${CRISIS_STAGE_NAMES[stage]}${stage === crisisLine.stage ? ' (teraz)' : ''}</li>`).join('');
+    const currentIdx = CRISIS_STAGES.indexOf(crisisLine.stage);
+    const axis = CRISIS_STAGES.map((stage, n) => {
+        const now = stage === crisisLine.stage;
+        return `<li class="${now ? 'current' : n < currentIdx ? 'done' : ''}" ${now ? 'aria-current="step"' : ''}><span class="crisis-step-no">${n < currentIdx ? '✓' : n + 1}</span>${CRISIS_STAGE_NAMES[stage]}${now ? ' <em>(teraz)</em>' : ''}</li>`;
+    }).join('');
     const reaction = crisisState.rate ? `Bank centralny: ${crisisState.rate.kind === 'hike' ? 'podwyżki' : 'cięcia'} stóp w toku.` : (crisisState.lastRate ? `Bank centralny zmienił stopy łącznie o ${(crisisState.lastRate.total * 100).toFixed(1)} pp.` : 'Reakcja banku centralnego jeszcze nie ruszyła.');
-    return `<div><h4 class="bank-section-title">Kryzys: ${def.icon} ${escapeHtml(def.name)}</h4>
-        <ol class="phase-history" aria-label="Etapy kryzysu">${axis}</ol>
-        <div class="market-grid"><ul class="list-plain">${stateRows(def.lose, -1)}</ul><ul class="list-plain">${stateRows(def.gain, 1)}</ul></div>
-        <p class="text-sm">${escapeHtml(reaction)} Upadłości: ${crisisLine.bankrupted.length}, ratunki państwa: ${crisisLine.rescued.length}.</p></div>`;
+    return `<div class="crisis-section"><h4 class="bank-section-title crisis-title">${icon(def.svg, 20)} Kryzys: ${escapeHtml(def.name)}</h4>
+        <ol class="crisis-axis" aria-label="Etapy kryzysu">${axis}</ol>
+        <div class="crisis-cols">${column(def.lose, -1)}${column(def.gain, 1)}</div>
+        <div class="crisis-foot"><p class="text-sm">${icon('bank', 16)} ${escapeHtml(reaction)}</p><p class="text-sm"><strong>Upadłości:</strong> ${crisisLine.bankrupted.length} · <strong>ratunki państwa:</strong> ${crisisLine.rescued.length}</p></div></div>`;
 }
 
 function renderCrisisSection() { return renderCrisisSectionBase() + renderCrisisCountries(); } // 0.16.2 G9: sekcja „Kryzys” z krajami i opóźnieniem zarażenia
