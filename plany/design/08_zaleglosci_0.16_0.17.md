@@ -32,8 +32,17 @@ Testy: 956.
 ## Etap 3. Projekt 0.17
 Zrobione: projekt [09_ui_0.17.md](09_ui_0.17.md), makieta [makiety/09_ui_017.html](makiety/09_ui_017.html), CSS (blok „0.17”), 11 ikon (7 surowców, 3 transportu, „Mistrz Opcji”) w `ui.js` i `img/ikony/`, ikony transportu w sekcji frachtu. Testy: 957.
 
+## Etap 4. Wdrożenie 0.17 po scaleniu S7
+Gałąź wciągnęła `zmiany-AI` 6d432e2 (scalenie lokalne, `origin/zmiany-AI` jest starsze). Konflikt w `renderCountryCard` rozwiązany: wiersz „Bezpieczeństwo państwa” jest na liście `.country-facts`. S7 nie wprowadziło flag ani emoji.
+
+Wdrożone wg [09_ui_0.17.md](09_ui_0.17.md): giełda towarowa (lista, serie, formularz, blokady, pozycje, karty ETC i ETF), karty frachtu, wiersz bezpieczeństwa, kroki ustawy, przetarg autostrady, pusty stan Ulubionych, ikona „Mistrza Opcji”. Linie budżetu z S7 (infrastruktura, obronność, bezpieczeństwo) zostały bez zmian, wyglądają poprawnie. Testy: 961. Zrzuty: `zrzuty/z017/w1`–`w12`.
+
+Odstępstwa od projektu:
+- Oś ustawy stoi pod całym panelem Państwa, nie w karcie „Ustawy”: 5 kroków nie mieści się w wąskiej kolumnie, nazwy się ucinały.
+- 8 kart ETC i ETF zamiast dwóch z makiety, bo każdy instrument ma własne pole kwoty i przyciski.
+- „(wolne: N)” przy slotach widać tylko, gdy gracz ma firmę budowlaną.
+
 ## Co zostało
-1. **Po scaleniu S7:** wdrożenie okna giełdy towarowej, frachtu, wiersza bezpieczeństwa, ustawy, przetargu autostrady, pustego stanu Ulubionych i ikony „Mistrza Opcji” (prompt w `09_ui_0.17.md`).
-2. **Konflikt przy scalaniu:** S7 dopisuje wiersz „Bezpieczeństwo państwa” do starego `<dl>` w `renderCountryCard`, a tu ten `<dl>` zamienił się na `.country-facts`. Wiersz trzeba przenieść na nową listę.
-3. **Figma:** bez aktualizacji (import `img/ikony/arkusz.html` i komponentów, gdy serwer zadziała).
-4. **Emoji w kodzie danych** (`icon` w `CRISIS_LINES`, hasła Akademii, `infrastructure.js`) zostają; widok sekcji Kryzys używa już `svg`.
+1. **Figma:** bez aktualizacji (import `img/ikony/arkusz.html` i komponentów, gdy serwer zadziała).
+2. **Emoji w kodzie danych** (`icon` w `CRISIS_LINES`, hasła Akademii, `infrastructure.js`, ikony ustaw w `SOCIAL_LAWS`) zostają. W tabeli ustaw `law.icon` jest wypisywany wprost, więc na ekranie to emoji, w tym 🛣️ przy ustawie infrastruktury z S5.
+3. **Nazwa `flags.js`:** plik trzyma już tylko ikony walut.
