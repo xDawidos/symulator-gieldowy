@@ -138,7 +138,7 @@ function checkFreightInvariants() {
     return FREIGHT_IDS.filter(id => !(fr.idx[id] > 0) || !Number.isFinite(fr.idx[id])).map(id => `fracht ${id}: indeks ${fr.idx[id]}`);
 }
 
-// --- Okno „Rynek”: wiersz frachtu ---
+// --- Okno „Rynek”: karty frachtu ---
 function renderFreightSection() {
     if (typeof commodityState === 'undefined' || !commodityState) return '';
     ensureFreightState();
@@ -146,17 +146,21 @@ function renderFreightSection() {
     const items = FREIGHT_IDS.map(id => {
         const v = getFreightIndex(id), dev = getFreightTrendRatio(id) - 1, [a, b] = getFreightDelivery(id);
         const ev = ensureFreightState().e.find(e => FREIGHT_EVENTS[e.id].mode === id);
-        return `<div class="bank-ticker-item">
-            <span>${uiIcon(`transport-${id}`, 14)} Fracht ${escapeHtml(FREIGHT_MODES[id].name.toLowerCase())}</span>
+        const cap = getFreightCapacity(id), upper = getInfraCapUpper(id), capText = `${formatNumberPl(cap, 2)} z ${formatNumberPl(upper, 2)}`;
+        return `<div class="freight-card">
+            <span class="freight-card-head">${uiIcon(`transport-${id}`, 16)} Fracht ${escapeHtml(FREIGHT_MODES[id].name.toLowerCase())}</span>
             <strong>${formatNumberPl(v, 0)}</strong>
-            <small class="text-muted">${pct(dev)} vs średnia 8 kw. · dostawa ${a === b ? a : `${a}–${b}`} tyg. · przepustowość ${formatNumberPl(getFreightCapacity(id), 2)}${ev ? ` · ${escapeHtml(FREIGHT_EVENTS[ev.id].name)}` : ''}</small>
+            <small>${pct(dev)} vs średnia 8 kw. · dostawa ${a === b ? a : `${a}–${b}`} tyg.</small>
+            ${renderLimitMeter(cap / upper * 100, null, `Przepustowość ${capText}`)}
+            <small>przepustowość ${capText}</small>
+            ${ev ? `<span class="badge badge--warn">${escapeHtml(FREIGHT_EVENTS[ev.id].name)}</span>` : ''}
         </div>`;
     }).join('');
     const oilDev = getCommodityPrice('oil') / getCommodityTrend('oil') - 1;
     return `<div>
         <h4 class="bank-section-title">Indeks frachtu (baza 100)</h4>
-        <div class="bank-ticker">${items}
-            <div class="bank-ticker-item"><span>Ropa (paliwo)</span><strong>${formatNumberPl(getCommodityPrice('oil'), 1)} USD</strong><small class="text-muted">${pct(oilDev)} vs średnia 8 kw.</small></div>
+        <div class="freight-cards">${items}
+            <div class="freight-card"><span class="freight-card-head">${uiIcon('surowiec-oil', 16)} Ropa (paliwo)</span><strong>${formatNumberPl(getCommodityPrice('oil'), 1)} USD</strong><small>${pct(oilDev)} vs średnia 8 kw.</small></div>
         </div>
     </div>`;
 }

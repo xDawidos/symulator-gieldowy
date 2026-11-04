@@ -92,6 +92,7 @@ function renderCountryCard(id) {
     const crisis = typeof crisisState === 'object' && crisisState.pendingImport?.origin === id ? 'kryzys wybuchł tutaj i zmierza do Polski'
         : (typeof crisisLine === 'object' && crisisLine?.origin === id ? 'kryzys zaczął się tutaj' : (crisisLine ? 'odczuwa kryzys z Polski' : 'bez kryzysu'));
     const kpi = (label, value) => `<div class="cc-kpi"><span>${label}</span><strong>${value}</strong></div>`;
+    const security = getCountrySecurityLevel(id), lowSecurity = security < 45; // 45: próg „umiarkowane” z getSecurityLabel
     return `<div class="bank-card country-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('rynek', 20)}</span><div><h4>${escapeHtml(def.name)}</h4><span class="bank-card-type">${escapeHtml(def.operator.name)} · ${currencyIcon(def.currency, 14)} ${def.currency}</span></div></header>
         <div class="cc-kpis">
             ${kpi('Nastrój rynku', `${uiIcon(phase.icon, 14)} ${phase.name}, ${premium > 0 ? '▲ +' : premium < 0 ? '▼ ' : '■ '}${formatNumberPl(premium * 100, 0)}%`)}
@@ -101,7 +102,7 @@ function renderCountryCard(id) {
         </div>
         <dl class="country-facts">
             <div><dt>Kryzys</dt><dd>${uiIcon(crisis === 'bez kryzysu' ? 'ok' : 'alert', 14)} ${crisis}</dd></div>
-            <div><dt>Bezpieczeństwo państwa</dt><dd>${getSecurityLabel(getCountrySecurityLevel(id))}</dd></div>
+            <div><dt>Bezpieczeństwo państwa</dt><dd${lowSecurity ? ' class="tone-warn"' : ''}>${uiIcon(lowSecurity ? 'alert' : 'tarcza', 14)} ${getSecurityLabel(security)}${renderLimitMeter(security, null, `Bezpieczeństwo państwa ${Math.round(security)} na 100`, lowSecurity)}</dd></div>
             <div><dt>Sesja</dt><dd>${typeof getMarketStatus === 'function' ? getMarketStatus(id).text : '—'}</dd></div>
             <div><dt>Prowizja operatora</dt><dd>${formatNumberPl(getCountryCommission(id) * 100, 1)}% (z biletem)</dd></div>
             <div><dt>Spółek na giełdzie</dt><dd>${getCountryIssuers(id).length} z limitu ${getCountryLimit(id)} (wielkość rynku ×${formatNumberPl(getCountryLimitMult(id), 2)} liczby startowej)</dd></div>
