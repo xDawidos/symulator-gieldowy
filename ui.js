@@ -9192,6 +9192,9 @@ function renderCountryPanel() {
                     <div><dt>Deficyt od</dt><dd>${budget.deficitQuarters} kw.</dd></div>
                     <div><dt>Zasiłki</dt><dd>${formatZl(budget.socialSpending || 0, 0)}</dd></div>
                     <div><dt>Programy socjalne ze skarbu</dt><dd>${formatZl(budget.programSpending || 0, 0)}</dd></div>
+                    <div><dt>Infrastruktura</dt><dd>${formatZl(budget.infrastructureSpending || 0, 0)}</dd></div>
+                    <div><dt>Obronność</dt><dd>${formatZl(budget.defense || 0, 0)} (${formatNumberPl(getDefenseShare() * 100, 1)}% wpływów)</dd></div>
+                    <div><dt>Bezpieczeństwo państwa</dt><dd>${getSecurityLabel(getHomeSecurityLevel())}</dd></div>
                     <div><dt>Podatki od pracy</dt><dd>${formatZl(budget.laborTaxes || 0, 0)}</dd></div>
                     <div><dt>Ubytek przez szarą strefę</dt><dd class="${budget.greyTaxLoss > 0 ? 'text-down' : ''}">${formatZl(budget.greyTaxLoss || 0, 0)}</dd></div>
                     <div><dt>CIT</dt><dd>${(getCompanyIncomeTaxRate() * 100).toFixed(0)}%${Number(society.laws.corpTaxBrackets) ? ` (małe ${((getCompanyIncomeTaxRate() + CORP_TAX_BRACKETS[society.laws.corpTaxBrackets][0]) * 100).toFixed(0)}%, duże ${((getCompanyIncomeTaxRate() + CORP_TAX_BRACKETS[society.laws.corpTaxBrackets][1]) * 100).toFixed(0)}%)` : ''}</dd></div>

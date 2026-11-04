@@ -151,6 +151,14 @@ const skills = {
             { level: 3, cost: 1800, description: 'jeszcze nie dodano' } //dodaj możliwość tworzenia własnego etf
         ]
     },
+    'optionsMaster': { // 0.17 S7
+        name: 'Mistrz Opcji',
+        unlockedLevel: 0,
+        levels: [
+            { level: 1, cost: 1500, description: 'Kontrakty terminowe na surowce: tylko pozycje długie, dźwignia do 1:3 (lub niższa wg surowca).' },
+            { level: 2, cost: 5000, description: 'Pozycje krótkie i pełna dźwignia wg surowca (złoto do 1:10).' }
+        ]
+    },
     'insiderAccess': {
         name: 'Dostęp Poufny 💼',
         unlockedLevel: 0,

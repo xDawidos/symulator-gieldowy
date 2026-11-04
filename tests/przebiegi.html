@@ -84,6 +84,36 @@ const PRESETS = {
 PRESETS['fundusz-gig-zamkniety'] = PRESETS['fundusz-gig'] + 'setFundOpenSubscriptions(false);';
 // 0.14.2 krok 0 (atrybucja): wyłączenie pojedynczych części w ramce, bez cofania historii.
 // bez-p6: katalog inwestycji/technologii ze wszystkich sektorów spółki, bez wymagań pozycji.
+// 0.17 S7: exploit kontraktów — fundusz jak fundusz-gig, a obok dwie strategie: powrót do średniej (surowiec najdalej od Ś8) i stałe krótkie na gazie (koszt przechowania w cenie). Dźwignia 1:3, seria kolejna, wynik do pola s017.kontrakty.
+PRESETS['kontrakty'] = PRESETS['fundusz-gig'] + `(function () {
+    const err = e => (window.__presetErrors = window.__presetErrors || []).push(String(e));
+    skills.optionsMaster.unlockedLevel = 2;
+    const blank = () => ({ pnl: 0, cap: 0, not: 0, n: 0, win: 0, closed: 0, forced: 0 });
+    const T = window.__kontrakty = { rev: blank(), carry: blank(), rate: 0, q: 0 }, tag = {}, seen = new Set();
+    const open = (name, id, side) => {
+        const q = getContractSeries()[1], deposit = getFundAssets() * 0.05;
+        if (q == null || deposit * 3 < MARGIN_RULES.minNotional) { T.why = 'za mały depozyt ' + Math.round(deposit); return; }
+        const g = Number(marketIndexes.find(i => i.id === 'GIG')?.value) || 0, need = deposit * 1.02 - playerCash; // gotówka z pozycji indeksowej
+        if (need > 0 && g > 0) { window.__idx.units = Math.max(0, window.__idx.units - need / g); playerCash += need; }
+        const r = openCommodityContract(id, q, side, deposit * 3, 3);
+        if (r.ok) { tag[r.position.id] = name; T[name].n++; } else T.why = r.reason;
+    };
+    const orig = advanceMacroQuarter;
+    advanceMacroQuarter = function () {
+        try {
+            T.q++; T.rate += DEPOSIT_INTEREST_RATE; skills.optionsMaster.unlockedLevel = 2;
+            for (const l of marginClosedLog) if (tag[l.id] && !seen.has(l.id)) { seen.add(l.id); const s = T[tag[l.id]]; s.pnl += l.pnl; s.closed++; if (l.pnl > 0) s.win++; if (l.reason !== 'expiry') s.forced++; }
+            const live = getMarginPositions('commodities');
+            for (const p of live) if (tag[p.id]) { T[tag[p.id]].cap += p.deposit; T[tag[p.id]].not += p.notional; }
+            if (!live.some(p => tag[p.id] === 'rev')) {
+                const id = COMMODITY_IDS.reduce((a, b) => Math.abs(getCommodityTrendRatio(b) - 1) > Math.abs(getCommodityTrendRatio(a) - 1) ? b : a), dev = getCommodityTrendRatio(id) - 1;
+                if (Math.abs(dev) > 0.1) open('rev', id, dev > 0 ? -1 : 1);
+            }
+            if (!live.some(p => tag[p.id] === 'carry')) open('carry', 'gas', -1);
+        } catch (e) { err(e); }
+        return orig.apply(this, arguments);
+    };
+})();`;
 PRESETS['bez-p6'] = `getCatalogSectorsForCompany = c => (Array.isArray(c?.sector) ? c.sector : []); meetsCatalogRequirements = () => true;`;
 // bez-p9: stare kotwice (bank z zysku po 4 kw., typy specjalne bez kotwicy, strata = 0,7 × WK) i bez rewizji > 10×.
 PRESETS['bez-p9'] = `(function () {
@@ -1224,7 +1254,7 @@ const PROBE_017 = `(function () {
             const k = Array.isArray(x.sector) ? x.sector[0] : x.sector, h = x.fundamentals.history.slice(-4), a = sec[k] || (sec[k] = [0, 0, 0]);
             a[0] += h.reduce((t, y) => t + (Number(y.ebitda) || 0), 0); a[1] += h.reduce((t, y) => t + (Number(y.revenue) || 0), 0); a[2]++;
         }
-        r.s017 = { ...T, capPl: Math.round(capPl), capForeign: Math.round(capForeign), secMargin: Object.fromEntries(Object.entries(sec).filter(([, a]) => a[1] > 0).map(([k, a]) => [k, [+(a[0] / a[1]).toFixed(4), a[2]]])),
+        r.s017 = { ...T, kontrakty: window.__kontrakty, capPl: Math.round(capPl), capForeign: Math.round(capForeign), secMargin: Object.fromEntries(Object.entries(sec).filter(([, a]) => a[1] > 0).map(([k, a]) => [k, [+(a[0] / a[1]).toFixed(4), a[2]]])),
             // 0.17 S3: surowce na koniec (cena / średnia), wynik botów na kontraktach, otwarte pozycje gracza na towarach
             com: typeof commodityState === 'object' && commodityState ? { px: Object.fromEntries(COMMODITY_IDS.map(id => [id, +(commodityState.prices[id] / COMMODITY_DEFS[id].mean).toFixed(3)])), bots: commodityState.bots?.stats || null, botOpen: commodityState.bots?.pos?.length || 0, ev: commodityState.events.map(e => e.id), playerPos: typeof getMarginPositions === 'function' ? getMarginPositions('commodities').length : null,
                 fr: commodityState.freight ? Object.fromEntries(Object.keys(commodityState.freight.idx).map(id => [id, +commodityState.freight.idx[id].toFixed(1)])) : null } : null }; // 0.17 S4: indeks frachtu na koniec

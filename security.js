@@ -100,6 +100,9 @@ function getDefenseRevenueFactor(stock, baseRevenue) {
     return f;
 }
 
+/** Poziom bezpieczeństwa słowem i liczbą (karta kraju, budżet). */
+function getSecurityLabel(level) { return `${level >= 70 ? 'wysokie' : level >= 45 ? 'umiarkowane' : 'niskie'} (${Math.round(level)}/100)`; }
+
 /** Premia za ryzyko kraju: ±2% wyceny przy S = 100 / 0. */
 function getSecurityValuationFactor(stock) {
     if (typeof society !== 'object' || !society) return 1;
@@ -109,3 +112,89 @@ function getSecurityValuationFactor(stock) {
 function getSecurityDemandAdj() { return DEFENSE_RULES.demandRange * (getHomeSecurityLevel() - 50) / 25; }
 /** Szansa zakupu przez boty zagraniczne na rynku krajowym. */
 function getSecurityBotFactor() { return DEFENSE_RULES.botBase + DEFENSE_RULES.botSlope * getHomeSecurityLevel() / 100; }
+
+// =================================================================================
+// 0.17 S7: AKADEMIA — 8 lekcji o surowcach, frachcie i bezpieczeństwie
+// =================================================================================
+Object.assign(ACADEMY_ENTRIES, {
+    cyklSurowcowy: {
+        title: 'Cykl surowcowy', get icon() { return academyIcon('rynek'); },
+        text: 'Ceny surowców falują wokół średniej. Drogi surowiec zachęca do nowych kopalń i oszczędzania, więc po czasie podaż rośnie, popyt słabnie i cena wraca. Tani działa odwrotnie. Do tego dochodzą koniunktura w przemyśle, pora roku i szoki, takie jak embargo albo susza. Szok mija, ale ślad w wynikach spółek zostaje na kilka kwartałów.',
+        example: () => { const id = COMMODITY_IDS.reduce((a, b) => Math.abs(getCommodityTrendRatio(b) - 1) > Math.abs(getCommodityTrendRatio(a) - 1) ? b : a); return `Najdalej od średniej z 8 kwartałów jest teraz ${COMMODITY_DEFS[id].name}: ${formatNumberPl((getCommodityTrendRatio(id) - 1) * 100, 0)}%.`; },
+        quiz: [
+            { q: 'Co zwykle dzieje się po długim okresie drogiego surowca?', a: ['podaż rośnie, a cena wraca w dół', 'cena rośnie bez końca', 'popyt zawsze rośnie'], c: 0 },
+            { q: 'Co najczęściej zaczyna nagły skok ceny ropy?', a: ['szok, np. embargo', 'wypłata dywidendy', 'split akcji'], c: 0 },
+            { q: 'Dlaczego „drogo” nie znaczy „będzie drożej”?', a: ['ceny surowców wracają do średniej', 'giełda zamyka się w piątki', 'surowce nie mają ceny'], c: 0 }
+        ]
+    },
+    kosztWsadu: {
+        title: 'Koszt wsadu i przerzucenie na ceny', get icon() { return academyIcon('magazyn'); },
+        text: 'Wsad to surowiec zużywany w produkcji: ropa w chemii, metale w przemyśle. Gdy drożeje, marża spada od razu, ale spółka z czasem podnosi ceny i przerzuca część kosztu na klientów. Zanim to zrobi, mija kilka kwartałów. Część spółek zabezpiecza się kontraktami i przez pewien czas płaci starą cenę. Producent surowca zyskuje tam, gdzie odbiorca traci.',
+        example: () => `Ropa jest teraz ${formatNumberPl((getCommodityTrendRatio('oil') - 1) * 100, 0)}% od średniej z 8 kwartałów: tyle zmienia się koszt wsadu przed przerzuceniem i zabezpieczeniem.`,
+        quiz: [
+            { q: 'Co dzieje się z marżą zaraz po wzroście ceny wsadu?', a: ['spada', 'rośnie', 'nie zmienia się nigdy'], c: 0 },
+            { q: 'Co łagodzi ten spadek po kilku kwartałach?', a: ['przerzucenie kosztu na ceny', 'split akcji', 'zmiana giełdy'], c: 0 },
+            { q: 'Kto zyskuje na drogim surowcu?', a: ['jego producent', 'każdy odbiorca', 'nikt'], c: 0 }
+        ]
+    },
+    kontraktTerminowy: {
+        title: 'Kontrakt terminowy', get icon() { return academyIcon('waga'); },
+        text: 'Kontrakt terminowy to umowa na cenę surowca w dniu zapadalności. Pozycja długa zarabia na wzroście, krótka na spadku. Nikt nie dostarcza beczek: na koniec kwartału wynik rozlicza się gotówką po cenie z tego dnia. Płacisz tylko depozyt, więc dźwignia mnoży i zysk, i stratę. Podatek od zysku z kontraktów jest taki jak od akcji: fundusz jest zwolniony, a zysk podnosi NAV i jest opodatkowany u klientów przy umorzeniu udziałów.',
+        example: () => { const q = getContractSeries()[1] ?? getContractSeries()[0]; return `Seria ${getContractName('oil', q)}: ${fmtCommodityUsd(getContractPriceUsd('oil', q))} przy cenie bieżącej ${fmtCommodityUsd(getCommodityPrice('oil'))}.`; },
+        quiz: [
+            { q: 'Jak rozlicza się kontrakt w dniu zapadalności?', a: ['gotówką po cenie z tego dnia', 'dostawą surowca do funduszu', 'nie rozlicza się'], c: 0 },
+            { q: 'Która pozycja zarabia na spadku ceny?', a: ['krótka', 'długa', 'żadna'], c: 0 },
+            { q: 'Gdzie płaci się podatek od zysku funduszu z kontraktów?', a: ['u klientów, przy umorzeniu udziałów', 'w funduszu i drugi raz u klientów', 'nigdzie'], c: 0 }
+        ]
+    },
+    contangoBackwardation: {
+        title: 'Contango i backwardation', get icon() { return academyIcon('rynek'); },
+        text: 'Contango znaczy, że kontrakt jest droższy od ceny bieżącej. Backwardation, że tańszy. W cenie kontraktu siedzi koszt przechowania i oczekiwany powrót do średniej: surowiec drogi ma kontrakty tańsze, a tani droższe. Dlatego „kup tanio i czekaj” nie daje darmowego zysku. Przedłużając długą pozycję w contango, co kwartał kupujesz drożej i tracisz na tej różnicy.',
+        example: () => { const q = getContractSeries()[1] ?? getContractSeries()[0]; return `Ropa: ${getContractStructure('oil', q)} na serii ${getContractName('oil', q)}.`; },
+        quiz: [
+            { q: 'Kontrakt jest droższy od ceny bieżącej. Jak to się nazywa?', a: ['contango', 'backwardation', 'dywidenda'], c: 0 },
+            { q: 'Jaką strukturę zwykle ma surowiec dużo droższy od średniej?', a: ['backwardation', 'contango', 'żadną'], c: 0 },
+            { q: 'Co traci długa pozycja przedłużana w contango?', a: ['różnicę przy każdym przedłużeniu', 'nic', 'depozyt w całości'], c: 0 }
+        ]
+    },
+    depozytTowary: {
+        title: 'Depozyt i margin call na towarach', get icon() { return academyIcon('alert'); },
+        text: 'Depozyt to część wartości pozycji, którą blokujesz na czas kontraktu. Przy dźwigni 1:5 ruch ceny o 10% to 50% depozytu. Gdy kapitał pozycji spadnie poniżej połowy depozytu, dostajesz margin call. Gdy spadnie jeszcze niżej, pozycja zamyka się sama. Surowce potrafią skoczyć o kilkadziesiąt procent w jednym szoku, dlatego dźwignia na gazie i węglu jest mniejsza niż na złocie.',
+        example: () => `Teraz: dźwignia do 1:${COMMODITY_MARKET.leverage.gold} na złocie, do 1:${COMMODITY_MARKET.leverage.gas} na gazie. Margin call poniżej ${Math.round(MARGIN_RULES.warnBelow * 100)}% depozytu.`,
+        quiz: [
+            { q: 'Dźwignia 1:5, cena spada o 10%. Ile depozytu tracisz?', a: ['50%', '10%', '5%'], c: 0 },
+            { q: 'Co się dzieje, gdy kapitał pozycji spadnie zbyt nisko?', a: ['pozycja zamyka się sama', 'cena wraca', 'dopłaca bank'], c: 0 },
+            { q: 'Dlaczego gaz ma mniejszą dźwignię niż złoto?', a: ['jego cena mocniej się waha', 'jest tańszy', 'nie ma powodu'], c: 0 }
+        ]
+    },
+    etcEtf: {
+        title: 'ETC i ETF surowcowy', get icon() { return academyIcon('moneta'); },
+        text: 'ETC to papier, który podąża za ceną jednego surowca. ETF koszykowy trzyma kilka surowców po równo i co kwartał wraca do równych wag. Nie ma tu dźwigni, depozytu ani zapadalności, więc nie grozi margin call. Płacisz za to roczną opłatą i spreadem. To prostszy sposób wejścia w surowce niż kontrakty, ale wynik w złotych dalej zależy od kursu dolara.',
+        example: () => `ETF „${COMMODITY_BASKET_NAME}” kosztuje teraz ${formatZl(getCommodityFundPrice('basket'), 2)}, opłata ${commodityPct(COMMODITY_FUNDS.basketFee)}% rocznie.`,
+        quiz: [
+            { q: 'Czego nie ma w ETC w porównaniu z kontraktem?', a: ['dźwigni i margin callu', 'ceny', 'opłaty'], c: 0 },
+            { q: 'Co robi ETF koszykowy co kwartał?', a: ['wraca do równych wag', 'wypłaca dywidendę', 'zmienia walutę'], c: 0 },
+            { q: 'Od czego poza ceną surowca zależy wynik w złotych?', a: ['od kursu dolara', 'od ceny akcji banku', 'od niczego'], c: 0 }
+        ]
+    },
+    frachtWaskieGardla: {
+        title: 'Fracht i wąskie gardła', get icon() { return academyIcon('samolot'); },
+        text: 'Indeks frachtu pokazuje koszt przewozu: morzem, powietrzem i lądem. Rośnie z ceną paliwa, popytem w przemyśle i zakłóceniami, takimi jak strajk kolejarzy. Spada, gdy kraj ma większą przepustowość: porty, lotniska, tory i autostrady. Drogi fracht to zysk przewoźnika i koszt dla importera. Dlatego budowa infrastruktury zmienia wyniki spółek daleko od budownictwa, ale dopiero po latach.',
+        example: () => `Fracht lądowy: ${formatNumberPl(getFreightIndex('land'), 0)} (baza 100), przepustowość ${formatNumberPl(getFreightCapacity('land'), 2)}.`,
+        quiz: [
+            { q: 'Co obniża indeks frachtu?', a: ['większa przepustowość kraju', 'droższe paliwo', 'strajk'], c: 0 },
+            { q: 'Kto zyskuje na drogim frachcie?', a: ['przewoźnik', 'importer', 'każda spółka'], c: 0 },
+            { q: 'Co się dzieje z przepustowością bez wydatków na utrzymanie?', a: ['spada przez zużycie', 'rośnie sama', 'nie zmienia się'], c: 0 }
+        ]
+    },
+    bezpieczenstwoZbrojenia: {
+        title: 'Bezpieczeństwo państwa i zbrojenia', get icon() { return academyIcon('bank'); },
+        text: 'Budżet obronny to część wpływów państwa, zależna od rządzącej partii. Daje zamówienia zbrojeniówce, ale pogłębia deficyt. Po szoku geopolitycznym rządy zwiększają wydatki, a metale i ropa drożeją. Kraj bezpieczny ma wyższe wyceny, spokojniejszych konsumentów i więcej kapitału z zagranicy. Rzadziej też dotyka go embargo. Te skutki są małe w jednym kwartale, ale działają stale.',
+        example: () => `Teraz: wydatki obronne ${formatNumberPl(getDefenseShare() * 100, 1)}% wpływów, bezpieczeństwo ${getSecurityLabel(getHomeSecurityLevel())}.`,
+        quiz: [
+            { q: 'Co podnosi budżet obronny poza zamówieniami dla zbrojeniówki?', a: ['deficyt budżetu', 'podatek od dywidend', 'liczbę akcji'], c: 0 },
+            { q: 'Co drożeje, gdy świat się zbroi?', a: ['metale', 'zboże przede wszystkim', 'nic'], c: 0 },
+            { q: 'Jak wysokie bezpieczeństwo działa na embargo?', a: ['zmniejsza jego szansę', 'zwiększa jego szansę', 'nie działa'], c: 0 }
+        ]
+    }
+});

@@ -14926,8 +14926,8 @@ group('0.17 S2 Spółki i koszty wsadu', () => {
 });
 
 group('0.17 S3 Giełda towarowa', () => {
-    const startFund = (cash = 5_000_000) => { resetWorld([mk156('GA', { price: 100 })]); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' }); playerCash = cash; initFxState(); resetGdrState(); macro.quarter = 10; initCommodityState(); };
-    const done = fn => () => { try { return fn(); } finally { resetMarginState(); resetGdrState(); initFxState(); initCommodityState(); } };
+    const startFund = (cash = 5_000_000) => { resetWorld([mk156('GA', { price: 100 })]); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' }); playerCash = cash; initFxState(); resetGdrState(); macro.quarter = 10; initCommodityState(); skills.optionsMaster.unlockedLevel = 2; };
+    const done = fn => () => { try { return fn(); } finally { resetMarginState(); resetGdrState(); initFxState(); initCommodityState(); skills.optionsMaster.unlockedLevel = 0; } };
     test('S3 silnik: reguły rynku (dźwignia z instrumentu, spread, bez kosztu utrzymania), zapadalność z rozliczeniem po cenie z tego dnia, zapis `expires`; forex bez zmian', done(() => {
         startFund();
         let px = 100;
@@ -15537,4 +15537,50 @@ group('0.17 S6 Zbrojenia, surowce i bezpieczeństwo państwa', () => {
             assertNear(getSecurityValuationFactor({ country: 'CH' }), 1 + 0.02 * 35 / 50, 'spółka obca: S swojego kraju', 1e-12);
         } finally { window.getHomeSecurityLevel = orig; }
     }));
+});
+
+group('0.17 S7 Mistrz Opcji i Akademia', () => {
+    const start = level => { resetWorld([makeCompany('GA')]); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' }); playerCash = 5_000_000; initFxState(); macro.quarter = 10; initCommodityState(); skills.optionsMaster.unlockedLevel = level; };
+    const done = fn => () => { try { return fn(); } finally { resetMarginState(); initFxState(); initCommodityState(); skills.optionsMaster.unlockedLevel = 0; } };
+    const q = () => getContractSeries()[1];
+
+    test('S7: bez umiejętności brak kontraktów, a okno pokazuje dlaczego', done(() => {
+        start(0);
+        assertEq(skills.optionsMaster.levels.map(l => l.cost).join(','), '1500,5000', 'koszty L1 i L2');
+        const r = openCommodityContract('oil', q(), 1, 50_000, 2);
+        assert(!r.ok && r.reason.includes('Mistrz Opcji'), 'odmowa bez umiejętności');
+        ensureCommodityState().hist[commodityForm.id].push(80, 90);
+        const html = renderCommodityTab();
+        assert(html.includes('„Mistrz Opcji”') && !html.includes('commodityUiOpen'), 'bez formularza zlecenia, z wyjaśnieniem');
+        assert(html.includes('<svg') && html.includes('Najniżej'), 'wykres ceny i ten sam zakres słowami');
+    }));
+    test('S7: L1 tylko długie i dźwignia do 1:3 (niższa wg surowca bez zmian)', done(() => {
+        start(1);
+        assert(!openCommodityContract('oil', q(), -1, 50_000, 2).ok, 'krótka odrzucona');
+        assert(!openCommodityContract('gold', q(), 1, 50_000, 4).ok, 'złoto 1:4 odrzucone');
+        assert(openCommodityContract('gold', q(), 1, 50_000, 3).ok, 'złoto 1:3');
+        assertEq(getContractMaxLeverage('gas'), 3, 'gaz 1:3');
+        assert(!renderCommodityTab().includes('value="-1"'), 'formularz bez krótkiej');
+    }));
+    test('S7: L2 krótkie i pełna dźwignia; pozycja sprzed zakupu zostaje, ale bez przedłużania', done(() => {
+        start(2);
+        assert(openCommodityContract('oil', q(), -1, 50_000, 5).ok, 'krótka 1:5');
+        const old = openCommodityContract('gold', q(), 1, 50_000, 10); assert(old.ok, 'złoto 1:10');
+        skills.optionsMaster.unlockedLevel = 0;
+        assertEq(getMarginPositions('commodities').length, 2, 'pozycje zostają');
+        const n = getMarginPositions('commodities').length, r = rollCommodityContract(old.position.id);
+        assert(!r.ok && getMarginPositions('commodities').length === n, 'przedłużenie odrzucone przed zamknięciem');
+        assert(closeMarginPosition(old.position.id).ok, 'zamknięcie działa');
+    }));
+    test('S7: 8 lekcji Akademii ma tekst, quiz i przykład; kontrakt mówi o podatku; bezpieczeństwo w karcie kraju i budżecie', () => {
+        const ids = ['cyklSurowcowy', 'kosztWsadu', 'kontraktTerminowy', 'contangoBackwardation', 'depozytTowary', 'etcEtf', 'frachtWaskieGardla', 'bezpieczenstwoZbrojenia'];
+        for (const id of ids) {
+            const e = ACADEMY_ENTRIES[id];
+            assert(e && e.title && e.text.length > 100 && e.quiz.length >= 3, `hasło ${id}`);
+            assert(e.quiz.every(x => x.a[x.c]), `quiz ${id}`);
+            assert(typeof e.example() === 'string' && !e.example().includes('NaN') && !e.example().includes('undefined'), `przykład ${id}`);
+        }
+        assert(ACADEMY_ENTRIES.kontraktTerminowy.text.includes('Podatek'), 'zdanie o podatku (decyzja 22)');
+        assertEq(getSecurityLabel(80), 'wysokie (80/100)', 'bezpieczeństwo słowem i liczbą');
+    });
 });

@@ -77,6 +77,7 @@ function renderCountryCard(id) {
             <div><dt>Kurs ${def.currency}</dt><dd>${fmtRate(getFxRate(def.currency) / getBaseScale(), def.currency)} ${getBaseCurrency()} (${fxArrow(change)} ${fxPct(change)} w roku)</dd></div>
             <div><dt>Powiązanie z Polską</dt><dd>${formatNumberPl(def.rho * 100, 0)}%</dd></div>
             <div><dt>Kryzys</dt><dd>${crisis}</dd></div>
+            <div><dt>Bezpieczeństwo państwa</dt><dd>${getSecurityLabel(getCountrySecurityLevel(id))}</dd></div>
             <div><dt>Spółki państwowe</dt><dd>${stateIssuers.length ? stateIssuers.map(i => escapeHtml(i.name)).join(', ') : 'brak'}${stateIssuers.length ? ` · skarb kraju (licznik): ${formatNumberPl(st.treasury, 0)} ${def.currency}` : ''}</dd></div>
             <div><dt>Pracownicy (profil kraju)</dt><dd>prawa ${escapeHtml(def.labour.rights)}, szansa związku ×${formatNumberPl(def.labour.unionMult, 1)}${def.labour.shadow ? `, szara strefa +${def.labour.shadow} pp` : ''}</dd></div>
             <div><dt>Nadzór</dt><dd>${escapeHtml(getOversight(id).name)} (poziom ${getOversight(id).level}/3), próg wezwania ${Math.round(getCallThreshold(id) * 100)}% głosów</dd></div>
