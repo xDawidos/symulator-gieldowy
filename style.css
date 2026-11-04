@@ -5489,6 +5489,9 @@ td.sc-actions button { white-space: normal; margin: 0; }
 
 /* 0.17: giełda towarowa, fracht, bezpieczeństwo, ustawa, autostrada (projekt: plany/design/09_ui_0.17.md) */
 .cm-name { display: inline-flex; align-items: center; gap: var(--space-2); }
+.bank-grid .kantor-form { flex-wrap: nowrap; gap: var(--space-2); }
+.bank-grid .kantor-form input { flex: 1; width: auto; min-width: 0; }
+.bank-card-icon { flex: none; }
 .freight-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: var(--space-2); }
 .freight-card { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-3); background: var(--color-bg-raised); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); min-width: 0; }
 .freight-card-head { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-body-sm-size); color: var(--color-text-secondary); }

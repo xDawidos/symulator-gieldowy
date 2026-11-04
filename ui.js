@@ -9208,7 +9208,6 @@ function renderCountryPanel() {
         <div class="bank-grid mt-3">
             <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('raport', 20)}</span><div><h4>Ustawy</h4><span class="bank-card-type">rząd zmienia 1 ustawę na rok, zapowiedź kwartał wcześniej</span></div></header>
                 <table class="asset-mini-table w-full"><tbody>${laws}</tbody></table>
-                ${renderInfraLawSteps()}
                 ${pending ? `<p class="text-sm">${uiIcon('megafon', 14)} Rynek już reaguje na zapowiedź — tak działa dyskontowanie: kurs zmienia się przy ogłoszeniu, nie w dniu wejścia ustawy w życie.</p>` : ''}
                 ${society.housingProgram > 0 ? `<p class="text-sm">${uiIcon('budownictwo', 14)} Trwa program mieszkań socjalnych (${society.housingProgram} kw.): przetargi dla budowlanki i deweloperów.</p>` : ''}</article>
             <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('bank', 20)}</span><div><h4>Budżet państwa</h4><span class="bank-card-type">Skarb Państwa ${formatZl(governmentTreasury, 0)}</span></div></header>
@@ -9229,7 +9228,8 @@ function renderCountryPanel() {
             <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('glosowanie', 20)}</span><div><h4>Partie</h4><span class="bank-card-type">${escapeHtml(getRulingParty().name)} · wybory za ${macro.election.quartersLeft} kw.</span></div></header>
                 ${renderPartyBars(support)}
                 <p class="text-xs text-muted">Sondaż: poparcie liczone z klas (biedni wolą Ludowców, zamożni Koalicję Rynkową), plus zmęczenie władzą, koniunktura i szum. Zwycięzca poniżej 40% rządzi w koalicji z drugą partią.</p></article>
-        </div>`;
+        </div>
+        ${renderInfraLawSteps()}`;
 }
 
 // ---------- Karta spółki: Zatrudnienie ----------
