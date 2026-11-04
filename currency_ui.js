@@ -119,7 +119,7 @@ function renderRatesTab() {
     }).join('');
     const code = kantorSelected, def = CURRENCIES[code];
     return `<table class="asset-mini-table w-full"><thead><tr><th>Waluta</th><th class="text-right">Kurs środkowy</th><th class="text-right">Zmiana</th><th class="text-right">Twoja pozycja</th></tr></thead><tbody>${rows}</tbody></table>
-        <h4 class="mt-3">${flagIcon(CURRENCY_FLAG[code], 14)} ${currencyIcon(code, 18)} ${code} — ${escapeHtml(def.name)}</h4>
+        <h4 class="mt-3">${currencyIcon(code, 18)} ${code} — ${escapeHtml(def.name)}</h4>
         ${renderFxChart(code)}
         <p class="text-sm text-muted">Kurs porusza się w widełkach ${fmtRate(def.min, code)}–${fmtRate(def.max, code)} zł i wraca do wolno zmieniającej się średniej. ${def.safe ? 'Waluta „bezpiecznej przystani”: w kryzysie zwykle drożeje.' : 'W kryzysie zwykle słabnie wobec bezpiecznych przystani (USD, CHF, JPY).'}</p>
         <div class="bank-card mt-3"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('moneta', 20)}</span><div><h4>Wymiana ${code}</h4><span class="bank-card-type">kupno i sprzedaż po kursie kantoru</span></div></header>
@@ -191,7 +191,7 @@ function renderForeignTab() {
     const rows = filtered.map(i => {
         const held = getGdrHeld(i), h = i.history, change = h.length > 1 ? i.price / h[0] - 1 : 0;
         return `<tr><td><strong>${getGdrSymbol(i)}</strong> <span class="text-muted">${escapeHtml(i.name)}</span></td>
-            <td>${flagIcon(i.country, 12)} ${escapeHtml(COUNTRY_NAMES[i.country] || i.country)} · ${currencyIcon(i.currency, 14)} ${i.currency}</td>
+            <td>${escapeHtml(COUNTRY_NAMES[i.country] || i.country)} · ${currencyIcon(i.currency, 14)} ${i.currency}</td>
             <td class="text-right">${formatNumberPl(i.price, 2)} ${i.currency}<br><span class="text-muted text-xs">${fxArrow(change)} ${fxPct(change)} w ${h.length - 1} tyg.</span></td>
             <td class="text-right">${formatZl(getGdrMid(i), 2)}<br><span class="text-muted text-xs">kupno ${formatZl(getGdrQuote(i, 'buy'), 2)} · sprzedaż ${formatZl(getGdrQuote(i, 'sell'), 2)}</span></td>
             <td class="text-right">${held > 0 ? `${formatNumberPl(held, 0)} (${formatZl(held * getGdrMid(i), 0)})` : '—'}</td>
@@ -274,7 +274,7 @@ function renderCashWindow() {
     const trs = held.map(r => {
         const gain = r.code === base ? null : r.rate / r.basis - 1;
         return `<tr class="${r.code === s.from ? 'row-selected' : ''}" tabindex="0" onclick="cashPickFrom('${r.code}')" onkeydown="if(event.key==='Enter')cashPickFrom('${r.code}')" aria-label="Wybierz ${r.code} jako walutę do wymiany">
-            <td>${flagIcon(CURRENCY_FLAG[r.code], 12)} <strong>${r.code}</strong> <span class="text-muted text-xs">${escapeHtml(CURRENCIES[r.code].name)}</span></td>
+            <td><strong>${r.code}</strong> <span class="text-muted text-xs">${escapeHtml(CURRENCIES[r.code].name)}</span></td>
             <td class="text-right">${formatNumberPl(r.amount, 2)}${r.code === base ? '' : `<br><span class="text-muted text-xs">kurs ${fmtRate(r.rate, r.code)} ${base}</span>`}</td>
             <td class="text-right">${formatZl(r.pln, 0)}<br><span class="text-muted text-xs">${formatNumberPl(r.share * 100, 0)}% gotówki</span></td>
             <td class="text-right">${gain === null ? '—' : `${fxArrow(gain)} ${fxPct(gain)}<br><span class="text-muted text-xs">${r.gainPln >= 0 ? '+' : ''}${formatZl(r.gainPln, 0)} od zakupu (śr. ${fmtRate(r.basis, r.code)} ${base})</span>`}</td></tr>`;

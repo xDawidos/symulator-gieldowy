@@ -1,6 +1,6 @@
 // =================================================================================
 // 0.16.2 UI: lotnisko i bilety (zakładka „Lotnisko” w oknie Miasto), rynki zagraniczne, karta kraju.
-// Komponenty 0.14.5 (bank-card, asset-mini-table, tab-btn), flagi i ikony walut z flags.js, bez emoji, kolor nigdy jedynym nośnikiem.
+// Komponenty 0.14.5 (bank-card, asset-mini-table, tab-btn), ikony walut z flags.js, bez emoji, kolor nigdy jedynym nośnikiem.
 // Warstwa wyświetlania jest osobno od logiki (countries.js: bilety i dostęp), żeby w 0.16.5 okno lotniska przeniosło się na stronę
 // „Ferie i wakacje” w Internecie: wystarczy wywołać `renderAirportWindow(id)` z innym kontenerem.
 // =================================================================================
@@ -47,7 +47,7 @@ function renderAirportWindow(targetId = 'city-content-airport', { tickets = fals
     const rows = !tickets ? '' : Object.values(COUNTRY_DEFS).map(def => {
         const has = hasTicket('player', def.id), price = getTicketPrice(def.id), joined = isCountryJoined(def.id);
         const action = has ? `<span class="text-muted">masz bilet</span> <button class="btn-ghost" onclick="feriePickCountry('${def.id}')">Zobacz rynek</button>` : `<button class="btn-ghost" ${built ? '' : 'disabled'} onclick="airportUiBuy('${def.id}')">Kup bilet za ${formatZl(price, 0)}</button>`;
-        return `<tr><td>${flagIcon(def.id, 14)} <strong>${escapeHtml(def.name)}</strong></td><td>${currencyIcon(def.currency, 14)} ${def.currency}</td>
+        return `<tr><td><strong>${escapeHtml(def.name)}</strong></td><td>${currencyIcon(def.currency, 14)} ${def.currency}</td>
             <td>${escapeHtml(def.operator.name)}</td><td>${joined ? 'giełda otwarta' : 'jeszcze zamknięta (pierwszy bilet ją otworzy)'}</td><td class="text-right">${action}</td></tr>`;
     }).join('');
     root.innerHTML = `${tickets && typeof renderMarketClockCard === 'function' ? renderMarketClockCard() : ''}<div class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('rynek', 20)}</span><div><h4>Lotnisko i bilety</h4><span class="bank-card-type">licencje na rynki zagraniczne</span></div></header>
@@ -76,7 +76,7 @@ function airportUiBuy(country) {
 }
 
 // =================================================================================
-// Rynki zagraniczne: zakładki krajów z flagami i walutą, karta kraju (nastrój, stopa, waluta, spółki państwowe), handel z biletem.
+// Rynki zagraniczne: zakładki krajów z nazwą i walutą, karta kraju (nastrój, stopa, waluta, spółki państwowe), handel z biletem.
 // Zakładka „Rynki” w oknie Kantor. Stan słowami (faza, kierunek ▲▼■), kolor nigdy jedynym nośnikiem.
 // =================================================================================
 
@@ -92,7 +92,7 @@ function renderCountryCard(id) {
     const crisis = typeof crisisState === 'object' && crisisState.pendingImport?.origin === id ? 'kryzys wybuchł tutaj i zmierza do Polski'
         : (typeof crisisLine === 'object' && crisisLine?.origin === id ? 'kryzys zaczął się tutaj' : (crisisLine ? 'odczuwa kryzys z Polski' : 'bez kryzysu'));
     const kpi = (label, value) => `<div class="cc-kpi"><span>${label}</span><strong>${value}</strong></div>`;
-    return `<div class="bank-card country-card"><header class="bank-card-head"><span class="bank-card-icon">${flagIcon(id, 22)}</span><div><h4>${escapeHtml(def.name)}</h4><span class="bank-card-type">${escapeHtml(def.operator.name)} · ${currencyIcon(def.currency, 14)} ${def.currency}</span></div></header>
+    return `<div class="bank-card country-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('rynek', 20)}</span><div><h4>${escapeHtml(def.name)}</h4><span class="bank-card-type">${escapeHtml(def.operator.name)} · ${currencyIcon(def.currency, 14)} ${def.currency}</span></div></header>
         <div class="cc-kpis">
             ${kpi('Nastrój rynku', `${uiIcon(phase.icon, 14)} ${phase.name}, ${premium > 0 ? '▲ +' : premium < 0 ? '▼ ' : '■ '}${formatNumberPl(premium * 100, 0)}%`)}
             ${kpi('Stopa w kraju', `${formatNumberPl(st.rate * 100, 2)}%`)}
@@ -116,7 +116,7 @@ function renderMarketsTab() {
         <div class="btn-row"><button class="btn-ghost" onclick="openInternetPage('ferie')">Idź do Ferie i wakacje</button></div>`;
     if (!marketsSelected || !joined.includes(marketsSelected)) marketsSelected = joined[0];
     const id = marketsSelected, def = COUNTRY_DEFS[id], access = canTradeCountry('player', id);
-    const tabs = joined.map(c => `<button class="tab-btn ${c === id ? 'active' : ''}" onclick="selectMarketCountry('${c}')" aria-pressed="${c === id}">${flagIcon(c, 12)} ${escapeHtml(COUNTRY_DEFS[c].name)} · ${COUNTRY_DEFS[c].currency}</button>`).join('');
+    const tabs = joined.map(c => `<button class="tab-btn ${c === id ? 'active' : ''}" onclick="selectMarketCountry('${c}')" aria-pressed="${c === id}">${escapeHtml(COUNTRY_DEFS[c].name)} · ${COUNTRY_DEFS[c].currency}</button>`).join('');
     const rows = [...getCountryIssuers(id)].sort((a, b) => getForeignTier(b).level - getForeignTier(a).level || toPln(b.price, b.currency) - toPln(a.price, a.currency)).map(i => {
         const h = i.history, change = h.length > 1 ? i.price / h[0] - 1 : 0, held = getGdrHeld(i), free = getGdrFree(i);
         return `<tr><td><strong>${getGdrSymbol(i)}</strong> <span class="text-muted">${escapeHtml(i.name)}</span>${i.state ? ' <span class="text-xs">(państwowa)</span>' : ''}${i.giant ? ' <span class="text-xs">(gigant)</span>' : ''} <button type="button" class="info-btn" aria-label="Karta spółki ${escapeHtml(i.name)}" title="Karta spółki" onclick="openDescriptionModal('${getShareSymbol(i)}')">${uiIcon('karta', 14)}</button> <button type="button" class="info-btn" aria-label="Wykres ${escapeHtml(i.name)}" title="Wykres ceny" onclick="showPriceHistoryModal('${getShareSymbol(i)}')">${uiIcon('wykres', 14)}</button><br><span class="text-muted text-xs">${escapeHtml(getForeignTier(i).label)}</span>${typeof renderForeignCompanyLine === 'function' ? renderForeignCompanyLine(i) : ''}</td>
@@ -203,7 +203,7 @@ function renderLinksCard() {
     const linked = getLinkedCountries();
     const chance = getEffectiveLinkChance();
     const hint = chance >= 0.16 ? 'wysoka' : chance >= 0.04 ? 'rośnie' : 'niska';
-    const rows = linked.map(id => `<li>${flagIcon(id, 12)} <strong>${escapeHtml(COUNTRY_DEFS[id].name)}</strong> — ${LINK_KIND_LABELS[countryState[id].link]}; bez biletu, prowizja ${formatNumberPl(LINK_RULES.domesticCommission * 100, 2)}%</li>`).join('');
+    const rows = linked.map(id => `<li><strong>${escapeHtml(COUNTRY_DEFS[id].name)}</strong> — ${LINK_KIND_LABELS[countryState[id].link]}; bez biletu, prowizja ${formatNumberPl(LINK_RULES.domesticCommission * 100, 2)}%</li>`).join('');
     const intl = exchangeLinks.intl ? `<p class="text-sm">Giełda międzynarodowa: ${['PL', ...exchangeLinks.intl.members.filter(m => m !== 'PL')].map(m => escapeHtml(m === 'PL' ? 'Polska' : COUNTRY_DEFS[m]?.name || m)).join(', ')}.</p>` : '';
     const taken = exchangeLinks.takenBy ? `<p class="alert alert--warn">${uiIcon('alert', 16)}<span>Wariant B: nasza giełda należy do ${escapeHtml(COUNTRY_DEFS[exchangeLinks.takenBy].name)} — opłaty za notowanie na ${getMarketLabel('GPW')} ×${LINK_RULES.listingFeeMult}.</span></p>` : '';
     const community = isEuropeanCommunity() ? '<p class="text-sm">Wspólnota europejska giełd działa — na rynku gra europejski hazardzista.</p>' : `<p class="text-sm text-muted">Wspólnota europejska powstanie, gdy na giełdzie będą ${LINK_RULES.communityMin} kraje europejskie (teraz ${countEuropeanJoined()}).</p>`;

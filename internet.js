@@ -17,7 +17,7 @@ const INTERNET_FAVORITES = [
     { id: 'lombard', tag: 'Płynność', tone: 'orange', title: 'Lombard', host: 'lombardex.pl', icon: 'lombard', desc: 'Pożyczki pod zastaw akcji.', unlocked: () => true }
 ];
 
-/** Barwy kraju (ciemne tło okna i akcent) — kolor nigdy jedynym nośnikiem: nazwa i flaga stoją w pasku okna. */
+/** Barwy kraju (ciemne tło okna i akcent) — kolor nigdy jedynym nośnikiem: nazwa stoi w pasku okna. */
 const COUNTRY_THEMES = {
     DE: { bg: '#1d1a0f', accent: '#ffce00' }, FR: { bg: '#10182b', accent: '#7aa2ff' }, US: { bg: '#141a2e', accent: '#e8606b' },
     CZ: { bg: '#14213a', accent: '#ee707a' }, SE: { bg: '#0f2236', accent: '#ffd24a' }, CH: { bg: '#2b1114', accent: '#ff7b7b' },
@@ -116,7 +116,7 @@ function applyInternetTheme() {
     if (theme) { modal.dataset.country = c; modal.style.setProperty('--net-bg', theme.bg); modal.style.setProperty('--net-accent', theme.accent); }
     else { delete modal.dataset.country; modal.style.removeProperty('--net-bg'); modal.style.removeProperty('--net-accent'); }
     const badge = document.getElementById('net-country-badge');
-    if (badge) badge.innerHTML = c ? `${flagIcon(c, 14)} <strong>Rynek: ${escapeHtml(COUNTRY_DEFS[c].name)}</strong> · ${COUNTRY_DEFS[c].currency}` : '';
+    if (badge) badge.innerHTML = c ? `<strong>Rynek: ${escapeHtml(COUNTRY_DEFS[c].name)}</strong> · ${COUNTRY_DEFS[c].currency}` : '';
 }
 
 function renderInternet() {
@@ -170,7 +170,7 @@ function renderFeriePage() {
         const wallet = has ? 'Opłacono bezterminowo' : !built ? 'Lotnisko nie stoi' : missing > 0 ? `<span class="net-short">Brakuje ${formatZl(missing, 0)}</span>` : `Dostępne (gotówka ${formatZl(playerCash, 0)})`;
         const action = has ? `<button class="btn-primary" onclick="feriePickCountry('${def.id}')">Zobacz rynek</button>` : `<button class="btn-primary" ${built && missing <= 0 ? '' : 'disabled'} onclick="airportUiBuy('${def.id}')">Kup bilet za ${formatZl(price, 0)}</button>`;
         return `<article class="net-dest ${def.id === c ? 'selected' : ''}" style="--dest:${theme.accent || 'var(--amber-400)'}">
-            <header><span class="net-dest-flag">${flagIcon(def.id, 28)}</span><div><h4>${escapeHtml(def.name)} <span class="net-chip">${currencyIcon(def.currency, 12)} ${def.currency}</span></h4><span class="text-sm text-muted">${escapeHtml(def.operator.name)}</span></div>
+            <header><div><h4>${escapeHtml(def.name)} <span class="net-chip">${currencyIcon(def.currency, 12)} ${def.currency}</span></h4><span class="text-sm text-muted">${escapeHtml(def.operator.name)}</span></div>
                 <span class="net-status ${joined ? 'open' : ''}">${joined ? 'Giełda otwarta' : 'Jeszcze zamknięta'}</span></header>
             <div class="net-dest-row"><span><small>${has ? 'Status licencji' : 'Koszt biletu'}</small>${money}</span><span class="text-right"><small>Prowizja z biletem</small><strong>${formatNumberPl(getCountryCommission(def.id) * 100, 1)}%</strong></span></div>
             <footer><span class="text-sm">${wallet}</span>${action}</footer>${joined ? '' : '<p class="text-xs text-muted">Pierwszy bilet otwiera giełdę kraju.</p>'}</article>`;
@@ -178,7 +178,7 @@ function renderFeriePage() {
     root.innerHTML = `<section class="net-airport"><span class="net-airport-icon">${uiIcon('samolot', 22)}</span><div><h3>Port lotniczy miasta <span class="net-status ${built ? 'open' : ''}">${status[0]}</span></h3><p class="text-sm" aria-live="polite">${status[1]}</p></div>${order}</section>
         <section class="net-hero"><span class="net-kicker">Międzynarodowe połączenia kapitałowe</span><h3>Bilet na rynek zagraniczny</h3><p class="text-sm text-muted">Odblokuj bezpośredni obrót spółkami kraju. Bilet kupujesz z gotówki funduszu, od ${formatZl(TICKET_RULES.min, 0)}.</p>
             <div class="net-route"><div><small>Wylot (z)</small><strong>${escapeHtml(getHomeCityLabel())}</strong><span class="text-sm text-muted">Rynek bazowy · ${getBaseCurrency()}</span></div><span class="net-route-line" aria-hidden="true">${uiIcon('samolot', 18)}</span>
-                <div><small>Przylot (do)</small>${owns ? `<strong>${flagIcon(c, 14)} ${escapeHtml(COUNTRY_DEFS[c].name)}</strong><span class="text-sm text-muted">${escapeHtml(COUNTRY_DEFS[c].operator.name)} · ${COUNTRY_DEFS[c].currency}</span>` : `<strong>Wybierz giełdę</strong><span class="text-sm text-muted">${defs.length} rynków globalnych</span>`}</div>
+                <div><small>Przylot (do)</small>${owns ? `<strong>${escapeHtml(COUNTRY_DEFS[c].name)}</strong><span class="text-sm text-muted">${escapeHtml(COUNTRY_DEFS[c].operator.name)} · ${COUNTRY_DEFS[c].currency}</span>` : `<strong>Wybierz giełdę</strong><span class="text-sm text-muted">${defs.length} rynków globalnych</span>`}</div>
                 <div><small>Klasa lotu</small><strong>Fundusz (inwestor)</strong><small>Ważność</small><strong>Bezterminowo</strong></div></div></section>
         <div class="net-section-head"><h3>Katalog lotów i licencji</h3><span class="text-sm text-muted">Dostępnych: ${defs.length} krajów</span></div>
         <div class="net-dests">${cards}</div><div id="net-ferie-country"></div>`;

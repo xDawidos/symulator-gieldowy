@@ -27,7 +27,7 @@ Bez zmian logiki. Testy: 954 → 955.
 
 Testy: 956.
 
-**Flagi:** nie przywracałem ich tam, gdzie zastąpiła je nazwa kraju (wiersz spółki, okno giganta). Zostały jednak w innych miejscach: zakładki krajów, karta kraju, kantor, Obce, gotówka, Ferie, zarażanie, połączenia, wybór kraju startowego. Do decyzji użytkownika, czy też mają zniknąć.
+**Flagi:** usunięte z całego interfejsu (decyzja użytkownika 2026-11-04): tabele, zakładki krajów, kantor, Ferie, wybór kraju startowego i pinezki globusa. Zostały nazwy krajów i ikony walut; `flagIcon`, `FLAG_MARKUP` i `CURRENCY_FLAG` skasowane, `flags.js` trzyma już tylko ikony walut. Karta kraju ma w nagłówku ikonę `rynek`.
 
 ## Etap 3. Projekt 0.17
 Zrobione: projekt [09_ui_0.17.md](09_ui_0.17.md), makieta [makiety/09_ui_017.html](makiety/09_ui_017.html), CSS (blok „0.17”), 11 ikon (7 surowców, 3 transportu, „Mistrz Opcji”) w `ui.js` i `img/ikony/`, ikony transportu w sekcji frachtu. Testy: 957.

@@ -5132,7 +5132,7 @@ button.mood-kpi:hover { background: var(--color-bg-hover) !important; border-col
 .text-right { text-align: right; }
 #internet-modal tr.row-selected { background: var(--bg-elevated-2); outline: 1px solid var(--accent-info); }
 #internet-modal tbody tr[onclick] { cursor: pointer; }
-.flag-ic, .cur-ic { vertical-align: -2px; flex: none; }
+.cur-ic { vertical-align: -2px; flex: none; }
 .cur-ic { color: var(--accent-info); }
 
 
@@ -5192,7 +5192,6 @@ body #internet-modal { background: var(--net-bg-base) !important; color: var(--n
 .net-dest { --dest: #f59e0b; display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: 14px; background: linear-gradient(160deg, color-mix(in srgb, var(--dest) 14%, var(--net-card)), var(--net-card)); border: 1px solid color-mix(in srgb, var(--dest) 45%, var(--net-line)); }
 .net-dest.selected { outline: 2px solid var(--dest); }
 .net-dest header { display: flex; align-items: center; gap: 12px; } .net-dest header > div { flex: 1; min-width: 0; } .net-dest h4 { margin: 0; }
-.net-dest-flag { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 12px; background: #0e0a16; flex: none; }
 .net-dest-row { display: flex; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: 10px; background: #0e0a16; border: 1px solid var(--net-line); }
 .net-dest-row > span { display: flex; flex-direction: column; gap: 2px; }
 .net-dest footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
@@ -5214,7 +5213,7 @@ body #internet-modal { background: var(--net-bg-base) !important; color: var(--n
 .net-msg { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--net-line); } .net-msg.unread { border-left: 3px solid var(--net-red); padding-left: 8px; } .net-msg > div { min-width: 0; }
 .net-count { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; background: #38bdf8; color: #0e0a16; font-size: 12px; font-weight: 700; }
 .net-empty { padding: 24px; text-align: center; color: var(--net-muted); border: 1px dashed var(--net-line); border-radius: 14px; }
-/* tło okna w barwach kraju (Ferie i wakacje, Kantory24) — kraj podaje też nazwa i flaga w pasku adresu */
+/* tło okna w barwach kraju (Ferie i wakacje, Kantory24) — kraj podaje też nazwa w pasku adresu */
 body #internet-modal[data-country] { background: var(--net-bg) !important; border-top: 5px solid var(--net-accent) !important; }
 body #internet-modal[data-country] .net-hero, body #internet-modal[data-country] .bank-card { border-left: 4px solid var(--net-accent) !important; }
 body #internet-modal[data-country] .tab-btn.active { border-color: var(--net-accent) !important; }

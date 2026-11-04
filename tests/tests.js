@@ -12203,12 +12203,9 @@ group('0.16.1', () => {
         initFxState(); resetGdrState();
     });
 
-    test('G4: flagi 10 krajów i UE oraz ikony 10 walut istnieją jako SVG z podpisem, bez emoji', () => {
-        for (const c of ['PL', 'DE', 'FR', 'CZ', 'SE', 'CH', 'JP', 'CN', 'IN', 'TW', 'US', 'EU']) {
-            const svg = flagIcon(c); assert(svg.startsWith('<svg') && svg.includes('aria-label="Flaga:') && svg.includes('<title>'), `flaga ${c}`); assert(!/[\u{1F1E6}-\u{1F1FF}]/u.test(svg), 'bez emoji');
-        }
-        for (const code of Object.keys(CURRENCIES)) { assert(currencyIcon(code).includes('<text'), `ikona ${code}`); assert(CURRENCY_FLAG[code], `flaga waluty ${code}`); }
-        assertEq(flagIcon('XX'), '', 'nieznany kraj bez flagi');
+    test('G4: ikony 10 walut jako SVG, bez flag krajów (decyzja użytkownika)', () => {
+        assert(typeof flagIcon === 'undefined', 'funkcja flag usunięta');
+        for (const code of Object.keys(CURRENCIES)) { assert(currencyIcon(code).includes('<text'), `ikona ${code}`); }
     });
 
     test('G5: TIG5 zniknął; SIG40 i BSIG80 uruchamia Bank Centralny dopiero przy dość dużym rynku (BSIG80 po SIG40), decyzja zapisuje się i wraca po wczytaniu', () => {
@@ -12648,7 +12645,7 @@ group('0.16.2', () => {
         const host = document.createElement('div'); host.id = 'airport-test-host'; document.body.appendChild(host);
         try {
             renderAirportWindow('airport-test-host', { tickets: true });
-            assert(host.innerHTML.includes('Zleć budowę lotniska') && host.innerHTML.includes('Zetland') && host.innerHTML.includes('aria-label="Flaga:'), 'stan, wiersz kraju, flaga');
+            assert(host.innerHTML.includes('Zleć budowę lotniska') && host.innerHTML.includes('Zetland') && !host.innerHTML.includes('flag-ic'), 'stan, wiersz kraju, bez flagi');
             assert(host.querySelectorAll('button[disabled]').length >= 1, 'bilety zablokowane bez lotniska');
             airportState.forced = true; renderAirportWindow('airport-test-host', { tickets: true });
             assert(host.innerHTML.includes('Kup bilet za') && !/[\u{1F300}-\u{1FAFF}]/u.test(host.innerHTML), 'przyciski zakupu, bez emoji');
@@ -14287,7 +14284,7 @@ group('0.16.9 Lombard w Internecie, rynek połączony na giełdzie', () => {
             assert(/^data:image\/jpeg;base64,/.test(window.GLOBE_TEXTURES.night) && /^data:image\/jpeg;base64,/.test(window.GLOBE_TEXTURES.bump), 'tekstury jako data-URI');
         } finally { delete window.GLOBE_GEO; delete window.GLOBE_TEXTURES; }
         for (const id of START_PLAYABLE) assert(GLOBE_COUNTRIES[id], `${id}: dane globusu`);
-        for (const id of Object.keys(GLOBE_COUNTRIES)) assert(START_COUNTRIES.some(c => c.id === id) && FLAG_NAMES[id], `${id}: kraj gry z flagą`);
+        for (const id of Object.keys(GLOBE_COUNTRIES)) assert(START_COUNTRIES.some(c => c.id === id) && COUNTRY_NAMES[id], `${id}: kraj gry z nazwą`);
         const de = renderGlobeCard('DE'), jp = renderGlobeCard('JP'), pl = renderGlobeCard('PL');
         assert(/Berlin/.test(de) && /EUR/.test(de) && /DAX/.test(de) && /09:00–17:30/.test(de), 'karta DE: stolica, waluta, giełda, sesja');
         assert(/wkrótce|nie jest dostępny/.test(jp) && /GPW/.test(pl), 'JP niegrywalny, PL = GPW');
