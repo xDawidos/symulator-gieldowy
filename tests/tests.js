@@ -15100,6 +15100,7 @@ group('0.17 S3 Giełda towarowa', () => {
         const html = renderCommodityTab();
         for (const word of ['Złoto', 'Uran', 'OIL-', 'Przedłuż', 'bezpieczna', 'Pozycje zabezpieczające']) assert(html.includes(word), `zakładka zawiera: ${word}`);
         assert(/contango|backwardation/.test(html), 'struktura krzywej słowem');
+        assert(html.includes('cm-name') && html.includes('fx-cover') && html.includes('fx-field'), 'ikona surowca, stan depozytu z paskiem, pola jak w forexie');
         const box = document.createElement('div'); box.id = 'commodity-etf-box'; document.body.appendChild(box);
         try { renderCommodityFundsBox(); assert(box.innerHTML.includes('Koszyk Surowców') && box.innerHTML.includes('ETC Ropa'), 'ETC i koszyk w panelu ETF'); } finally { box.remove(); }
     }));
@@ -15215,6 +15216,7 @@ group('0.17 S4 Transport i indeks frachtu', () => {
         const html = renderFreightSection();
         assert(['Fracht morski', 'Fracht lotniczy', 'Fracht lądowy', 'dostawa', 'Statek utknął w kanale', 'Ropa'].every(t => html.includes(t)), 'treść sekcji');
         assert(/[▲▼]/.test(html), 'kierunek nie tylko kolorem');
+        assert((html.match(/class="freight-card"/g) || []).length === 4 && html.includes('badge--warn') && /przepustowość \d/.test(html) && html.includes('role="img"'), 'karty frachtu z paskiem, przepustowość liczbą, zakłócenie jako znacznik');
     }));
 });
 
@@ -15324,6 +15326,8 @@ group('0.17 S5 Infrastruktura publiczna i PPP', () => {
         assertEq(bs.reduce((s, b) => s + getActiveProjectsForBuilder(b).length, 0), built.length, 'odcinek = 1 slot');
         const proj = constructionProjects.find(x => x.tender.infra?.seg === built[0].n);
         assertNear(proj.paidToBuilder / proj.price, 0.30, 'zaliczka 30%', 1e-9);
+        const strip = renderHighwayStrip(proj.tender);
+        assert(strip.includes(`odcinek ${built[0].n} z 5`) && (strip.match(/role="listitem"/g) || []).length === 5 && strip.includes('w budowie 0%') && strip.includes('rabatu') && strip.includes('Rozstrzygnięcie:'), 'pasek 5 odcinków, postęp słowem, rabat, rozstrzygnięcie');
         assertEq(proj.milestones.join(','), '0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9', 'odbiory co 10% postępu');
         proj.progress = 0.1; payDueMilestones(proj);
         assertNear(proj.paidToBuilder / proj.price, 0.30 + 0.6 * 0.1, 'po 10% postępu: zaliczka + 10% części za roboty', 1e-9);

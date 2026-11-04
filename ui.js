@@ -2311,6 +2311,11 @@ function displayStocks(previousInputValues = {}) {
 
   const countryBtn = document.getElementById('table-country-sort');
   if (countryBtn) { countryBtn.textContent = countrySortState === 'asc' ? 'Kraj ▲' : countrySortState === 'desc' ? 'Kraj ▼' : 'Kraj'; countryBtn.setAttribute('aria-pressed', String(countrySortState !== 'none')); }
+  if (favoritesOnlyFilter && !playerProfile?.favorites?.length) {
+    const cell = stockTableBody.insertRow().insertCell();
+    cell.colSpan = STOCK_TABLE_COLS;
+    cell.innerHTML = `<p class="alert">${uiIcon('gwiazdka', 18)}<span>Nie masz jeszcze ulubionych spółek. Gwiazdka przy nazwie spółki dodaje ją do tej listy.</span></p>`;
+  }
   liveStockTableBody.replaceChildren(...stockTableBody.childNodes);
   const shownCount = document.getElementById('mkpi-active');
   if (shownCount) shownCount.textContent = liveStockTableBody.querySelectorAll('tr.stock-row').length; // 0.15.4 P1: licznik = wiersze listy
@@ -5968,6 +5973,8 @@ function renderTendersList() {
             ));
         }
 
+        if (tender.infra?.highway) card.insertAdjacentHTML('beforeend', renderHighwayStrip(tender));
+
         const details = document.createElement('details');
         details.dataset.tenderId = tender.id;
         details.open = expandedIds.has(tender.id);
@@ -7209,7 +7216,7 @@ function renderCvPanel() {
         const reqMsg = next?.requires?.level === 4 ? 'Wymaga poziomu 4 „Nastroje rynku”' : 'Wymaga wcześniejszego szkolenia';
 
         return `<article class="cv-training">
-            <h4>${escapeHtml(stripEmoji(skill.name))} ${medal ? `<span class="cv-medal cv-medal-${medal.id}" title="${medal.label}">${uiIcon('medal', 14)}<span class="sr-only">${medal.label}</span></span>` : ''}</h4>
+            <h4>${id === 'optionsMaster' ? `${uiIcon('umiejetnosc-opcje', 20)} ` : ''}${escapeHtml(stripEmoji(skill.name))} ${medal ? `<span class="cv-medal cv-medal-${medal.id}" title="${medal.label}">${uiIcon('medal', 14)}<span class="sr-only">${medal.label}</span></span>` : ''}</h4>
             <p class="fund-muted">Poziom ${level}/${skill.levels.length}</p>
             <div class="level-steps">${steps}</div>
             ${next ? `<p>${escapeHtml(next.description || '')}</p>` : '<p><strong>Ukończone w pełni.</strong></p>'}
@@ -9201,6 +9208,7 @@ function renderCountryPanel() {
         <div class="bank-grid mt-3">
             <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('raport', 20)}</span><div><h4>Ustawy</h4><span class="bank-card-type">rząd zmienia 1 ustawę na rok, zapowiedź kwartał wcześniej</span></div></header>
                 <table class="asset-mini-table w-full"><tbody>${laws}</tbody></table>
+                ${renderInfraLawSteps()}
                 ${pending ? `<p class="text-sm">${uiIcon('megafon', 14)} Rynek już reaguje na zapowiedź — tak działa dyskontowanie: kurs zmienia się przy ogłoszeniu, nie w dniu wejścia ustawy w życie.</p>` : ''}
                 ${society.housingProgram > 0 ? `<p class="text-sm">${uiIcon('budownictwo', 14)} Trwa program mieszkań socjalnych (${society.housingProgram} kw.): przetargi dla budowlanki i deweloperów.</p>` : ''}</article>
             <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('bank', 20)}</span><div><h4>Budżet państwa</h4><span class="bank-card-type">Skarb Państwa ${formatZl(governmentTreasury, 0)}</span></div></header>
