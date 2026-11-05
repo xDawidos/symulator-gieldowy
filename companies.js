@@ -450,6 +450,8 @@ function replaceCeo(stock, newCeo = null) {
         generateCEO(stock, true); // Używamy flagi 'isReplacement', aby wyzerować staż
     }
 
+    if (typeof noteTiedStaffChange === 'function') noteTiedStaffChange(stock, oldCeo, stock.ceo); // 0.17.3 R1: wpis kadrowy
+
     // Sprawdź, czy nowy CEO ma cechę "Midas"
     if (stock.ceo && stock.ceo.traits && stock.ceo.traits.some(t => t.id === 'midas')) {
         stock.financialHealth += 3;

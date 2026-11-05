@@ -15801,3 +15801,187 @@ group('0.17.3 R0 Osoby, relacje, kontakty', () => {
         assert(Number(newCeoId().slice(1)) > 950, 'licznik ponad użytymi');
     });
 });
+
+group('0.17.3 R1 Tied: kontakty, reakcje, znajomi', () => {
+    const start = () => {
+        const list = [makeCompany('AAA'), makeCompany('BBB')];
+        list.forEach(company => { company.insiderShares = 0; company.reputation = { player: 0 }; });
+        resetWorld(list); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        playerCash = 5_000_000; botRelations = createBotRelations(); delete oversight.records.player; mailbox = createMailbox(); macro.quarter = 10;
+        tiedView = { feed: 'main', side: 'me', pane: 'feed', person: null, company: null, message: null, filter: 'all', pool: null };
+        for (const stock of stocks) { stock.ceo = null; generateCEO(stock); }
+    };
+    const key = () => getCeoRelationKey(stocks[0].ceo.id);
+    const post = (fields = {}) => addTiedPost({ symbol: 'AAA', author: stocks[0].ceo.name, ceoId: stocks[0].ceo.id, text: 'Tajny plan zarządu', ...fields });
+    const html = () => {
+        const root = document.createElement('div'); root.id = 'net-tied-body'; document.body.appendChild(root);
+        try { renderTiedPage(); return root.innerHTML; } finally { root.remove(); }
+    };
+
+    test('widoczność: post dla znajomych i zaufanych wg poziomu; post niedostępny bez treści, roli, daty i reakcji', () => {
+        start();
+        const friends = post({ audience: 'friends', text: 'Dla znajomych tekst' }), trusted = post({ audience: 'trusted', text: 'Dla zaufanych tekst' });
+        assert(!canSeeTiedPost(friends) && !canSeeTiedPost(trusted), 'kontakt widzi tylko publiczne');
+        botRelations.values[key()] = 30; addTiedFriend(key());
+        assert(canSeeTiedPost(friends) && !canSeeTiedPost(trusted), 'znajomy');
+        assertEq(getTiedLevel(key()), 'Znajomy', 'poziom słowem');
+        botRelations.values[key()] = 60;
+        assert(canSeeTiedPost(trusted), 'zaufany od +60');
+        assertEq(getTiedLevel(key()), 'Zaufany znajomy', 'poziom');
+        botRelations.values[key()] = 10; ensureTiedState().friends = [];
+        const locked = renderTiedPost(friends);
+        assert(locked.includes('is-locked') && locked.includes('Treść dla znajomych') && locked.includes(stocks[0].ceo.name), 'autor i napis');
+        assert(!locked.includes('Dla znajomych tekst') && !locked.includes('Prezes') && !locked.includes('tied-react') && !locked.includes('tied-meta'), 'bez treści, roli, daty i reakcji');
+        assert(renderTiedPost(trusted).includes('Treść dla zaufanych'), 'napis dla zaufanych');
+        assert(!likeTiedPost(friends.id) && !commentTiedPost(friends.id, getTiedCommentChoices(friends.id)[0]), 'na post niedostępny nie da się zareagować');
+    });
+    test('reakcje: raz na post, +1, najwyżej +2 kwartalnie na osobę; działają bez udziałów', () => {
+        start();
+        const posts = [post(), post(), post()];
+        assert(likeTiedPost(posts[0].id), 'polubienie');
+        assert(!likeTiedPost(posts[0].id), 'drugi raz nie');
+        assertEq(getRelation(key()), 1, '+1');
+        const text = getTiedCommentChoices(posts[0].id)[1];
+        assertEq(getTiedCommentChoices(posts[0].id).length, 3, '3 teksty');
+        assert(!commentTiedPost(posts[0].id, 'Własny tekst'), 'tylko z puli');
+        assert(commentTiedPost(posts[0].id, text), 'komentarz');
+        assertEq(getRelation(key()), 2, '+2');
+        assert(likeTiedPost(posts[1].id), 'polubienie działa dalej');
+        assertEq(getRelation(key()), 2, 'limit +2');
+        macro.quarter++;
+        assert(likeTiedPost(posts[2].id), 'kolejny post');
+        assertEq(getRelation(key()), 3, 'nowy kwartał, nowy limit');
+        assert(!renderTiedPost(posts[1]).includes('limit'), 'limit ukryty');
+    });
+    test('reakcje botów stałe i bez zapisu; odznaka ok. 20% kont, z hasha', () => {
+        start();
+        const p = post(), before = JSON.stringify(p);
+        assertEq(JSON.stringify(getTiedBotReactions(p)), JSON.stringify(getTiedBotReactions(p)), 'ten sam wynik');
+        assertEq(JSON.stringify(p), before, 'post bez nowych pól');
+        const verified = Array.from({ length: 1000 }, (_, i) => isTiedVerified(`ceo:c${i}`)).filter(Boolean).length;
+        assert(verified > 150 && verified < 250, `odznaka: ${verified} z 1000`);
+    });
+    test('prośba gracza: akceptacja od +20; odrzucenie −2 i przerwa 2 kw.; relacja poniżej 0 usuwa ze znajomych', () => {
+        start();
+        botRelations.values[key()] = 25;
+        assert(requestTiedFriend(key()), 'prośba wysłana');
+        assertEq(getTiedFriendState(key()).status, 'sent', 'stan');
+        assert(!requestTiedFriend(key()), 'bez duplikatu');
+        assert(html().length > 0 && renderTiedFriendAction(key()).includes('Prośba wysłana'), 'napis');
+        processTiedQuarterly();
+        assert(!isTiedFriend(key()), 'odpowiedź dopiero w następnym kwartale');
+        macro.quarter++; processTiedQuarterly();
+        assert(isTiedFriend(key()), 'akceptacja');
+        const other = getCeoRelationKey(stocks[1].ceo.id);
+        botRelations.values[other] = 10;
+        requestTiedFriend(other);
+        macro.quarter++; processTiedQuarterly();
+        assert(!isTiedFriend(other), 'poniżej progu odmowa');
+        assertEq(getRelation(other), 8, 'relacja −2');
+        assertEq(getTiedFriendState(other).status, 'rejected', 'stan odrzucenia');
+        assert(!requestTiedFriend(other), 'przerwa');
+        assert(renderTiedFriendAction(other).includes('ponów za 2 kw.'), 'tekst przerwy');
+        macro.quarter += 2; processTiedQuarterly();
+        assertEq(getTiedFriendState(other).status, 'none', 'po 2 kw. można znowu');
+        changeRelation(key(), -40, 'test');
+        assert(!isTiedFriend(key()), 'relacja poniżej 0 usuwa ze znajomych');
+    });
+    test('prośba do gracza: przyjęcie albo odrzucenie −2; limit 3 oczekujących; poniżej progu nie zaprasza', () => {
+        start();
+        buyStock('AAA', 10);
+        const random = Math.random; Math.random = () => 0;
+        try {
+            botRelations.values[key()] = 5;
+            processTiedQuarterly();
+            assertEq(ensureTiedState().invites.length, 0, 'poniżej progu nie zaprasza');
+            botRelations.values[key()] = 30;
+            processTiedQuarterly();
+        } finally { Math.random = random; }
+        assertEq(ensureTiedState().invites[0], key(), 'zaproszenie');
+        assert(html().length > 0, 'render');
+        tiedView.side = 'people';
+        assert(html().includes('Przyjmij'), 'prośba w kontaktach');
+        declineTiedInvite(key());
+        assertEq(getRelation(key()), 28, 'odrzucenie −2');
+        ensureTiedState().requests = {}; ensureTiedState().invites = [key()];
+        acceptTiedInvite(key());
+        assert(isTiedFriend(key()), 'przyjęcie');
+    });
+    test('wpisy kadrowe z replaceCeo, bez reakcji; limity 40 i 40 postów', () => {
+        start();
+        const old = stocks[0].ceo;
+        replaceCeo(stocks[0]);
+        const [joined, left] = getTiedPosts();
+        assert(left.hr === 'out' && left.ceoId === old.id && joined.hr === 'in' && joined.ceoId === stocks[0].ceo.id, 'oba wpisy');
+        assert(renderTiedPost(left).includes('Odejście ze spółki') && renderTiedPost(joined).includes('Objęcie stanowiska'), 'teksty');
+        assert(!renderTiedPost(joined).includes('tied-react') && !likeTiedPost(joined.id), 'bez reakcji');
+        mailbox.tied = [];
+        playerProfile.follows = ['co:AAA'];
+        for (let i = 0; i < 60; i++) addTiedPost({ symbol: 'AAA', text: `w${i}`, kind: 'coop' });
+        for (let i = 0; i < 60; i++) addTiedPost({ symbol: 'BBB', text: `g${i}`, kind: 'coop' });
+        assertEq(getTiedPosts().filter(p => p.symbol === 'AAA').length, 40, 'obserwowani: 40');
+        assertEq(getTiedPosts().filter(p => p.symbol === 'BBB').length, 40, 'cały rynek: 40');
+        assertEq(getTiedFeedPosts('contacts').length, 40, 'zakładka Kontakty');
+    });
+    test('kanały: Kontakty i Portfel; obserwowanie nie zmienia relacji; profil firmowy i osoby bez „Napisz”', () => {
+        start();
+        const p = post();
+        assertEq(getTiedFeedPosts('contacts').length, 0, 'pusto bez kontaktu');
+        toggleTiedFollow(key());
+        assertEq(getTiedFeedPosts('contacts').length, 1, 'obserwowany w Kontaktach');
+        assertEq(getRelation(key()), 0, 'bez zmiany relacji');
+        toggleTiedFollow(key());
+        assertEq(getTiedFeedPosts('portfolio').length, 0, 'portfel pusty');
+        buyStock('AAA', 10);
+        assertEq(getTiedFeedPosts('portfolio').length, 1, 'post spółki z portfela');
+        assertEq(getTiedFeedPosts('contacts').length, 1, 'prezes po zakupie jest kontaktem');
+        tiedOpenPerson(key());
+        const person = html();
+        assert(person.includes('tied-profile') && person.includes('Dodaj do znajomych') && person.includes('Obserwuj') && person.includes('Karta spółki') && person.includes('skali od'), 'profil osoby');
+        assert(!person.includes('Napisz') && !person.includes('Porozmawiaj'), 'bez rozmowy przed R4');
+        tiedOpenCompany('AAA');
+        const company = html();
+        assert(company.includes('Konto spółki') && company.includes('Zarząd') && company.includes('Karta spółki'), 'profil firmy');
+        tiedBack();
+        assert(html().includes('Główna'), 'powrót do kanału');
+    });
+    test('wiadomość otwiera wątek: .is-talk, oznaczona jako przeczytana; pasek zwija się tylko wtedy', () => {
+        start();
+        addMail({ sender: 'bot:x', subject: 'Cześć', body: 'Treść listu' });
+        const id = mailbox.messages[0].id;
+        assert(!html().includes('is-talk'), 'bez wątku');
+        tiedOpenMessage(id);
+        const page = html();
+        assert(page.includes('is-talk') && page.includes('Treść listu'), 'wątek');
+        assert(mailbox.messages[0].read, 'przeczytana');
+        tiedBack();
+        assert(!html().includes('is-talk'), 'po zamknięciu');
+    });
+    test('Poczta: KNF, NBP i dział klienta w Poczcie; folder Ważne: importance od 3, bez spamu, ze wszystkich kanałów', () => {
+        start();
+        for (const sender of ['KNF', 'NBP', 'Dział obsługi klienta']) addMail({ sender, subject: 'S', body: 'B' });
+        assertEq(mailbox.messages.filter(m => getMailChannel(m) === 'poczta').length, 3, 'w Poczcie');
+        addMail({ sender: CORPORATION_SENDER, subject: 'Pilne', body: 'B', importance: 3 });
+        addMail({ sender: 'KNF', subject: 'Zwykłe', body: 'B', importance: 2 });
+        addMail({ sender: 'KNF', subject: 'Reklama', body: 'B', importance: 3, isSpam: true });
+        assert(MAIL_FOLDERS.indexOf('important') === MAIL_FOLDERS.indexOf('inbox') + 1, 'za Odebranymi');
+        assertEq(getMailInFolder('important').map(m => m.subject).join(), 'Pilne', 'filtr');
+        assertEq(getUnreadMailCount('important'), 1, 'licznik');
+        assert(MAIL_FOLDER_LABELS.important.includes('Ważne'), 'etykieta');
+    });
+    test('w HTML Tied nie ma nazw charakterów ani elementów z R2–R5', () => {
+        start(); buyStock('AAA', 10); post(); post({ audience: 'friends' });
+        const pages = [];
+        for (const side of ['me', 'msgs', 'people']) { tiedView.side = side; pages.push(html()); }
+        tiedOpenPerson(key()); pages.push(html());
+        const all = pages.join(' ');
+        for (const word of ['Rachmistrz', 'Mentor', 'Lojalista', 'Zachowawczy', 'Sceptyk', 'Blefiarz', 'Manipulator', 'Wiceprezes', 'VIP', 'Opublikuj', 'Wpis na ten kwartał']) assert(!all.includes(word), `bez: ${word}`);
+    });
+    test('karta spółki ma link do profilu w Tied; stary post bez ceoId nadal się wyświetla', () => {
+        start();
+        assert(renderCompanyCardOverview(stocks[0]).includes('Profil w Tied'), 'link');
+        const old = { id: 5, at: 0, symbol: 'AAA', author: 'Jan Dawny', text: 'Stary post', kind: 'result' };
+        const page = renderTiedPost(old);
+        assert(page.includes('Jan Dawny') && page.includes('Stary post'), 'stary post');
+    });
+});
