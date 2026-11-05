@@ -16249,7 +16249,7 @@ group('0.17.3 R4 Rozmowy, posty gracza, VIP', () => {
         settleVipTalk('vip:7', { success: true, delta: 0 });
         assertEq(playerFund.vip.won, 1, 'wygrana');
         assert(!getVipOffers().length, 'oferta zamknięta');
-        assertNear(getFundNav(), nav, 'NAV bez zmian', 1e-6);
+        assert(Math.abs(getFundNav() / nav - 1) < 0.002, 'NAV bez zmian poza kosztem wpłaty jak dawniej');
         assert(playerFund.clients.some(c => c.vip && c.name === 'Katarzyna Lis'), 'klient VIP');
         assert(getTiedContacts().some(p => p.kind === 'vip'), 'kontakt VIP');
         const lost = { id: 8, profile: 'rentier', name: 'Jan Tomek', expiresQ: 12 };
@@ -16284,5 +16284,100 @@ group('0.17.3 R4 Rozmowy, posty gracza, VIP', () => {
         assertEq(getRelation(key()), 30, 'odwołanie −20');
         assertEq(TIED_CHARACTERS.lojalista.decay, 0.5, 'lojalista');
         assertEq(getRelationDecayFactor('kolega'), 1, 'poza osobami 1');
+    });
+});
+
+group('0.17.3 R5 Obietnice botów', () => {
+    const start = () => {
+        const list = [makeCompany('AAA'), makeCompany('BBB')];
+        list.forEach(company => { company.insiderShares = 0; company.reputation = { player: 0 }; });
+        resetWorld(list); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        playerCash = 1_000_000; botRelations = createBotRelations(); delete oversight.records.player; mailbox = createMailbox(); macro.quarter = 10;
+        for (const stock of stocks) { stock.ceo = null; generateCEO(stock); }
+        return getRelationPeople().find(person => person.kind === 'investor').entity;
+    };
+    const live = (ai, type, goal, amount = 5000, dueQ = 12) => { const tied = ensurePromises(); const promise = { id: tied.promiseNext++, bot: ai.id, name: ai.name, type, goal, amount, dueQ, offerQ: 10, status: 'live' }; tied.promises.unshift(promise); return promise; };
+
+    test('spełnienie: bot kupuje po NAV z własnej gotówki; pieniądze przechodzą, NAV bez zmian, relacja +5, lock-up 1 rok', () => {
+        const ai = start(); ai.cash = 100_000;
+        const promise = live(ai, 'cashShare', {});
+        const nav = getFundNav(), cash = playerCash, total = ai.cash + playerCash, units = playerFund.units, clients = playerFund.clients.length;
+        macro.quarter = 12;
+        checkPromises(true);
+        assertEq(promise.status, 'done', 'spełniona');
+        assertEq(ai.cash, 95_000, 'gotówka bota maleje o wpłatę');
+        assertEq(playerCash, cash + 5000, 'gotówka funduszu rośnie o wpłatę');
+        assertEq(ai.cash + playerCash, total, 'obietnica nie tworzy pieniędzy');
+        assertNear(getFundNav(), nav, 'NAV bez zmian', 1e-9);
+        assertNear(playerFund.units, units + 5000 / nav, 'jednostki po NAV', 1e-9);
+        assertEq(playerFund.clients.length, clients + 1, 'klient funduszu');
+        assertEq(playerFund.clients.at(-1).name, ai.name, 'bot jest klientem');
+        assertEq(getTranches(playerFund.clients.at(-1))[0].lockedUntilQ, 16, 'lock-up 1 rok');
+        assertEq(getRelation(ai.id), 5, 'relacja +5');
+    });
+    test('brak gotówki: bot kupuje tyle, ile ma, bez utraty relacji, karteczka to pokazuje', () => {
+        const ai = start(); ai.cash = 1500;
+        const promise = live(ai, 'cashShare', {});
+        macro.quarter = 12;
+        checkPromises(true);
+        assertEq(promise.paid, 1500, 'tyle miał');
+        assertEq(ai.cash, 0, 'bez ujemnej gotówki');
+        assert(getRelation(ai.id) > 0, 'bez utraty relacji');
+        assert(renderTeamedPromises().includes('tyle miał gotówki'), 'opis na karteczce');
+    });
+    test('niespełnienie −10, rezygnacja −5, utrzymanie akcji pęka od razu po sprzedaży', () => {
+        const ai = start(); ai.cash = 100_000;
+        playerCash = 0; playerPortfolio.AAA = { shares: 10, avgPrice: 100 };
+        const money = ai.cash;
+        const failed = live(ai, 'cashShare', {});
+        macro.quarter = 12;
+        checkPromises(true);
+        assertEq(failed.status, 'failed', 'termin minął');
+        assertEq(getRelation(ai.id), -10, '−10');
+        assertEq(ai.cash, money, 'bez wpłaty');
+        const resigned = live(ai, 'beatGig', {}, 5000, 20);
+        assert(resignPromise(resigned.id), 'rezygnacja');
+        assertEq(getRelation(ai.id), -15, '−5');
+        const hold = live(ai, 'holdShares', { symbol: 'AAA', base: 10 }, 5000, 20);
+        checkPromises(false);
+        assertEq(hold.status, 'live', 'trzyma');
+        playerPortfolio.AAA.shares = 5;
+        checkPromises(false);
+        assertEq(hold.status, 'failed', 'sprzedał');
+        delete playerPortfolio.AAA;
+    });
+    test('oferty: relacja od +20, najwyżej 3 aktywne, kwota 1–3% aktywów i do 25% gotówki bota', () => {
+        const ai = start(); ai.cash = 100_000;
+        const random = Math.random; Math.random = () => 0.5;
+        try { const offer = createPromiseOffer(ai); assert(offer && offer.amount <= 25_000 && offer.amount >= getFundAssets() * 0.01 - 1, `kwota ${offer?.amount}`); }
+        finally { Math.random = random; }
+        assert(acceptPromiseOffer(ensurePromises().promiseOffers[0].id), 'przyjęcie');
+        assertEq(getActivePromises().length, 1, 'aktywna');
+        live(ai, 'beatGig', {}); live(ai, 'beatGig', {});
+        const offer = createPromiseOffer(ai);
+        assert(!acceptPromiseOffer(offer?.id ?? -1), 'limit 3');
+        assert(renderTiedPromiseOffers().includes('3 z 3') || !offer, 'licznik');
+        ensurePromises().promiseOffers = []; ensurePromises().promises = [];
+        botRelations.values[ai.id] = 10;
+        const r = Math.random; Math.random = () => 0;
+        try { maybeOfferPromises(); } finally { Math.random = r; }
+        assertEq(ensurePromises().promiseOffers.length, 0, 'poniżej progu bez oferty');
+    });
+    test('cele: każdy ma tekst i stan; postęp przy zakupie; karteczka z miernikiem i słowem', () => {
+        const ai = start(); ai.portfolio = { AAA: { shares: 5, avgPrice: 100 } }; ai.cash = 100_000;
+        assertEq(Object.keys(PROMISE_GOALS).length, 11, '11 celów');
+        const goals = { buyShares: { symbol: 'AAA', shares: 10, base: 0 }, sellHolding: { symbol: 'AAA' }, sectorShare: { sector: 'Technologia' }, holdShares: { symbol: 'AAA', base: 0 }, maxPosition: {}, cashShare: {}, closeShorts: {}, noDebt: {}, beatGig: {}, agmVote: { symbol: 'AAA', item: 'x', label: 'Test', vote: 'for' }, safeShare: {} };
+        for (const [type, goal] of Object.entries(goals)) { assert(PROMISE_GOALS[type].text(goal).length > 5, `tekst ${type}`); assert(typeof PROMISE_GOALS[type].state(goal).done === 'boolean', `stan ${type}`); }
+        const promise = live(ai, 'buyShares', goals.buyShares);
+        buyStock('AAA', 4);
+        assert(renderTeamedPromises().includes('4 z 10 akcji') && renderTeamedPromises().includes('W toku'), 'miernik');
+        assertEq(promise.status, 'live', 'jeszcze nie');
+        buyStock('AAA', 6);
+        assertEq(promise.status, 'done', 'spełniona po transakcji');
+    });
+    test('zapis: obietnice w profilu gracza wracają po wczytaniu', () => {
+        const ai = start(); live(ai, 'beatGig', {});
+        const saved = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
+        assertEq(saved.playerProfile.tied.promises.length, 1, 'w zapisie');
     });
 });

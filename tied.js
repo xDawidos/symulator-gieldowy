@@ -137,6 +137,7 @@ function processTiedQuarterly() {
         if (tied.invites.length >= TIED_RULES.maxInvites) break;
         if (getTiedFriendState(person.key).status === 'none' && Math.random() < getTiedInviteChance(person.key)) tied.invites.push(person.key);
     }
+    processPromisesQuarterly();
 }
 
 // --- Reakcje ---
@@ -856,4 +857,140 @@ function processCeoRelationBonus() {
 }
 function noteCeoRelationLoss(stock, loss, reason) {
     if (stock?.ceo?.id) changeRelation(ceoKey(stock.ceo.id), -loss, reason);
+}
+
+// =================================================================================
+// 0.17.3 R5: obietnice botów. Bot płaci z własnej gotówki i kupuje jednostki po NAV, bez sprzedaży po innej cenie.
+// =================================================================================
+const PROMISE_RULES = { relationAt: 20, maxActive: 3, offerChance: 0.15, amountShare: [0.01, 0.03], cashShare: 0.25, term: [2, 3], lockYears: 1, reward: 5, failLoss: 10, resignLoss: 5, keepClosed: 8 };
+const heldSymbols = () => Object.keys(playerPortfolio || {}).filter(symbol => playerPortfolio[symbol]?.shares > 0);
+const stockOf = symbol => stocks.find(s => s.symbol === symbol);
+const portfolioShareOf = value => { const total = getFundPortfolioValue(); return total > 0 ? value / total : 0; };
+const lastPeriodBeat = () => { const p = playerFund?.periods?.at(-1); return Boolean(p) && p.fundReturn >= p.benchmarkReturn; };
+const shortMargins = () => (typeof getMarginPositions === 'function' ? getMarginPositions() : []).filter(p => p.side < 0);
+
+// Każdy cel: make(ai) daje parametry albo null, gdy nie ma sensu; state(goal) daje { done, failed?, value?, max? }; end: liczy się dopiero na koniec terminu.
+const PROMISE_GOALS = {
+    buyShares: { make: ai => { const symbol = getRandomElement(Object.keys(ai.portfolio || {}).filter(s => stockOf(s) && !stockOf(s).assetType && canAccessExchange(stockOf(s).exchange, stockOf(s)))); if (!symbol) return null; const stock = stockOf(symbol); const shares = Math.max(10, Math.floor(getFundAssets() * 0.02 / stock.price)); return { symbol, shares, base: playerPortfolio?.[symbol]?.shares || 0 }; },
+        text: g => `Kup min. ${formatNumberPl(g.shares, 0)} akcji ${stockOf(g.symbol)?.name || g.symbol}.`, state: g => { const value = Math.max(0, (playerPortfolio?.[g.symbol]?.shares || 0) - g.base); return { done: value >= g.shares, value, max: g.shares, unit: 'akcji' }; } },
+    sellHolding: { make: () => { const symbol = getRandomElement(heldSymbols()); return symbol ? { symbol } : null; }, text: g => `Sprzedaj akcje ${stockOf(g.symbol)?.name || g.symbol}.`, state: g => ({ done: !(playerPortfolio?.[g.symbol]?.shares > 0) }) },
+    sectorShare: { make: ai => { const stock = stockOf(getRandomElement(Object.keys(ai.portfolio || {}))); const sector = stock && getMainSector(stock); return sector ? { sector } : null; }, text: g => `Ustaw sektor ${g.sector} na min. 10% wartości portfela.`,
+        state: g => ({ done: portfolioShareOf(heldSymbols().filter(s => stockOf(s) && getMainSector(stockOf(s)) === g.sector).reduce((sum, s) => sum + getHoldingMarketValue(s, playerPortfolio[s]), 0)) >= 0.1 }) },
+    holdShares: { end: true, make: () => { const symbol = getRandomElement(heldSymbols()); return symbol ? { symbol, base: playerPortfolio[symbol].shares } : null; }, text: g => `Utrzymaj akcje ${stockOf(g.symbol)?.name || g.symbol} do terminu, nie sprzedawaj.`, state: g => { const kept = (playerPortfolio?.[g.symbol]?.shares || 0) >= g.base; return { done: kept, failed: !kept }; } },
+    maxPosition: { make: () => heldSymbols().some(s => portfolioShareOf(getHoldingMarketValue(s, playerPortfolio[s])) >= 0.25) ? {} : null, text: () => 'Zejdź z największą pozycją poniżej 25% portfela.', state: () => ({ done: heldSymbols().every(s => portfolioShareOf(getHoldingMarketValue(s, playerPortfolio[s])) < 0.25) }) },
+    cashShare: { end: true, make: () => ({}), text: () => 'Utrzymaj gotówkę funduszu na poziomie min. 10% do terminu.', state: () => ({ done: playerCash >= getFundAssets() * 0.1 }) },
+    closeShorts: { make: () => shortMargins().length ? {} : null, text: () => 'Zamknij wszystkie pozycje krótkie.', state: () => ({ done: !shortMargins().length }) },
+    noDebt: { make: () => (playerFund?.liquidityLoan?.principal > 0 || getMarginPositions().length) ? {} : null, text: () => 'Spłać kredyt i zejdź z dźwignią do zera.', state: () => ({ done: !(playerFund?.liquidityLoan?.principal > 0) && !getMarginPositions().length }) },
+    beatGig: { end: true, make: () => ({}), text: () => 'Pokonaj GIG w ostatnim kwartale przed terminem.', state: () => ({ done: lastPeriodBeat() }) },
+    agmVote: { make: () => { const stock = stocks.find(s => s.governance?.pendingAgm?.items?.length && canFundControlAgm(s)); if (!stock) return null; const item = getRandomElement(stock.governance.pendingAgm.items); return { symbol: stock.symbol, item: item.id, label: item.label, vote: Math.random() < 0.5 ? 'for' : 'against' }; },
+        text: g => `Zagłosuj ${g.vote === 'for' ? 'za' : 'przeciw'}: ${g.label} (${stockOf(g.symbol)?.name || g.symbol}).`, state: g => { const item = stockOf(g.symbol)?.governance?.pendingAgm?.items?.find(i => i.id === g.item); return { done: item?.playerVote === g.vote }; } },
+    safeShare: { make: () => ({}), text: () => 'Miej min. 10% aktywów w obligacjach lub funduszach towarowych.', state: () => { const assets = getFundAssets(); return { done: assets > 0 && (getFundBondsValue() + (typeof getFundCommodityValue === 'function' ? getFundCommodityValue() : 0)) / assets >= 0.1 }; } }
+};
+
+function ensurePromises() {
+    const tied = ensureTiedState();
+    tied.promiseOffers ||= []; tied.promises ||= []; tied.promiseNext ||= 1;
+    return tied;
+}
+const getActivePromises = () => ensurePromises().promises.filter(promise => promise.status === 'live');
+const getPromiseBot = promise => aiCompetitors.find(ai => ai.id === promise.bot) || null;
+
+/** Co kwartał: bot z dobrą relacją proponuje umowę. Manipulator częściej, zwłaszcza przed własną sprzedażą. */
+function maybeOfferPromises() {
+    if (!playerFund) return;
+    const tied = ensurePromises();
+    for (const person of getRelationPeople().filter(item => item.kind === 'investor' && getRelation(item.id) >= PROMISE_RULES.relationAt)) {
+        if (getActivePromises().length + tied.promiseOffers.length >= PROMISE_RULES.maxActive) return;
+        if (tied.promiseOffers.some(offer => offer.bot === person.id) || getActivePromises().some(promise => promise.bot === person.id)) continue;
+        const pushy = getPersonCharacter(person.id) === 'manipulator' ? (person.entity.tiedPump ? 3 : 2) : 1;
+        if (Math.random() < PROMISE_RULES.offerChance * pushy) createPromiseOffer(person.entity);
+    }
+}
+function createPromiseOffer(ai) {
+    const tied = ensurePromises(), types = Object.keys(PROMISE_GOALS).sort(() => Math.random() - 0.5);
+    for (const type of types) {
+        const goal = PROMISE_GOALS[type].make(ai);
+        if (!goal) continue;
+        const amount = Math.floor(Math.min(getFundAssets() * getRandomInRange(...PROMISE_RULES.amountShare), (Number(ai.cash) || 0) * PROMISE_RULES.cashShare));
+        if (!(amount >= 100)) return null;
+        const offer = { id: tied.promiseNext++, bot: ai.id, name: ai.name, type, goal, amount, dueQ: macro.quarter + getRandomIntInRange(...PROMISE_RULES.term), offerQ: macro.quarter };
+        tied.promiseOffers.push(offer);
+        return offer;
+    }
+    return null;
+}
+function acceptPromiseOffer(id) {
+    const tied = ensurePromises(), offer = tied.promiseOffers.find(item => item.id === id);
+    if (!offer || getActivePromises().length >= PROMISE_RULES.maxActive) return false;
+    tied.promiseOffers = tied.promiseOffers.filter(item => item !== offer);
+    tied.promises.unshift({ ...offer, status: 'live' });
+    return true;
+}
+function refusePromiseOffer(id) { const tied = ensurePromises(); tied.promiseOffers = tied.promiseOffers.filter(item => item.id !== id); }
+
+/** Spełnienie: bot kupuje po NAV tyle, na ile go stać; pieniądze przechodzą z jego gotówki do funduszu. */
+function fulfillPromise(promise) {
+    const ai = getPromiseBot(promise), paid = Math.floor(Math.min(promise.amount, Math.max(0, Number(ai?.cash) || 0)));
+    promise.status = 'done'; promise.paid = paid;
+    if (ai) changeRelation(ai.id, PROMISE_RULES.reward, 'spełniona obietnica');
+    if (!(paid > 0)) return 0;
+    const nav = getFundNav();
+    ai.cash -= paid;
+    const client = addFundClient('rich', 0, nav);
+    client.name = promise.name; client.botId = ai.id;
+    const units = subscribeClient(client, paid); // bez kosztu kampanii, więc NAV się nie zmienia
+    addTranche(client, units, nav, { lockYears: PROMISE_RULES.lockYears });
+    return paid;
+}
+function closePromise(promise, status, loss, reason) {
+    promise.status = status;
+    if (getPromiseBot(promise)) changeRelation(promise.bot, -loss, reason);
+}
+function resignPromise(id) {
+    const promise = getActivePromises().find(item => item.id === id);
+    if (!promise) return false;
+    closePromise(promise, 'resigned', PROMISE_RULES.resignLoss, 'rezygnacja z umowy');
+    return true;
+}
+/** Po transakcji i przy zmianie kwartału. */
+function checkPromises(atQuarterEnd = false) {
+    if (!playerProfile?.tied?.promises?.length) return;
+    for (const promise of getActivePromises()) {
+        const def = PROMISE_GOALS[promise.type], state = def.state(promise.goal), due = macro.quarter >= promise.dueQ;
+        if (state.failed) closePromise(promise, 'failed', PROMISE_RULES.failLoss, 'niespełniona obietnica');
+        else if (state.done && (!def.end || (due && atQuarterEnd))) fulfillPromise(promise);
+        else if (due && atQuarterEnd) closePromise(promise, 'failed', PROMISE_RULES.failLoss, 'niespełniona obietnica');
+    }
+    const tied = playerProfile.tied, closed = tied.promises.filter(promise => promise.status !== 'live');
+    if (closed.length > PROMISE_RULES.keepClosed) tied.promises = tied.promises.filter(promise => promise.status === 'live' || closed.indexOf(promise) < PROMISE_RULES.keepClosed);
+}
+const onPromiseCheck = () => checkPromises(false);
+function processPromisesQuarterly() {
+    const tied = ensurePromises();
+    tied.promiseOffers = tied.promiseOffers.filter(offer => offer.offerQ === macro.quarter || macro.quarter - offer.offerQ < 2);
+    checkPromises(true);
+    maybeOfferPromises();
+}
+
+function renderTiedPromiseOffers() {
+    return ensurePromises().promiseOffers.map(offer => `<div class="tied-offer"><span class="tied-kicker">Obietnica zakupu</span><p>${escapeHtml(offer.name)}: kupię jednostki Twojego funduszu za <strong>${formatZl(offer.amount, 0)}</strong>, jeśli do ${formatQuarterDate(offer.dueQ)} wykonasz cel. ${escapeHtml(PROMISE_GOALS[offer.type].text(offer.goal))}</p>
+        <div class="tied-actions"><button class="btn-primary btn-sm" onclick="tiedAcceptPromise(${offer.id})" ${getActivePromises().length >= PROMISE_RULES.maxActive ? 'disabled' : ''}>Przyjmij</button><button class="btn-ghost btn-sm" onclick="tiedRefusePromise(${offer.id})">Odmów</button></div>
+        <p class="tied-note">Aktywne obietnice: ${getActivePromises().length} z ${PROMISE_RULES.maxActive}. Trafią do TeamedUP! jako karteczka.</p></div>`).join('');
+}
+const tiedAcceptPromise = id => { acceptPromiseOffer(id); renderTiedPage(); };
+const tiedRefusePromise = id => { refusePromiseOffer(id); renderTiedPage(); };
+
+const PROMISE_STATUS = { live: ['te-chip live', 'zegar', 'W toku'], done: ['te-chip ok', 'ok', 'Spełniona'], failed: ['te-chip', 'zamknij', 'Niespełniona'], resigned: ['te-chip', 'zamknij', 'Rezygnacja'] };
+function renderTeamedPromises() {
+    const list = ensurePromises().promises;
+    if (!list.length) return '<p class="fund-muted">Brak obietnic. Tu trafiają umowy z inwestorami przyjęte w Tied.</p>';
+    return `<ul class="te-notes">${list.map(promise => {
+        const def = PROMISE_GOALS[promise.type], state = def.state(promise.goal), [chip, icon, label] = PROMISE_STATUS[promise.status];
+        const cls = promise.status === 'done' ? ' is-done' : promise.status === 'live' ? '' : ' is-failed';
+        const meter = promise.status === 'live' && state.max ? `${renderLimitMeter(Math.min(100, state.value / state.max * 100), NaN, `Wykonano ${state.value} z ${state.max} ${state.unit}`)}<span class="tied-note">${formatNumberPl(state.value, 0)} z ${formatNumberPl(state.max, 0)} ${state.unit}</span>` : '';
+        const foot = promise.status === 'live' ? `<span>do ${formatQuarterDate(promise.dueQ)}</span><button class="btn-ghost btn-sm" onclick="resignPromise(${promise.id}); renderTeamedUp()">Zrezygnuj</button>`
+            : promise.status === 'done' ? `<span>${promise.paid < promise.amount ? `${escapeHtml(promise.name)} kupił jednostki za ${formatZl(promise.paid, 0)}: tyle miał gotówki.` : `${escapeHtml(promise.name)} kupił jednostki po NAV.`}</span>` : `<span>termin: ${formatQuarterDate(promise.dueQ)}</span>`;
+        return `<li class="te-note${cls}"><div class="te-note-top"><span class="net-avatar sm" aria-hidden="true">${escapeHtml(initials(promise.name))}</span><strong>${escapeHtml(promise.name)}</strong><span class="${chip}">${uiIcon(icon, 12)} ${label}</span></div>
+            <span>${escapeHtml(def.text(promise.goal))}</span>${meter}<span class="te-note-amount">${formatZl(promise.amount, 0)}</span><footer>${foot}</footer></li>`;
+    }).join('')}</ul>`;
 }

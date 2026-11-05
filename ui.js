@@ -7743,10 +7743,11 @@ function renderTeamedUp() {
     if (introFlow?.bossShown) { introRenderChat(); return; } // 0.16.10: rozmowa z szefem ze scenki startowej
     const unread = getTeamedUnread();
     const item = (pane, icon, label, extra = '') => `<button class="mail-folder ${teamedView.pane === pane ? 'active' : ''}" ${teamedView.pane === pane ? 'aria-current="page"' : ''} onclick="setTeamedPane('${pane}')"><span>${uiIcon(icon, 16)} ${label}</span>${extra}</button>`;
-    document.getElementById('teamedup-nav').innerHTML = item('tasks', 'cel', 'Zadania i oceny') + item('messages', 'poczta', 'Wiadomości', unread ? `<b>${unread}</b>` : '') + item('hiring', 'pracownik', 'Zatrudnianie');
+    document.getElementById('teamedup-nav').innerHTML = item('tasks', 'cel', 'Zadania i oceny') + item('messages', 'poczta', 'Wiadomości', unread ? `<b>${unread}</b>` : '') + item('hiring', 'pracownik', 'Zatrudnianie') + item('promises', 'karteczka', 'Obietnice', getActivePromises().length ? `<b>${getActivePromises().length}</b>` : '');
     const body = document.getElementById('teamedup-content');
     if (teamedView.pane === 'tasks') { body.innerHTML = renderTeamedTasks(); return; }
     if (teamedView.pane === 'hiring') { body.innerHTML = renderTeamedHiring(); return; }
+    if (teamedView.pane === 'promises') { body.innerHTML = renderTeamedPromises(); return; } // 0.17.3 R5
     const msgs = getTeamedMessages();
     const selected = msgs.find(m => m.id === teamedView.selectedId);
     body.innerHTML = `<div class="mail-list te-contacts" aria-label="Wiadomości">${msgs.length ? msgs.slice(0, 60).map(m => { // 0.16.6 S5: karty kontaktów jak we wzorze Stitcha (awatar, rola, godzina, zajawka, kropka nieprzeczytanej)
