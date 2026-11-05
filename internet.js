@@ -5,8 +5,6 @@
 // wyświetlanie niżej; bilety i dostęp do rynku zostają w countries.js. Komponenty 0.14.5, ikony SVG, tylko ciemny motyw.
 // =================================================================================
 
-const TIED_POST_LIMIT = 60;
-const TIED_POSITIVE_NEWS = /wynik|kontrakt|raport|współprac|kooperac|dywidend|rekord|przełom|technolog|nowa (oferta|placówk)/i;
 
 /** Ulubione: jedyna droga do stron. */
 const INTERNET_FAVORITES = [
@@ -48,34 +46,13 @@ function selectInternetCountry(id) {
     applyInternetTheme();
 }
 
-// --- Tied: posty prezesów z faktycznych zdarzeń spółki (wołane z logEvent) ---
-function getTiedPosts() { return (mailbox && mailbox.tied) || []; }
-
-function addTiedPost({ symbol, author, text, kind = 'result' }) {
-    if (!mailbox) return null;
-    if (!Array.isArray(mailbox.tied)) mailbox.tied = [];
-    const post = { id: mailbox.nextId++, at: typeof getMailClockMs === 'function' ? getMailClockMs() : 0, symbol, author, text, kind };
-    mailbox.tied.unshift(post);
-    if (mailbox.tied.length > TIED_POST_LIMIT) mailbox.tied.length = TIED_POST_LIMIT;
-    return post;
-}
-
-/** Zdarzenie spółki → post jej prezesa (tylko dobre wieści; reszta to nie chwalenie się). */
-function noteTiedEvent(message, category) {
-    if (category !== 'company' || !mailbox || typeof stocks === 'undefined' || !TIED_POSITIVE_NEWS.test(message)) return null;
-    const stock = stocks.find(s => s.ceo && typeof s.ceo === 'object' && message.includes(s.name));
-    if (!stock) return null;
-    const kind = /współprac|kooperac/i.test(message) ? 'coop' : 'result';
-    const lead = kind === 'coop' ? 'Cieszę się, że możemy to ogłosić:' : 'Z dumą dzielę się wiadomością:';
-    const text = `${lead} ${String(message).replace(/\p{Extended_Pictographic}|️/gu, '').replace(/\s+/g, ' ').trim()}`;
-    if (getTiedPosts().some(p => p.symbol === stock.symbol && p.text === text)) return null;
-    return addTiedPost({ symbol: stock.symbol, author: stock.ceo.name, text, kind });
-}
+const POCZTA_SENDERS = ['KNF', 'NBP', 'Dział obsługi klienta'];
 
 /** Kanał wiadomości: Poczta (newsy, ciekawostki, reklamy), TeamedUP! (szefostwo i współpracownicy), Tied (inwestorzy i spółki). Nic nie ginie — kanał liczy się przy wyświetlaniu. */
 function getMailChannel(message) {
     const s = String(message.sender);
     if (s === CORPORATION_SENDER) return 'teamedup';
+    if (POCZTA_SENDERS.includes(s)) return 'poczta'; // urzędy i obsługa klienta: Poczta ma znaczek w menu, Tied nie
     if (message.action) return 'poczta'; // przyciski wiadomości (pakiet, VIP) pokazuje tylko podgląd Poczty i TeamedUP!
     if (MAGAZINES[s] || message.isSpam) return 'poczta'; // reklamy zostają w Poczcie (Spam), Tied jest bez reklam
     if (s.startsWith('bot:') && typeof findRelationPerson === 'function' && findRelationPerson(s.slice(4))?.kind === 'colleague') return 'teamedup';
@@ -182,29 +159,6 @@ function renderFeriePage() {
 }
 
 function feriePickCountry(id) { selectInternetCountry(id); renderFeriePage(); }
-
-// --- Tied ---
-const initials = name => String(name || '?').split(/\s+/).map(w => w.charAt(0)).join('').slice(0, 2).toUpperCase();
-
-function renderTiedPage() {
-    const root = document.getElementById('net-tied-body');
-    if (!root) return;
-    const me = playerProfile || {}, position = CAREER_POSITIONS[getPositionIndex(me.positionId)]?.name || '';
-    const posts = getTiedPosts().map(p => {
-        const st = stocks.find(x => x.symbol === p.symbol);
-        return `<article class="net-post"><header><span class="net-avatar" aria-hidden="true">${escapeHtml(initials(p.author))}</span><div><strong>${escapeHtml(p.author || 'Prezes')}</strong>
-            <span class="text-sm text-muted">Prezes · ${escapeHtml(st?.name || p.symbol)} (${escapeHtml(p.symbol)}) · ${formatMailTime(p.at)}</span></div><span class="net-chip">${p.kind === 'coop' ? 'Współpraca' : 'Wyniki'}</span></header>
-            <p>${escapeHtml(p.text)}</p><footer>${st ? `<span class="text-sm">Kurs ${escapeHtml(p.symbol)}: <strong>${formatZl(st.price, 2)}</strong></span>` : '<span></span>'}<button class="btn-ghost btn-sm" onclick="openStockDetailsModal('${escapeHtml(p.symbol)}')">${uiIcon('rynek', 14)} Pokaż spółkę</button></footer></article>`;
-    }).join('');
-    const msgsAll = mailbox.messages.filter(m => getMailChannel(m) === 'tied'), unread = msgsAll.filter(m => !m.read).length;
-    const msgs = msgsAll.slice(0, 20).map(m => `<li class="net-msg ${m.read ? '' : 'unread'}"><span class="net-avatar sm" aria-hidden="true">${escapeHtml(initials(getMailSenderName(m.sender).replace(/^\P{L}+/u, '')))}</span><div><strong>${escapeHtml(getMailSenderName(m.sender).replace(/^\P{L}+/u, ''))}</strong>${m.read ? '' : ' <span class="net-chip">Nowa</span>'}
-        <div class="text-sm">${escapeHtml(m.subject)}</div><div class="text-sm text-muted">${escapeHtml(m.body.slice(0, 140))}</div>${m.read ? '' : `<button type="button" class="btn-ghost btn-sm" onclick="markMailRead(${m.id}); renderTiedPage()">Oznacz jako przeczytane</button>`}</div></li>`).join('');
-    root.innerHTML = `<div class="net-tied">
-        <aside class="net-tied-profile"><div class="net-card"><span class="net-avatar lg" aria-hidden="true">${escapeHtml(initials(me.name))}</span><h4>${escapeHtml(me.name || 'Ty')}</h4><span class="text-sm text-muted">${escapeHtml(position)}${playerFund?.name ? ' · ' + escapeHtml(playerFund.name) : ''}</span>
-            <dl class="net-kv"><div><dt>Konto prywatne</dt><dd>${formatZl(playerWallet?.cash || 0, 2)}</dd></div><div><dt>Zaufanie klientów</dt><dd>${(playerFund?.trust ?? 0).toFixed(0)} / 100</dd></div></dl></div></aside>
-        <section class="net-tied-feed"><div class="net-feed-tab">Najnowsze z rynku</div>${posts || '<p class="net-empty">Prezesi jeszcze nic nie opublikowali — posty pojawiają się przy dobrych wiadomościach ze spółek.</p>'}</section>
-        <aside class="net-tied-msgs"><div class="net-card"><h4>${uiIcon('poczta', 16)} Wiadomości <span class="net-count">${unread}</span></h4>${msgs ? `<ul class="list-plain">${msgs}</ul>` : '<p class="text-sm text-muted">Brak wiadomości od inwestorów i spółek.</p>'}</div></aside></div>`;
-}
 
 // --- Lombard (jedno źródło prawdy: renderPawnPanel z panelu funduszu + renderPawnShopInfo z ui.js) ---
 function renderLombardPage() {

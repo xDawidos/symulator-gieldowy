@@ -16,7 +16,7 @@
 
 const MAIL_LIMIT = 100;          // zapis gry: skrzynka ograniczona do 100 najnowszych (było 150)
 const MAIL_HARD_LIMIT = 150;     // także przypięte decyzje — zapis gry mieści się w localStorage
-const MAIL_FOLDERS = ['inbox', 'starred', 'PULS', 'FLESZ', 'OBSER', 'spam']; // 0.16.5: sprawy korporacji są w TeamedUP!
+const MAIL_FOLDERS = ['inbox', 'important', 'starred', 'PULS', 'FLESZ', 'OBSER', 'spam']; // 0.16.5: sprawy korporacji są w TeamedUP!
 const CORPORATION_SENDER = 'corporation';
 
 const MAGAZINES = {
@@ -422,6 +422,7 @@ function markAllMailRead(folder) {
 
 function getMailInFolder(folder) {
     if (folder === 'starred') return mailbox.messages.filter(m => m.starred);
+    if (folder === 'important') return mailbox.messages.filter(m => !m.isSpam && m.importance >= 3); // 0.17.3: ze wszystkich kanałów
     if (folder === 'inbox') return mailbox.messages.filter(m => getMailFolder(m) !== 'spam' && (typeof getMailChannel !== 'function' || getMailChannel(m) === 'poczta')); // 0.16.5: wiadomości od inwestorów i spółek czyta się w Tied
     return mailbox.messages.filter(m => getMailFolder(m) === folder);
 }
