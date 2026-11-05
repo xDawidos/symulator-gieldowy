@@ -2415,7 +2415,7 @@ function findRelationPerson(id) {
 const getCeoRelationKey = ceoId => `ceo:${ceoId}`;
 function findCeoRelationPerson(key) {
     if (!String(key).startsWith('ceo:')) return null;
-    const ceoId = key.slice(4), ceo = stocks.find(stock => stock.ceo?.id === ceoId)?.ceo;
+    const ceoId = key.slice(4), ceo = stocks.find(stock => stock.ceo?.id === ceoId)?.ceo || stocks.flatMap(stock => stock.deputies || []).find(deputy => deputy.id === ceoId);
     const name = ceo?.name || playerProfile?.contacts?.find(contact => contact.id === ceoId)?.name;
     return name ? { id: key, name, kind: 'ceo', entity: ceo || null } : null;
 }
@@ -2425,9 +2425,11 @@ function noteCeoContact(stock) {
     if (!playerProfile || !stock?.ceo?.name || (typeof isForeignShare === 'function' && isForeignShare(stock))) return;
     if (!stock.ceo.id) stock.ceo.id = newCeoId();
     const contacts = playerProfile.contacts || (playerProfile.contacts = []);
-    const entry = { id: stock.ceo.id, name: stock.ceo.name, symbol: stock.symbol, role: 'prezes' }, known = contacts.find(contact => contact.id === entry.id);
-    if (known) Object.assign(known, entry);
-    else contacts.push(entry);
+    for (const [person, role] of [[stock.ceo, 'prezes'], ...(stock.deputies || []).map(deputy => [deputy, 'wiceprezes'])]) { // 0.17.3 R3: także wiceprezesi
+        const entry = { id: person.id, name: person.name, symbol: stock.symbol, role }, known = contacts.find(contact => contact.id === entry.id);
+        if (known) Object.assign(known, entry);
+        else contacts.push(entry);
+    }
 }
 
 function getRelation(id) {

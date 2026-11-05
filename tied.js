@@ -66,10 +66,10 @@ function noteTiedEvent(message, category) {
 }
 
 /** Wpis kadrowy z replaceCeo: objęcie stanowiska albo odejście ze spółki. */
-function noteTiedStaffChange(stock, oldCeo, newCeo) {
+function noteTiedStaffChange(stock, oldCeo, newCeo, role = 'prezes') {
     if (!mailbox || !stock) return;
-    if (oldCeo?.name) addTiedPost({ kind: 'hr', hr: 'out', symbol: stock.symbol, author: oldCeo.name, ceoId: oldCeo.id });
-    if (newCeo?.name) addTiedPost({ kind: 'hr', hr: 'in', symbol: stock.symbol, author: newCeo.name, ceoId: newCeo.id });
+    if (oldCeo?.name) addTiedPost({ kind: 'hr', hr: 'out', role, symbol: stock.symbol, author: oldCeo.name, ceoId: oldCeo.id });
+    if (newCeo?.name) addTiedPost({ kind: 'hr', hr: 'in', role, symbol: stock.symbol, author: newCeo.name, ceoId: newCeo.id, ...(newCeo.formerDeputyTrait ? { promoted: true } : {}) });
 }
 
 // --- Znajomi i poziomy ---
@@ -82,7 +82,7 @@ function canSeeTiedPost(post) {
     if (!post.audience || post.audience === 'public') return true;
     const key = tiedPostKey(post);
     if (!key || !isTiedFriend(key)) return false;
-    return post.audience === 'friends' || getRelation(key) >= TIED_RULES.trustedAt;
+    return post.audience === 'friends' || post.gossip || getRelation(key) >= TIED_RULES.trustedAt; // Plotkarz: post dla zaufanych widzą znajomi
 }
 /** Decyzja o prośbie. R4: tu wejdzie charakter osoby. */
 function willAcceptTiedFriend(key) { return getRelation(key) >= TIED_RULES.friendAt; }
@@ -145,7 +145,8 @@ function grantTiedReaction(post) {
     if (!key) return;
     const tied = ensureTiedState();
     if (tied.reacted.q !== macro.quarter) tied.reacted = { q: macro.quarter, gains: {} };
-    if ((tied.reacted.gains[key] || 0) >= TIED_RULES.reactionCap) return;
+    const cap = TIED_RULES.reactionCap + (stocks.some(s => getDeputies(s).some(deputy => ceoKey(deputy.id) === key && deputy.trait === 'towarzyski')) ? 1 : 0);
+    if ((tied.reacted.gains[key] || 0) >= cap) return;
     tied.reacted.gains[key] = (tied.reacted.gains[key] || 0) + 1;
     changeRelation(key, 1, 'reakcja w Tied');
 }
@@ -193,8 +194,10 @@ function getTiedPerson(key) {
     if (person.kind !== 'ceo') return { key, name: person.name, kind: person.kind, role: person.kind === 'investor' ? 'Inwestor' : 'Współpracownik', stock: null };
     const ceoId = key.slice(4), stock = stocks.find(s => s.ceo?.id === ceoId);
     if (stock) return { key, name: person.name, kind: 'ceo', role: 'Prezes', stock, tenure: Math.floor((stock.ceo.tenure || 0) / 4) };
+    const employer = stocks.find(s => getDeputies(s).some(deputy => deputy.id === ceoId));
+    if (employer) return { key, name: person.name, kind: 'deputy', role: 'Wiceprezes', stock: employer, tenure: Math.floor((macro.quarter - getDeputies(employer).find(deputy => deputy.id === ceoId).hiredQ) / 4) };
     const contact = playerProfile?.contacts?.find(c => c.id === ceoId);
-    return { key, name: person.name, kind: 'ceo', role: 'Dawniej prezes', stock: stocks.find(s => s.symbol === contact?.symbol) || null, former: true };
+    return { key, name: person.name, kind: contact?.role === 'wiceprezes' ? 'deputy' : 'ceo', role: `Dawniej ${contact?.role || 'prezes'}`, stock: stocks.find(s => s.symbol === contact?.symbol) || null, former: true };
 }
 
 /** Lista kontaktów: prezesi spółek kupionych przez gracza oraz inwestorzy, z którymi coś go łączy. */
@@ -227,8 +230,8 @@ function renderTiedStaffPost(post) {
     const person = key && findRelationPerson(key) ? tiedPersonLink(key, post.author) : escapeHtml(post.author);
     const company = stock ? tiedCompanyLink(stock) : escapeHtml(post.symbol);
     return `<article class="net-post tied-hr">${uiIcon(joined ? 'zarzad' : 'wyjscie', 20)}<div><span class="tied-kicker">${joined ? 'Objęcie stanowiska' : 'Odejście ze spółki'}</span>
-        ${person} ${joined ? `obejmuje stanowisko prezesa spółki ${company}` : `odchodzi ze spółki ${company} (prezes)`}
-        <div class="tied-meta">${formatMailTime(post.at)}</div></div></article>`;
+        ${person} ${joined ? `obejmuje stanowisko ${post.role === 'wiceprezes' ? 'wiceprezesa' : 'prezesa'} spółki ${company}` : `odchodzi ze spółki ${company} (${post.role || 'prezes'})`}
+        <div class="tied-meta">${post.promoted ? 'wcześniej wiceprezes tej spółki · ' : ''}${formatMailTime(post.at)}</div></div></article>`;
 }
 
 function renderTiedPost(post) {
@@ -301,8 +304,8 @@ function renderTiedCompany(symbol) {
     const stock = stocks.find(s => s.symbol === symbol);
     if (!stock) return `<section class="tied-view">${tiedBackButton()}<p class="net-empty">Tej spółki nie ma już na giełdzie.</p></section>`;
     const follow = companyFollowKey(symbol), posts = getTiedPosts().filter(post => post.symbol === symbol && post.kind !== 'hr');
-    const ceoId = stock.ceo?.id, key = ceoId ? ceoKey(ceoId) : null;
-    const board = stock.ceo?.name ? `<h4 class="tied-section">Zarząd</h4><ul class="tied-board"><li><span class="net-avatar sm" aria-hidden="true">${escapeHtml(initials(stock.ceo.name))}</span>${key ? `${tiedPersonLink(key, stock.ceo.name)}${renderTiedBadges(key)}` : escapeHtml(stock.ceo.name)}<span class="tied-meta">Prezes</span></li></ul>` : '';
+    const row = (person, role) => { const id = person.id ? ceoKey(person.id) : null; return `<li><span class="net-avatar sm" aria-hidden="true">${escapeHtml(initials(person.name))}</span>${id ? `${tiedPersonLink(id, person.name)}${renderTiedBadges(id)}` : escapeHtml(person.name)}<span class="tied-meta">${role}</span></li>`; };
+    const board = stock.ceo?.name ? `<h4 class="tied-section">Zarząd</h4><ul class="tied-board">${row(stock.ceo, 'Prezes')}${getDeputies(stock).map(deputy => row(deputy, 'Wiceprezes')).join('')}</ul>` : '';
     return `<section class="tied-view">${tiedBackButton()}<article class="tied-profile">
         <div class="tied-profile-head"><span class="net-avatar lg" aria-hidden="true">${escapeHtml(initials(stock.name))}</span><div><h4>${escapeHtml(stock.name)}</h4>
             <span class="tied-meta">Konto spółki · ${escapeHtml(getMainSector(stock) || '')} · ${escapeHtml(exchanges[stock.exchange]?.name || stock.exchange)}</span>
@@ -339,7 +342,7 @@ function renderTiedContacts() {
     const invites = tied.invites.map(getTiedPerson).filter(Boolean).map(person => `<div class="tied-request"><div class="tied-request-who"><span class="net-avatar sm" aria-hidden="true">${escapeHtml(initials(person.name))}</span><span>${tiedPersonLink(person.key, person.name)}<br><span class="tied-meta">${person.role}${person.stock ? ` · ${escapeHtml(person.stock.name)}` : ''}</span></span></div>
         <div class="btn-row"><button class="btn-primary btn-sm" onclick="tiedAcceptInvite('${escapeHtml(person.key)}')">Przyjmij</button><button class="btn-ghost btn-sm" onclick="tiedDeclineInvite('${escapeHtml(person.key)}')">Odrzuć</button></div></div>`).join('');
     const all = getTiedContacts(), list = all.filter(person => tiedView.filter === 'all' || person.kind === tiedView.filter);
-    const filter = [['all', 'Wszyscy'], ['ceo', 'Prezesi'], ['investor', 'Inwestorzy']].map(([id, label]) => `<button aria-pressed="${tiedView.filter === id}" onclick="tiedSetFilter('${id}')">${label}</button>`).join('');
+    const filter = [['all', 'Wszyscy'], ['ceo', 'Prezesi'], ['deputy', 'Wiceprezesi'], ['investor', 'Inwestorzy']].map(([id, label]) => `<button aria-pressed="${tiedView.filter === id}" onclick="tiedSetFilter('${id}')">${label}</button>`).join('');
     const rows = list.map(person => `<li><button class="tied-contact" onclick="tiedOpenPerson('${escapeHtml(person.key)}')"><span class="net-avatar sm" aria-hidden="true">${escapeHtml(initials(person.name))}</span><span><strong>${escapeHtml(person.name)}</strong><span class="tied-meta">${person.role}${person.stock ? ` · ${escapeHtml(person.stock.name)}` : ''}</span><span class="tied-level">${getTiedLevel(person.key)}</span></span></button></li>`).join('');
     return `<section class="tied-panel">${invites ? `<h4 class="tied-section mt-0">Prośby do Ciebie (${tied.invites.length})</h4>${invites}` : ''}
         <h4 class="tied-section${invites ? '' : ' mt-0'}">Kontakty (${all.length})</h4>
@@ -461,11 +464,12 @@ const TIED_PLAN_TYPES = Object.keys(TIED_HINTS);
 /** Post-zapowiedź: bez liczb i dat, styl zdradza autora. */
 function postTiedHint(stock, type, sectorName = null) {
     if (!stock.ceo?.id) return null;
-    const key = ceoKey(stock.ceo.id), character = getPersonCharacterData(key);
+    const quiet = getDeputies(stock).find(deputy => deputy.trait === 'milczek'), gossip = getDeputies(stock).find(deputy => deputy.trait === 'plotkarz');
+    const author = (type && stock.plannedMove?.real && quiet) || gossip || stock.ceo, key = ceoKey(author.id), character = getPersonCharacterData(key); // Milczek mówi tylko o planach prawdziwych
     if (Math.random() >= character.hint) return null;
     const audience = Math.random() < COMPANY_PLAN_RULES.audienceTrusted ? 'trusted' : 'friends';
     const text = getRandomElement(TIED_HINTS[type][audience]).replace('{sector}', sectorName || getMainSector(stock) || 'podobnego');
-    return addTiedPost({ symbol: stock.symbol, author: stock.ceo.name, ceoId: stock.ceo.id, text: `${text} ${getRandomElement(character.closing)}`, kind: 'hint', audience, q: macro.quarter });
+    return addTiedPost({ symbol: stock.symbol, author: author.name, ceoId: author.id, text: `${text} ${getRandomElement(character.closing)}`, kind: 'hint', audience, q: macro.quarter, ...(author !== stock.ceo ? { role: 'Wiceprezes' } : {}), ...(gossip && author === gossip ? { gossip: true } : {}) });
 }
 
 /** Plan spółki: decyzja zapada teraz, wykonanie po 1–2 kwartałach. false, gdy spółka ma już plan: wtedy kod wykonuje decyzję od razu, więc częstość się nie zmienia. */
@@ -510,11 +514,13 @@ function processCompanyPlansQuarterly() {
 // --- Posty bez zapowiedzi: styl prezesów i opinie inwestorów ---
 function processTiedChatterQuarterly() {
     if (!mailbox) return;
-    const authors = stocks.filter(s => s.ceo?.id && !s.isBankrupt && !s.assetType);
+    const authors = stocks.filter(s => s.ceo?.id && !s.isBankrupt && !s.assetType).flatMap(s => [{ stock: s, person: s.ceo }, ...getDeputies(s).flatMap(deputy => Array.from({ length: Math.round((DEPUTY_TRAITS[deputy.trait]?.posts ?? 1) * 2) }, () => ({ stock: s, person: deputy, role: 'Wiceprezes' })))]);
     for (let i = 0; i < COMPANY_PLAN_RULES.flavorPosts && authors.length; i++) {
-        const stock = getRandomElement(authors);
-        addTiedPost({ symbol: stock.symbol, author: stock.ceo.name, ceoId: stock.ceo.id, text: getRandomElement(getPersonCharacterData(ceoKey(stock.ceo.id)).flavor), kind: 'note' });
+        const { stock, person, role } = getRandomElement(authors);
+        addTiedPost({ symbol: stock.symbol, author: person.name, ceoId: person.id, text: getRandomElement(getPersonCharacterData(ceoKey(person.id)).flavor), kind: 'note', ...(role ? { role } : {}) });
     }
+    const speaker = stocks.find(s => hasDeputyTrait(s, 'rzecznik') && Math.random() < 0.15); // Rzecznik: częstsze posty konta spółki
+    if (speaker) addTiedPost({ symbol: speaker.symbol, text: pickByHash(['Pracujemy nad kolejnymi projektami. Szczegóły wkrótce.', 'Dziękujemy klientom za kolejny dobry kwartał.', 'Spotkajmy się na najbliższych targach branżowych.'], `${speaker.symbol}:${macro.quarter}`), kind: 'note' });
     for (const ai of aiCompetitors) { // wypchnięcie akcji po własnej reklamie
         if (ai.tiedPump && ai.tiedPump.q < macro.quarter) {
             const shares = Math.floor((ai.portfolio?.[ai.tiedPump.symbol]?.shares || 0) * COMPANY_PLAN_RULES.pumpShare);
@@ -564,4 +570,82 @@ function resolveTiedTips(stock) {
     playerCash -= fine; governmentTreasury += fine;
     if (typeof recordPayment === 'function') recordPayment('player-fund', 'external:knf', fine, `Kara KNF: ${stock.name}`);
     addMail({ sender: 'KNF', subject: `Kara za transakcje na akcjach ${stock.name}`, body: `Ponownie stwierdziliśmy zakup akcji tuż przed decyzją zarządu, którą znałeś z zamkniętego kręgu. Kara: pięć procent gotówki funduszu, czyli ${formatZl(fine, 0)}.`, importance: 3, symbol: stock.symbol });
+}
+
+// =================================================================================
+// 0.17.3 R3: wiceprezesi (stock.deputies). Od giełdy Złotej i progu kapitalizacji, 1–3 w spółce.
+// =================================================================================
+const DEPUTY_RULES = { minLevel: 3, termQuarters: [12, 24], promoteChance: 0.7, heirChance: 0.9, leaveChance: 0.15, successorDelay: [1, 2], capTiers: [1, 2.5] };
+// Cecha działa przez parametr gry (patrz wywołania getDeputyFactor i hasDeputyTrait); w karcie spółki się nie pokazuje.
+const DEPUTY_TRAITS = {
+    gadula: { name: 'Gaduła', posts: 2 }, milczek: { name: 'Milczek', posts: 0.5 }, plotkarz: { name: 'Plotkarz' }, towarzyski: { name: 'Towarzyski' }, rzecznik: { name: 'Rzecznik' },
+    skarbnik: { name: 'Skarbnik', volatility: 0.98 }, inzynier: { name: 'Inżynier', research: 1.05 }, sprzedawca: { name: 'Sprzedawca', revenue: 1.005 }, kontroler: { name: 'Kontroler', costs: 0.995 },
+    prawnik: { name: 'Prawnik', resistance: 0.95 }, kadrowy: { name: 'Kadrowy', union: 0.8 }, nastepca: { name: 'Następca', heir: true }, aspirant: { name: 'Aspirant', heir: true },
+    lojalny: { name: 'Lojalny' }, wyga: { name: 'Stary wyga' }
+};
+const getDeputies = stock => stock?.deputies || [];
+const hasDeputyTrait = (stock, id) => getDeputies(stock).some(deputy => deputy.trait === id);
+/** Iloczyn efektu cech wiceprezesów spółki (1, gdy ich nie ma). */
+function getDeputyFactor(stock, field) {
+    let factor = 1;
+    for (const deputy of getDeputies(stock)) factor *= DEPUTY_TRAITS[deputy.trait]?.[field] ?? 1;
+    return factor;
+}
+
+function getDeputyCapThreshold() {
+    const caps = stocks.filter(s => s.exchange === 'GOLD' && !s.isBankrupt && !s.assetType).map(getMarketCapValue).sort((a, b) => a - b);
+    return caps.length ? caps[caps.length >> 1] : Infinity;
+}
+function getDeputyTarget(stock, threshold) {
+    if ((exchanges[stock.exchange]?.level ?? 0) < DEPUTY_RULES.minLevel || stock.assetType || stock.isBankrupt) return 0;
+    const cap = getMarketCapValue(stock);
+    if (!(cap >= threshold)) return 0;
+    const tier = 1 + DEPUTY_RULES.capTiers.filter(mult => cap >= threshold * mult * 2).length; // rośnie z kapitalizacją
+    return Math.min(3, tier + (descriptionHash(`dep:${stock.symbol}`) % 2 ? 0 : tier > 1 ? 0 : 1));
+}
+function createDeputy(stock) {
+    const candidate = generateCeoCandidate(stock);
+    const deputy = { id: candidate.id, name: candidate.name, age: candidate.age, trait: getRandomElement(Object.keys(DEPUTY_TRAITS)), traits: (candidate.traits || []).slice(0, 1), hiredQ: macro.quarter, untilQ: macro.quarter + getRandomIntInRange(...DEPUTY_RULES.termQuarters) };
+    (stock.deputies ||= []).push(deputy);
+    noteTiedStaffChange(stock, null, deputy, 'wiceprezes');
+    return deputy;
+}
+function removeDeputy(stock, deputy, announce = true) {
+    stock.deputies = getDeputies(stock).filter(item => item !== deputy);
+    if (!stock.deputies.length) delete stock.deputies;
+    if (announce) noteTiedStaffChange(stock, deputy, null, 'wiceprezes');
+}
+/** Co kwartał: koniec kadencji, nowi (najwyżej 1 na spółkę na kwartał). Spółka pod progiem nie dostaje nowych, obecni zostają do końca kadencji. */
+function processDeputiesQuarterly() {
+    const threshold = getDeputyCapThreshold(), quarter = macro.quarter;
+    for (const stock of stocks) {
+        for (const deputy of [...getDeputies(stock)]) if (deputy.untilQ <= quarter && deputy.trait !== 'lojalny') removeDeputy(stock, deputy);
+        if (getDeputies(stock).length < getDeputyTarget(stock, threshold) && quarter >= (stock.deputyWaitQ ?? 0)) createDeputy(stock);
+    }
+}
+
+/** Następca przy replaceCeo bez kandydata: wiceprezes albo null (wtedy nowa osoba z zewnątrz). */
+function pickDeputySuccessor(stock) {
+    const list = getDeputies(stock);
+    if (!list.length) return null;
+    const heirs = list.filter(deputy => DEPUTY_TRAITS[deputy.trait]?.heir);
+    if (Math.random() >= (heirs.length ? DEPUTY_RULES.heirChance : DEPUTY_RULES.promoteChance)) return null;
+    return getRandomElement(heirs.length ? heirs : list);
+}
+/** Awans: relacja zostaje przy id, cecha wiceprezesa to już tylko historia, prezes dostaje zwykły zestaw z zachowaniem cechy z ceoTraits. */
+function promoteDeputy(stock, deputy) {
+    removeDeputy(stock, deputy, false);
+    const kept = deputy.traits || [], ceo = { id: deputy.id, name: deputy.name, age: deputy.age, traits: [] };
+    assignCeoTraits(ceo);
+    ceo.traits = [...kept, ...ceo.traits.filter(trait => !kept.some(old => old.id === trait.id))];
+    ceo.formerDeputyTrait = deputy.trait;
+    if (deputy.trait === 'wyga') ceo.keepTenure = Math.max(0, macro.quarter - deputy.hiredQ);
+    stock.deputyWaitQ = macro.quarter + getRandomIntInRange(...DEPUTY_RULES.successorDelay);
+    return ceo;
+}
+/** Po zmianie prezesa: pominięty aspirant odchodzi, reszta odchodzi z małą szansą; lojalny zostaje. */
+function settleDeputiesAfterCeoChange(stock) {
+    for (const deputy of [...getDeputies(stock)]) {
+        if (deputy.trait === 'aspirant' || (deputy.trait !== 'lojalny' && Math.random() < DEPUTY_RULES.leaveChance)) removeDeputy(stock, deputy);
+    }
 }

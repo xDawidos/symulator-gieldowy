@@ -386,7 +386,7 @@ function ensureCeoIds() {
     const used = [
         ...Object.keys(botRelations?.values || {}).filter(key => key.startsWith('ceo:')).map(key => key.slice(4)),
         ...(playerProfile?.contacts || []).map(contact => contact.id),
-        ...stocks.map(stock => stock.ceo?.id)
+        ...stocks.flatMap(stock => [stock.ceo?.id, ...(stock.deputies || []).map(deputy => deputy.id)])
     ];
     nextCeoId = Math.max(nextCeoId, ...used.map(id => numberOf(id) + 1));
     const seen = new Set();
@@ -438,10 +438,14 @@ function generateCEO(stock, isReplacement = false) {
 
 function replaceCeo(stock, newCeo = null) {
     const oldCeo = stock.ceo; // Zapisujemy starego CEO do późniejszej analizy
+    const deputy = !newCeo && typeof pickDeputySuccessor === 'function' ? pickDeputySuccessor(stock) : null; // 0.17.3 R3: awans wiceprezesa
+    if (deputy) newCeo = promoteDeputy(stock, deputy);
+    else if (newCeo?.id && stock.deputies?.some(item => item.id === newCeo.id)) { const chosen = stock.deputies.find(item => item.id === newCeo.id); newCeo = promoteDeputy(stock, chosen); } // wiceprezes wybrany na walnym
 
     // Jeśli przekazano konkretnego kandydata (od gracza lub AI), powołaj go.
     if (newCeo) {
-        newCeo.tenure = 0; // Nowy prezes zaczyna z zerowym stażem w tej firmie
+        newCeo.tenure = newCeo.keepTenure || 0; // Nowy prezes zaczyna z zerowym stażem w tej firmie (Stary wyga zachowuje staż ze spółki)
+        delete newCeo.keepTenure;
         if (!newCeo.id) newCeo.id = newCeoId(); // podkupiony prezes zachowuje id, a z nim relację
         stock.ceo = newCeo;
     }
@@ -451,6 +455,7 @@ function replaceCeo(stock, newCeo = null) {
     }
 
     if (typeof noteTiedStaffChange === 'function') noteTiedStaffChange(stock, oldCeo, stock.ceo); // 0.17.3 R1: wpis kadrowy
+    if (typeof settleDeputiesAfterCeoChange === 'function') settleDeputiesAfterCeoChange(stock); // 0.17.3 R3
 
     // Sprawdź, czy nowy CEO ma cechę "Midas"
     if (stock.ceo && stock.ceo.traits && stock.ceo.traits.some(t => t.id === 'midas')) {
@@ -3232,7 +3237,7 @@ function computeQuarterResults(stock) {
     const quarterFactor = (typeof getStrikeRevenueFactor === 'function' ? getStrikeRevenueFactor(stock) : 1) * (typeof getSocietyRevenueFactor === 'function' ? getSocietyRevenueFactor(stock) : 1) * consumeNicheRevenueFactor(stock) * getCooperationShockFactor(stock) * (typeof getCrisisRevenueFactor === 'function' ? getCrisisRevenueFactor(stock) : 1); // T3: sezon TV/Rozrywka; T5: strajk kooperanta (połowa szoku)
     const commodityAdj = typeof getCommodityResultAdj === 'function' ? getCommodityResultAdj(stock) : { revenueFactor: 1, marginAdj: 0 }; // 0.17 S2: produkt i wsad względem Ś8
     const baseRevenue = fundamentals.revenue;
-    const revenue = baseRevenue * quarterFactor * commodityAdj.revenueFactor * (typeof getDefenseRevenueFactor === 'function' ? getDefenseRevenueFactor(stock, baseRevenue) : 1); // 0.17 S6: zamówienia obronne
+    const revenue = baseRevenue * quarterFactor * commodityAdj.revenueFactor * (typeof getDefenseRevenueFactor === 'function' ? getDefenseRevenueFactor(stock, baseRevenue) : 1) * (stock.deputies ? getDeputyFactor(stock, 'revenue') : 1); // 0.17 S6: zamówienia obronne; 0.17.3 R3: Sprzedawca
     const lostRevenue = baseRevenue - revenue; // dźwignia operacyjna: 40% kosztów jest sztywnych w krótkim terminie
     const inflationSqueeze = Math.max(0, inflation - 0.04) * 0.5; // wysoka inflacja zjada marże
     // 0.13: marża = marża_0.12 + udział_kosztu_pracy × (1 − indeks); neutralnie (indeks 1,0) bez zmian.
@@ -3245,7 +3250,8 @@ function computeQuarterResults(stock) {
     const competitiveErosion = excessMargin * 0.35;
     const stabilizedBaseMargin = baseMargin - competitiveErosion;
     // 0.13: marża = marża_bazowa + udział_kosztu_pracy × (1 − indeks); neutralnie (indeks 1,0) bez zmian.
-    const margin = Math.max(-0.4, Math.min(0.6, stabilizedBaseMargin + laborAdj + commodityAdj.marginAdj));
+    const controller = stock.deputies ? (1 - getDeputyFactor(stock, 'costs')) * (1 - stabilizedBaseMargin) : 0; // 0.17.3 R3: Kontroler, koszty −0,5%
+    const margin = Math.max(-0.4, Math.min(0.6, stabilizedBaseMargin + laborAdj + commodityAdj.marginAdj + controller));
     const fixedExpenses = Math.max(0, Number(stock.fixedExpenses) || 0);
 
     // Działające inwestycje: kwartalny zysk lub strata (investments.js).
@@ -6333,7 +6339,7 @@ function updateResearchProgress(deltaTime) {
                 }
 
                 // Dodaj punkty postępu
-                stock.research.progress += researchPoints * baseSpeedMultiplier * ceoMultiplier * phaseMultiplier;
+                stock.research.progress += researchPoints * baseSpeedMultiplier * ceoMultiplier * phaseMultiplier * (stock.deputies ? getDeputyFactor(stock, 'research') : 1); // 0.17.3 R3: Inżynier
 
                 // Sprawdź, czy badanie zostało ukończone
                 const currentTechCost = technologies[stock.research.currentTech]?.cost;
@@ -6721,11 +6727,8 @@ function initiateCeoChange(symbol) {
     }
 
     // Generujemy 3 kandydatów
-    const candidates = [
-        generateCeoCandidate(stock),
-        generateCeoCandidate(stock),
-        generateCeoCandidate(stock)
-    ];
+    const deputies = (stock.deputies || []).slice(0, 2); // 0.17.3 R3: wiceprezesi na liście kandydatów
+    const candidates = [...deputies, ...Array.from({ length: 3 - deputies.length }, () => generateCeoCandidate(stock))];
     
     // Obliczamy szansę na sukces
     const baseChance = 0.50;
@@ -7122,6 +7125,7 @@ function changeReputation(entityId, stockSymbol, change) {
 function applyPriceEffect(stockSymbol, percentageChange, eventType, eventCategory = 'company') {
     const stock = stocks.find(s => s.symbol === stockSymbol);
     if (!stock) return;
+    if (percentageChange < 0 && eventCategory === 'company' && stock.deputies) percentageChange *= getDeputyFactor(stock, 'resistance'); // 0.17.3 R3: Prawnik
 
     // ===>>> NOWY BLOK: TARCZA PR (PR SHIELD CHECK) <<<===
     if (percentageChange < 0 && stock.prShieldExpiry && Date.now() < stock.prShieldExpiry) {
@@ -10847,7 +10851,7 @@ function getUnionChance(stock) {
     const wf = stock.workforce;
     const policy = LABOR_POLICIES[wf.policy] || LABOR_POLICIES.standard;
     const strike = stock.ceo?.traits?.some(t => t.id === 'greve_generale') ? 2 : 1; // 0.16.3: Grève générale — silniejsze związki
-    return UNION_BASE_CHANCE * Math.max(0.2, (50 - wf.satisfaction) / 10) * policy.union * RIGHTS_UNION_MULT[getRightsLevel()] * (wf.employees >= 200 ? 1 : 0.3) * strike;
+    return UNION_BASE_CHANCE * Math.max(0.2, (50 - wf.satisfaction) / 10) * policy.union * RIGHTS_UNION_MULT[getRightsLevel()] * (wf.employees >= 200 ? 1 : 0.3) * strike * (stock.deputies ? getDeputyFactor(stock, 'union') : 1); // 0.17.3 R3: Kadrowy
 }
 
 function processUnionFormation(companies) {

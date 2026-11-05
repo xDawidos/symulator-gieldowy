@@ -15969,13 +15969,13 @@ group('0.17.3 R1 Tied: kontakty, reakcje, znajomi', () => {
         assertEq(getUnreadMailCount('important'), 1, 'licznik');
         assert(MAIL_FOLDER_LABELS.important.includes('Ważne'), 'etykieta');
     });
-    test('w HTML Tied nie ma nazw charakterów ani elementów z R2–R5', () => {
+    test('w HTML Tied nie ma nazw charakterów', () => {
         start(); buyStock('AAA', 10); post(); post({ audience: 'friends' });
         const pages = [];
         for (const side of ['me', 'msgs', 'people']) { tiedView.side = side; pages.push(html()); }
         tiedOpenPerson(key()); pages.push(html());
         const all = pages.join(' ');
-        for (const word of ['Rachmistrz', 'Mentor', 'Lojalista', 'Zachowawczy', 'Sceptyk', 'Blefiarz', 'Manipulator', 'Wiceprezes', 'VIP', 'Opublikuj', 'Wpis na ten kwartał']) assert(!all.includes(word), `bez: ${word}`);
+        for (const word of ['Rachmistrz', 'Mentor', 'Lojalista', 'Zachowawczy', 'Sceptyk', 'Blefiarz', 'Manipulator']) assert(!all.includes(word), `bez: ${word}`);
     });
     test('karta spółki ma link do profilu w Tied; stary post bez ceoId nadal się wyświetla', () => {
         start();
@@ -16060,5 +16060,89 @@ group('0.17.3 R2 Zapowiedzi, opinie, KNF', () => {
             processTiedChatterQuarterly();
             assert(!ai.tiedPump && ai.portfolio.AAA.shares < 100, 'sprzedał część');
         } finally { aiCompetitors.splice(0, aiCompetitors.length, ...bots); ai.portfolio = {}; delete ai.tiedPump; }
+    });
+});
+
+group('0.17.3 R3 Wiceprezesi', () => {
+    const start = () => {
+        const list = [makeCompany('AAA'), makeCompany('BBB'), makeCompany('CCC')];
+        list.forEach(company => { company.insiderShares = 0; company.reputation = { player: 0 }; company.exchange = 'GOLD'; company.price = 500; });
+        list[2].exchange = 'SILVER';
+        resetWorld(list); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        playerCash = 5_000_000; botRelations = createBotRelations(); delete oversight.records.player; mailbox = createMailbox(); macro.quarter = 10;
+        for (const stock of stocks) { stock.ceo = null; generateCEO(stock); }
+    };
+    const withRandom = (v, fn) => { const r = Math.random; Math.random = () => v; try { return fn(); } finally { Math.random = r; } };
+
+    test('warunek: giełda Złota i próg kapitalizacji; poniżej progu nowi nie przychodzą, obecni zostają do końca kadencji', () => {
+        start();
+        processDeputiesQuarterly();
+        assert(getDeputies(stocks[0]).length === 1 && getDeputies(stocks[1]).length === 1, 'spółki ze Złotej');
+        assertEq(getDeputies(stocks[2]).length, 0, 'Srebrna bez wiceprezesa');
+        const deputy = getDeputies(stocks[0])[0];
+        assert(deputy.id && DEPUTY_TRAITS[deputy.trait] && deputy.traits.length <= 1, 'jedna cecha wiceprezesa, najwyżej 1 z ceoTraits');
+        assert(getTiedPosts().some(p => p.kind === 'hr' && p.role === 'wiceprezes' && p.author === deputy.name), 'wpis kadrowy');
+        stocks[0].exchange = 'SILVER'; deputy.trait = 'gadula';
+        processDeputiesQuarterly();
+        assert(getDeputies(stocks[0]).includes(deputy), 'zostaje pod progiem');
+        macro.quarter = deputy.untilQ;
+        processDeputiesQuarterly();
+        assert(!getDeputies(stocks[0]).includes(deputy), 'odchodzi po kadencji');
+        assertEq(getDeputies(stocks[0]).length, 0, 'bez następcy pod progiem');
+    });
+    test('awans: relacja zostaje przy id, nowy prezes ma zwykły zestaw cech, następny wiceprezes z opóźnieniem', () => {
+        start();
+        processDeputiesQuarterly();
+        const s = stocks[0], deputy = getDeputies(s)[0], key = getCeoRelationKey(deputy.id);
+        deputy.trait = 'wyga'; deputy.hiredQ = 2; deputy.traits = [{ id: 'wyjadacz', name: 'Wyjadacz' }];
+        playerProfile.contacts = [{ id: deputy.id, name: deputy.name, symbol: 'AAA', role: 'wiceprezes' }];
+        changeRelation(key, 30, 'test');
+        withRandom(0.1, () => replaceCeo(s));
+        assertEq(s.ceo.id, deputy.id, 'to samo id');
+        assertEq(getRelation(key), 30, 'relacja zostaje');
+        assert(s.ceo.traits.some(t => t.id === 'wyjadacz'), 'cecha z ceoTraits zostaje');
+        assertEq(s.ceo.formerDeputyTrait, 'wyga', 'historia');
+        assertEq(s.ceo.tenure, 8, 'Stary wyga zachowuje staż');
+        assertEq(getDeputies(s).length, 0, 'zszedł z listy');
+        assert(s.deputyWaitQ > macro.quarter, 'opóźnienie następcy');
+        assert(getTiedPosts().find(p => p.hr === 'in').promoted, 'wpis: wcześniej wiceprezes');
+    });
+    test('bez wiceprezesa i przy szansie poza progiem przychodzi ktoś z zewnątrz; pominięty aspirant odchodzi, lojalny zostaje', () => {
+        start();
+        processDeputiesQuarterly();
+        const s = stocks[0], a = getDeputies(s)[0], loyal = { ...a, id: 'c777', trait: 'lojalny', name: 'Ewa Stała' };
+        a.trait = 'aspirant'; s.deputies.push(loyal);
+        withRandom(0.95, () => replaceCeo(s));
+        assert(s.ceo.id !== a.id && s.ceo.id !== loyal.id, 'osoba z zewnątrz');
+        assert(!getDeputies(s).includes(a), 'aspirant odszedł');
+        assert(getDeputies(s).includes(loyal), 'lojalny został');
+    });
+    test('cechy działają przez parametry gry: zmienność, przychód, koszty, odporność, związek, limit reakcji, plotkarz', () => {
+        start();
+        const s = stocks[0], d = (trait, id = 'c500') => ({ id, name: 'Jan Test', trait, traits: [], hiredQ: 0, untilQ: 99 });
+        const check = (trait, field, value) => { s.deputies = [d(trait)]; assertNear(getDeputyFactor(s, field), value, trait, 1e-12); };
+        check('skarbnik', 'volatility', 0.98); check('inzynier', 'research', 1.05); check('sprzedawca', 'revenue', 1.005); check('kontroler', 'costs', 0.995); check('prawnik', 'resistance', 0.95); check('kadrowy', 'union', 0.8);
+        s.deputies = [];
+        delete s.deputies;
+        assertEq(getDeputyFactor(s, 'revenue'), 1, 'bez wiceprezesa 1');
+        assertEq(Object.keys(DEPUTY_TRAITS).length, 15, '15 cech');
+        s.deputies = [d('towarzyski')];
+        const key = getCeoRelationKey('c500'), posts = [0, 1, 2, 3].map(() => addTiedPost({ symbol: 'AAA', author: 'Jan Test', ceoId: 'c500', text: 'x', role: 'Wiceprezes' }));
+        posts.forEach(p => likeTiedPost(p.id));
+        assertEq(getRelation(key), 3, 'towarzyski: limit +3');
+        s.deputies = [d('plotkarz')]; addTiedFriend(key); botRelations.values[key] = 25;
+        assert(canSeeTiedPost({ audience: 'trusted', ceoId: 'c500', gossip: true }), 'plotkarz: znajomy widzi');
+        assert(!canSeeTiedPost({ audience: 'trusted', ceoId: 'c500' }), 'zwykły post dla zaufanych nie');
+    });
+    test('kontakt obejmuje wiceprezesów; karta spółki i profil firmy pokazują ich bez cech', () => {
+        start();
+        processDeputiesQuarterly();
+        const s = stocks[0], deputy = getDeputies(s)[0];
+        noteCeoContact(s);
+        assert(playerProfile.contacts.some(c => c.id === deputy.id && c.role === 'wiceprezes'), 'kontakt');
+        assertEq(getTiedPerson(getCeoRelationKey(deputy.id)).role, 'Wiceprezes', 'rola');
+        const card = renderCompanyCardOverview(s);
+        assert(card.includes('Wiceprezesi') && card.includes(deputy.name) && !card.includes(DEPUTY_TRAITS[deputy.trait].name), 'karta bez cechy');
+        assert(renderTiedCompany('AAA').includes(deputy.name), 'profil firmy');
     });
 });
