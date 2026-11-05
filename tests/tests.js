@@ -16381,3 +16381,39 @@ group('0.17.3 R5 Obietnice botów', () => {
         assertEq(saved.playerProfile.tied.promises.length, 1, 'w zapisie');
     });
 });
+
+group('0.17.3 R6 Akademia i zapis', () => {
+    test('3 hasła Akademii: tekst, quiz, przykład; bez liczb o charakterach', () => {
+        resetWorld([makeCompany('AAA')]); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' }); mailbox = createMailbox();
+        for (const id of ['jakCzytacTied', 'relacjeKontakty', 'obietniceInwestorow']) {
+            const entry = ACADEMY_ENTRIES[id];
+            assert(entry?.text.length > 100 && entry.quiz.length >= 3 && entry.quiz.every(q => q.a[q.c]), `hasło ${id}`);
+            assert(typeof entry.example() === 'string' && !/undefined|NaN/.test(entry.example()), `przykład ${id}`);
+            for (const word of ['Rachmistrz', 'Blefiarz', 'Manipulator']) assert(!entry.text.includes(word), `bez nazwy: ${word}`);
+        }
+        assert(!/\d+%/.test(ACADEMY_ENTRIES.jakCzytacTied.text), 'bez liczb o prawdziwości');
+    });
+    test('zapis: plany, wiceprezesi, znajomi i posty wracają po wczytaniu; stary zapis bez nich działa', () => {
+        const list = [makeCompany('AAA'), makeCompany('BBB')];
+        resetWorld(list); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' }); mailbox = createMailbox();
+        for (const stock of stocks) { stock.ceo = null; generateCEO(stock); }
+        const s = stocks[0], deputy = { id: 'c900', name: 'Ewa Mazur', age: 50, trait: 'skarbnik', traits: [], hiredQ: 1, untilQ: 40 };
+        s.deputies = [deputy]; s.plannedMove = { type: 'dividend', atQ: 99, real: true, data: { policy: 'Balanced' } };
+        addTiedFriend(getCeoRelationKey(deputy.id));
+        addTiedPost({ symbol: 'AAA', author: 'Ewa Mazur', ceoId: 'c900', text: 'Post', audience: 'friends', kind: 'hint', q: 1 });
+        const snapshot = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
+        applySaveSnapshot(JSON.parse(JSON.stringify(snapshot)));
+        const back = stocks.find(x => x.symbol === 'AAA');
+        assertEq(back.deputies[0].trait, 'skarbnik', 'wiceprezes');
+        assertEq(back.plannedMove.data.policy, 'Balanced', 'plan');
+        assert(isTiedFriend('ceo:c900'), 'znajomy');
+        assertEq(getTiedPosts()[0].audience, 'friends', 'post');
+        assert(findRelationPerson('ceo:c900')?.name === 'Ewa Mazur', 'osoba');
+        const old = JSON.parse(JSON.stringify(snapshot));
+        old.version = 21; delete old.playerProfile.tied;
+        for (const stock of old.stocks) { delete stock.deputies; delete stock.plannedMove; }
+        const report = applySaveSnapshot(old);
+        assert(!report?.errors?.length, 'stary zapis');
+        assertEq(ensureTiedState().friends.length, 0, 'pusty stan Tied');
+    });
+});

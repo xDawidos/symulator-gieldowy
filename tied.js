@@ -19,7 +19,7 @@ const TIED_AUDIENCE = { friends: 'Dla znajomych', trusted: 'Dla zaufanych' };
 const TIED_LOCKED_TEXT = { friends: 'Treść dla znajomych', trusted: 'Treść dla zaufanych' };
 
 let tiedView = { feed: 'main', side: 'me', pane: 'feed', person: null, company: null, message: null, filter: 'all', pool: null, talk: null, draft: 'good' };
-const initials = name => String(name || '?').split(/\s+/).map(w => w.charAt(0)).join('').slice(0, 2).toUpperCase();
+const initials = name => (String(name || '?').match(/(?<![\p{L}"])\p{L}/gu) || ['?']).filter((_, i, all) => i === 0 || i === all.length - 1).join('').toUpperCase(); // bez pseudonimu w cudzysłowie
 const ceoKey = id => getCeoRelationKey(id);
 const tiedPostKey = post => post.botId || (post.ceoId ? ceoKey(post.ceoId) : null);
 const companyFollowKey = symbol => `co:${symbol}`;
@@ -98,6 +98,7 @@ function getTiedFriendState(key) {
 function requestTiedFriend(key) {
     if (getTiedFriendState(key).status !== 'none' || !findRelationPerson(key)) return false;
     ensureTiedState().requests[key] = { status: 'sent', q: macro.quarter };
+    if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('relacjeKontakty');
     return true;
 }
 function addTiedFriend(key) {
@@ -317,7 +318,7 @@ function renderTiedCompany(symbol) {
     if (!stock) return `<section class="tied-view">${tiedBackButton()}<p class="net-empty">Tej spółki nie ma już na giełdzie.</p></section>`;
     const follow = companyFollowKey(symbol), posts = getTiedPosts().filter(post => post.symbol === symbol && post.kind !== 'hr');
     const row = (person, role) => { const id = person.id ? ceoKey(person.id) : null; return `<li><span class="net-avatar sm" aria-hidden="true">${escapeHtml(initials(person.name))}</span>${id ? `${tiedPersonLink(id, person.name)}${renderTiedBadges(id)}` : escapeHtml(person.name)}<span class="tied-meta">${role}</span></li>`; };
-    const board = stock.ceo?.name ? `<h4 class="tied-section">Zarząd</h4><ul class="tied-board">${row(stock.ceo, 'Prezes')}${getDeputies(stock).map(deputy => row(deputy, 'Wiceprezes')).join('')}</ul>` : '';
+    const board = stock.ceo?.name ? `<h5 class="tied-section">Zarząd</h5><ul class="tied-board">${row(stock.ceo, 'Prezes')}${getDeputies(stock).map(deputy => row(deputy, 'Wiceprezes')).join('')}</ul>` : '';
     return `<section class="tied-view">${tiedBackButton()}<article class="tied-profile">
         <div class="tied-profile-head"><span class="net-avatar lg" aria-hidden="true">${escapeHtml(initials(stock.name))}</span><div><h4>${escapeHtml(stock.name)}</h4>
             <span class="tied-meta">Konto spółki · ${escapeHtml(getMainSector(stock) || '')} · ${escapeHtml(exchanges[stock.exchange]?.name || stock.exchange)}</span>
@@ -390,6 +391,7 @@ function renderTiedSide() {
 function renderTiedPage() {
     const root = document.getElementById('net-tied-body');
     if (!root) return;
+    if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('jakCzytacTied');
     const message = tiedView.message !== null ? mailbox.messages.find(m => m.id === tiedView.message) : null, talk = tiedView.talk;
     const center = talk ? renderTiedConversation(talk) : message ? renderTiedTalk(message) : tiedView.person ? renderTiedPerson(tiedView.person) : tiedView.company ? renderTiedCompany(tiedView.company) : renderTiedFeed();
     const feedTab = (id, label) => `<button role="tab" aria-selected="${tiedView.feed === id && !tiedView.person && !tiedView.company}" onclick="tiedSetFeed('${id}')">${label}</button>`;
@@ -715,7 +717,7 @@ const TALK_TONES = {
     numbers: { label: 'Liczby', texts: ['Jaki poziom marży uznajesz za bezpieczny?', 'Które koszty rosną najszybciej?', 'Ile zarabiacie na najmniejszym kliencie?'] },
     vision: { label: 'Wizja', texts: ['Gdzie widzisz spółkę za trzy lata?', 'Co może zmienić całą branżę?', 'W co warto dziś wejść, zanim zrobią to inni?'] },
     safety: { label: 'Bezpieczeństwo', texts: ['Co najbardziej zagraża wynikom?', 'Jak jesteście przygotowani na gorszy rok?', 'Ile gotówki trzymacie na czarną godzinę?'] },
-    relation: { label: 'Relacja', texts: ['Doceniam, że znalazłeś czas.', 'Dobrze się z Tobą rozmawia.', 'Cenię to, co robisz w tej firmie.'] },
+    relation: { label: 'Relacja', texts: ['Doceniam ten czas na rozmowę.', 'Dobrze się z Tobą rozmawia.', 'Cenię to, co robisz w tej firmie.'] },
     pressure: { label: 'Presja', texts: ['Akcjonariusze oczekują więcej.', 'Rynek traci cierpliwość.', 'Wyniki muszą się poprawić, i to szybko.'] }
 };
 const TALK_OPENERS = ['Dzień dobry. Co Cię do mnie sprowadza?', 'Mam chwilę. O czym chcesz porozmawiać?', 'Słucham. Co sądzisz o ostatnim kwartale?'];
@@ -924,6 +926,7 @@ function acceptPromiseOffer(id) {
     if (!offer || getActivePromises().length >= PROMISE_RULES.maxActive) return false;
     tied.promiseOffers = tied.promiseOffers.filter(item => item !== offer);
     tied.promises.unshift({ ...offer, status: 'live' });
+    if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('obietniceInwestorow');
     return true;
 }
 function refusePromiseOffer(id) { const tied = ensurePromises(); tied.promiseOffers = tied.promiseOffers.filter(item => item.id !== id); }
@@ -994,3 +997,39 @@ function renderTeamedPromises() {
             <span>${escapeHtml(def.text(promise.goal))}</span>${meter}<span class="te-note-amount">${formatZl(promise.amount, 0)}</span><footer>${foot}</footer></li>`;
     }).join('')}</ul>`;
 }
+
+// =================================================================================
+// 0.17.3 R6: Akademia. Uczy czytania stylu, ale nie mapuje go na liczby.
+// =================================================================================
+Object.assign(ACADEMY_ENTRIES, {
+    jakCzytacTied: {
+        title: 'Jak czytać Tied', get icon() { return academyIcon('rynek'); },
+        text: 'Nie każdy prezes pisze to samo i nie każdy mówi prawdę równie często. Jeden liczy koszty, drugi dziękuje ludziom, trzeci obiecuje rewolucję w każdym kwartale. Styl zdradza człowieka: ten, kto zawsze pisze superlatywami, rzadziej dotrzymuje słowa niż ten, kto pisze o marży. Posty dla znajomych i zaufanych mówią więcej, ale nigdy nie są pewnikiem, bo plan zarządu może odpaść. Zakup akcji tuż po poufnej wiadomości interesuje też KNF.',
+        example: () => `W Tied jest teraz ${getTiedPosts().length} wpisów. Sprawdź, kto z autorów pisze o liczbach, a kto o wizji.`,
+        quiz: [
+            { q: 'Co najwięcej mówi o wiarygodności autora?', a: ['styl jego wpisów w czasie', 'liczba polubień', 'odznaka przy nazwisku'], c: 0 },
+            { q: 'Czy zapowiedź zarządu jest pewna?', a: ['nie, plan może odpaść', 'tak, zawsze', 'tak, gdy pisze ją prezes'], c: 0 },
+            { q: 'Co grozi za zakup tuż po poufnym poście?', a: ['kontrola KNF', 'nic', 'zamknięcie konta w Tied'], c: 0 }
+        ]
+    },
+    relacjeKontakty: {
+        title: 'Relacje i kontakty', get icon() { return academyIcon('bank'); },
+        text: 'Kontaktem zostaje prezes spółki, której akcje kupiłeś, także gdy później je sprzedasz. Polubienia i komentarze budują relację powoli, a rozmowa działa mocniej, ale tylko raz na kwartał. Znajomym zostaje osoba, która przyjmie Twoją prośbę, a to wymaga dobrej relacji. Relacja idzie za człowiekiem: gdy prezes zmienia spółkę, zabiera ją ze sobą, a jego następca zaczyna od zera. Jeśli prosisz zarząd o decyzję, potrzebujesz udziału w spółce.',
+        example: () => `Masz ${getTiedContacts().length} kontaktów i ${ensureTiedState().friends.length} znajomych.`,
+        quiz: [
+            { q: 'Co dzieje się z relacją, gdy prezes odchodzi do innej spółki?', a: ['zostaje przy nim', 'przechodzi na następcę', 'znika'], c: 0 },
+            { q: 'Kto może zostać znajomym?', a: ['osoba, która przyjmie prośbę', 'każdy po polubieniu', 'tylko inwestor'], c: 0 },
+            { q: 'Co działa mocniej na relację?', a: ['udana rozmowa', 'pojedyncze polubienie', 'obserwowanie'], c: 0 }
+        ]
+    },
+    obietniceInwestorow: {
+        title: 'Obietnice inwestorów', get icon() { return academyIcon('moneta'); },
+        text: 'Inwestor z dobrą relacją może obiecać zakup jednostek Twojego funduszu, jeśli wykonasz cel. Płaci po NAV, z własnej gotówki, więc obietnica nie zmienia wartości jednostki dla pozostałych klientów. Kiedy nie ma tyle pieniędzy, kupuje mniej. Cel bywa jednak na rękę jemu, na przykład zakup spółki, którą sam trzyma. Zanim się zgodzisz, zapytaj, czy zrobiłbyś to samo bez jego pieniędzy, bo obowiązek wobec klientów masz cały czas.',
+        example: () => `Aktywne obietnice: ${getActivePromises().length} z ${PROMISE_RULES.maxActive}.`,
+        quiz: [
+            { q: 'Po jakiej cenie inwestor kupuje jednostki?', a: ['po NAV', 'z premią', 'z dyskontem'], c: 0 },
+            { q: 'Co się dzieje przy niespełnionej obietnicy?', a: ['relacja spada', 'fundusz płaci karę', 'nic'], c: 0 },
+            { q: 'Dlaczego warto sprawdzić cel obietnicy?', a: ['może służyć inwestorowi', 'jest zawsze szkodliwy', 'nie ma to znaczenia'], c: 0 }
+        ]
+    }
+});
