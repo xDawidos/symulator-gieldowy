@@ -39,7 +39,7 @@ Dotychczasowe ustalenia, które zostają: jedna skala relacji −100…+100, 1 r
 - `ceo.id`: nadawane przy tworzeniu, stare zapisy dostają je przy wczytaniu.
 - Relacje z prezesami i wiceprezesami w `botRelations.values` pod kluczem `ceo:<id>`. Zanik i `getRelation` działają bez zmian. Tabela prezentów w panelu funduszu pokazuje dalej tylko inwestorów i kolegów.
 - `playerProfile.contacts`: lista identyfikatorów osób z nazwą, spółką i rolą, dopisywana przy `buyStock` (także dla osób, które później odeszły ze spółki).
-- Tied odblokowuje się jak dziś. Kontakty zbierają się wcześniej i czekają.
+- Tied jest dostępny od początku gry (decyzja 2026-11-05). `isTiedUnlocked` i ekran zablokowanego kafelka znikają, odpowiednie testy do zmiany.
 - Zakres startowy: spółki krajowe. Spółki zagraniczne poza zakresem.
 - Zapis: `SAVE_FORMAT_VERSION` 22, pola opcjonalne. Relacje równe 0 nie trafiają do zapisu.
 
@@ -73,7 +73,10 @@ Ustalenia użytkownika z 2026-11-05.
 - **Profil osoby:** otwierany kliknięciem w autora. Rola, spółka, staż, relacja słowem i miernikiem, ostatnie posty. Akcje: Obserwuj, Napisz, Dodaj do znajomych, odnośnik do karty spółki.
 - **Profil firmowy:** spółki mają własne konta i posty. Profil pokazuje sektor, giełdę, zarząd z Tied, ostatnie posty i przycisk Obserwuj.
 - **Obserwowanie:** posty obserwowanych trafiają do zakładki Kontakty. Lista w `playerProfile.follows`. Obserwowanie nie zmienia relacji.
-- **Znajomi:** gracz może wysłać prośbę w każdej chwili. Akceptacja zależy od relacji (próg +20) i charakteru osoby, próg i charakter działają razem lub osobno według tabeli do strojenia. Plan nie pokazuje graczowi powodu odmowy.
+- **Znajomi, prośby od gracza:** można wysłać w każdej chwili. Akceptacja zależy od relacji (próg +20) i charakteru osoby. Odrzucenie: relacja −2, kolejna prośba do tej osoby po 2 kwartałach. Powód odmowy nie jest pokazywany.
+- **Znajomi, prośby do gracza:** prezesi, wiceprezesi i boty też zapraszają. Manipulator robi to najczęściej, gdy czegoś potrzebuje.
+- **Utrata znajomego:** relacja poniżej 0 usuwa osobę ze znajomych.
+- **Posty gracza:** zakładka Mój profil, gotowe wpisy, np. o wynikach funduszu, raz na kwartał. Wpis zgodny z wynikiem daje mały wzrost zaufania klientów (start +1), a chwałba przy słabym wyniku obniża zaufanie (start −2).
 - **Odznaki przy nazwisku:** „Zweryfikowany” dla ok. 20% kont, stała z hasha, bez wpływu na mechanikę. Ikona „Znajomy” przy osobach ze znajomych. Nazwa „zweryfikowany” odróżnia odznakę od poziomu „zaufany znajomy”.
 - **Kadry w kanale:** wpis, gdy prezes lub wiceprezes obejmuje stanowisko i gdy odchodzi ze spółki. Źródło: `replaceCeo` i zmiany w `stock.deputies`.
 - **Reakcje innych:** boty lubią i komentują posty między sobą. Liczniki i komentarze liczone hashem z identyfikatora posta, bez zapisu, teksty z tej samej puli co komentarze gracza.
@@ -100,7 +103,8 @@ Ustalenia użytkownika z 2026-11-05.
 - Prawdziwość zależy od charakteru autora, patrz tabela. Plan może też odpaść z przyczyn zewnętrznych, więc podpowiedź nigdy nie jest pewnikiem.
 - Podpowiedź bez liczb i dat, tylko kierunek.
 - Boty-inwestorzy postują opinie o sektorach i spółkach, które trzymają. Część to uczciwe rady, część próby wypchnięcia akcji przed własną sprzedażą, zależnie od charakteru.
-- `TIED_POST_LIMIT` zostaje 60. Zmiana limitu tylko po pomiarze zapisu.
+- Limity postów: osobno 40 na Główną i 40 na posty kontaktów i obserwowanych zamiast wspólnych 60. Wartości do potwierdzenia pomiarem zapisu.
+- **KNF:** zakup akcji spółki w ciągu kwartału po poście dla zaufanych o tej spółce, gdy zapowiedź się sprawdzi, daje szansę na wykrycie (start 15%). Pierwsze wykrycie: mail ostrzegawczy od KNF. Drugie i kolejne: kara, start 5% gotówki funduszu. Licznik wykryć w `playerProfile`. Logika obok kontroli z `WOLF_RULES`.
 
 ## R3. Wiceprezesi
 
