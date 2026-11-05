@@ -1335,7 +1335,6 @@ function resolveBankIPO(decision) {
         quarterlyEarnings: 0,
         bankAccountId: null,
         cash: bankToIPO.cash,
-        descriptionParts: null,
         ceo: null,
         isBankStock: true,
         bankData: { id: bankToIPO.id, type: bankToIPO.type }
