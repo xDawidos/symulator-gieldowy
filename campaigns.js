@@ -733,7 +733,7 @@ function maybeCreateVipOffer() {
     vip.yearOffers.n++;
     if (typeof addMail === 'function') addMail({
         sender: 'Dział obsługi klienta', subject: `Inwestor VIP: ${offer.name}`,
-        body: `${profile.icon} ${offer.name} ${profile.blurb} i rozważa wpłatę do funduszu (5–15% NAV, lock-up 1–2 lata). Wybierz argument — gra sprawdzi go na danych funduszu. Oferta ważna do ${formatQuarterDate(q + 2)}.`,
+        body: `${profile.icon} ${offer.name} ${profile.blurb} i rozważa wpłatę do funduszu (5–15% NAV, lock-up 1–2 lata). Porozmawiaj z nim w Tied. Oferta ważna do ${formatQuarterDate(q + 2)}.`,
         importance: 3, action: { type: 'vip', vipId: offer.id }
     });
     return offer;
@@ -744,12 +744,18 @@ function pitchVip(offerId, argument) {
     const offer = vip?.offers.find(o => o.id === offerId);
     if (!offer || !VIP_ARGUMENTS[argument]) return { ok: false };
     const chance = getVipSuccessChance(offer, argument);
+    return { ...settleVipOffer(offer, Math.random() < chance), chance };
+}
+
+/** Rozstrzygnięcie oferty VIP: 0.17.3 R4 po rozmowie w Tied. */
+function settleVipOffer(offer, success) {
+    const vip = playerFund.vip;
     vip.offers = vip.offers.filter(o => o !== offer);
     const q = currentQuarter();
-    if (Math.random() >= chance) {
+    if (!success) {
         vip.lost++; vip.pauseUntilQ = q + VIP_PAUSE_Q;
-        logEvent(`💎 ${offer.name} odrzuca ofertę (argument: ${VIP_ARGUMENTS[argument].label}). Kolejny VIP najwcześniej ${formatQuarterDate(q + VIP_PAUSE_Q)}.`, 'review');
-        return { ok: true, success: false, chance };
+        logEvent(`💎 ${offer.name} odrzuca ofertę. Kolejny VIP najwcześniej ${formatQuarterDate(q + VIP_PAUSE_Q)}.`, 'review');
+        return { ok: true, success: false };
     }
     const nav = getFundNav();
     const value = getFundAssets() * getRandomInRange(0.05, 0.15);
@@ -762,7 +768,7 @@ function pitchVip(offerId, argument) {
     logEvent(`💎 ${offer.name} wpłaca ${formatZl(value, 0)} (lock-up do ${formatQuarterDate(getTranches(client)[0].lockedUntilQ)}).`, 'review');
     if (typeof pushNews === 'function') pushNews(`${offer.name} dołącza do funduszu (${formatZl(value, 0)})`);
     if (vip.won >= 3 && typeof unlockAchievement === 'function') unlockAchievement('vip_trust');
-    return { ok: true, success: true, chance, value };
+    return { ok: true, success: true, value };
 }
 
 /** VIP może wyjść przed końcem lock-upu, gdy fundusz jest słabszy od GIG o > 10 pp w roku (umowa indywidualna). */
@@ -948,7 +954,7 @@ function renderCampaignCards() {
     const offers = (vip?.offers || []).filter(o => o.expiresQ > q).map(o => {
         const p = VIP_PROFILES.find(x => x.id === o.profile);
         return `<div class="vip-offer"><p class="vip-who">${icon('osoba', 16)} <strong>${escapeHtml(o.name)}</strong>${p ? ` · ${p.name}` : ''} <span class="text-xs text-muted">do ${formatQuarterDate(o.expiresQ)}</span></p>${p ? `<p class="text-xs text-muted">${p.name} ${p.blurb}.</p>` : ''}
-            <div class="vip-args">${Object.entries(VIP_ARGUMENTS).map(([k, a]) => `<button type="button" class="btn-secondary vip-arg" title="${escapeHtml(a.hint)}" onclick="pitchVip(${o.id}, '${k}'); renderJuMarket();"><strong>${a.label}</strong><span>${escapeHtml(a.hint)}</span></button>`).join('')}</div></div>`;
+            <div class="vip-args"><button type="button" class="btn-secondary" onclick="openTiedVip(${o.id})">Porozmawiaj w Tied</button></div></div>`;
     }).join('');
     const vipCard = (vip && (offers || vip.won || vip.lost)) ? `<article class="bank-card vip-card"><header class="bank-card-head"><span class="bank-card-icon">${icon('diament')}</span><div><h4>Inwestorzy VIP</h4><span class="bank-card-type">pozyskani ${vip.won} · odrzuceni ${vip.lost}</span></div></header>${offers || '<p class="text-sm text-muted">Brak aktywnych ofert.</p>'}<p class="text-xs text-muted">Argument musi pasować do profilu i być poparty danymi funduszu.</p></article>` : '';
     return campaignCard + irCard + vipCard;

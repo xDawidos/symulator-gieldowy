@@ -2414,6 +2414,10 @@ function findRelationPerson(id) {
 // 0.17.3 R0: relacje z prezesami pod kluczem ceo:<id>, poza getRelationPeople, więc tabela prezentów ich nie pokazuje.
 const getCeoRelationKey = ceoId => `ceo:${ceoId}`;
 function findCeoRelationPerson(key) {
+    if (String(key).startsWith('vip:')) {
+        const vip = [...(playerFund?.vip?.offers || []), ...(playerProfile?.tied?.vips || [])].find(item => `vip:${item.id}` === key);
+        return vip ? { id: key, name: vip.name, kind: 'vip', entity: null } : null;
+    }
     if (!String(key).startsWith('ceo:')) return null;
     const ceoId = key.slice(4), ceo = stocks.find(stock => stock.ceo?.id === ceoId)?.ceo || stocks.flatMap(stock => stock.deputies || []).find(deputy => deputy.id === ceoId);
     const name = ceo?.name || playerProfile?.contacts?.find(contact => contact.id === ceoId)?.name;
@@ -2484,6 +2488,8 @@ function onPlayerForcedDividend(stock) {
 
 /** Handel funduszu: zrzut ≥ 1% akcji spółki bota szkodzi, zakup ≥ 0,5% wspiera jej kurs. */
 function onFundTrade(stock, quantity, side) {
+    if (side === 'sell' && quantity / Math.max(1, stock.totalShares) >= CEO_RELATION_RULES.bigSale) noteCeoRelationLoss(stock, CEO_RELATION_RULES.bigSaleLoss, `sprzedaż pakietu ${stock.name}`); // 0.17.3
+    if (typeof onPromiseCheck === 'function') onPromiseCheck();
     const bot = getMajorityBot(stock);
     if (!bot) return;
     const pct = quantity / Math.max(1, stock.totalShares);
@@ -2550,7 +2556,7 @@ function processRelationsQuarterly() {
         botRelations.values[id] *= 1 - RELATION_DECAY * (typeof getRelationDecayFactor === 'function' ? getRelationDecayFactor(id) : 1); // 0.17.3 R4: charakter
         if (Math.abs(botRelations.values[id]) < 0.5) delete botRelations.values[id];
     }
-    if (typeof processTiedQuarterly === 'function') processTiedQuarterly(); // 0.17.3 R1: prośby do znajomych
+    if (typeof processTiedQuarterly === 'function') { processTiedQuarterly(); processCeoRelationBonus(); } // 0.17.3 R1: prośby do znajomych; R0: premia do reputacji
     if (!playerFund) return;
     for (const person of getRelationPeople()) {
         const value = getRelation(person.id);

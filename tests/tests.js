@@ -15923,7 +15923,7 @@ group('0.17.3 R1 Tied: kontakty, reakcje, znajomi', () => {
         assertEq(getTiedPosts().filter(p => p.symbol === 'BBB').length, 40, 'cały rynek: 40');
         assertEq(getTiedFeedPosts('contacts').length, 40, 'zakładka Kontakty');
     });
-    test('kanały: Kontakty i Portfel; obserwowanie nie zmienia relacji; profil firmowy i osoby bez „Napisz”', () => {
+    test('kanały: Kontakty i Portfel; obserwowanie nie zmienia relacji; profil firmowy i osoby', () => {
         start();
         const p = post();
         assertEq(getTiedFeedPosts('contacts').length, 0, 'pusto bez kontaktu');
@@ -15938,7 +15938,7 @@ group('0.17.3 R1 Tied: kontakty, reakcje, znajomi', () => {
         tiedOpenPerson(key());
         const person = html();
         assert(person.includes('tied-profile') && person.includes('Dodaj do znajomych') && person.includes('Obserwuj') && person.includes('Karta spółki') && person.includes('skali od'), 'profil osoby');
-        assert(!person.includes('Napisz') && !person.includes('Porozmawiaj'), 'bez rozmowy przed R4');
+        assert(person.includes('Napisz'), 'kontakt może pisać');
         tiedOpenCompany('AAA');
         const company = html();
         assert(company.includes('Konto spółki') && company.includes('Zarząd') && company.includes('Karta spółki'), 'profil firmy');
@@ -16144,5 +16144,145 @@ group('0.17.3 R3 Wiceprezesi', () => {
         const card = renderCompanyCardOverview(s);
         assert(card.includes('Wiceprezesi') && card.includes(deputy.name) && !card.includes(DEPUTY_TRAITS[deputy.trait].name), 'karta bez cechy');
         assert(renderTiedCompany('AAA').includes(deputy.name), 'profil firmy');
+    });
+});
+
+group('0.17.3 R4 Rozmowy, posty gracza, VIP', () => {
+    const start = () => {
+        const list = [makeCompany('AAA'), makeCompany('BBB')];
+        list.forEach(company => { company.insiderShares = 0; company.reputation = { player: 0 }; });
+        resetWorld(list); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        playerCash = 5_000_000; botRelations = createBotRelations(); delete oversight.records.player; mailbox = createMailbox(); macro.quarter = 10;
+        tiedView = { feed: 'main', side: 'me', pane: 'feed', person: null, company: null, message: null, filter: 'all', pool: null, talk: null, draft: 'good' };
+        for (const stock of stocks) { stock.ceo = null; generateCEO(stock); }
+    };
+    const key = () => getCeoRelationKey(stocks[0].ceo.id);
+    const html = () => { const root = document.createElement('div'); root.id = 'net-tied-body'; document.body.appendChild(root); try { renderTiedPage(); return root.innerHTML; } finally { root.remove(); } };
+
+    test('macierz charakter × ton: wszystkie tony w skali −2…+2, wynik bez losowania, nastrój daje zmianę od −6 do +6', () => {
+        start();
+        const tones = Object.keys(TALK_TONES);
+        for (const [id, c] of Object.entries(TIED_CHARACTERS)) {
+            assertEq(Object.keys(c.tones).sort().join(), [...tones].sort().join(), `${id}: wszystkie tony`);
+            assert(Object.values(c.tones).every(v => v >= -2 && v <= 2), `${id}: skala`);
+        }
+        const random = Math.random; Math.random = () => { throw new Error('losowanie po wyborze'); };
+        try {
+            const a = resolveTalk(key(), ['numbers', 'vision']), b = resolveTalk(key(), ['numbers', 'vision']);
+            assertEq(JSON.stringify(a), JSON.stringify(b), 'ten sam wynik');
+        } finally { Math.random = random; }
+        for (const choices of [['numbers'], ['pressure', 'pressure', 'pressure'], ['relation', 'vision', 'safety']]) {
+            const r = resolveTalk(key(), choices);
+            assert(r.mood >= -2 && r.mood <= 2 && r.delta === r.mood * 3, 'zakres');
+        }
+    });
+    test('sukces rozmów: gracz według charakteru 40–70%, losowy ok. 25%', () => {
+        start();
+        const tones = Object.keys(TALK_TONES), N = 4000;
+        const trial = (reader, i) => {
+            const person = `ceo:c${i}`, turns = 2 + i % 2, picks = [], used = {}, chars = getPersonCharacterData(person).tones;
+            for (let t = 0; t < turns; t++) {
+                const options = [...tones].sort(() => Math.random() - 0.5).slice(0, 3 + (Math.random() < 0.5 ? 1 : 0));
+                let choice = options[Math.floor(Math.random() * options.length)];
+                if (reader) for (const tone of options) if (chars[tone] - (used[tone] || 0) > chars[choice] - (used[choice] || 0)) choice = tone;
+                picks.push(choice); used[choice] = (used[choice] || 0) + 1;
+            }
+            return resolveTalk(person, picks).success;
+        };
+        const rate = reader => Array.from({ length: N }, (_, i) => trial(reader, i)).filter(Boolean).length / N;
+        const reader = rate(true), random = rate(false);
+        assert(reader >= 0.4 && reader <= 0.7, `według charakteru ${(reader * 100).toFixed(1)}%`);
+        assert(random >= 0.18 && random <= 0.32, `losowy ${(random * 100).toFixed(1)}%`);
+    });
+    test('dostęp: kontakt pełna rozmowa, autor widocznego posta bez kontaktu tylko szybka, inaczej brak; 1 na kwartał', () => {
+        start();
+        assertEq(getTiedTalkAccess(key()), null, 'obcy');
+        tiedOpenPerson(key());
+        assert(!html().includes('Napisz'), 'bez przycisku');
+        addTiedPost({ symbol: 'AAA', author: stocks[0].ceo.name, ceoId: stocks[0].ceo.id, text: 'Post' });
+        assertEq(getTiedTalkAccess(key()), 'quick', 'autor widocznego posta');
+        assert(!startTiedTalk(key()), 'bez kontaktu bez pełnej rozmowy');
+        const gain = quickTiedTalk(key());
+        assert(gain >= 1 && gain <= 2 && getRelation(key()) === gain, 'szybka do +2');
+        assert(!quickTiedTalk(key()), 'raz na kwartał');
+        macro.quarter++;
+        noteCeoContact(stocks[0]);
+        assertEq(getTiedTalkAccess(key()), 'full', 'kontakt');
+        assert(startTiedTalk(key()), 'start');
+        assert(html().includes('is-talk'), 'pasek zwinięty');
+    });
+    test('rozmowa w widoku: tury, 3–4 opcje, wynik zmienia relację; prośby od 5% udziału', () => {
+        start(); noteCeoContact(stocks[0]);
+        startTiedTalk(key());
+        const talk = tiedView.talk;
+        assert(talk.turns >= 2 && talk.turns <= 3 && talk.options.length >= 3 && talk.options.length <= 4, 'tury i opcje');
+        talk.turns = 2;
+        chooseTalkOption(0);
+        assertEq(talk.turn, 2, 'druga tura');
+        const page = html();
+        assert(page.includes('Prośby do zarządu') && page.includes('Masz 0,0%') && page.includes('disabled'), 'prośby zablokowane');
+        chooseTalkOption(0);
+        assert(talk.result, 'koniec');
+        assertEq(getRelation(key()), talk.result.delta, 'relacja zmieniona');
+        assert(hasTalkedThisQuarter(key()), 'limit kwartału');
+        assert(html().includes('tied-result'), 'wynik');
+    });
+    test('prośba do zarządu przy sukcesie tworzy plan spółki', () => {
+        start(); const s = stocks[0];
+        s.dividendPolicy = 'Growth';
+        assert(executeTalkRequest(s, 'dividend'), 'dywidenda');
+        assertEq(s.plannedMove.data.policy, 'Balanced', 'plan podwyżki');
+        delete s.plannedMove;
+        assert(executeTalkRequest(s, 'buyback'), 'skup');
+        const before = s.treasuryShares || 0, atQ = s.plannedMove.atQ;
+        macro.quarter = atQ;
+        processCompanyPlansQuarterly();
+        assert((s.treasuryShares || 0) > before, 'skup wykonany');
+    });
+    test('VIP: rozmowa rozstrzyga o wpłacie, skutki jak dawniej; mail ważny z przejściem do Tied', () => {
+        start();
+        playerFund.vip = { offers: [{ id: 7, profile: 'rentier', name: 'Katarzyna Lis', expiresQ: 12 }], yearOffers: { year: 2, n: 1 }, pauseUntilQ: -1, won: 0, lost: 0, nextId: 8 };
+        tiedView.side = 'msgs';
+        assert(html().includes('Oferta VIP'), 'oferta w Wiadomościach');
+        assert(startVipTalk(7), 'rozmowa');
+        const nav = getFundNav();
+        settleVipTalk('vip:7', { success: true, delta: 0 });
+        assertEq(playerFund.vip.won, 1, 'wygrana');
+        assert(!getVipOffers().length, 'oferta zamknięta');
+        assertNear(getFundNav(), nav, 'NAV bez zmian', 1e-6);
+        assert(playerFund.clients.some(c => c.vip && c.name === 'Katarzyna Lis'), 'klient VIP');
+        assert(getTiedContacts().some(p => p.kind === 'vip'), 'kontakt VIP');
+        const lost = { id: 8, profile: 'rentier', name: 'Jan Tomek', expiresQ: 12 };
+        playerFund.vip.offers = [lost];
+        settleVipTalk('vip:8', { success: false, delta: 0 });
+        assertEq(playerFund.vip.lost, 1, 'przegrana');
+        assert(playerFund.vip.pauseUntilQ > macro.quarter, 'pauza');
+    });
+    test('wpis gracza: raz na kwartał, zgodny +1, chwałba przy słabym wyniku −2', () => {
+        start();
+        playerFund.trust = 50; playerFund.periods = [{ fundReturn: -0.05, benchmarkReturn: 0.02 }];
+        assert(publishTiedPlayerPost('brag'), 'publikacja');
+        assertEq(playerFund.trust, 48, 'chwałba −2');
+        assert(!publishTiedPlayerPost('good'), 'raz na kwartał');
+        macro.quarter++;
+        assert(publishTiedPlayerPost('hard'), 'kolejny kwartał');
+        assertEq(playerFund.trust, 49, 'zgodny +1');
+        macro.quarter++; playerFund.periods = [{ fundReturn: 0.05, benchmarkReturn: 0.02 }];
+        publishTiedPlayerPost('good');
+        assertEq(playerFund.trust, 50, 'zgodny +1');
+        assert(getTiedPosts()[0].kind === 'player' && renderTiedPost(getTiedPosts()[0]).includes('Zarządca funduszu'), 'post gracza');
+    });
+    test('relacja z prezesem: premia reputacji od +40 do +30 z tego źródła; spadki za sprzedaż i próbę odwołania; zanik lojalisty wolniejszy', () => {
+        start(); const s = stocks[0];
+        botRelations.values[key()] = 50;
+        processCeoRelationBonus();
+        assertEq(s.reputation.player, 1, '+1');
+        playerProfile.tied.repGain = { AAA: 30 };
+        processCeoRelationBonus();
+        assertEq(s.reputation.player, 1, 'limit +30');
+        noteCeoRelationLoss(s, CEO_RELATION_RULES.dismissalLoss, 'test');
+        assertEq(getRelation(key()), 30, 'odwołanie −20');
+        assertEq(TIED_CHARACTERS.lojalista.decay, 0.5, 'lojalista');
+        assertEq(getRelationDecayFactor('kolega'), 1, 'poza osobami 1');
     });
 });

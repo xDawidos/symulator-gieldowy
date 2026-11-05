@@ -18,7 +18,7 @@ const TIED_POST_KINDS = { result: 'Wyniki', coop: 'Współpraca', note: 'Wpis', 
 const TIED_AUDIENCE = { friends: 'Dla znajomych', trusted: 'Dla zaufanych' };
 const TIED_LOCKED_TEXT = { friends: 'Treść dla znajomych', trusted: 'Treść dla zaufanych' };
 
-let tiedView = { feed: 'main', side: 'me', pane: 'feed', person: null, company: null, message: null, filter: 'all', pool: null };
+let tiedView = { feed: 'main', side: 'me', pane: 'feed', person: null, company: null, message: null, filter: 'all', pool: null, talk: null, draft: 'good' };
 const initials = name => String(name || '?').split(/\s+/).map(w => w.charAt(0)).join('').slice(0, 2).toUpperCase();
 const ceoKey = id => getCeoRelationKey(id);
 const tiedPostKey = post => post.botId || (post.ceoId ? ceoKey(post.ceoId) : null);
@@ -84,10 +84,10 @@ function canSeeTiedPost(post) {
     if (!key || !isTiedFriend(key)) return false;
     return post.audience === 'friends' || post.gossip || getRelation(key) >= TIED_RULES.trustedAt; // Plotkarz: post dla zaufanych widzą znajomi
 }
-/** Decyzja o prośbie. R4: tu wejdzie charakter osoby. */
-function willAcceptTiedFriend(key) { return getRelation(key) >= TIED_RULES.friendAt; }
-/** Czy osoba zaprasza gracza. R4: tu wejdzie charakter osoby. */
-function getTiedInviteChance(key) { return getRelation(key) >= TIED_RULES.friendAt ? TIED_RULES.inviteChance : 0; }
+/** Decyzja o prośbie: próg i charakter osoby. */
+function willAcceptTiedFriend(key) { return getRelation(key) >= TIED_RULES.friendAt + getPersonCharacterData(key).accept; }
+/** Czy osoba zaprasza gracza: próg i charakter osoby. */
+function getTiedInviteChance(key) { return getRelation(key) >= TIED_RULES.friendAt ? TIED_RULES.inviteChance * getPersonCharacterData(key).invite : 0; }
 
 function getTiedFriendState(key) {
     const tied = ensureTiedState();
@@ -191,6 +191,7 @@ const isTiedVerified = key => descriptionHash(key) % TIED_RULES.verifiedEvery ==
 function getTiedPerson(key) {
     const person = findRelationPerson(key);
     if (!person) return null;
+    if (person.kind === 'vip') return { key, name: person.name, kind: 'vip', role: 'Inwestor VIP', stock: null };
     if (person.kind !== 'ceo') return { key, name: person.name, kind: person.kind, role: person.kind === 'investor' ? 'Inwestor' : 'Współpracownik', stock: null };
     const ceoId = key.slice(4), stock = stocks.find(s => s.ceo?.id === ceoId);
     if (stock) return { key, name: person.name, kind: 'ceo', role: 'Prezes', stock, tenure: Math.floor((stock.ceo.tenure || 0) / 4) };
@@ -204,7 +205,8 @@ function getTiedPerson(key) {
 function getTiedContacts() {
     const ceos = (playerProfile?.contacts || []).map(contact => getTiedPerson(ceoKey(contact.id)));
     const investors = getRelationPeople().filter(person => person.kind === 'investor' && (getRelation(person.id) !== 0 || isTiedFriend(person.id))).map(person => getTiedPerson(person.id));
-    return [...ceos, ...investors].filter(Boolean);
+    const vips = (playerProfile?.tied?.vips || []).map(vip => getTiedPerson(`vip:${vip.id}`));
+    return [...ceos, ...investors, ...vips].filter(Boolean);
 }
 
 function toggleTiedFollow(key) {
@@ -223,6 +225,7 @@ const tiedBadge = (cls, icon, label) => `<span class="tied-badge${cls}" title="$
 function renderTiedBadges(key) {
     return `${isTiedVerified(key) ? tiedBadge('', 'zweryfikowany', 'Zweryfikowany') : ''}${isTiedFriend(key) ? tiedBadge(' is-friend', 'znajomy', 'Znajomy') : ''}`;
 }
+const tiedRoleOf = post => post.kind === 'player' ? 'Zarządca funduszu' : post.botId ? 'Inwestor' : post.role || 'Prezes';
 const tiedPostName = post => post.author || stocks.find(s => s.symbol === post.symbol)?.name || post.symbol;
 
 function renderTiedStaffPost(post) {
@@ -240,9 +243,10 @@ function renderTiedPost(post) {
     if (!canSeeTiedPost(post)) return `<article class="net-post is-locked"><span class="net-avatar" aria-hidden="true">${escapeHtml(initials(name))}</span>${known ? tiedPersonLink(key, name) : `<strong>${escapeHtml(name)}</strong>`}${known ? renderTiedBadges(key) : ''}
         <span class="tied-locked">${uiIcon('klodka', 14)} ${TIED_LOCKED_TEXT[post.audience]}</span></article>`;
     const stock = stocks.find(s => s.symbol === post.symbol), bots = getTiedBotReactions(post);
+    const meta = post.botId || post.kind === 'player' ? tiedRoleOf(post) : post.author ? `${tiedRoleOf(post)} · ${stock ? tiedCompanyLink(stock) : escapeHtml(post.symbol)}` : `Konto spółki · ${escapeHtml(stock ? getMainSector(stock) || '' : '')}`;
+    if (post.kind === 'player') return `<article class="net-post"><header><span class="net-avatar" aria-hidden="true">${escapeHtml(initials(name))}</span><div><span class="tied-who"><strong>${escapeHtml(name)}</strong></span><span class="tied-meta">${meta} · ${formatMailTime(post.at)}</span></div><span class="net-chip">Wpis</span></header><p>${escapeHtml(post.text)}</p></article>`;
     const who = key || post.author ? `<span class="tied-who">${known ? tiedPersonLink(key, name) : `<strong>${escapeHtml(name)}</strong>`}${known ? renderTiedBadges(key) : ''}</span>`
         : `<span class="tied-who">${stock ? tiedCompanyLink(stock) : `<strong>${escapeHtml(name)}</strong>`}${isTiedVerified(companyFollowKey(post.symbol)) ? tiedBadge('', 'zweryfikowany', 'Zweryfikowany') : ''}</span>`;
-    const meta = post.botId ? 'Inwestor' : post.author ? `${post.role || 'Prezes'} · ${stock ? tiedCompanyLink(stock) : escapeHtml(post.symbol)}` : `Konto spółki · ${escapeHtml(stock ? getMainSector(stock) || '' : '')}`;
     const chip = TIED_AUDIENCE[post.audience] ? `${uiIcon(post.audience === 'friends' ? 'znajomy' : 'klodka', 12)} ${TIED_AUDIENCE[post.audience]}` : TIED_POST_KINDS[post.kind] || 'Wyniki';
     const comments = [...(post.comment ? [{ me: true, text: post.comment }] : []), ...bots.comments].map(item => {
         const label = item.me ? (playerProfile?.name || 'Ty') : item.person.name;
@@ -283,6 +287,13 @@ function renderTiedFollowAction(key) {
 }
 const tiedBackButton = () => `<button class="tied-back" onclick="tiedBack()">${uiIcon('cofnij', 14)} Wróć do kanału</button>`;
 
+function renderTiedTalkAction(key) {
+    const access = getTiedTalkAccess(key);
+    if (!access) return '';
+    if (hasTalkedThisQuarter(key)) return `<button class="tied-act" disabled>${uiIcon('komentarz', 14)}Następna rozmowa w kolejnym kwartale</button>`;
+    return `<button class="tied-act" onclick="tiedOpenTalk('${escapeHtml(key)}')">${uiIcon('komentarz', 14)}Napisz</button>`;
+}
+
 function renderTiedPerson(key) {
     const person = getTiedPerson(key);
     if (!person) return `<section class="tied-view">${tiedBackButton()}<p class="net-empty">Tej osoby nie ma już w Tied.</p></section>`;
@@ -296,7 +307,7 @@ function renderTiedPerson(key) {
         <div class="tied-profile-head"><span class="net-avatar lg" aria-hidden="true">${escapeHtml(initials(person.name))}</span><div><h4>${escapeHtml(person.name)}</h4>
             <span class="tied-meta">${person.role}${place}${tenure}</span>${tags ? `<div class="tied-tags">${tags}</div>` : ''}</div></div>
         <div class="tied-rel"><strong>Relacja: ${level}</strong> (${tiedRelationText(value)} w skali od −100 do +100) ${meter}${next ? `<span class="tied-note">Kreska: następny poziom, ${next[0]}.</span>` : ''}</div>
-        <div class="tied-actions">${renderTiedFollowAction(key)}${renderTiedFriendAction(key)}${person.stock ? `<button class="tied-act" onclick="openDescriptionModal('${escapeHtml(person.stock.symbol)}')">${uiIcon('rynek', 14)}Karta spółki</button>` : ''}</div></article>
+        <div class="tied-actions">${renderTiedFollowAction(key)}${renderTiedTalkAction(key)}${renderTiedFriendAction(key)}${person.stock ? `<button class="tied-act" onclick="openDescriptionModal('${escapeHtml(person.stock.symbol)}')">${uiIcon('rynek', 14)}Karta spółki</button>` : ''}</div></article>
         ${posts.length ? `<h4 class="tied-section">Ostatnie posty</h4>${posts.slice(0, 5).map(renderTiedPost).join('')}` : ''}</section>`;
 }
 
@@ -314,12 +325,30 @@ function renderTiedCompany(symbol) {
         ${posts.length ? `<h4 class="tied-section">Ostatnie posty</h4>${posts.slice(0, 5).map(renderTiedPost).join('')}` : ''}</section>`;
 }
 
-/** Wątek w środku kolumny. R4 doda tu rozmowę; na razie treść wiadomości. */
+/** Wiadomość w środku kolumny; rozmowę prowadzi renderTiedConversation. */
 function renderTiedTalk(message) {
     const sender = getMailSenderName(message.sender).replace(/^\P{L}+/u, '');
     return `<section class="tied-view"><div class="tied-talk"><div class="tied-talk-head"><span class="net-avatar" aria-hidden="true">${escapeHtml(initials(sender))}</span><div><strong>${escapeHtml(sender)}</strong><span class="tied-meta">${escapeHtml(message.subject)}</span></div>
         <button class="tied-act" onclick="tiedBack()">${uiIcon('zamknij', 14)}Zamknij</button></div>
-        <div class="tied-thread"><div class="tied-bubble">${escapeHtml(message.body)}<small>${formatMailTime(message.at)}</small></div></div></div></section>`;
+        <div class="tied-thread"><div class="tied-bubble">${escapeHtml(message.body)}<small>${formatMailTime(message.at)}</small></div></div>${String(message.sender).startsWith('bot:') ? `<div class="tied-actions">${renderTiedTalkAction(String(message.sender).slice(4))}</div>` : ''}</div></section>`;
+}
+
+function renderTiedConversation(talk) {
+    const person = talk.name ? { name: talk.name, role: 'Inwestor VIP', stock: null } : getTiedPerson(talk.key);
+    const key = talk.key, name = person?.name || '', known = !talk.name;
+    const head = `<div class="tied-talk-head"><span class="net-avatar" aria-hidden="true">${escapeHtml(initials(name))}</span><div><span class="tied-who">${known ? tiedPersonLink(key, name) : `<strong>${escapeHtml(name)}</strong>`}${known ? renderTiedBadges(key) : ''}</span><span class="tied-meta">${person?.role || ''}${person?.stock ? ` · ${escapeHtml(person.stock.name)}` : ''}${known ? ` · relacja: ${getTiedLevel(key)}` : ''}</span></div>
+        <button class="tied-act" onclick="tiedBack()">${uiIcon('zamknij', 14)}Zamknij rozmowę</button></div>`;
+    if (talk.start) return `<section class="tied-view"><div class="tied-talk">${head}<div class="tied-start"><button class="tied-act" onclick="tiedStartFull()">${uiIcon('komentarz', 14)}Porozmawiaj (2–3 tury)</button><button class="tied-act" onclick="tiedQuick()">${uiIcon('szybko', 14)}Szybka rozmowa (tylko relacja, do +2)</button></div></div></section>`;
+    const thread = talk.log.map(line => `<div class="tied-bubble${line.me ? ' is-me' : ''}">${escapeHtml(line.text)}</div>`).join('');
+    if (talk.result) {
+        const { delta, requested } = talk.result, sign = delta > 0 ? '▲ +' : delta < 0 ? '▼ −' : '■ ';
+        const text = talk.name ? (talk.result.success ? `${escapeHtml(name)} wpłaca środki do funduszu.` : `${escapeHtml(name)} rezygnuje z wpłaty.`) : `Rozmowa zakończona. Relacja <strong>${sign}${Math.abs(delta)}</strong>, teraz ${tiedRelationText(getRelation(key))}. Następna rozmowa w kolejnym kwartale.${talk.request ? (requested ? ' Zarząd wróci do Twojej prośby.' : ' Prośba została bez odpowiedzi.') : ''}`;
+        return `<section class="tied-view"><div class="tied-talk">${head}<div class="tied-thread">${thread}</div><div class="tied-result">${uiIcon('ok', 16)}<span>${text}</span></div></div></section>`;
+    }
+    const choices = talk.options.map((option, index) => `<button onclick="tiedChoose(${index})"><small>${TALK_TONES[option.tone].label}</small>${escapeHtml(option.text)}</button>`).join('');
+    const stock = !talk.name && person?.stock && !person.former ? person.stock : null, stake = getTalkStake(stock), last = talk.turn === talk.turns, open = stake >= TALK_RULES.minStake;
+    const requests = stock && last ? `<h4 class="tied-section">Prośby do zarządu</h4><div class="tied-choices">${Object.entries(TALK_REQUESTS).map(([id, item]) => `<button ${open ? `onclick="tiedChoose(0, '${id}')"` : 'disabled'}><small>${item.label}</small>${item.text}</button>`).join('')}</div>${open ? '' : `<p class="notice-inline">${uiIcon('klodka', 14)}<span>Prośby wymagają co najmniej 5% udziałów w spółce. Masz ${formatNumberPl(stake * 100, 1)}%.</span></p>`}` : '';
+    return `<section class="tied-view"><div class="tied-talk">${head}<div class="tied-thread">${thread}<p class="tied-turn">Tura ${talk.turn} z ${talk.turns}. Jedna rozmowa z tą osobą na kwartał.</p><div class="tied-choices">${choices}</div>${requests}</div></div></section>`;
 }
 
 const getTiedMessages = () => mailbox.messages.filter(m => getMailChannel(m) === 'tied');
@@ -328,21 +357,23 @@ function renderTiedMyProfile() {
     const me = playerProfile || {}, position = CAREER_POSITIONS[getPositionIndex(me.positionId)]?.name || '';
     return `<section class="tied-panel"><span class="net-avatar lg" aria-hidden="true">${escapeHtml(initials(me.name))}</span><h4 class="mt-2">${escapeHtml(me.name || 'Ty')}</h4>
         <span class="tied-meta">${escapeHtml(position)}${playerFund?.name ? ` · ${escapeHtml(playerFund.name)}` : ''}</span>
-        <dl class="tied-kv"><div><dt>Konto prywatne</dt><dd>${formatZl(playerWallet?.cash || 0, 2)}</dd></div><div><dt>Zaufanie klientów</dt><dd>${(playerFund?.trust ?? 0).toFixed(0)} / 100</dd></div><div><dt>Znajomi</dt><dd>${ensureTiedState().friends.length}</dd></div></dl></section>`;
+        <dl class="tied-kv"><div><dt>Konto prywatne</dt><dd>${formatZl(playerWallet?.cash || 0, 2)}</dd></div><div><dt>Zaufanie klientów</dt><dd>${(playerFund?.trust ?? 0).toFixed(0)} / 100</dd></div><div><dt>Znajomi</dt><dd>${ensureTiedState().friends.length}</dd></div></dl>
+        <h4 class="tied-section">${uiIcon('wpis', 14)} Wpis na ten kwartał</h4>${canPublishTiedPost() ? `<form class="tied-compose" onsubmit="tiedPublish(); return false">${Object.entries(TIED_PLAYER_POSTS).map(([id, text]) => `<label><input type="radio" name="tied-post" value="${id}" ${tiedView.draft === id ? 'checked' : ''} onchange="tiedView.draft='${id}'"> ${escapeHtml(text)}</label>`).join('')}<div class="btn-row"><button class="btn-primary btn-sm">Opublikuj</button></div></form>` : '<p class="tied-note">Wpis opublikowany. Następny w kolejnym kwartale.</p>'}</section>`;
 }
 function renderTiedMessages() {
+    const offers = getVipOffers().map(offer => `<div class="tied-offer"><span class="tied-kicker">Oferta VIP</span><p>${escapeHtml(offer.name)} rozważa wpłatę do funduszu. Rozmowa rozstrzyga, czy wpłaci.</p><div class="tied-actions"><button class="btn-primary btn-sm" onclick="tiedOpenVip(${offer.id})">Porozmawiaj</button><button class="btn-ghost btn-sm" onclick="tiedDeclineVip(${offer.id})">Odrzuć</button></div></div>`).join('');
     const rows = getTiedMessages().slice(0, 20).map(m => {
         const sender = getMailSenderName(m.sender).replace(/^\P{L}+/u, '');
         return `<li><button class="tied-contact${m.read ? '' : ' is-new'}" onclick="tiedOpenMessage(${m.id})"><span class="net-avatar sm" aria-hidden="true">${escapeHtml(initials(sender))}</span><span><strong>${escapeHtml(sender)}${m.read ? '' : ' <span class="net-chip">Nowa</span>'}</strong><span class="text-sm">${escapeHtml(m.subject)}</span></span></button></li>`;
     }).join('');
-    return `<section class="tied-panel">${rows ? `<ul class="tied-list">${rows}</ul>` : '<p class="text-sm text-muted">Brak wiadomości.</p>'}</section>`;
+    return `<section class="tied-panel">${offers}${typeof renderTiedPromiseOffers === 'function' ? renderTiedPromiseOffers() : ''}${rows ? `<ul class="tied-list">${rows}</ul>` : offers ? '' : '<p class="text-sm text-muted">Brak wiadomości.</p>'}</section>`;
 }
 function renderTiedContacts() {
     const tied = ensureTiedState();
     const invites = tied.invites.map(getTiedPerson).filter(Boolean).map(person => `<div class="tied-request"><div class="tied-request-who"><span class="net-avatar sm" aria-hidden="true">${escapeHtml(initials(person.name))}</span><span>${tiedPersonLink(person.key, person.name)}<br><span class="tied-meta">${person.role}${person.stock ? ` · ${escapeHtml(person.stock.name)}` : ''}</span></span></div>
         <div class="btn-row"><button class="btn-primary btn-sm" onclick="tiedAcceptInvite('${escapeHtml(person.key)}')">Przyjmij</button><button class="btn-ghost btn-sm" onclick="tiedDeclineInvite('${escapeHtml(person.key)}')">Odrzuć</button></div></div>`).join('');
     const all = getTiedContacts(), list = all.filter(person => tiedView.filter === 'all' || person.kind === tiedView.filter);
-    const filter = [['all', 'Wszyscy'], ['ceo', 'Prezesi'], ['deputy', 'Wiceprezesi'], ['investor', 'Inwestorzy']].map(([id, label]) => `<button aria-pressed="${tiedView.filter === id}" onclick="tiedSetFilter('${id}')">${label}</button>`).join('');
+    const filter = [['all', 'Wszyscy'], ['ceo', 'Prezesi'], ['deputy', 'Wiceprezesi'], ['investor', 'Inwestorzy'], ['vip', 'VIP-y']].map(([id, label]) => `<button aria-pressed="${tiedView.filter === id}" onclick="tiedSetFilter('${id}')">${label}</button>`).join('');
     const rows = list.map(person => `<li><button class="tied-contact" onclick="tiedOpenPerson('${escapeHtml(person.key)}')"><span class="net-avatar sm" aria-hidden="true">${escapeHtml(initials(person.name))}</span><span><strong>${escapeHtml(person.name)}</strong><span class="tied-meta">${person.role}${person.stock ? ` · ${escapeHtml(person.stock.name)}` : ''}</span><span class="tied-level">${getTiedLevel(person.key)}</span></span></button></li>`).join('');
     return `<section class="tied-panel">${invites ? `<h4 class="tied-section mt-0">Prośby do Ciebie (${tied.invites.length})</h4>${invites}` : ''}
         <h4 class="tied-section${invites ? '' : ' mt-0'}">Kontakty (${all.length})</h4>
@@ -358,11 +389,11 @@ function renderTiedSide() {
 function renderTiedPage() {
     const root = document.getElementById('net-tied-body');
     if (!root) return;
-    const message = tiedView.message !== null ? mailbox.messages.find(m => m.id === tiedView.message) : null;
-    const center = message ? renderTiedTalk(message) : tiedView.person ? renderTiedPerson(tiedView.person) : tiedView.company ? renderTiedCompany(tiedView.company) : renderTiedFeed();
+    const message = tiedView.message !== null ? mailbox.messages.find(m => m.id === tiedView.message) : null, talk = tiedView.talk;
+    const center = talk ? renderTiedConversation(talk) : message ? renderTiedTalk(message) : tiedView.person ? renderTiedPerson(tiedView.person) : tiedView.company ? renderTiedCompany(tiedView.company) : renderTiedFeed();
     const feedTab = (id, label) => `<button role="tab" aria-selected="${tiedView.feed === id && !tiedView.person && !tiedView.company}" onclick="tiedSetFeed('${id}')">${label}</button>`;
     const paneTab = (id, label) => `<button role="tab" aria-selected="${tiedView.pane === id}" onclick="tiedSetPane('${id}')">${label}</button>`;
-    root.innerHTML = `<div class="tied${message ? ' is-talk' : ''}" data-pane="${tiedView.pane}">
+    root.innerHTML = `<div class="tied${message || talk ? ' is-talk' : ''}" data-pane="${tiedView.pane}">
         <div class="tied-tabs tied-switch" role="tablist" aria-label="Widok Tied">${paneTab('feed', 'Kanał')}${paneTab('side', 'Profil i kontakty')}</div>
         <div class="tied-main"><div class="tied-feedbar"><div><div class="tied-tabs" role="tablist" aria-label="Kanał">${feedTab('main', 'Główna')}${feedTab('contacts', 'Kontakty')}${feedTab('portfolio', 'Portfel')}</div></div></div>${center}</div>
         ${renderTiedSide()}</div>`;
@@ -370,7 +401,7 @@ function renderTiedPage() {
 
 // --- Akcje widoku ---
 function tiedSetView(changes) { Object.assign(tiedView, changes); renderTiedPage(); }
-function tiedCenter(changes) { tiedSetView({ person: null, company: null, message: null, pool: null, pane: 'feed', ...changes }); }
+function tiedCenter(changes) { tiedSetView({ person: null, company: null, message: null, pool: null, talk: null, pane: 'feed', ...changes }); }
 const tiedBack = () => tiedCenter({});
 const tiedSetFeed = feed => tiedCenter({ feed });
 const tiedSetSide = side => tiedSetView({ side });
@@ -379,6 +410,22 @@ const tiedSetFilter = filter => tiedSetView({ filter });
 const tiedOpenPerson = key => tiedCenter({ person: key });
 const tiedOpenCompany = symbol => tiedCenter({ company: symbol });
 function tiedOpenMessage(id) { markMailRead(id); tiedCenter({ message: id }); }
+function tiedOpenTalk(key) {
+    if (getTiedTalkAccess(key) === 'full') { tiedCenter({ talk: { key, start: true } }); return; }
+    quickTiedTalk(key); tiedCenter({ person: key });
+}
+function tiedStartFull() { const key = tiedView.talk?.key; if (key && startTiedTalk(key)) renderTiedPage(); }
+function tiedQuick() { const key = tiedView.talk?.key; if (key) { quickTiedTalk(key); tiedCenter({ person: key }); } }
+const tiedChoose = (index, request = null) => { chooseTalkOption(index, request); renderTiedPage(); };
+const tiedPublish = () => { publishTiedPlayerPost(tiedView.draft); renderTiedPage(); };
+function tiedOpenVip(id) { if (startVipTalk(id)) tiedSetView({ person: null, company: null, message: null, pane: 'feed' }); }
+const tiedDeclineVip = id => { declineVipOffer(id); renderTiedPage(); };
+function openTiedVip(id) {
+    tiedCenter({ side: 'msgs' });
+    openInternetPage('tied');
+    tiedOpenVip(id);
+    if (typeof closeMailbox === 'function') closeMailbox();
+}
 const tiedLike = id => { likeTiedPost(id); renderTiedPage(); };
 const tiedTogglePool = id => tiedSetView({ pool: tiedView.pool === id ? null : id });
 const tiedComment = (id, text) => { commentTiedPost(id, text); tiedSetView({ pool: null }); };
@@ -483,6 +530,13 @@ function executeCompanyPlan(stock, plan) {
     const data = plan.data || {};
     if (plan.type === 'dividend') return !stock.dividendPolicyLockedByOwner && applyDividendPolicyChange(stock, data.policy);
     if (plan.type === 'strategy') return proposeStrategy(stock, data.proposal) === 'started';
+    if (plan.type === 'buyback') { // prośba do zarządu; zwykły skup działa na liczniku cechy prezesa
+        const shares = Math.floor(stock.totalShares * 0.001);
+        if (!(shares > 0) || shares > getAvailableShares(stock)) return false;
+        stock.treasuryShares = (stock.treasuryShares || 0) + shares;
+        logEvent(`📈 Zarząd ${stock.name} ogłasza skup akcji własnych.`, 'company');
+        return true;
+    }
     if (plan.type === 'takeover') {
         const target = stocks.find(s => s.symbol === data.target);
         if (!target || target.isBankrupt || target.mergerProcess || stock.mergerProcess) return false; // plan odpada z przyczyn zewnętrznych
@@ -497,7 +551,7 @@ function processCompanyPlansQuarterly() {
         const plan = stock.plannedMove;
         if (plan && plan.atQ <= quarter) {
             delete stock.plannedMove;
-            if (plan.real && plan.type !== 'buyback' && executeCompanyPlan(stock, plan)) resolveTiedTips(stock);
+            if (plan.real && (plan.type !== 'buyback' || plan.data?.manual) && executeCompanyPlan(stock, plan)) resolveTiedTips(stock);
             continue;
         }
         if (plan || !stock.ceo?.id || stock.assetType || stock.isBankrupt) continue;
@@ -648,4 +702,158 @@ function settleDeputiesAfterCeoChange(stock) {
     for (const deputy of [...getDeputies(stock)]) {
         if (deputy.trait === 'aspirant' || (deputy.trait !== 'lojalny' && Math.random() < DEPUTY_RULES.leaveChance)) removeDeputy(stock, deputy);
     }
+}
+
+// =================================================================================
+// 0.17.3 R4: rozmowy, posty gracza, VIP w Tied
+// =================================================================================
+// Wynik liczy się bez losowania: charakter × ton, nastawienie rozmówcy w tym kwartale (hash), powtórzony ton traci, relacja.
+// Parametry z symulacji: gracz czytający charakter ok. 64% sukcesu, losowy ok. 25%.
+const TALK_RULES = { turns: [2, 3], options: [3, 4], repeatLoss: 1, likedBonus: 1, dislikedLoss: 4, successAt: 0.5, friendBonus: 0.25, hostileLoss: 0.25, moodStep: 3, quickGain: 2, minStake: 0.05 };
+const TALK_TONES = {
+    numbers: { label: 'Liczby', texts: ['Jaki poziom marży uznajesz za bezpieczny?', 'Które koszty rosną najszybciej?', 'Ile zarabiacie na najmniejszym kliencie?'] },
+    vision: { label: 'Wizja', texts: ['Gdzie widzisz spółkę za trzy lata?', 'Co może zmienić całą branżę?', 'W co warto dziś wejść, zanim zrobią to inni?'] },
+    safety: { label: 'Bezpieczeństwo', texts: ['Co najbardziej zagraża wynikom?', 'Jak jesteście przygotowani na gorszy rok?', 'Ile gotówki trzymacie na czarną godzinę?'] },
+    relation: { label: 'Relacja', texts: ['Doceniam, że znalazłeś czas.', 'Dobrze się z Tobą rozmawia.', 'Cenię to, co robisz w tej firmie.'] },
+    pressure: { label: 'Presja', texts: ['Akcjonariusze oczekują więcej.', 'Rynek traci cierpliwość.', 'Wyniki muszą się poprawić, i to szybko.'] }
+};
+const TALK_OPENERS = ['Dzień dobry. Co Cię do mnie sprowadza?', 'Mam chwilę. O czym chcesz porozmawiać?', 'Słucham. Co sądzisz o ostatnim kwartale?'];
+const TALK_REQUESTS = { dividend: { label: 'Dywidenda', text: 'Czy spółka rozważy wyższą wypłatę?' }, buyback: { label: 'Skup akcji', text: 'Czy spółka rozważy skup akcji?' }, strategy: { label: 'Strategia', text: 'Czy zarząd rozważy nowy kierunek?' } };
+const TIED_PLAYER_POSTS = { good: 'Fundusz zakończył kwartał powyżej indeksu.', hard: 'Trudny kwartał, trzymamy się strategii.', brag: 'Najlepszy fundusz na rynku!' };
+
+/** Czy można rozmawiać: 'full', 'quick' albo null. Jedyne miejsce z tym warunkiem (decyzja użytkownika może go zmienić): pełna rozmowa z kontaktem, u autora widocznego posta bez kontaktu tylko szybka. */
+function getTiedTalkAccess(key) {
+    const person = getTiedPerson(key);
+    if (!person || person.kind === 'colleague') return null;
+    if (isTiedContact(key)) return 'full';
+    return getTiedPosts().some(post => tiedPostKey(post) === key && post.kind !== 'hr' && canSeeTiedPost(post)) ? 'quick' : null;
+}
+const isTiedContact = key => getTiedContacts().some(person => person.key === key);
+const hasTalkedThisQuarter = key => ensureTiedState().talked?.[key] === macro.quarter;
+
+/** Nastawienie rozmówcy w tym kwartale: stałe, gracz odczytuje je z odpowiedzi. */
+function getTalkBias(key) {
+    const tones = Object.keys(TALK_TONES), liked = descriptionHash(`${key}:${macro.quarter}:up`) % tones.length;
+    return { liked: tones[liked], disliked: tones[(liked + 1 + descriptionHash(`${key}:${macro.quarter}:down`) % (tones.length - 1)) % tones.length] };
+}
+function getTalkToneValue(key, tone, used = {}) {
+    const bias = getTalkBias(key);
+    return getPersonCharacterData(key).tones[tone] - TALK_RULES.repeatLoss * (used[tone] || 0) + (tone === bias.liked ? TALK_RULES.likedBonus : 0) - (tone === bias.disliked ? TALK_RULES.dislikedLoss : 0);
+}
+/** Wynik rozmowy z listy tonów: nastrój −2…+2, zmiana relacji −6…+6, sukces. */
+function resolveTalk(key, choices) {
+    const used = {};
+    let sum = 0;
+    for (const tone of choices) { sum += getTalkToneValue(key, tone, used); used[tone] = (used[tone] || 0) + 1; }
+    const relation = getRelation(key), bonus = relation >= TIED_RULES.friendAt ? TALK_RULES.friendBonus : relation < 0 ? -TALK_RULES.hostileLoss : 0;
+    const score = sum / Math.max(1, choices.length) + bonus, mood = Math.max(-2, Math.min(2, Math.round(score)));
+    return { mood, delta: mood * TALK_RULES.moodStep, success: score >= TALK_RULES.successAt };
+}
+function getTalkOptions() {
+    const tones = Object.keys(TALK_TONES).sort(() => Math.random() - 0.5).slice(0, getRandomIntInRange(...TALK_RULES.options));
+    return tones.map(tone => ({ tone, text: getRandomElement(TALK_TONES[tone].texts) }));
+}
+function startTiedTalk(key) {
+    if (getTiedTalkAccess(key) !== 'full' || hasTalkedThisQuarter(key)) return false;
+    tiedView.talk = { key, turn: 1, turns: getRandomIntInRange(...TALK_RULES.turns), choices: [], log: [{ text: getRandomElement(TALK_OPENERS) }], options: getTalkOptions(), request: null, result: null };
+    return true;
+}
+function markTalked(key) { const tied = ensureTiedState(); (tied.talked ||= {})[key] = macro.quarter; }
+
+/** Szybka rozmowa: bez minigry, najwyżej +2, także bez kontaktu. */
+function quickTiedTalk(key) {
+    if (!getTiedTalkAccess(key) || hasTalkedThisQuarter(key)) return false;
+    const best = Math.max(...Object.values(getPersonCharacterData(key).tones));
+    const gain = Math.min(TALK_RULES.quickGain, getTalkToneValue(key, 'relation') >= best - 1 ? 2 : 1);
+    markTalked(key);
+    changeRelation(key, gain, 'szybka rozmowa w Tied');
+    return gain;
+}
+function getTalkStake(stock) { return stock ? (getFundStakePct(stock) || 0) : 0; }
+/** Prośba do zarządu przy sukcesie: zwykły plan spółki. Udział ≥ 5%, tylko u prezesa albo wiceprezesa. */
+function executeTalkRequest(stock, request) {
+    if (request === 'dividend') {
+        const index = DIVIDEND_POLICY_ORDER.indexOf(normalizeDividendPolicy(stock.dividendPolicy));
+        return index < 2 && planCompanyMove(stock, 'dividend', { policy: DIVIDEND_POLICY_ORDER[index + 1] });
+    }
+    if (request === 'buyback') return planCompanyMove(stock, 'buyback', { manual: true });
+    const proposal = canStartExpansion(stock) ? { type: 'expand', target: pickExpansionSector(stock) } : null;
+    return Boolean(proposal?.target) && planCompanyMove(stock, 'strategy', { proposal });
+}
+function chooseTalkOption(index, request = null) {
+    const talk = tiedView.talk;
+    if (!talk || talk.result) return null;
+    const option = request ? { tone: 'pressure', text: TALK_REQUESTS[request].text } : talk.options[index];
+    if (!option) return null;
+    const used = {};
+    for (const tone of talk.choices) used[tone] = (used[tone] || 0) + 1;
+    const value = getTalkToneValue(talk.key, option.tone, used), reply = getPersonCharacterData(talk.key).reply;
+    talk.choices.push(option.tone);
+    if (request) talk.request = request;
+    talk.log.push({ me: true, text: option.text }, { text: value >= 1 ? reply.good : value < 0 ? reply.bad : reply.neutral });
+    if (talk.turn < talk.turns) { talk.turn++; talk.options = getTalkOptions(); return talk; }
+    finishTiedTalk(talk);
+    return talk;
+}
+function finishTiedTalk(talk) {
+    const result = resolveTalk(talk.key, talk.choices);
+    markTalked(talk.key);
+    if (talk.key.startsWith('vip:')) { settleVipTalk(talk.key, result); talk.result = result; return; }
+    changeRelation(talk.key, result.delta, 'rozmowa w Tied');
+    const stock = getTiedPerson(talk.key)?.stock;
+    if (talk.request && stock) result.requested = result.success && executeTalkRequest(stock, talk.request);
+    talk.result = result;
+}
+
+// --- VIP ---
+function getVipOffers() { return (playerFund?.vip?.offers || []).filter(offer => offer.expiresQ > macro.quarter); }
+function startVipTalk(offerId) {
+    const offer = getVipOffers().find(item => item.id === offerId);
+    if (!offer) return false;
+    const key = `vip:${offer.id}`;
+    tiedView.talk = { key, name: offer.name, turn: 1, turns: 3, choices: [], log: [{ text: 'Rozważam wpłatę do Twojego funduszu. Przekonaj mnie.' }], options: getTalkOptions(), request: null, result: null };
+    return true;
+}
+/** Rozmowa rozstrzyga o wpłacie; skutki bez zmian (5–15% NAV, lock-up, wyjście przy słabym wyniku). */
+function settleVipTalk(key, result) {
+    const offer = getVipOffers().find(item => `vip:${item.id}` === key);
+    if (!offer) return;
+    settleVipOffer(offer, result.success);
+    const tied = ensureTiedState();
+    (tied.vips ||= []).push({ id: offer.id, name: offer.name, won: result.success });
+}
+function declineVipOffer(offerId) {
+    const vip = playerFund?.vip;
+    if (vip) vip.offers = vip.offers.filter(offer => offer.id !== offerId);
+}
+
+// --- Wpis gracza ---
+function canPublishTiedPost() { return ensureTiedState().postQ !== macro.quarter; }
+function publishTiedPlayerPost(id) {
+    if (!TIED_PLAYER_POSTS[id] || !canPublishTiedPost()) return false;
+    ensureTiedState().postQ = macro.quarter;
+    addTiedPost({ kind: 'player', author: playerProfile.name, text: TIED_PLAYER_POSTS[id], symbol: null });
+    const period = playerFund?.periods?.at(-1);
+    if (!period) return true;
+    const beat = period.fundReturn >= period.benchmarkReturn;
+    const change = (id === 'hard' ? !beat : beat) ? 1 : id === 'hard' ? 0 : -2; // zgodny z wynikiem +1, chwałba przy słabym wyniku −2
+    playerFund.trust = Math.max(0, Math.min(100, playerFund.trust + change));
+    return true;
+}
+
+// --- Relacja z prezesem a spółka (R0: premia i spadki) ---
+const CEO_RELATION_RULES = { bonusAt: 40, bonusCap: 30, bigSale: 0.01, bigSaleLoss: 5, voteLoss: 8, dismissalLoss: 20 };
+/** Co kwartał: dobra relacja z prezesem daje +1 do reputacji w spółce, do +30 z tego źródła. */
+function processCeoRelationBonus() {
+    if (!playerProfile) return;
+    const gained = ensureTiedState().repGain ||= {};
+    for (const stock of stocks) {
+        if (!stock.ceo?.id || getRelation(ceoKey(stock.ceo.id)) < CEO_RELATION_RULES.bonusAt || (gained[stock.symbol] || 0) >= CEO_RELATION_RULES.bonusCap) continue;
+        const before = stock.reputation?.player;
+        changeReputation('player', stock.symbol, 1);
+        if (stock.reputation?.player !== before) gained[stock.symbol] = (gained[stock.symbol] || 0) + 1;
+    }
+}
+function noteCeoRelationLoss(stock, loss, reason) {
+    if (stock?.ceo?.id) changeRelation(ceoKey(stock.ceo.id), -loss, reason);
 }

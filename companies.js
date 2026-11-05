@@ -6777,6 +6777,7 @@ function confirmCeoChange(symbol, candidateIndex) {
     const baseChance = 0.50;
     const bonusChance = (ownershipPct - 50) * 0.01;
     const successChance = Math.min(1.0, baseChance + bonusChance);
+    if (typeof noteCeoRelationLoss === 'function') noteCeoRelationLoss(stock, CEO_RELATION_RULES.dismissalLoss, 'próba odwołania prezesa'); // 0.17.3
 
     if (Math.random() < successChance) {
         
