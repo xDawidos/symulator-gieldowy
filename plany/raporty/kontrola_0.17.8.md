@@ -1,75 +1,104 @@
 # Kontrola 0.17.8: generator opisów spółek
 
-Gałąź `claude/impl-017-s0b-891539` po scaleniu `zmiany-AI` 5fe70bd, nie scalona z powrotem i nie wypchnięta. Testy: **968/968**, w tym 7 nowych w grupie „0.17.8 Generator opisów spółek”. Plan: `plany/plan_generator_opisow.md`.
+Gałąź `claude/impl-017-s0b-891539` po scaleniu `zmiany-AI` 5fe70bd, nie scalona z powrotem i nie wypchnięta. Testy: **970/970**, w tym 9 w grupie „0.17.8 Generator opisów spółek”. Plan: `plany/plan_generator_opisow.md`.
 
 ## Co zrobione
 - **Generator w `companies.js`:** `getDescriptionSentences` składa opis na bieżąco. Warianty wybiera hash, więc tekst jest ten sam przy każdym otwarciu karty. Opis nie trafia do zapisu.
-- **Pierwsze zdanie:** pozycja według poziomu giełdy i krótka fraza działalności.
-- **Środek:** dokładnie 1 podpowiedź oraz 1–2 zdania ozdobne (motto i zdanie o charakterze sektora).
+- **Pierwsze zdanie:** pozycja według poziomu giełdy i fraza działalności. Fraza pochodzi kolejno z typu aktywa (REIT, windykator, lombard, biuro rachunkowe), podsektora (28 fraz, po jednej na każdy), a na końcu z sektora (21 fraz).
+- **Środek:** dokładnie 1 podpowiedź, hasło firmy zależne od poziomu giełdy i czasem zdanie o charakterze sektora.
 - **Ostatnie zdanie:** cytat prezesa z puli `neutral` i `positive`.
 - **Stałe opisy:** przeniesione ENG, TRN, PUR, NOC; usunięte ZST, SLS, TIR. Testy S2 i S4 poprawione. Po prywatyzacji stały opis znika i działa generator.
 - **Stare zapisy:** pole `descriptionParts` jest pomijane. Nowe spółki go nie dostają.
-- **Usunięty martwy kod:** `sectorSpecifics`, `getCEOQuote`, `getVolatilitySentence`.
-- **Bez zmian:** startupy, instytuty i spółki zagraniczne.
+- **Usunięty martwy kod:** `sectorSpecifics`, `getCEOQuote`, `getVolatilitySentence`, `companyMottos`, pula `innovator`.
+- **Bez zmian:** startupy, instytuty i spółki zagraniczne. Opisu MLD nie dodałem.
 
-## Odstępstwa od planu
-- **21 sektorów zamiast 16:** tabela fraz obejmuje wszystkie sektory z `SECTOR_NAMES`. Lista 16 z `sectorSpecifics` nie pokrywała m.in. Obronności, Budowlanego i Transportu.
-- **Poziom 4 (Platynowa):** plan mówi „poziomy 5 i 6: `giant`” oraz „jak w `getCompanyDescriptor`”, a stary kod dawał `giant` już od poziomu 4. Wybrałem pierwsze zdanie planu: poziomy 3–4 używają `leader`, 5 i wyższe `giant`.
-- **Pula pozycji:** „ugruntowana pozycja” usunięta, a „instytucja w branży” i „uznana marka w branży” skrócone, bo nie składały się ze zdaniem „to … w sektorze”.
-- **Mediana zmienności:** liczona ze spółek startowych, nie z bieżących. Dzięki temu podpowiedź nie zmienia się przy cudzym debiucie.
-- **Wybór podpowiedzi:** najwyższy stały numer z hasha symbolu i rodzaju podpowiedzi, nie „hash modulo liczba pasujących”. Nowa prawdziwa podpowiedź rzadziej wypiera dotychczasową.
+## Poprawki po pierwszym przeglądzie
+1. **Frazy:** frazy sektorów są teraz szerokie, bo to zapas dla spółek bez podsektora. Przemysł: „dostarcza towary i usługi innym firmom”, Technologia: „dostarcza usługi i rozwiązania cyfrowe”, Żywność: „dostarcza jedzenie i napoje klientom w całym kraju”.
+2. **Pula pozycji:** usunięte „bezpieczna przystań” i „konglomerat”. Poprawione określenia niesiadające z „w sektorze”: „nowicjusz”, „gigant”, „lider”, „weteran”, „tytan” (bez „na rynku”, „branży”). Usunięte też „stabilna firma”, „pewny gracz”, „dynamiczny startup”, „filar rynku”, „główny dostawca”, „lider segmentu”, bo mówiły o kursie albo źle się składały. Platynowa używa puli „lider”.
+3. **Hasła firm:** zamiast starych mott trzy pule (Śmieciowa i Brązowa, Srebrna i Złota, od Platynowej wzwyż). Podane jako „Hasło firmy: „…””, czyli to, co spółka mówi o sobie, więc nie twierdzą niczego o jej danych. Przejście między pulami zmienia hasło razem z pierwszym zdaniem.
+4. **Nowe podpowiedzi:** „bez długów” (zobowiązania ≤ 2% aktywów) i „duży dług” (≥ 33%). Czytają ten sam bilans co kafelek „Zadłużenie”. Banki są wyłączone, bo depozyty mają poza bilansem.
+5. **Test sprzeczności:** pula pozycji nie zawiera już słów o kursie, a test sprawdza to na puli i na wszystkich spółkach.
 
 ## Progi i rozkład podpowiedzi (66 spółek przez generator, jedna nowa gra)
-Progi po strojeniu: stabilna ≤ 0,8 mediany sektora (w planie 0,7), nerwowa ≥ 1,3 (w planie 1,4), wsad ≥ 0,15, produkt ≥ 0,3, dywidenda tylko polityki `Aggressive` i `Total`. Przy `Balanced` dywidenda pasowała do 33 z 66 spółek, czyli połowy giełdy.
+Progi: stabilna ≤ 0,8 mediany sektora, nerwowa ≥ 1,3, wsad ≥ 0,15, produkt ≥ 0,3, dywidenda `Aggressive` i `Total`, bez długów ≤ 2%, duży dług ≥ 33%.
 
 | Podpowiedź | Pasuje | Wybrana |
 |---|---|---|
-| Stabilna | 20 | 10 |
-| Nerwowa | 18 | 11 |
+| Duży dług | 21 | 12 |
+| Surowiec we wsadzie | 16 | 11 |
+| Stabilna | 20 | 9 |
+| Nerwowa | 18 | 7 |
+| Odporność | 19 | 5 |
+| Dywidenda | 13 | 5 |
+| Bez długów | 7 | 5 |
 | Kierunek rozwoju | 8 | 3 |
-| Surowiec we wsadzie | 16 | 12 |
 | Surowiec w produkcie | 6 | 3 |
-| Dywidenda | 13 | 6 |
 | Własne badania | 0 | 0 |
-| Odporność | 19 | 7 |
-| Zdanie zapasowe | — | 14 |
+| **Zdanie zapasowe** | — | **6** (było 14) |
 
-- **Własne badania** nie pojawiają się na starcie, bo żadna spółka nie ma jeszcze odblokowanych technologii. Podpowiedź wejdzie w trakcie gry; warunek ma test.
-- **Dywidenda** zmienia się między grami, bo polityki są losowane na starcie.
-- **Długość:** 31 opisów ma 4 zdania, 35 ma 5.
+Zapasowe dostają: WPY, PLX, BHI, MIN, SKP, QBF. Żadna podpowiedź nie pasuje do połowy giełdy. „Własne badania” pojawią się w trakcie gry, bo na starcie nikt nie ma technologii. Dywidenda zmienia się między grami.
+
+## Przegląd fraz na 66 spółkach
+Wszystkie frazy są prawdziwe, ale nie wszystkie dokładne.
+
+**Spółki bez podsektora, którym przydałby się dokładniejszy opis.** Nie zgadywałem. Frazy nie kłamią, ale są ogólne. Dokładniejsza fraza wymaga podsektora w danych, a to zmienia też mechanikę (np. wsad i listę `listedOnly`), więc decyzja należy do użytkownika.
+
+| Spółka | Fraza teraz | Co wynika z nazwy | Możliwa zmiana danych |
+|---|---|---|---|
+| KWM Kopalnie Węgla Mine | dostarcza towary i usługi innym firmom | kopalnia | podsektor Wydobycie |
+| ORT Orzeł Telekom | dostarcza usługi i rozwiązania cyfrowe | telekom | nowy podsektor Telekomunikacja |
+| STM Stocznia Morska | dostarcza towary i usługi innym firmom | stocznia | podsektor Przemysł ciężki |
+| BTX Betonex | dostarcza towary i usługi innym firmom | beton | podsektor Przemysł ciężki |
+| KRA Krawaciarze Inc. | dostarcza towary i usługi innym firmom | doradcy | bez zmiany, fraza pasuje |
+| PIX Pikselowe Marzenia | dostarcza usługi i rozwiązania cyfrowe | grafika lub gry | do decyzji |
+| NRB Nova Robotics | dostarcza usługi i rozwiązania cyfrowe | robotyka to drugi segment | zamiana segmentów |
+| BOR Biurowce Obsługi Rachunkowej | obsługuje firmy i klientów indywidualnych | biurowce to drugi segment | zamiana segmentów |
+| PLX Plandex | organizuje wyjazdy i wypoczynek | niejasne | do decyzji |
+
+**Dane niezgodne z nazwą.** Podsektor Fintech mają WIP WinPost i CRO Cyber-Ochrona. Dlatego fraza Fintechu jest ogólna: „obsługuje klientów przez internet”. BFP Bank Finansowania Projektów i FPM Fundacja Przedsiębiorczości Miejskiej są typu `Holding`, więc dostają „zarządza kapitałem i udziałami w innych firmach”.
 
 ## 12 przykładów
-**ECL, Śmieciowa, Chemia:** EcoLube to świeża siła w sektorze Chemia, wytwarza surowce i półprodukty dla przemysłu. Uważnie patrzy na ceny ropy. Wizją spółki jest zostanie niekwestionowanym liderem innowacji w swojej branży. W tej branży dużo zależy od tego, co dzieje się z kosztem energii. „Analizujemy trendy rynkowe, aby podejmować świadome i odpowiedzialne decyzje.” — mówi prezes Stępień.
+**ECL, Śmieciowa, Chemia:** EcoLube to świeża siła w sektorze Chemia, wytwarza surowce i półprodukty dla przemysłu. Uważnie patrzy na ceny ropy. Hasło firmy: „Najpierw przetrwać, potem podbijać”. W tej branży dużo zależy od tego, co dzieje się z kosztem energii. „Analizujemy trendy rynkowe, aby podejmować świadome i odpowiedzialne decyzje.” — mówi prezes Stępień.
 
-**SUM, Śmieciowa, Żywność:** Super Makarony to nowicjusz na rynku w sektorze Żywność, dostarcza produkty na sklepowe półki w całym kraju. Popyt nie znika tu nawet w recesji. Kluczem do sukcesu jest dla nas partnerstwo i transparentność w biznesie. „Naszym priorytetem jest optymalizacja procesów i długoterminowa satysfakcja klienta.” — mówi prezes Wiśniewski.
+**KFX, Śmieciowa, Żywność:** Konfiturex to świeża siła w sektorze Żywność, dostarcza jedzenie i napoje klientom w całym kraju. Bank jest tu ważnym wspólnikiem, choć nie ma akcji. Hasło firmy: „Dziś parter, jutro piętro”. Tu o wyniku często decydują ceny składników. „Utrzymanie płynności i dyscyplina kosztowa to fundamenty naszej działalności w obecnym klimacie.” — mówi prezes Ostrowski.
 
-**BAL, Brązowa, Turystyka:** Bałtyckie Rejsy to pewny gracz w sektorze Turystyka, organizuje wyjazdy i wypoczynek. Akcjonariusze rzadko czekają tu na dywidendę z pustymi rękami. Inwestujemy w ludzi, bo to oni tworzą wartość naszej firmy. „Budujemy wartość dla naszych akcjonariuszy każdego dnia, konsekwentnie realizując strategię.” — mówi prezes Zieliński.
+**BLP, Śmieciowa, Medycyna:** Błyskawiczna Proteza to nowicjusz w sektorze Medycyna, produkuje sprzęt dla lekarzy i pacjentów. Kurs potrafi zaskoczyć nawet w spokojnej branży. Hasło firmy: „Małe kroki, duże nadzieje”. Popyt na zdrowie rzadko zależy od koniunktury. „Dzięki zaufaniu inwestorów i ciężkiej pracy całego zespołu osiągamy kolejne kamienie milowe.” — mówi prezes Mazur.
 
-**KWM, Brązowa, Przemysł:** Kopalnie Węgla Mine to bezpieczna przystań w sektorze Przemysł, wytwarza produkty dla innych firm. Akcje ruszają się mocniej niż u większości sąsiadów z branży. Myślimy globalnie, działamy lokalnie. „Nasza siła leży w stabilności i przewidywalności, co cenią nasi partnerzy biznesowi.” — mówi prezes Górski.
+**TIR, Brązowa, Transport i logistyka:** Tir-Pol Spedycja to lokalny gracz w sektorze Transport i logistyka, przewozi ładunki koleją i drogami. Nerwowo śledzi notowania ropy. Hasło firmy: „Dziś parter, jutro piętro”. W tej branży liczy się każdy kilometr i każdy litr paliwa. „Działamy zgodnie z przyjętym planem, adaptując się do zmian w otoczeniu biznesowym.” — mówi prezes Stępień.
 
-**NAG, Brązowa, Energia (stały opis):** NatGaz to zaufana marka w sektorze Energia. Państwowa spółka wydobycia i importu gazu, z kontraktami długoterminowymi ze wschodu „do renegocjacji”. Przychody rosną razem z ceną gazu. „Dzięki zaufaniu inwestorów i ciężkiej pracy całego zespołu osiągamy kolejne kamienie milowe.” — mówi prezes Michalski.
+**KWM, Brązowa, Przemysł:** Kopalnie Węgla Mine to rozpoznawalna marka w sektorze Przemysł, dostarcza towary i usługi innym firmom. Bank jest tu ważnym wspólnikiem, choć nie ma akcji. Hasło firmy: „Dziś parter, jutro piętro”. „Nasza siła leży w stabilności i przewidywalności, co cenią nasi partnerzy biznesowi.” — mówi prezes Górski.
 
-**DPB, Srebrna, Gaming:** DVD Project Black to sprawdzony partner w sektorze Gaming, tworzy i wydaje gry. Na tle branży nie wyróżnia się na razie niczym szczególnym. Budujemy przyszłość w oparciu o tradycję, doświadczenie i nowoczesne technologie. Jedna premiera potrafi przesądzić o całym roku. „Utrzymanie płynności i dyscyplina kosztowa to fundamenty naszej działalności w obecnym klimacie.” — mówi prezes Jankowski.
+**DPB, Srebrna, Gaming:** DVD Project Black to sprawdzony partner w sektorze Gaming, tworzy i wydaje gry. Sporą część majątku finansuje długiem. Hasło firmy: „Konkurencja niech się martwi”. Jedna premiera potrafi przesądzić o całym roku. „Utrzymanie płynności i dyscyplina kosztowa to fundamenty naszej działalności w obecnym klimacie.” — mówi prezes Jankowski.
 
-**SIK, Srebrna, Chemia:** Siarkobrzeg to filar rynku w sektorze Chemia, wytwarza surowce i półprodukty dla przemysłu. Akcjonariusze rzadko czekają tu na dywidendę z pustymi rękami. Firma kieruje się zasadą zrównoważonego rozwoju i odpowiedzialności społecznej. „Dzięki zaufaniu inwestorów i ciężkiej pracy całego zespołu osiągamy kolejne kamienie milowe.” — mówi prezes Wiśniewska.
+**SIK, Srebrna, Chemia:** Siarkobrzeg to ważny gracz w sektorze Chemia, wytwarza surowce i półprodukty dla przemysłu. Bank jest tu ważnym wspólnikiem, choć nie ma akcji. Hasło firmy: „Solidnie i terminowo”. „Dzięki zaufaniu inwestorów i ciężkiej pracy całego zespołu osiągamy kolejne kamienie milowe.” — mówi prezes Wiśniewska.
 
-**SKP, Złota, Dobra konsumpcyjne:** SuperKonsumpcja! to lider rynku w sektorze Dobra konsumpcyjne, sprzedaje towary codziennego użytku. Na tle branży nie wyróżnia się na razie niczym szczególnym. Jakość nie jest celem, jest standardem. „Nie tylko spełniamy prognozy, my je przekraczamy. To nowy standard w naszej firmie.” — mówi prezes Lewandowska.
+**SKP, Złota, Dobra konsumpcyjne (zdanie zapasowe):** SuperKonsumpcja! to wyznacznik standardów w sektorze Dobra konsumpcyjne, sprzedaje towary codziennego użytku. Na tle branży nie wyróżnia się na razie niczym szczególnym. Hasło firmy: „Konkurencja niech się martwi”. „Nie tylko spełniamy prognozy, my je przekraczamy. To nowy standard w naszej firmie.” — mówi prezes Lewandowska.
 
-**STM, Złota, Przemysł:** Stocznia Morska to kluczowy gracz w sektorze Przemysł, wytwarza produkty dla innych firm. Uważnie patrzy na ceny metali. Budujemy przyszłość w oparciu o tradycję, doświadczenie i nowoczesne technologie. Gdy gospodarka zwalnia, ta branża czuje to jako jedna z pierwszych. „Rynek jest wymagający, ale dzięki efektywności operacyjnej utrzymujemy solidną pozycję.” — mówi prezes Kozłowski.
+**STM, Złota, Przemysł:** Stocznia Morska to czołowy gracz w sektorze Przemysł, dostarcza towary i usługi innym firmom. Uważnie patrzy na ceny metali. Hasło firmy: „Konkurencja niech się martwi”. Gdy gospodarka zwalnia, ta branża czuje to jako jedna z pierwszych. „Rynek jest wymagający, ale dzięki efektywności operacyjnej utrzymujemy solidną pozycję.” — mówi prezes Kozłowski.
 
-**UNP, Platynowa, Technologia:** Universal Projects to lider rynku w sektorze Technologia, tworzy oprogramowanie i usługi cyfrowe. Akcjonariusze rzadko czekają tu na dywidendę z pustymi rękami. Spółka stawia na dynamiczny rozwój, elastyczność i pełną satysfakcję klienta. „Technologia, którą rozwijamy, daje nam przewagę na lata. Konkurencja może tylko patrzeć.” — mówi prezes Walczak.
+**GRET, Złota, Nieruchomości (REIT):** Global Real Estate Trust to kluczowy gracz w sektorze Nieruchomości, wynajmuje nieruchomości i dzieli się czynszem z akcjonariuszami. Bank jest tu ważnym wspólnikiem, choć nie ma akcji. Hasło firmy: „Solidnie i terminowo”. Tu czynsze płyną powoli, ale regularnie. „Rynek jest wymagający, ale dzięki efektywności operacyjnej utrzymujemy solidną pozycję.” — mówi prezes Szymański.
 
-**BEW, Szmaragdowa, Energia:** Bałtycka Energia to gigant na rynku w sektorze Energia, dostarcza energię firmom i domom. Chętnie dzieli się zyskiem z akcjonariuszami. Wizją spółki jest zostanie niekwestionowanym liderem innowacji w swojej branży. Energia to branża, w której państwo zawsze ma coś do powiedzenia. „Dzięki zaufaniu inwestorów i ciężkiej pracy całego zespołu osiągamy kolejne kamienie milowe.” — mówi prezes Kamińska.
+**BEW, Szmaragdowa, Energia (OZE):** Bałtycka Energia to mocarstwo w sektorze Energia, wytwarza prąd ze źródeł odnawialnych. Chętnie dzieli się zyskiem z akcjonariuszami. Hasło firmy: „Rynek nas zna, konkurencja też”. Energia to branża, w której państwo zawsze ma coś do powiedzenia. „Dzięki zaufaniu inwestorów i ciężkiej pracy całego zespołu osiągamy kolejne kamienie milowe.” — mówi prezes Kamińska.
 
-**ORT, Szmaragdowa, Technologia:** Orzeł Telekom to konglomerat w sektorze Technologia, tworzy oprogramowanie i usługi cyfrowe. Kurs chodzi spokojniej niż u większości sąsiadów z branży. Kluczem do sukcesu jest dla nas partnerstwo i transparentność w biznesie. Tu rynek płaci głównie za przyszłość, nie za przeszłość. „Jesteśmy na fali wznoszącej i nie zamierzamy zwalniać tempa.” — mówi prezes Kowalski.
+**ORT, Szmaragdowa, Technologia:** Orzeł Telekom to gigant w sektorze Technologia, dostarcza usługi i rozwiązania cyfrowe. Kurs chodzi spokojniej niż u większości sąsiadów z branży. Hasło firmy: „Nie gonimy rynku, to rynek wie, gdzie jesteśmy”. Tu rynek płaci głównie za przyszłość, nie za przeszłość. „Jesteśmy na fali wznoszącej i nie zamierzamy zwalniać tempa.” — mówi prezes Kowalski.
+
+## Karta spółki na ekranie
+Sprawdzone w grze, konsola bez błędów. Tekst mieści się w sekcji „O spółce”.
+
+- Spółka prywatna: [BurgerLand](zrzuty_0.17.8/karta_prywatna_BUL.jpg)
+- Spółka państwowa ze stałym opisem: [NatGaz](zrzuty_0.17.8/karta_panstwowa_NAG.jpg)
 
 ## Propozycja opisu MLD (do akceptacji, nie w grze)
 > Państwowa kopalnia i huta miedzi, w której każdy nowy rząd obiecuje modernizację. Wynik idzie za ceną metali, a rachunki za prąd zjadają marżę.
 
+## Odstępstwa od planu
+- **21 sektorów zamiast 16:** lista z `sectorSpecifics` nie pokrywała m.in. Obronności, Budowlanego i Transportu.
+- **Mediana zmienności:** liczona ze spółek startowych, nie z bieżących, żeby podpowiedź nie zmieniała się przy cudzym debiucie.
+- **Wybór podpowiedzi:** najwyższy stały numer z hasha symbolu i rodzaju podpowiedzi. Nowa prawdziwa podpowiedź rzadziej wypiera dotychczasową.
+- **Poziom giełdy zmienia też hasło firmy** przy przejściu między pulami, zgodnie z poleceniem poprawek. Plan mówił tylko o pierwszym zdaniu.
+
 ## Do uwagi
-- **Generyczność fraz:** fraza sektora nie zawsze pasuje do spółki: Orzeł Telekom „tworzy oprogramowanie”, a Kopalnie Węgla „wytwarzają produkty dla innych firm”. To skutek jednej frazy na sektor. Precyzję dałyby frazy na podsektor albo stałe opisy.
-- **Niezgodność pozycji i podpowiedzi:** zdarza się, np. „bezpieczna przystań” przy „akcje ruszają się mocniej”. Pozycja zależy tylko od poziomu giełdy, a pula `stable` obejmuje to określenie.
-- **Motta:** pula jest stara i korporacyjna, więc przy spółce ze Śmieciowej brzmi poważniej niż plan wskazuje („niekwestionowanym liderem”).
-- **Cytat a zgodność płci:** „mówi prezes Wiśniewska” używa tego samego słowa „prezes” co reszta gry.
-- **`plany/opisy_spolek_pl.md`:** pozostałe propozycje zostają tylko jako materiał, plan generatora je zastępuje.
-- **Sprawdzone w grze:** rozkład i przykłady z uruchomionej gry, konsola bez błędów. Karty spółki nie oglądałem na ekranie po zmianie; `assembleDescription` zwraca tam zwykły tekst jak wcześniej.
+- **Podpowiedzi o długu mogą się zmieniać w trakcie gry:** zadłużenie zmienia się co kwartał, więc spółka blisko progu 33% może przechodzić między podpowiedziami. Mieści się to w zasadzie „gdy przestanie być prawdziwa”.
+- **Powtórzenia:** „Bank jest tu ważnym wspólnikiem” i to samo hasło mogą się trafić kilku spółkom na tej samej giełdzie, bo pule są małe.
+- **„Prezes” przy nazwiskach kobiet:** bez zmian, jak w reszcie gry.
+- **`plany/opisy_spolek_pl.md`:** pozostałe propozycje zostają tylko jako materiał.
