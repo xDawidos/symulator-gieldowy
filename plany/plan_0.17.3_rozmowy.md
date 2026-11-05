@@ -156,7 +156,7 @@ Charakter jest stały dla osoby i nigdy nie pojawia się w UI. Akademia uczy czy
 
 ### Rozmowa
 
-- Dostępna dla kontaktów, 1 na osobę na kwartał gry.
+- „Napisz” działa u kontaktów i u autora posta widocznego w kanale. Bez zakupu akcji dostępna jest tylko „szybka rozmowa”, pełna rozmowa wymaga kontaktu. 1 rozmowa na osobę na kwartał gry.
 - 2–3 tury, w każdej 3–4 opcje w tonie: liczby, wizja, bezpieczeństwo, relacja, presja.
 - Wynik zależy od macierzy charakter × ton i relacji. Nastrój −2…+2 daje zmianę relacji od −6 do +6.
 - „Szybka rozmowa”: bez minigry, najwyżej +2.
@@ -210,6 +210,17 @@ Bot wybiera cel zgodnie ze swoim portfelem, np. poleca spółkę, którą sam tr
   - nowy preset „czytelnik Tied”, który handluje po zapowiedziach: przewaga nad presetem bazowym poniżej progu do ustalenia;
   - rozmiar zapisu: średnia w limicie;
   - czas kroku: bez wzrostu ponad 2%.
+
+## Decyzje po projekcie Tied (2026-11-05)
+
+Zastępują punkt 3 w sekcji „Do decyzji użytkownika” w `plany/design/10_tied_0.17.3.md`, pozostałe przyjęte jak w dokumencie.
+
+- Profil pokazuje też liczbę relacji, np. „+34”.
+- Odrzucenie prośby od prezesa lub bota: relacja −2.
+- Limit +2 za reakcje pozostaje ukryty.
+- Wpis gracza: 3 gotowe do wyboru na kwartał.
+- Mail KNF nie podaje kwoty kary w ostrzeżeniu.
+- Maile KNF, NBP i działu klienta zostają w Poczcie (`getMailChannel`), nie w Tied. Do zrobienia w R1.
 
 ## Odrzucone pomysły
 
