@@ -341,6 +341,7 @@ function buyStock(symbol, quantity) {
     logFundTrade(symbol, 'buy');
 
     // Logika transakcji
+    if (typeof noteCeoContact === 'function') noteCeoContact(stockToBuy); // 0.17.3 R0
     if (!stockToBuy.playerTransactions) stockToBuy.playerTransactions = [];
     stockToBuy.playerTransactions.push({
         type: 'buy',
@@ -1785,6 +1786,7 @@ function startNewCareer(profile = {}) {
         baseCurrency: 'PLN', // 0.16.11 K2: zmienia się przy wyborze kraju startowego (setStartCountry)
         positionId: 'junior',
         startedAt: Date.now(),
+        contacts: [], follows: [], // 0.17.3 R0: osoby z Tied (kontakty zostają po sprzedaży akcji), obserwowani
         cv: [{ type: 'start', text: `Zatrudnienie w ${profile.corporation || 'korporacji'} jako Młodszy zarządca.` }]
     };
 

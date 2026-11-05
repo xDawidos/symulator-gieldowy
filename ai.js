@@ -2408,7 +2408,26 @@ function getRelationPeople() {
 }
 
 function findRelationPerson(id) {
-    return getRelationPeople().find(person => person.id === id) || null;
+    return getRelationPeople().find(person => person.id === id) || findCeoRelationPerson(id);
+}
+
+// 0.17.3 R0: relacje z prezesami pod kluczem ceo:<id>, poza getRelationPeople, więc tabela prezentów ich nie pokazuje.
+const getCeoRelationKey = ceoId => `ceo:${ceoId}`;
+function findCeoRelationPerson(key) {
+    if (!String(key).startsWith('ceo:')) return null;
+    const ceoId = key.slice(4), ceo = stocks.find(stock => stock.ceo?.id === ceoId)?.ceo;
+    const name = ceo?.name || playerProfile?.contacts?.find(contact => contact.id === ceoId)?.name;
+    return name ? { id: key, name, kind: 'ceo', entity: ceo || null } : null;
+}
+
+/** Kontakt w Tied: prezes spółki, której akcje gracz kupił. Wpis zostaje po sprzedaży i po odejściu prezesa; spółki zagraniczne poza zakresem. */
+function noteCeoContact(stock) {
+    if (!playerProfile || !stock?.ceo?.name || (typeof isForeignShare === 'function' && isForeignShare(stock))) return;
+    if (!stock.ceo.id) stock.ceo.id = newCeoId();
+    const contacts = playerProfile.contacts || (playerProfile.contacts = []);
+    const entry = { id: stock.ceo.id, name: stock.ceo.name, symbol: stock.symbol, role: 'prezes' }, known = contacts.find(contact => contact.id === entry.id);
+    if (known) Object.assign(known, entry);
+    else contacts.push(entry);
 }
 
 function getRelation(id) {

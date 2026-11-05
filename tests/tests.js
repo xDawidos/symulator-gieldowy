@@ -13607,9 +13607,7 @@ group('0.16.5 Internet i TeamedUP!', () => {
         assert(!canOpenInternetPage('google.com').ok && !canOpenInternetPage('').ok && !canOpenInternetPage(undefined).ok, 'spoza ulubionych odmowa');
         assert(!openInternetPage('google.com') && internetState.page === null, 'adres spoza ulubionych nie zmienia strony');
         playerProfile.positionId = 'junior'; botRelations.values = {};
-        assert(!canOpenInternetPage('tied').ok && canOpenInternetPage('tied').reason.length > 10, 'Tied zablokowany z opisem');
-        playerProfile.positionId = 'manager';
-        assert(canOpenInternetPage('tied').ok, 'Tied po awansie');
+        assert(canOpenInternetPage('tied').ok, 'Tied od początku gry');
     });
 
     test('I5: bilet z gotówki funduszu od 1000 zł, odmowa przy braku gotówki; tło okna zmienia się na kraj i wraca', () => {
@@ -13626,12 +13624,12 @@ group('0.16.5 Internet i TeamedUP!', () => {
         } finally { airportState.forced = false; resetTicketsState(); }
     });
 
-    test('I5: wiadomości od inwestorów i spółek idą do Tied dopiero po jego odblokowaniu; sprawy korporacji do TeamedUP!, newsy zostają w Poczcie; nic nie ginie', () => {
+    test('I5: wiadomości od inwestorów i spółek idą do Tied od początku; sprawy korporacji do TeamedUP!, newsy i wiadomości z przyciskiem zostają w Poczcie; nic nie ginie', () => {
         startFund(); playerProfile.positionId = 'junior'; botRelations.values = {};
         addMail({ sender: 'bot:x', subject: 'Cześć', body: 'Kawa?' }); addMail({ sender: CORPORATION_SENDER, subject: 'Cel', body: 'Do zrobienia' });
-        const total = mailbox.messages.length; assertEq(getMailInFolder('inbox').length, 1, 'bez Tied inwestor czyta się w Poczcie, korporacja w TeamedUP!'); assertEq(mailbox.messages.filter(m => getMailChannel(m) === 'teamedup').length, 1, 'korporacja w TeamedUP!');
-        playerProfile.positionId = 'manager';
-        assertEq(getMailInFolder('inbox').length, 0, 'inwestor poza Pocztą'); assertEq(mailbox.messages.filter(m => getMailChannel(m) === 'tied').length, 1, 'wiadomość w Tied'); assertEq(mailbox.messages.length, total, 'żadna nie zginęła');
+        const total = mailbox.messages.length; assertEq(getMailInFolder('inbox').length, 0, 'inwestor poza Pocztą'); assertEq(mailbox.messages.filter(m => getMailChannel(m) === 'teamedup').length, 1, 'korporacja w TeamedUP!'); assertEq(mailbox.messages.filter(m => getMailChannel(m) === 'tied').length, 1, 'wiadomość w Tied'); assertEq(mailbox.messages.length, total, 'żadna nie zginęła');
+        addMail({ sender: 'bot:x', subject: 'Pakiet', body: 'Oferta', action: { type: 'botBlock', symbol: 'AAA' } });
+        assertEq(getMailInFolder('inbox').length, 1, 'wiadomość z przyciskiem w Poczcie');
     });
 
     test('I5: dobre wieści spółki dają post jej prezesa w Tied (bez duplikatu), złe nie', () => {
@@ -14009,7 +14007,7 @@ group('0.16.7 Pełne spółki zagraniczne', () => {
         for (const row of Object.values(snap.issuers)) delete row.c; // zapis v17
         resetGdrState(); applyCountriesSnapshot(snap); const c = foreignIssuers.YA1; assert(c.balanceSheet && c.cash > 0 && !c.fundamentals, 'v17: model z ceny, fundamenty przy pierwszym raporcie');
         quarter(); assert(foreignIssuers.YA1.fundamentals, 'po kwartale są fundamenty'); assertEq(checkWorldInvariants().join(' ; '), '', 'niezmienniki po migracji');
-        assertEq(SAVE_FORMAT_VERSION, 21, 'wersja zapisu'); assert(SUPPORTED_SAVE_VERSIONS.includes(17), 'v17 nadal wczytywany');
+        assertEq(SAVE_FORMAT_VERSION, 22, 'wersja zapisu'); assert(SUPPORTED_SAVE_VERSIONS.includes(17), 'v17 nadal wczytywany');
     }));
 
     test('F2: prezes po 65. roku odchodzi (nowa osoba, cecha kraju z definicji)', () => withYY(() => {
@@ -14249,7 +14247,7 @@ group('0.16.9 Lombard w Internecie, rynek połączony na giełdzie', () => {
             const back = convertCurrency('PLN', 'EUR', getCurrencyCash('player', 'PLN')); assert(back.ok && back.receivedCode === 'EUR', 'wymiana PLN→EUR');
             addCurrencyCash('player', 'EUR', 10); assertNear(playerCash, playerCash, 'brak NaN'); assert(!('EUR' in playerCashByCurrency), 'wpływ w EUR trafia do gotówki bazowej');
             assertEq(checkCurrencyInvariants().length, 0, 'niezmienniki walut'); assertEq(checkWorldInvariants().length, 0, 'niezmienniki świata');
-            const snap = JSON.parse(JSON.stringify(buildSaveSnapshot())); assertEq(snap.version, 21); assertEq(snap.playerProfile.baseCurrency, 'EUR');
+            const snap = JSON.parse(JSON.stringify(buildSaveSnapshot())); assertEq(snap.version, 22); assertEq(snap.playerProfile.baseCurrency, 'EUR');
             const old = JSON.parse(JSON.stringify(snap)); old.version = 20; delete old.playerProfile.baseCurrency;
             const rep = applySaveSnapshot(old); assert(rep.ok, 'v20 się wczytuje: ' + rep.errors.join('; ')); assertEq(getBaseCurrency(), 'PLN', 'stary zapis = PLN');
             assert(FOREIGN_CURRENCIES.includes('EUR') && !FOREIGN_CURRENCIES.includes('PLN'), 'lista walut po migracji');
@@ -14494,7 +14492,7 @@ group('0.16.9 W1 Gotówka w wielu walutach', () => {
         assert(basis > 0 && snap.basis.CHF === basis, 'basis w zapisie');
         applyCurrencySnapshot(snap); assertNear(playerFxBasis.CHF, basis, 'odtworzony kurs nabycia', 1e-12);
         delete snap.basis; fxRates.CHF = fxRates.CHF; applyCurrencySnapshot(snap); assertNear(playerFxBasis.CHF, fxRates.CHF, 'v19: kurs nabycia = bieżący', 1e-12);
-        assertEq(SAVE_FORMAT_VERSION, 21); assert(SUPPORTED_SAVE_VERSIONS.includes(19) && SUPPORTED_SAVE_VERSIONS.includes(20) && SUPPORTED_SAVE_VERSIONS.includes(21), 'v19, v20 i v21 obsługiwane');
+        assertEq(SAVE_FORMAT_VERSION, 22); assert(SUPPORTED_SAVE_VERSIONS.includes(19) && SUPPORTED_SAVE_VERSIONS.includes(20) && SUPPORTED_SAVE_VERSIONS.includes(21), 'v19, v20 i v21 obsługiwane');
         assertEq(checkCurrencyInvariants().length, 0);
         initFxState();
     });
@@ -15720,5 +15718,86 @@ group('0.17.8 Generator opisów spółek', () => {
         assert(!assembleDescription(stock).includes('STARE'), 'pole pominięte');
         const startup = { assetType: 'Startup', name: 'S', symbol: 'ST', sector: ['Technologia'], ceo: { name: 'Jan Nowak' }, description: 'Opis startupu.' };
         assertEq(assembleDescription(startup), 'Opis startupu.', 'startup');
+    });
+});
+
+group('0.17.3 R0 Osoby, relacje, kontakty', () => {
+    const start = () => { const list = [makeCompany('AAA'), makeCompany('BBB')]; list.forEach(company => { company.insiderShares = 0; company.reputation = { player: 0 }; }); resetWorld(list); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' }); playerCash = 5_000_000; botRelations = createBotRelations(); delete oversight.records.player; for (const stock of stocks) { stock.ceo = null; generateCEO(stock); } };
+    const [a, b] = [() => stocks[0], () => stocks[1]];
+
+    test('prezes ma id przy tworzeniu; każde zastąpienie bez kandydata daje nową osobę, kandydat ma własne id', () => {
+        start();
+        assert(a().ceo.id && b().ceo.id && a().ceo.id !== b().ceo.id, 'różne id');
+        const first = a().ceo.id;
+        replaceCeo(a());
+        assert(a().ceo.id && a().ceo.id !== first, 'nowy prezes, nowe id');
+        const candidate = generateCeoCandidate(a());
+        assert(candidate.id, 'kandydat ma id');
+        replaceCeo(a(), candidate);
+        assertEq(a().ceo.id, candidate.id, 'kandydat zachowuje swoje id');
+    });
+    test('kontakt zostaje po pełnej sprzedaży i po odejściu prezesa; bez duplikatów', () => {
+        start();
+        const ceo = a().ceo;
+        buyStock('AAA', 10);
+        assertEq(playerPortfolio.AAA?.shares, 10, 'kupno');
+        assertEq(playerProfile.contacts.length, 1, 'kontakt po kupnie');
+        assertEq(JSON.stringify(playerProfile.contacts[0]), JSON.stringify({ id: ceo.id, name: ceo.name, symbol: 'AAA', role: 'prezes' }), 'pola kontaktu');
+        buyStock('AAA', 5);
+        assertEq(playerProfile.contacts.length, 1, 'drugie kupno bez duplikatu');
+        sellStock('AAA', 15);
+        assert(!playerPortfolio.AAA, 'pełna sprzedaż');
+        assertEq(playerProfile.contacts.length, 1, 'kontakt zostaje po sprzedaży');
+        replaceCeo(a());
+        assertEq(playerProfile.contacts[0].id, ceo.id, 'kontakt zostaje przy osobie, która odeszła');
+        assertEq(findRelationPerson(getCeoRelationKey(ceo.id)).name, ceo.name, 'osoba spoza spółki nadal ma nazwę');
+    });
+    test('podkupiony prezes zachowuje id i relację, a nowy w spółce źródłowej zaczyna od zera', () => {
+        start();
+        const ceo = a().ceo, key = getCeoRelationKey(ceo.id);
+        changeRelation(key, 30, 'test');
+        assertEq(getRelation(key), 30, 'relacja przez changeRelation');
+        a().workforce = null; b().workforce = null; b().cash = 1e9; a().totalShares = 1000;
+        const random = Math.random; Math.random = () => 0;
+        let result; try { result = poachCeo(b(), a()); } finally { Math.random = random; }
+        assert(result.success, `podkupienie: ${result.reason || ''}`);
+        assertEq(b().ceo.id, ceo.id, 'to samo id w nowej spółce');
+        assertEq(getRelation(getCeoRelationKey(b().ceo.id)), 30, 'relacja idzie z osobą');
+        assert(a().ceo.id !== ceo.id, 'źródło ma nową osobę');
+        assertEq(getRelation(getCeoRelationKey(a().ceo.id)), 0, 'nowy prezes od zera');
+    });
+    test('relacje z prezesami: zanik działa, tabela prezentów ich nie pokazuje, zera poza zapisem', () => {
+        start();
+        const key = getCeoRelationKey(a().ceo.id);
+        changeRelation(key, 40, 'test');
+        assert(!getRelationPeople().some(person => person.id === key), 'poza tabelą inwestorów i kolegów');
+        for (let i = 0; i < 2; i++) for (const id of Object.keys(botRelations.values)) botRelations.values[id] *= 1 - RELATION_DECAY;
+        assertNear(getRelation(key), 40 * (1 - RELATION_DECAY) ** 2, 'zanik', 1e-9);
+        botRelations.values.zero = 0;
+        const saved = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
+        assertEq(saved.version, 22, 'wersja 22');
+        assert(!('zero' in saved.botRelations.values) && saved.botRelations.values[key] > 0, 'zero poza zapisem, relacja w zapisie');
+        delete botRelations.values.zero;
+    });
+    test('stary zapis: prezesi dostają różne id, licznik nie powtarza użytych, listy puste', () => {
+        start();
+        const snapshot = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
+        snapshot.version = 21;
+        delete snapshot.playerProfile.contacts; delete snapshot.playerProfile.follows;
+        for (const stock of snapshot.stocks) if (stock.ceo) delete stock.ceo.id;
+        const list = stocks; stocks = [];
+        const report = applySaveSnapshot(snapshot);
+        assert(report === undefined || !report.errors?.length, 'wczytano');
+        assert(Array.isArray(playerProfile.contacts) && Array.isArray(playerProfile.follows), 'listy');
+        const ids = stocks.filter(stock => stock.ceo).map(stock => stock.ceo.id);
+        assert(ids.length && ids.every(Boolean) && new Set(ids).size === ids.length, 'różne id');
+        assert(!ids.includes(newCeoId()), 'nowe id nie powtarza użytych');
+    });
+    test('stary zapis z relacją i kontaktem: id z kontaktu i relacji nie wraca do nowego prezesa', () => {
+        start();
+        playerProfile.contacts = [{ id: 'c900', name: 'Jan Były', symbol: 'AAA', role: 'prezes' }];
+        botRelations.values['ceo:c950'] = 12;
+        ensureCeoIds();
+        assert(Number(newCeoId().slice(1)) > 950, 'licznik ponad użytymi');
     });
 });

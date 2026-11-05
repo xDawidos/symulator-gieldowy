@@ -5174,7 +5174,6 @@ body #internet-modal { background: var(--net-bg-base) !important; color: var(--n
 .net-fav-icon { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 12px; color: var(--tone); background: color-mix(in srgb, var(--tone) 14%, transparent); border: 1px solid color-mix(in srgb, var(--tone) 35%, transparent); }
 .net-fav:hover, .net-fav:focus-visible { border-color: var(--tone); outline: 2px solid color-mix(in srgb, var(--tone) 40%, transparent); }
 .net-fav.tone-amber { --tone: #f59e0b; } .net-fav.tone-blue { --tone: #38bdf8; } .net-fav.tone-violet { --tone: #a78bfa; } .net-fav.tone-teal { --tone: #2dd4bf; } .net-fav.tone-orange { --tone: #fb923c; }
-.net-fav.locked { --tone: #6b7280; border-style: dashed; opacity: .8; }
 .net-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--tone, var(--net-muted)); background: color-mix(in srgb, var(--tone, #8b80a1) 14%, transparent); border: 1px solid color-mix(in srgb, var(--tone, #8b80a1) 35%, transparent); }
 .net-new { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; background: var(--net-red); color: #fff; }
 .net-section-head { display: flex; justify-content: space-between; align-items: baseline; margin: 22px 0 10px; }
