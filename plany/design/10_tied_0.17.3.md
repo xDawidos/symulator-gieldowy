@@ -55,13 +55,13 @@ Stan widoku w grze: `tiedView = { feed, side, pane, person, company, talk }`, po
 | TeamedUP! | pozycja „Obietnice” w `#teamedup-nav`, ikona `karteczka`, liczba aktywnych; `.te-notes` z `.te-note`, `.is-done`, `.is-failed`; `limit-meter` i „320 z 500 akcji” przy celu mierzalnym; „Zrezygnuj” tylko w toku; zakup częściowy opisany na karteczce |
 | Karta spółki | w `renderCompanyCardOverview` przy nazwisku `.ceo-link` „Profil w Tied”, pod spodem „Wiceprezesi” i `.ceo-deputies`, gdy `stock.deputies?.length`; bez cech wiceprezesa w karcie |
 
-## Do decyzji użytkownika
-1. **Liczba relacji na profilu.** Plan mówi „słowem i miernikiem”, makieta dokłada „+34”. Bez liczby trudniej ocenić, ile brakuje do progu. Rekomendacja: zostawić.
-2. **Odrzucenie prośby od prezesa lub bota.** Plan nie podaje skutku. Rekomendacja: relacja −2, jak w drugą stronę.
-3. **„Napisz” do osoby spoza kontaktów.** Rozmowa jest tylko dla kontaktów. Rekomendacja: przycisk `disabled` z tekstem „Rozmowa po zakupie akcji tej spółki”.
-4. **Limit +2 za reakcje.** Makieta go nie pokazuje, klikanie dalej działa bez efektu. Rekomendacja: zostawić ukryty.
-5. **Wybór treści wpisu gracza.** Makieta pokazuje 3 gotowe wpisy, w tym jedną chwałbę. Plan nie podaje ich liczby. Rekomendacja: 3 na kwartał.
-6. **Kara KNF w mailu.** Makieta nie podaje kwoty w ostrzeżeniu. Rekomendacja: nie podawać, by nie zachęcać do liczenia opłacalności.
+## Decyzje użytkownika (2026-11-05)
+1. **Relacja na profilu:** słowo, miernik i liczba („Znajomy (+34)”).
+2. **Odrzucenie prośby od prezesa lub bota:** relacja −2, jak w drugą stronę. Uzupełnia plan, do dopisania w R1.
+3. **„Napisz” poza kontaktami:** przycisk `disabled` z tekstem „Rozmowa po zakupie akcji tej spółki”.
+4. **Limit +2 za reakcje:** ukryty, bez komunikatu.
+5. **Wpisy gracza:** 3 na kwartał: uczciwy o wyniku, ostrożny, chwałba.
+6. **Kara KNF:** ostrzeżenie nie podaje kwoty, tylko „Następne wykrycie: kara”.
 
 ## Prompt dla czatu kodu (R1, R2, R4, R5)
 > Wdróż wygląd 0.17.3 wg `plany/design/10_tied_0.17.3.md` i makiety `plany/design/makiety/10_tied_0173.html`, klasy CSS i ikony są gotowe, nie dopisuj tokenów. Zmieniasz markup: `renderTiedPage` w `internet.js` (podziel na `renderTiedFeed`, `renderTiedPost`, `renderTiedPerson`, `renderTiedCompany`, `renderTiedTalk`, `renderTiedSide`, stan `tiedView` poza zapisem, `.net-tied` i blok profilu po lewej usuń ze `style.css`), wpisy z `addTiedPost` i kadry z `replaceCeo`, `renderMailbox` i `MAIL_FOLDERS`, `getMailInFolder`, `getUnreadMailCount` w `events.js`, `MAIL_FOLDER_LABELS` w `ui.js`, nawigację w `renderTeamedUp` oraz nowe `renderTeamedPromises`, `renderCompanyCardOverview` (`ui.js`). Paski przez `renderLimitMeter`. Usuń `isTiedUnlocked` i ekran blokady zgodnie z R0. Charakter nie może trafić do żadnego tekstu, `title` ani `data-`. Testy: 1 na post niedostępny (bez treści, roli i reakcji), 1 na `.is-talk` przy otwartej rozmowie, 1 na folder „Ważne”, 1 na karteczkę, 1 sprawdzający brak nazw charakterów w HTML Tied. Sprawdź w przeglądarce na desktopie i 390 px, commit po polsku.
