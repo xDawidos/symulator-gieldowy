@@ -340,7 +340,16 @@ const UI_ICON_PATHS = {
     'transport-sea': 'M2 15h20l-2.5 6h-15zM5 15v-4h6v4M11 15V8h5v7M12 5h3M16 15v-3h4v3',
     'transport-air': 'M21 15l-8-4V5a1 1 0 0 0-2 0v6l-8 4v2l8-2v4l-2 2h6l-2-2v-4l8 2z',
     'transport-land': 'M2 7h12v9H2zM14 10h4l4 3v3h-8zM6.5 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM17.5 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4z',
-    'umiejetnosc-opcje': 'M3 3v18h18M6 17h6l7-10M12 17v4M12 3v2M12 8v2M12 13v2'
+    'umiejetnosc-opcje': 'M3 3v18h18M6 17h6l7-10M12 17v4M12 3v2M12 8v2M12 13v2',
+    'zweryfikowany': 'M12 2.5l2.4 1.8 3-.2 1 2.8 2.5 1.7-.9 2.9.9 2.9-2.5 1.7-1 2.8-3-.2L12 21.5l-2.4-1.8-3 .2-1-2.8-2.5-1.7.9-2.9-.9-2.9 2.5-1.7 1-2.8 3 .2zM8.5 12l2.4 2.4 4.6-4.8',
+    'znajomy': 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2.5 21a6.5 6.5 0 0 1 13 0M16 11l2 2 4-4',
+    'dodaj-znajomego': 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2.5 21a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6',
+    'komentarz': 'M4 5h16v11H10l-5 4v-4H4z',
+    'obserwuj': 'M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+    'karteczka': 'M4 4h16v11l-5 5H4zM20 15h-5v5M8 9h8M8 13h4',
+    'szybko': 'M13 2L4 14h7l-1 8 9-12h-7z',
+    'wazne': 'M6 3h12v18l-6-4-6 4zM12 7v5M12 14.5v.5',
+    'wpis': 'M4 20l1-4L16 5l3 3L8 19zM14 7l3 3',
 };
 
 const SECTOR_ICON_PATHS = {
