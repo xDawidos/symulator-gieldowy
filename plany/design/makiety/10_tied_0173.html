@@ -1,0 +1,330 @@
+<!doctype html><html lang="pl"><head><meta charset="utf-8"><title>Makieta UI 0.17.3 — Tied</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../../../tokens.css"><link rel="stylesheet" href="../../../style.css">
+<style>
+html, body { overflow: auto !important; height: auto !important; }
+body { display: block !important; padding: 24px !important; }
+.demo { max-width: 1120px; margin: 0 auto 32px; padding: 24px; background: var(--color-bg-base); border: 1px solid var(--color-border-subtle); border-radius: 6px; }
+.demo-title { margin: 0 0 4px; font-size: 20px; }
+.demo-sub { margin: 0 0 16px; color: var(--color-text-muted); font-size: 13px; }
+.sheet { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+.sheet div { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+#internet-modal { position: static !important; padding: 16px !important; overflow: visible; width: auto !important; max-width: none !important; height: auto !important; max-height: none !important; transform: none !important; }
+.demo-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+@media (max-width: 640px) { body { padding: 8px !important; } .demo { padding: 12px; } #internet-modal { padding: 8px !important; } }
+</style></head><body class="dark-mode">
+<svg style="display:none" id="ic-defs"></svg>
+
+<section class="demo"><h2 class="demo-title">0. Nowe ikony 0.17.3</h2><p class="demo-sub">24×24, kreska 1,8, currentColor. Polubienie to istniejące <code>serce</code>, wpis kadrowy to <code>zarzad</code> i <code>wyjscie</code>, blokada to <code>klodka</code>.</p>
+<div class="sheet">
+  <div><i data-ic="zweryfikowany" data-s="24"></i><i data-ic="zweryfikowany"></i> zweryfikowany</div>
+  <div><i data-ic="znajomy" data-s="24"></i><i data-ic="znajomy"></i> znajomy</div>
+  <div><i data-ic="dodaj-znajomego" data-s="24"></i><i data-ic="dodaj-znajomego"></i> dodaj-znajomego</div>
+  <div><i data-ic="komentarz" data-s="24"></i><i data-ic="komentarz"></i> komentarz</div>
+  <div><i data-ic="obserwuj" data-s="24"></i><i data-ic="obserwuj"></i> obserwuj</div>
+  <div><i data-ic="wpis" data-s="24"></i><i data-ic="wpis"></i> wpis</div>
+  <div><i data-ic="szybko" data-s="24"></i><i data-ic="szybko"></i> szybko</div>
+  <div><i data-ic="wazne" data-s="24"></i><i data-ic="wazne"></i> wazne</div>
+  <div><i data-ic="karteczka" data-s="24"></i><i data-ic="karteczka"></i> karteczka</div>
+</div></section>
+
+<section class="demo"><h2 class="demo-title">1. Tied: działający układ</h2><p class="demo-sub">Klikaj: zakładki, nazwiska, „Napisz”, wiadomości. Dwie kolumny, bez lewej. W rozmowie pasek zakładek kanału zwija się w górę, prawa kolumna zostaje. Do 900 px jedna kolumna z przełącznikiem.</p>
+<div id="internet-modal" style="display: block;">
+<div class="tied" id="tied" data-pane="feed">
+
+  <div class="tied-tabs tied-switch" role="tablist" aria-label="Widok Tied">
+    <button role="tab" aria-selected="true" data-pane-go="feed">Kanał</button>
+    <button role="tab" aria-selected="false" data-pane-go="side">Profil i kontakty</button>
+  </div>
+
+  <div class="tied-main">
+    <div class="tied-feedbar"><div><div class="tied-tabs" role="tablist" aria-label="Kanał">
+      <button role="tab" aria-selected="true" data-go="main">Główna</button>
+      <button role="tab" aria-selected="false" data-go="contacts">Kontakty</button>
+      <button role="tab" aria-selected="false" data-go="portfolio">Portfel</button>
+    </div></div></div>
+
+    <!-- KANAŁ: GŁÓWNA -->
+    <section class="tied-view" data-view="main">
+      <article class="net-post">
+        <header><span class="net-avatar" aria-hidden="true">AW</span><div>
+          <span class="tied-who"><button class="tied-name" data-go="person">Anna Wrona</button><span class="tied-badge" title="Zweryfikowany"><i data-ic="zweryfikowany" data-s="15"></i><span class="sr-only">Zweryfikowany</span></span><span class="tied-badge is-friend" title="Znajomy"><i data-ic="znajomy" data-s="15"></i><span class="sr-only">Znajomy</span></span></span>
+          <span class="tied-meta">Prezes · <button class="tied-name" data-go="company">Nordbud S.A.</button> · 10:42</span></div><span class="net-chip">Wyniki</span></header>
+        <p>Marża w trzecim kwartale wyższa o dwa punkty. Koszty materiałów spadły szybciej niż ceny kontraktów.</p>
+        <div class="tied-react">
+          <button class="tied-act" aria-pressed="true" data-toggle="Lubię to|Polubione"><i data-ic="serce" data-s="14"></i><span>Polubione</span> <b>13</b></button>
+          <button class="tied-act" aria-expanded="false" data-pool="p1"><i data-ic="komentarz" data-s="14"></i>Skomentuj <b>3</b></button>
+          <span class="tied-quote">Kurs NBD: <strong>48,20 PLN</strong><button class="btn-ghost btn-sm"><i data-ic="rynek" data-s="14"></i> Pokaż spółkę</button></span>
+        </div>
+        <div class="tied-pool" id="p1" hidden><button class="tied-act">Super!</button><button class="tied-act">Gratuluję!</button><button class="tied-act">Trzymamy za was kciuki :)</button></div>
+        <details class="tied-comments"><summary>Komentarze (3)</summary><ul>
+          <li><span class="net-avatar sm" aria-hidden="true">PL</span><span><button class="tied-name">Piotr Laskowski</button><br>Gratuluję!</span></li>
+          <li><span class="net-avatar sm" aria-hidden="true">JS</span><span><button class="tied-name">Julia Sowa</button><br>Super!</span></li>
+          <li><span class="net-avatar sm" aria-hidden="true">MZ</span><span><button class="tied-name">Marek Zapała</button><br>Trzymamy za was kciuki :)</span></li>
+        </ul></details>
+      </article>
+
+      <article class="net-post tied-hr">
+        <i data-ic="zarzad" data-s="20"></i><div><span class="tied-kicker">Objęcie stanowiska</span>
+        <button class="tied-name" data-go="person">Tomasz Bieniek</button> obejmuje stanowisko prezesa spółki <button class="tied-name" data-go="company">Kolpol S.A.</button>
+        <div class="tied-meta">wcześniej wiceprezes tej spółki · 9:15</div></div>
+      </article>
+
+      <article class="net-post">
+        <header><span class="net-avatar" aria-hidden="true">NB</span><div>
+          <span class="tied-who"><button class="tied-name" data-go="company">Nordbud S.A.</button><span class="tied-badge" title="Zweryfikowany"><i data-ic="zweryfikowany" data-s="15"></i><span class="sr-only">Zweryfikowany</span></span></span>
+          <span class="tied-meta">Konto spółki · Budownictwo · 8:30</span></div><span class="net-chip">Współpraca</span></header>
+        <p>Podpisaliśmy umowę na trzy odcinki autostrady. Dziękujemy zespołowi kontraktów.</p>
+        <div class="tied-react"><button class="tied-act" aria-pressed="false" data-toggle="Lubię to|Polubione"><i data-ic="serce" data-s="14"></i><span>Lubię to</span> <b>41</b></button><button class="tied-act" aria-expanded="false"><i data-ic="komentarz" data-s="14"></i>Skomentuj <b>6</b></button></div>
+      </article>
+
+      <article class="net-post is-locked">
+        <span class="net-avatar" aria-hidden="true">JK</span><button class="tied-name" data-go="person">Jan Kos</button>
+        <span class="tied-locked"><i data-ic="klodka" data-s="14"></i> Treść dla zaufanych</span>
+      </article>
+      <article class="net-post is-locked">
+        <span class="net-avatar" aria-hidden="true">EM</span><button class="tied-name" data-go="person">Ewa Mazur</button><span class="tied-badge" title="Zweryfikowany"><i data-ic="zweryfikowany" data-s="15"></i><span class="sr-only">Zweryfikowany</span></span>
+        <span class="tied-locked"><i data-ic="klodka" data-s="14"></i> Treść dla znajomych</span>
+      </article>
+
+      <article class="net-post tied-hr">
+        <i data-ic="wyjscie" data-s="20"></i><div><span class="tied-kicker">Odejście ze spółki</span>
+        <button class="tied-name" data-go="person">Jan Kos</button> odchodzi ze spółki <button class="tied-name" data-go="company">Kolpol S.A.</button> (wiceprezes)
+        <div class="tied-meta">wczoraj</div></div>
+      </article>
+    </section>
+
+    <!-- KANAŁ: KONTAKTY -->
+    <section class="tied-view" data-view="contacts" hidden>
+      <article class="net-post">
+        <header><span class="net-avatar" aria-hidden="true">AW</span><div>
+          <span class="tied-who"><button class="tied-name" data-go="person">Anna Wrona</button><span class="tied-badge" title="Zweryfikowany"><i data-ic="zweryfikowany" data-s="15"></i><span class="sr-only">Zweryfikowany</span></span><span class="tied-badge is-friend" title="Znajomy"><i data-ic="znajomy" data-s="15"></i><span class="sr-only">Znajomy</span></span></span>
+          <span class="tied-meta">Prezes · <button class="tied-name" data-go="company">Nordbud S.A.</button> · 11:03</span></div><span class="net-chip"><i data-ic="znajomy" data-s="12"></i> Dla znajomych</span></header>
+        <p>Coraz częściej rozmawiamy w zarządzie o akcjonariuszach.</p>
+        <div class="tied-react"><button class="tied-act" aria-pressed="false" data-toggle="Lubię to|Polubione"><i data-ic="serce" data-s="14"></i><span>Lubię to</span> <b>2</b></button><button class="tied-act" aria-expanded="false"><i data-ic="komentarz" data-s="14"></i>Skomentuj <b>0</b></button></div>
+      </article>
+      <article class="net-post">
+        <header><span class="net-avatar" aria-hidden="true">JS</span><div>
+          <span class="tied-who"><button class="tied-name" data-go="person">Julia Sowa</button></span>
+          <span class="tied-meta">Inwestorka · 9:50</span></div><span class="net-chip"><i data-ic="klodka" data-s="12"></i> Dla zaufanych</span></header>
+        <p>Przyglądam się mniejszemu graczowi z sektora Chemia. Na razie tylko się przyglądam.</p>
+        <div class="tied-react"><button class="tied-act" aria-pressed="false" data-toggle="Lubię to|Polubione"><i data-ic="serce" data-s="14"></i><span>Lubię to</span> <b>0</b></button><button class="tied-act" aria-expanded="false"><i data-ic="komentarz" data-s="14"></i>Skomentuj <b>0</b></button></div>
+      </article>
+    </section>
+
+    <!-- KANAŁ: PORTFEL -->
+    <section class="tied-view" data-view="portfolio" hidden>
+      <p class="net-empty">Spółki z Twojego portfela jeszcze nic nie opublikowały. Tu trafiają posty publiczne o spółkach, które trzymasz.</p>
+    </section>
+
+    <!-- PROFIL OSOBY -->
+    <section class="tied-view" data-view="person" hidden>
+      <button class="tied-back" data-go="main"><i data-ic="cofnij" data-s="14"></i> Wróć do kanału</button>
+      <article class="tied-profile">
+        <div class="tied-profile-head"><span class="net-avatar lg" aria-hidden="true">AW</span><div>
+          <h4>Anna Wrona</h4>
+          <span class="tied-meta">Prezes · <button class="tied-name" data-go="company">Nordbud S.A.</button> · staż 3 lata</span>
+          <div class="tied-tags"><span class="tied-tag tied-badge"><i data-ic="zweryfikowany" data-s="14"></i> Zweryfikowany</span><span class="tied-tag tied-badge is-friend"><i data-ic="znajomy" data-s="14"></i> Znajomy</span></div>
+        </div></div>
+        <div class="tied-rel"><strong>Relacja: Znajomy</strong> (+34 w skali od −100 do +100)
+          <span class="limit-meter" role="img" aria-label="Relacja +34, następny poziom od +60" style="--v:67;--limit:80"><i></i><b></b></span>
+          <span class="tied-note">Kreska: następny poziom, Zaufany znajomy.</span></div>
+        <div class="tied-actions">
+          <button class="tied-act" aria-pressed="false" data-toggle="Obserwuj|Obserwujesz"><i data-ic="obserwuj" data-s="14"></i><span>Obserwuj</span></button>
+          <button class="tied-act" data-go="talk"><i data-ic="komentarz" data-s="14"></i>Napisz</button>
+          <button class="tied-act" disabled><i data-ic="znajomy" data-s="14"></i>W znajomych</button>
+          <button class="tied-act"><i data-ic="rynek" data-s="14"></i>Karta spółki</button>
+        </div>
+      </article>
+      <h4 class="tied-section">Ostatnie posty</h4>
+      <article class="net-post"><header><span class="net-avatar sm" aria-hidden="true">AW</span><div><span class="tied-who"><strong>Anna Wrona</strong></span><span class="tied-meta">11:03</span></div><span class="net-chip"><i data-ic="znajomy" data-s="12"></i> Dla znajomych</span></header><p>Coraz częściej rozmawiamy w zarządzie o akcjonariuszach.</p></article>
+      <h4 class="tied-section">Inne stany akcji</h4>
+      <div class="tied-actions">
+        <button class="tied-act"><i data-ic="dodaj-znajomego" data-s="14"></i>Dodaj do znajomych</button>
+        <button class="tied-act" disabled><i data-ic="zegar" data-s="14"></i>Prośba wysłana</button>
+        <button class="tied-act" disabled><i data-ic="blokada" data-s="14"></i>Prośba odrzucona, ponów za 2 kw.</button>
+        <button class="tied-act" disabled><i data-ic="komentarz" data-s="14"></i>Następna rozmowa w kolejnym kwartale</button>
+      </div>
+    </section>
+
+    <!-- PROFIL FIRMOWY -->
+    <section class="tied-view" data-view="company" hidden>
+      <button class="tied-back" data-go="main"><i data-ic="cofnij" data-s="14"></i> Wróć do kanału</button>
+      <article class="tied-profile">
+        <div class="tied-profile-head"><span class="net-avatar lg" aria-hidden="true">NB</span><div>
+          <h4>Nordbud S.A.</h4><span class="tied-meta">Konto spółki · Budownictwo · giełda Złota</span>
+          <div class="tied-tags"><span class="tied-tag tied-badge"><i data-ic="zweryfikowany" data-s="14"></i> Zweryfikowany</span></div>
+        </div></div>
+        <h4 class="tied-section">Zarząd</h4>
+        <ul class="tied-board">
+          <li><span class="net-avatar sm" aria-hidden="true">AW</span><button class="tied-name" data-go="person">Anna Wrona</button><span class="tied-badge is-friend" title="Znajomy"><i data-ic="znajomy" data-s="15"></i><span class="sr-only">Znajomy</span></span><span class="tied-meta">Prezes</span></li>
+          <li><span class="net-avatar sm" aria-hidden="true">EM</span><button class="tied-name" data-go="person">Ewa Mazur</button><span class="tied-meta">Wiceprezes</span></li>
+          <li><span class="net-avatar sm" aria-hidden="true">RD</span><button class="tied-name" data-go="person">Robert Duda</button><span class="tied-meta">Wiceprezes</span></li>
+        </ul>
+        <div class="tied-actions" style="margin-top:12px">
+          <button class="tied-act" aria-pressed="true" data-toggle="Obserwuj|Obserwujesz"><i data-ic="obserwuj" data-s="14"></i><span>Obserwujesz</span></button>
+          <button class="tied-act"><i data-ic="rynek" data-s="14"></i>Karta spółki</button>
+        </div>
+      </article>
+      <h4 class="tied-section">Ostatnie posty</h4>
+      <article class="net-post"><header><span class="net-avatar sm" aria-hidden="true">NB</span><div><span class="tied-who"><strong>Nordbud S.A.</strong></span><span class="tied-meta">8:30</span></div><span class="net-chip">Współpraca</span></header><p>Podpisaliśmy umowę na trzy odcinki autostrady. Dziękujemy zespołowi kontraktów.</p></article>
+    </section>
+
+    <!-- ROZMOWA -->
+    <section class="tied-view" data-view="talk" hidden>
+      <div class="tied-talk">
+        <div class="tied-talk-head"><span class="net-avatar" aria-hidden="true">AW</span><div>
+          <span class="tied-who"><button class="tied-name" data-go="person">Anna Wrona</button><span class="tied-badge" title="Zweryfikowany"><i data-ic="zweryfikowany" data-s="15"></i><span class="sr-only">Zweryfikowany</span></span><span class="tied-badge is-friend" title="Znajomy"><i data-ic="znajomy" data-s="15"></i><span class="sr-only">Znajomy</span></span></span>
+          <span class="tied-meta">Prezes · Nordbud S.A. · relacja: Znajomy</span></div>
+          <button class="tied-act" data-go="main"><i data-ic="zamknij" data-s="14"></i>Zamknij rozmowę</button></div>
+        <div class="tied-start" data-start>
+          <button class="tied-act" data-start-go="full"><i data-ic="komentarz" data-s="14"></i>Porozmawiaj (2–3 tury)</button>
+          <button class="tied-act" data-start-go="quick"><i data-ic="szybko" data-s="14"></i>Szybka rozmowa (tylko relacja, do +2)</button>
+        </div>
+        <div class="tied-thread" data-thread hidden>
+          <div class="tied-bubble">Dzień dobry. Widzę Cię wśród akcjonariuszy. Co sądzisz o ostatnim kwartale?<small>10:50</small></div>
+          <div class="tied-bubble is-me">Marża robi wrażenie. Czy to się utrzyma przy obecnych cenach stali?<small>Ty, 10:51</small></div>
+          <div class="tied-bubble">Staramy się liczyć każdy koszt. Nie obiecuję cudów, ale kierunek jest dobry.<small>10:52</small></div>
+          <p class="tied-turn">Tura 2 z 3. Jedna rozmowa z tą osobą na kwartał.</p>
+          <div class="tied-choices">
+            <button><small>Liczby</small>Jaki poziom marży uznajesz za bezpieczny?</button>
+            <button><small>Wizja</small>Gdzie widzisz Nordbud za trzy lata?</button>
+            <button><small>Relacja</small>Doceniam, że znalazłaś czas.</button>
+            <button><small>Presja</small>Akcjonariusze oczekują więcej.</button>
+          </div>
+          <h4 class="tied-section">Prośby do zarządu</h4>
+          <div class="tied-choices">
+            <button disabled><small>Dywidenda</small>Czy spółka rozważy wypłatę?</button>
+            <button disabled><small>Skup akcji</small>Czy spółka rozważy skup?</button>
+          </div>
+          <p class="notice-inline"><i data-ic="klodka" data-s="14"></i><span>Prośby wymagają co najmniej 5% udziałów w spółce. Masz 1,2%.</span></p>
+        </div>
+        <div class="tied-result" data-result hidden><i data-ic="ok" data-s="16"></i><span>Rozmowa zakończona. Relacja <strong>▲ +2</strong>, teraz +36. Następna rozmowa w kolejnym kwartale.</span></div>
+      </div>
+      <h4 class="tied-section">Oferta w rozmowie: VIP</h4>
+      <div class="tied-offer"><span class="tied-kicker">Oferta VIP</span><p>Katarzyna Lis rozważa wpłatę do funduszu. Rozmowa rozstrzyga, czy wpłaci. Masz na to 3 tury.</p><div class="tied-actions"><button class="btn-primary btn-sm">Porozmawiaj</button><button class="btn-ghost btn-sm">Odrzuć</button></div></div>
+      <h4 class="tied-section">Oferta w rozmowie: obietnica bota</h4>
+      <div class="tied-offer"><span class="tied-kicker">Obietnica zakupu</span><p>Kupię jednostki Twojego funduszu za <strong>120 000 PLN</strong>, jeśli do końca kw. 3 roku 4 kupisz min. 500 akcji Nordbud S.A.</p><div class="tied-actions"><button class="btn-primary btn-sm">Przyjmij</button><button class="btn-ghost btn-sm">Odmów</button></div><p class="tied-note">Aktywne obietnice: 2 z 3. Trafią do TeamedUP! jako karteczka.</p></div>
+    </section>
+  </div>
+
+  <!-- PRAWA KOLUMNA -->
+  <aside class="tied-side" aria-label="Profil, wiadomości i kontakty">
+    <div class="tied-tabs" role="tablist" aria-label="Panel">
+      <button role="tab" aria-selected="true" data-side="me">Mój profil</button>
+      <button role="tab" aria-selected="false" data-side="msgs">Wiadomości <span class="net-count">2</span></button>
+      <button role="tab" aria-selected="false" data-side="people">Kontakty</button>
+    </div>
+
+    <section class="tied-panel" data-panel="me">
+      <span class="net-avatar lg" aria-hidden="true">ZK</span>
+      <h4 class="mt-2">Zofia Kania</h4><span class="tied-meta">Młodszy Zarządca · Fundusz Pierwszy Krok</span>
+      <dl class="tied-kv"><div><dt>Konto prywatne</dt><dd>1 551,15 PLN</dd></div><div><dt>Zaufanie klientów</dt><dd>14 / 100</dd></div><div><dt>Znajomi</dt><dd>4</dd></div></dl>
+      <h4 class="tied-section"><i data-ic="wpis" data-s="14"></i> Wpis na ten kwartał</h4>
+      <form class="tied-compose" onsubmit="return false">
+        <label><input type="radio" name="wpis" checked> Fundusz zakończył kwartał powyżej indeksu.</label>
+        <label><input type="radio" name="wpis"> Trudny kwartał, trzymamy się strategii.</label>
+        <label><input type="radio" name="wpis"> Najlepszy fundusz na rynku!</label>
+        <div class="btn-row"><button class="btn-primary btn-sm">Opublikuj</button></div>
+      </form>
+      <p class="tied-note">Jeden wpis na kwartał. Po publikacji: „Następny wpis w kwartale 3”.</p>
+    </section>
+
+    <section class="tied-panel" data-panel="msgs" hidden>
+      <ul class="tied-list">
+        <li><button class="tied-contact is-new" data-go="talk"><span class="net-avatar sm" aria-hidden="true">KL</span><span><strong>Katarzyna Lis <span class="net-chip">Nowa</span></strong><span class="tied-meta">Inwestorka VIP</span><span class="text-sm">Oferta wpłaty do funduszu</span></span></button></li>
+        <li><button class="tied-contact is-new" data-go="talk"><span class="net-avatar sm" aria-hidden="true">JS</span><span><strong>Julia Sowa <span class="net-chip">Nowa</span></strong><span class="tied-meta">Inwestorka</span><span class="text-sm">Mam dla Ciebie propozycję</span></span></button></li>
+        <li><button class="tied-contact" data-go="talk"><span class="net-avatar sm" aria-hidden="true">AW</span><span><strong>Anna Wrona</strong><span class="tied-meta">Prezes · Nordbud S.A.</span><span class="text-sm">Staramy się liczyć każdy koszt.</span></span></button></li>
+      </ul>
+    </section>
+
+    <section class="tied-panel" data-panel="people" hidden>
+      <h4 class="tied-section mt-0">Prośby do Ciebie (1)</h4>
+      <div class="tied-request"><div class="tied-request-who"><span class="net-avatar sm" aria-hidden="true">RD</span><span><button class="tied-name" data-go="person">Robert Duda</button><br><span class="tied-meta">Wiceprezes · Nordbud S.A.</span></span></div>
+        <div class="btn-row"><button class="btn-primary btn-sm">Przyjmij</button><button class="btn-ghost btn-sm">Odrzuć</button></div></div>
+      <h4 class="tied-section">Kontakty (6)</h4>
+      <div class="tied-filter" role="group" aria-label="Filtr kontaktów">
+        <button aria-pressed="true">Wszyscy</button><button aria-pressed="false">Prezesi</button><button aria-pressed="false">Wiceprezesi</button><button aria-pressed="false">Inwestorzy</button><button aria-pressed="false">VIP-y</button>
+      </div>
+      <ul class="tied-list">
+        <li><button class="tied-contact" data-go="person"><span class="net-avatar sm" aria-hidden="true">AW</span><span><strong>Anna Wrona</strong><span class="tied-meta">Prezes · Nordbud S.A.</span><span class="tied-level">Znajomy</span></span></button></li>
+        <li><button class="tied-contact" data-go="person"><span class="net-avatar sm" aria-hidden="true">JS</span><span><strong>Julia Sowa</strong><span class="tied-meta">Inwestorka</span><span class="tied-level">Zaufany znajomy</span></span></button></li>
+        <li><button class="tied-contact" data-go="person"><span class="net-avatar sm" aria-hidden="true">JK</span><span><strong>Jan Kos</strong><span class="tied-meta">Dawniej wiceprezes · Kolpol S.A.</span><span class="tied-level">Kontakt</span></span></button></li>
+      </ul>
+    </section>
+  </aside>
+</div></div></section>
+
+<section class="demo"><h2 class="demo-title">2. Poczta: zakładka „Ważne” i mail KNF</h2><p class="demo-sub">Nowy folder <code>important</code> zaraz pod Odebranymi: filtr po <code>importance ≥ 3</code>. Mail KNF ma nadawcę urzędowego, bez nazwy mechaniki w tekście.</p>
+<div class="demo-pair">
+  <div>
+    <nav class="mail-folders">
+      <button class="mail-folder"><span><i data-ic="poczta" data-s="14"></i> Odebrane</span><b>5</b></button>
+      <button class="mail-folder active" aria-current="page"><span><i data-ic="wazne" data-s="14"></i> Ważne</span><b>2</b></button>
+      <button class="mail-folder"><span><i data-ic="gwiazdka" data-s="14"></i> Oznaczone</span></button>
+    </nav>
+  </div>
+  <article class="mail-preview-wrap">
+    <div class="mail-message"><h3><i data-ic="alert" data-s="16"></i> Ostrzeżenie: transakcje na akcjach Nordbud S.A.</h3>
+      <p class="fund-muted">KNF, Departament Nadzoru Obrotu · 14:20</p>
+      <p>Zarejestrowaliśmy zakup akcji Nordbud S.A. tuż przed istotną decyzją spółki. Zakup nastąpił po wymianie informacji z osobą z zarządu.</p>
+      <p>To pierwsze ostrzeżenie. Przy kolejnym takim przypadku nałożymy karę finansową na fundusz.</p>
+      <p class="alert alert--warn"><i data-ic="alert" data-s="16"></i><span><strong>Następne wykrycie: kara.</strong> Kwotę poznasz w decyzji.</span></p>
+    </div>
+  </article>
+</div></section>
+
+<section class="demo"><h2 class="demo-title">3. TeamedUP!: karteczki obietnic</h2><p class="demo-sub">Nowa pozycja menu „Obietnice” z ikoną <code>karteczka</code> i liczbą aktywnych. Bot, cel, kwota, termin, stan słowem. Najwyżej 3 aktywne. Pasek tylko przy celu mierzalnym. Tu ramki zwykłe, ostre są wyłącznie w Tied.</p>
+<ul class="te-notes">
+  <li class="te-note"><div class="te-note-top"><span class="net-avatar sm" aria-hidden="true">JS</span><strong>Julia Sowa</strong><span class="te-chip live"><i data-ic="zegar" data-s="12"></i> W toku</span></div>
+    <span>Kup min. 500 akcji Nordbud S.A.</span><span class="limit-meter" role="img" aria-label="Kupiono 320 z 500 akcji" style="--v:64"><i></i></span><span class="tied-note">320 z 500 akcji</span>
+    <span class="te-note-amount">120 000 PLN</span><footer><span>do końca kw. 3 roku 4</span><button class="btn-ghost btn-sm">Zrezygnuj</button></footer></li>
+  <li class="te-note"><div class="te-note-top"><span class="net-avatar sm" aria-hidden="true">PL</span><strong>Piotr Laskowski</strong><span class="te-chip live"><i data-ic="zegar" data-s="12"></i> W toku</span></div>
+    <span>Pokonaj GIG w kwartale.</span>
+    <span class="te-note-amount">80 000 PLN</span><footer><span>do końca kw. 2 roku 4</span><button class="btn-ghost btn-sm">Zrezygnuj</button></footer></li>
+  <li class="te-note is-done"><div class="te-note-top"><span class="net-avatar sm" aria-hidden="true">MZ</span><strong>Marek Zapała</strong><span class="te-chip ok"><i data-ic="ok" data-s="12"></i> Spełniona</span></div>
+    <span>Utrzymaj gotówkę funduszu ≥ 10%.</span>
+    <span class="te-note-amount">60 000 PLN</span><footer><span>Marek Zapała kupił jednostki za 41 300 PLN: tyle miał gotówki.</span></footer></li>
+  <li class="te-note is-failed"><div class="te-note-top"><span class="net-avatar sm" aria-hidden="true">EM</span><strong>Ewa Mazur</strong><span class="te-chip"><i data-ic="zamknij" data-s="12"></i> Niespełniona</span></div>
+    <span>Zamknij wszystkie pozycje krótkie.</span>
+    <span class="te-note-amount">50 000 PLN</span><footer><span>termin minął w kw. 1 roku 4</span></footer></li>
+</ul></section>
+
+<section class="demo"><h2 class="demo-title">4. Karta spółki: sekcja „Prezes”</h2><p class="demo-sub">Link do profilu w Tied przy nazwisku. Wiceprezesi w tej samej sekcji, od razu z linkami. Bez listy, gdy spółka ich nie ma.</p>
+<div class="bank-card"><h4>Prezes</h4>
+  <p class="m-0"><strong><i data-ic="zarzad" data-s="14"></i> Anna Wrona</strong> <button class="ceo-link"><i data-ic="grupa" data-s="12"></i> Profil w Tied</button></p>
+  <p class="text-xs text-muted mt-0">wiek 52, staż 3 lata</p>
+  <h4>Wiceprezesi</h4>
+  <ul class="ceo-deputies">
+    <li><strong>Ewa Mazur</strong> <button class="ceo-link"><i data-ic="grupa" data-s="12"></i> Profil w Tied</button></li>
+    <li><strong>Robert Duda</strong> <button class="ceo-link"><i data-ic="grupa" data-s="12"></i> Profil w Tied</button></li>
+  </ul>
+</div></section>
+
+<script>
+// Wstawia sprite i rozwija <i data-ic> w <svg class="ic">; w grze to samo robi uiIcon(nazwa, 16).
+fetch('../../../img/ikony/sprite.svg').then(r => r.text()).then(t => {
+  document.getElementById('ic-defs').outerHTML = t;
+  document.querySelectorAll('i[data-ic]').forEach(el => { const s = el.dataset.s || 16; el.outerHTML = `<svg class="ic" width="${s}" height="${s}" viewBox="0 0 24 24" aria-hidden="true"><use href="#ic-${el.dataset.ic}"/></svg>`; });
+});
+// Tylko pokaz przejść. W grze to samo daje `tiedView` i ponowny render renderTiedPage().
+const tied = document.getElementById('tied');
+const go = view => {
+  tied.querySelectorAll('.tied-view').forEach(v => { v.hidden = v.dataset.view !== view; });
+  tied.classList.toggle('is-talk', view === 'talk');
+  tied.querySelectorAll('[role=tab][data-go]').forEach(b => b.setAttribute('aria-selected', b.dataset.go === view));
+  tied.dataset.pane = 'feed';
+  tied.querySelectorAll('[data-pane-go]').forEach(b => b.setAttribute('aria-selected', b.dataset.paneGo === 'feed'));
+  if (view === 'talk') { tied.querySelector('[data-start]').hidden = false; tied.querySelector('[data-thread]').hidden = true; tied.querySelector('[data-result]').hidden = true; }
+};
+tied.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.go) go(b.dataset.go);
+  if (b.dataset.side) { tied.querySelectorAll('.tied-panel').forEach(p => { p.hidden = p.dataset.panel !== b.dataset.side; }); tied.querySelectorAll('[data-side]').forEach(x => x.setAttribute('aria-selected', x === b)); }
+  if (b.dataset.paneGo) { tied.dataset.pane = b.dataset.paneGo; tied.querySelectorAll('[data-pane-go]').forEach(x => x.setAttribute('aria-selected', x === b)); }
+  if (b.dataset.toggle) { const [off, on] = b.dataset.toggle.split('|'), now = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', now); b.querySelector('span').textContent = now ? on : off; }
+  if (b.dataset.pool) { const p = document.getElementById(b.dataset.pool); p.hidden = !p.hidden; b.setAttribute('aria-expanded', !p.hidden); }
+  if (b.dataset.startGo) { tied.querySelector('[data-start]').hidden = true; tied.querySelector(b.dataset.startGo === 'full' ? '[data-thread]' : '[data-result]').hidden = false; }
+});
+</script>
+</body></html>
