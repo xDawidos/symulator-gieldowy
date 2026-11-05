@@ -61,10 +61,31 @@ Relacja z prezesem ≥ +40: +1 kwartalnie do `stock.reputation.player`, przez `c
 
 ## R1. Tied: profile i kontakty
 
-- Czwarty widok obok kanału: lista kontaktów z rolą, spółką, słownym poziomem relacji i filtrem (prezesi, wiceprezesi, inwestorzy, VIP-y).
-- Profil osoby: rola, spółka, staż, relacja słowem i miernikiem, ostatnie posty, przycisk rozmowy, odnośnik do karty spółki.
-- Link w karcie spółki przy nazwisku prezesa (`renderCompanyCardOverview`, `ui.js:4356`). Wiceprezesi w tej samej sekcji, od razu z linkami.
-- Post dostaje polubienie i komentarz. Post niedostępny dla gracza widać jako wpis z autorem i informacją „dla znajomych” bez treści.
+Ustalenia użytkownika z 2026-11-05.
+
+- **Prawa kolumna:** zakładki Mój profil, Wiadomości, Kontakty. Kontakty mają rolę, spółkę, poziom relacji i filtr (prezesi, wiceprezesi, inwestorzy, VIP-y).
+- **Kanał:** zakładki w kolejności Główna, Kontakty, Portfel. Główna to cały rynek.
+- **Post niedostępny:** autor i sam napis „Treść dla znajomych” lub „Treść dla zaufanych”. Bez dodatkowych informacji o relacji.
+- **Profil osoby:** otwierany kliknięciem w autora. Rola, spółka, staż, relacja słowem i miernikiem, ostatnie posty. Akcje: Obserwuj, Napisz, Dodaj do znajomych, odnośnik do karty spółki.
+- **Profil firmowy:** spółki mają własne konta i posty. Profil pokazuje sektor, giełdę, zarząd z Tied, ostatnie posty i przycisk Obserwuj.
+- **Obserwowanie:** posty obserwowanych trafiają do zakładki Kontakty. Lista w `playerProfile.follows`. Obserwowanie nie zmienia relacji.
+- **Znajomi:** gracz dodaje osobę z profilu. Szczegóły przyjmowania do ustalenia w rozmowie o mechanikach.
+- **Odznaki przy nazwisku:** „Zweryfikowany” dla ok. 20% kont, stała z hasha, bez wpływu na mechanikę. Ikona „Znajomy” przy osobach ze znajomych. Nazwa „zweryfikowany” odróżnia odznakę od poziomu „zaufany znajomy”.
+- **Kadry w kanale:** wpis, gdy prezes lub wiceprezes obejmuje stanowisko i gdy odchodzi ze spółki. Źródło: `replaceCeo` i zmiany w `stock.deputies`.
+- **Reakcje innych:** boty lubią i komentują posty między sobą. Liczniki i komentarze liczone hashem z identyfikatora posta, bez zapisu, teksty z tej samej puli co komentarze gracza.
+- **Zdjęcia w postach:** post może mieć zdjęcie z bazy. Gracz może dołączyć zdjęcie z tej bazy do wiadomości. Bez przesyłania plików z dysku.
+- **Zdjęcia profilowe:** baza dla prezesów i wiceprezesów. Brak pasującego zdjęcia: inicjały.
+- **Kształty:** ramki kart w Tied ostre, `border-radius: 0`. Okrągłe zostają tylko zdjęcia profilowe.
+- **Link w karcie spółki:** przy nazwisku prezesa (`renderCompanyCardOverview`, `ui.js:4356`). Wiceprezesi w tej samej sekcji, od razu z linkami.
+
+### Baza zdjęć
+
+- Pliki dostarcza użytkownik: `img/tied/posty/` i `img/tied/profile/`.
+- Post i osoba przechowują tylko numer zdjęcia, więc baza nie obciąża zapisu.
+- Start: 24 zdjęcia postów (biuro, fabryka, gala, budowa, zespół, produkt) i 24 profilowe (12 kobiet, 12 mężczyzn, różny wiek).
+- Format: WebP. Posty 800×450, do 80 KB. Profilowe 200×200, do 20 KB.
+- Rodzaj zdjęcia profilowego dobierany po imieniu, bo prezes nie ma pola płci.
+- Tylko zdjęcia z prawem użycia. Bez prawdziwych, rozpoznawalnych osób.
 
 ## R2. Posty i zapowiedzi
 
@@ -191,7 +212,9 @@ Bot wybiera cel zgodnie ze swoim portfelem, np. poleca spółkę, którą sam tr
 
 ## Interfejs
 
-Czat designu: lista kontaktów, profil, post z reakcjami, wpis zablokowany, okno rozmowy, karteczki w TeamedUP!, zakładka „Ważne”. Bez koloru jako jedynego nośnika, bez emoji. Gra używa „prezes”, nie „CEO”.
+Czat designu: układ według sekcji R1, profil osoby i firmy, post z reakcjami i zdjęciem, wpis zablokowany, wpis kadrowy, rozmowa, karteczki w TeamedUP!, zakładka „Ważne”. Bez koloru jako jedynego nośnika, bez emoji. Gra używa „prezes”, nie „CEO”.
+
+Do usunięcia z makiety Stitcha: „TLS 1.3”, „Węzeł autoryzowany”, „Stan terminala”, „GPW”. Dekoracyjne odznaki zastępuje jedna odznaka „Zweryfikowany”.
 
 ## Kolejność etapów
 
@@ -203,6 +226,7 @@ R0 (dane) → R1 (kontakty) → R2 (posty i zapowiedzi) → R3 (wiceprezesi) →
 - **Klikanie polubień:** limit +2 kwartalnie na osobę.
 - **Rozmiar zapisu:** 41 ze 120 gier przekracza już limit, a wiceprezesi i relacje dokładają dane.
 - **Przeniesienie decyzji spółek na plany:** największa zmiana w logice. Etap R2 ma osobną kontrolę częstości.
+- **Rozmiar gry:** 48 zdjęć przy podanych limitach to do ok. 2,4 MB. Zdjęcia ładowane dopiero przy wyświetleniu.
 - **Ilość tekstu:** 7 charakterów × rodzaje postów × 5 tonów. Treści powstają jako pule, nie pojedyncze zdania.
 
 ## Polecenie dla czatu kodu
