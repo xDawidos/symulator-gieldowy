@@ -377,6 +377,26 @@ function assignCeoTraits(ceo) {
     ceo.traits = assignedTraits;
 }
 
+// 0.17.3 R0: id osoby; relacje i kontakty trzymają się osoby, nie spółki. Licznika nie ma w zapisie: odtwarza go ensureCeoIds.
+let nextCeoId = 1;
+function newCeoId() { return `c${nextCeoId++}`; }
+/** Przy wczytaniu: prezesi ze starych zapisów dostają id, licznik startuje ponad wszystkimi użytymi. */
+function ensureCeoIds() {
+    const numberOf = id => Number(/^c(\d+)$/.exec(id || '')?.[1]) || 0;
+    const used = [
+        ...Object.keys(botRelations?.values || {}).filter(key => key.startsWith('ceo:')).map(key => key.slice(4)),
+        ...(playerProfile?.contacts || []).map(contact => contact.id),
+        ...stocks.map(stock => stock.ceo?.id)
+    ];
+    nextCeoId = Math.max(nextCeoId, ...used.map(id => numberOf(id) + 1));
+    const seen = new Set();
+    for (const stock of stocks) {
+        if (!stock.ceo) continue;
+        if (!stock.ceo.id || seen.has(stock.ceo.id)) stock.ceo.id = newCeoId();
+        seen.add(stock.ceo.id);
+    }
+}
+
 function generateCEO(stock, isReplacement = false) {
     if (stock.ceo && typeof stock.ceo === 'object' && !isReplacement) return;
 
@@ -403,6 +423,7 @@ function generateCEO(stock, isReplacement = false) {
     }
 
     const newCeo = {
+        id: newCeoId(),
         name: `${firstName} ${lastName}`,
         age: age,
         tenure: tenure,
@@ -421,6 +442,7 @@ function replaceCeo(stock, newCeo = null) {
     // Jeśli przekazano konkretnego kandydata (od gracza lub AI), powołaj go.
     if (newCeo) {
         newCeo.tenure = 0; // Nowy prezes zaczyna z zerowym stażem w tej firmie
+        if (!newCeo.id) newCeo.id = newCeoId(); // podkupiony prezes zachowuje id, a z nim relację
         stock.ceo = newCeo;
     }
     // W przeciwnym razie (np. emerytura, losowe zdarzenie), wygeneruj nowego losowego prezesa.
@@ -625,6 +647,7 @@ function generateCeoCandidate(stock) {
     const tenure = getRandomIntInRange(5 * 4, 15 * 4); // Staż w kwartałach (5-15 lat doświadczenia)
 
     const candidate = {
+        id: newCeoId(),
         name: `${firstName} ${lastName}`,
         age: age,
         tenure: tenure,

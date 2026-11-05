@@ -8,13 +8,13 @@
 const TIED_POST_LIMIT = 60;
 const TIED_POSITIVE_NEWS = /wynik|kontrakt|raport|współprac|kooperac|dywidend|rekord|przełom|technolog|nowa (oferta|placówk)/i;
 
-/** Ulubione: jedyna droga do stron. `unlocked` — mechanika gry (nie zakup); `hint` — opis zablokowanego kafelka. */
+/** Ulubione: jedyna droga do stron. */
 const INTERNET_FAVORITES = [
-    { id: 'kantory24', tag: 'Waluty i forex', tone: 'amber', title: 'Kantory24', host: 'kantory24.pl', icon: 'moneta', desc: 'Waluty, kwity GDR, rynki zagraniczne i forex.', unlocked: () => true },
-    { id: 'tied', tag: 'Sieć zawodowa', tone: 'blue', title: 'Tied', host: 'tied.net', icon: 'grupa', desc: 'Posty prezesów i wiadomości od inwestorów.', unlocked: () => isTiedUnlocked(), hint: 'Odblokuje się po awansie na Zarządcę funduszu albo po pierwszych relacjach z inwestorami.' },
-    { id: 'startupy', tag: 'Venture capital', tone: 'violet', title: 'Startupy', host: 'startupy.gielda.pl', icon: 'rakieta', desc: 'Inkubator, pula start-upów i rundy finansowania.', unlocked: () => true },
-    { id: 'ferie', tag: 'Mobilność', tone: 'teal', title: 'Ferie i wakacje', host: 'ferie-i-wakacje.pl', icon: 'samolot', desc: 'Bilety do rynków zagranicznych, lotnisko miasta.', unlocked: () => true },
-    { id: 'lombard', tag: 'Płynność', tone: 'orange', title: 'Lombard', host: 'lombardex.pl', icon: 'lombard', desc: 'Pożyczki pod zastaw akcji.', unlocked: () => true }
+    { id: 'kantory24', tag: 'Waluty i forex', tone: 'amber', title: 'Kantory24', host: 'kantory24.pl', icon: 'moneta', desc: 'Waluty, kwity GDR, rynki zagraniczne i forex.' },
+    { id: 'tied', tag: 'Sieć zawodowa', tone: 'blue', title: 'Tied', host: 'tied.net', icon: 'grupa', desc: 'Posty prezesów i wiadomości od inwestorów.' },
+    { id: 'startupy', tag: 'Venture capital', tone: 'violet', title: 'Startupy', host: 'startupy.gielda.pl', icon: 'rakieta', desc: 'Inkubator, pula start-upów i rundy finansowania.' },
+    { id: 'ferie', tag: 'Mobilność', tone: 'teal', title: 'Ferie i wakacje', host: 'ferie-i-wakacje.pl', icon: 'samolot', desc: 'Bilety do rynków zagranicznych, lotnisko miasta.' },
+    { id: 'lombard', tag: 'Płynność', tone: 'orange', title: 'Lombard', host: 'lombardex.pl', icon: 'lombard', desc: 'Pożyczki pod zastaw akcji.' }
 ];
 
 /** Barwy kraju (ciemne tło okna i akcent) — kolor nigdy jedynym nośnikiem: nazwa stoi w pasku okna. */
@@ -29,18 +29,10 @@ let internetState = { page: null, country: null }; // page: null = ekran ulubion
 
 function getInternetFavorite(id) { return INTERNET_FAVORITES.find(f => f.id === id) || null; }
 
-/** Tied: po awansie na Zarządcę albo po pierwszych relacjach z inwestorami. */
-function isTiedUnlocked() {
-    if (typeof playerProfile === 'undefined' || !playerProfile) return false;
-    if (getPositionIndex(playerProfile.positionId) >= 1) return true;
-    return typeof botRelations === 'object' && Object.values(botRelations?.values || {}).some(v => Number(v) !== 0);
-}
-
-/** Strona otwiera się wyłącznie z ulubionych i tylko odblokowana. Zwraca { ok, reason }. */
+/** Strona otwiera się wyłącznie z ulubionych. Zwraca { ok, reason }. */
 function canOpenInternetPage(id) {
     const fav = getInternetFavorite(id);
     if (!fav) return { ok: false, reason: 'Tej strony nie ma w ulubionych — przeglądarka otwiera tylko ulubione.' };
-    if (!fav.unlocked()) return { ok: false, reason: fav.hint || 'Strona jest jeszcze zablokowana.' };
     return { ok: true };
 }
 
@@ -80,13 +72,14 @@ function noteTiedEvent(message, category) {
     return addTiedPost({ symbol: stock.symbol, author: stock.ceo.name, text, kind });
 }
 
-/** Kanał wiadomości: Poczta (newsy, ciekawostki, reklamy), TeamedUP! (szefostwo i współpracownicy), Tied (inwestorzy i spółki, po odblokowaniu). Nic nie ginie — kanał liczy się przy wyświetlaniu. */
+/** Kanał wiadomości: Poczta (newsy, ciekawostki, reklamy), TeamedUP! (szefostwo i współpracownicy), Tied (inwestorzy i spółki). Nic nie ginie — kanał liczy się przy wyświetlaniu. */
 function getMailChannel(message) {
     const s = String(message.sender);
     if (s === CORPORATION_SENDER) return 'teamedup';
+    if (message.action) return 'poczta'; // przyciski wiadomości (pakiet, VIP) pokazuje tylko podgląd Poczty i TeamedUP!
     if (MAGAZINES[s] || message.isSpam) return 'poczta'; // reklamy zostają w Poczcie (Spam), Tied jest bez reklam
     if (s.startsWith('bot:') && typeof findRelationPerson === 'function' && findRelationPerson(s.slice(4))?.kind === 'colleague') return 'teamedup';
-    return isTiedUnlocked() ? 'tied' : 'poczta';
+    return 'tied';
 }
 
 // =================================================================================
@@ -141,15 +134,14 @@ function renderInternet() {
 
 function renderInternetFavorites() {
     const tiles = INTERNET_FAVORITES.map(f => {
-        const ok = f.unlocked();
-        const extra = f.id === 'tied' && ok ? unreadTiedCount() : 0;
-        return `<button type="button" role="listitem" class="net-fav tone-${f.tone} ${ok ? '' : 'locked'}" ${ok ? '' : 'aria-disabled="true"'} onclick="openInternetPage('${f.id}')">
-            <span class="net-fav-top"><span class="net-fav-icon">${uiIcon(ok ? f.icon : 'klodka', 22)}</span>
-                ${ok ? `<span class="net-chip">${escapeHtml(f.tag)}</span>` : `<span class="net-chip">${uiIcon('klodka', 11)} Zablokowane</span>`}${extra ? `<span class="net-new">${extra} ${extra === 1 ? 'nowa' : 'nowe'}</span>` : ''}</span>
+        const extra = f.id === 'tied' ? unreadTiedCount() : 0;
+        return `<button type="button" role="listitem" class="net-fav tone-${f.tone}" onclick="openInternetPage('${f.id}')">
+            <span class="net-fav-top"><span class="net-fav-icon">${uiIcon(f.icon, 22)}</span>
+                <span class="net-chip">${escapeHtml(f.tag)}</span>${extra ? `<span class="net-new">${extra} ${extra === 1 ? 'nowa' : 'nowe'}</span>` : ''}</span>
             <strong>${escapeHtml(f.title)}</strong>
-            <span class="net-fav-desc">${escapeHtml(ok ? f.desc : (f.hint || 'Zablokowane'))}</span>${ok ? `<span class="net-fav-arrow" aria-hidden="true">&rarr;</span>` : ''}</button>`;
+            <span class="net-fav-desc">${escapeHtml(f.desc)}</span><span class="net-fav-arrow" aria-hidden="true">&rarr;</span></button>`;
     }).join('');
-    return `<p class="net-notice">${uiIcon('info', 16)} Ulubione to jedyny sposób wejścia na strony. Nowe odblokowuje gra, nie zakup.</p><div class="net-favs" role="list" aria-label="Ulubione strony">${tiles}</div>`;
+    return `<p class="net-notice">${uiIcon('info', 16)} Ulubione to jedyny sposób wejścia na strony.</p><div class="net-favs" role="list" aria-label="Ulubione strony">${tiles}</div>`;
 }
 
 function unreadTiedCount() { return mailbox ? mailbox.messages.filter(m => !m.read && getMailChannel(m) === 'tied').length : 0; }
