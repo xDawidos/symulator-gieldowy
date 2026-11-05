@@ -289,14 +289,13 @@ const bankInvestments = {
 const maleFirstNames = ["Jan", "Piotr", "Krzysztof", "Marek", "Andrzej", "Tomasz", "Paweł", "Marcin", "Michał", "Adam", "Dariusz", "Grzegorz", "Stanisław", "Cezary", "Rafał", "Jacek", "Artur", "Sebastian", "Robert", "Mariusz", "Mateusz", "Wojciech", "Zbigniew", "Kamil"];
 const femaleFirstNames = ["Anna", "Maria", "Katarzyna", "Elżbieta", "Małgorzata", "Agnieszka", "Barbara", "Ewa", "Joanna", "Magdalena", "Monika", "Grażyna", "Justyna", "Beata", "Izabela", "Karolina", "Aleksandra", "Patrycja", "Natalia", "Weronika"];
 const ceoLastNames = ["Kowalski", "Nowak", "Wiśniewski", "Dąbrowski", "Lewandowski", "Wójcik", "Kamiński", "Zieliński", "Szymański", "Woźniak", "Kozłowski", "Jankowski", "Mazur", "Kwiatkowski", "Wojciechowski", "Krawczyk", "Zając", "Król", "Walczak", "Stępień", "Górski", "Pawlak", "Michalski", "Sikora", "Ostrowski", "Baran", "Duda", "Piotrowski", "Grabowski"];
-const companyDescriptors = {
-    leader: ["potentat", "numer jeden", "wyznacznik standardów", "hegemon", "dominator", "czołowy gracz", "pionier", "lider rynku", "kluczowy gracz", "główny dostawca", "lider segmentu"],
-    experienced: ["weteran branży", "wytrawny gracz", "filar rynku", "firma z tradycjami", "ugruntowana pozycja", "sprawdzony partner", "doświadczony podmiot", "instytucja w branży"],
-    stable: ["solidny brand", "zaufana marka", "marka o ugruntowanej pozycji", "pewny gracz", "stabilna firma", "bezpieczna przystań"],
-    renowned: ["prestiżowa marka", "symbol jakości", "ceniony brand", "uznana marka w branży", "firma z renomą", "synonim niezawodności"],
-    rookie: ["challenger", "nowicjusz na rynku", "debiutant", "wschodząca gwiazda", "młoda firma", "świeża siła", "ambitny gracz", "dynamiczny startup"],
-    giant: ["kolos", "imperium biznesowe", "mocarstwo", "lewiatan", "rekin biznesu", "tytan branży", "gigant na rynku", "konglomerat"],
-    innovator: ["wizjoner", "innowator", "trendsetter", "prekursor zmian", "motor napędowy branży", "awangarda sektora"]
+const companyDescriptors = { // składnia „X to … w sektorze Y”; bez słów o kursie, bo o kursie mówi podpowiedź
+    leader: ["potentat", "numer jeden", "wyznacznik standardów", "hegemon", "dominator", "czołowy gracz", "pionier", "lider", "kluczowy gracz"],
+    experienced: ["weteran", "wytrawny gracz", "ważny gracz", "firma z tradycjami", "sprawdzony partner", "doświadczony gracz", "uznana firma"],
+    stable: ["solidny brand", "zaufana marka", "marka o ugruntowanej pozycji", "znana firma", "lokalny gracz", "rozpoznawalna marka"],
+    renowned: ["prestiżowa marka", "symbol jakości", "ceniony brand", "uznana marka", "firma z renomą", "synonim niezawodności"],
+    rookie: ["challenger", "nowicjusz", "debiutant", "wschodząca gwiazda", "młoda firma", "świeża siła", "ambitny gracz"],
+    giant: ["kolos", "imperium biznesowe", "mocarstwo", "lewiatan", "rekin biznesu", "tytan", "gigant"]
 };
 const ceoQuotes = {
     positive: ["Jesteśmy na fali wznoszącej i nie zamierzamy zwalniać tempa.", "Nasze wyniki mówią same za siebie. Innowacja to klucz do naszego sukcesu.", "Z optymizmem patrzymy w przyszłość, planując dalszą ekspansję na rynki zagraniczne.", "Budujemy wartość dla naszych akcjonariuszy każdego dnia, konsekwentnie realizując strategię.", "Dzięki zaufaniu inwestorów i ciężkiej pracy całego zespołu osiągamy kolejne kamienie milowe.", "Nasza pozycja lidera jest niezagrożona, a my już wyznaczamy nowe, ambitne cele.", "Każdy kwartał przynosi rekordowe zyski. To najlepszy dowód na słuszność naszej obranej drogi.", "Technologia, którą rozwijamy, daje nam przewagę na lata. Konkurencja może tylko patrzeć.", "Nie tylko spełniamy prognozy, my je przekraczamy. To nowy standard w naszej firmie.", "Nasz model biznesowy udowodnił swoją skuteczność. Czas na skalowanie działalności."],
@@ -305,47 +304,11 @@ const ceoQuotes = {
 };
 const startupVerbs = ["planuje", "zamierza", "chce", "przymierza się by", "ma ambicję", "celuje w to, by", "dąży do tego, aby", "przygotowuje się, by", "podejmuje próbę, by"];
 const startupQuotes = ["Zmienimy zasady gry w tej branży, to obietnica.", "Nasz produkt to rewolucja, na którą wszyscy czekali. Potrzebujemy tylko paliwa rakietowego.", "Mamy technologię i zespół, które zostawią konkurencję daleko w tyle.", "To dopiero początek. Nasz potencjał jest nieograniczony, a apetyt na sukces jeszcze większy.", "Jesteśmy małym zespołem z wielkimi ambicjami i jeszcze większą determinacją.", "Szukamy odważnych inwestorów, którzy tak jak my wierzą w ten przełomowy projekt.", "Nie chcemy być kolejną firmą na rynku. Chcemy być rynkiem.", "Nasza wizja jest prosta: stworzyć produkt, bez którego wkrótce nikt nie będzie wyobrażał sobie życia.", "Konkurencja jeszcze nie wie, co nadchodzi. To nasza największa przewaga.", "Albo będziemy numerem jeden, albo nie będzie nas wcale. Nie ma innej opcji."];
-const companyMottos = ["Naszą misją jest dostarczanie najwyższej jakości i przekraczanie oczekiwań.", "Firma kieruje się zasadą zrównoważonego rozwoju i odpowiedzialności społecznej.", "Wizją spółki jest zostanie niekwestionowanym liderem innowacji w swojej branży.", "Spółka stawia na dynamiczny rozwój, elastyczność i pełną satysfakcję klienta.", "Budujemy przyszłość w oparciu o tradycję, doświadczenie i nowoczesne technologie.", "Kluczem do sukcesu jest dla nas partnerstwo i transparentność w biznesie.", "Codziennie pracujemy na zaufanie naszych klientów i inwestorów.", "Inwestujemy w ludzi, bo to oni tworzą wartość naszej firmy.", "Jakość nie jest celem, jest standardem.", "Myślimy globalnie, działamy lokalnie."];
-const sectorSpecifics = {
-    'Media': { 
-    activity: [
-        "Spółka jest właścicielem ogólnopolskiego dziennika finansowego i portalu internetowego.", 
-        "Grupa medialna koncentruje się na stacjach radiowych i telewizji biznesowej.", 
-        "Firma specjalizuje się w organizacji konferencji branżowych i wydawaniu magazynów specjalistycznych.",
-        "Agencja jest liderem na rynku public relations i marketingu sponsorowanego."
-    ], 
-    keywords: [
-        "rynek reklamowy", "wpływy z subskrypcji", "wiarygodność", "zasięgi", 
-        "regulacje medialne", "content marketing", "dziennikarstwo śledcze"
-    ] 
-},
-    'Pożyczki konsumenckie': { 
-    activity: [
-        "Spółka jest liderem na rynku pożyczek pozabankowych, tzw. 'chwilówek'.", 
-        "Firma specjalizuje się w windykacji należności i zarządzaniu portfelami długów.", 
-        "Podmiot prowadzi ogólnopolską sieć lombardów i kantorów wymiany walut.",
-        "Firma oferuje usługi księgowe i optymalizację podatkową dla małych i średnich przedsiębiorstw."
-    ], 
-    keywords: [
-        "zadłużenie konsumentów", "regulacje KNF", "stopy procentowe", "koszty windykacji", 
-        "popyt na gotówkę", "scoring kredytowy", "płynność finansowa", "progi podatkowe"
-    ] 
-},
-    'Chemia': { activity: ["Spółka jest kluczowym producentem specjalistycznych chemikaliów dla przemysłu.", "Firma koncentruje się na produkcji wysokomarżowych tworzyw sztucznych.", "Zakład produkuje nawozy sztuczne dla rolnictwa na skalę krajową.", "Koncern jest liderem w segmencie chemii gospodarczej i kosmetycznej."], keywords: ["ceny surowców", "regulacje ekologiczne", "nowe patenty", "łańcuch dostaw", "koszty energii", "innowacje produktowe"] },
-    'Energia': { activity: ["Koncern zajmuje się wydobyciem i dystrybucją energii ze źródeł konwencjonalnych.", "Spółka inwestuje w odnawialne źródła energii, głównie farmy wiatrowe i fotowoltaikę.", "Firma jest operatorem dużej elektrowni systemowej, kluczowej dla krajowego bezpieczeństwa.", "Spółka rozwija technologie związane z magazynowaniem energii i wodorem."], keywords: ["bezpieczeństwo energetyczne", "transformacja klimatyczna", "ceny uprawnień do emisji", "polityka państwa", "magazynowanie energii", "inwestycje w sieć"] },
-    'Żywność': { activity: ["Firma jest jednym z największych przetwórców mięsa w kraju.", "Specjalnością spółki są zdrowe, organiczne produkty żywnościowe dystrybuowane w sieciach premium.", "Koncern jest liderem na rynku napojów i soków owocowych.", "Zakład jest znaczącym producentem wyrobów cukierniczych i słodyczy."], keywords: ["trendy konsumenckie", "ceny płodów rolnych", "koszty logistyki", "eksport", "inflacja cen żywności", "zdrowa żywność"] },
-    'Dobra konsumpcyjne': { activity: ["Spółka produkuje szeroką gamę artykułów gospodarstwa domowego, od chemii po małe AGD.", "Firma jest właścicielem popularnej marki odzieżowej o ugruntowanej pozycji.", "Koncern specjalizuje się w produkcji i dystrybucji kosmetyków na rynek masowy.", "Firma jest znanym producentem mebli, sprzedawanych w sieci własnych salonów."], keywords: ["siła nabywcza konsumentów", "rozpoznawalność marki", "e-commerce", "koszty marketingu", "lojalność klientów", "marża detaliczna"] },
-    'Technologia': { activity: ["Firma dostarcza oprogramowanie typu SaaS dla klientów korporacyjnych w chmurze.", "Spółka specjalizuje się w produkcji zaawansowanych komponentów do urządzeń mobilnych.", "Agencja tworzy dedykowane systemy IT dla sektora finansowego i ubezpieczeniowego.", "Firma jest liderem w dziedzinie cyberbezpieczeństwa, chroniąc dane największych instytucji."], keywords: ["innowacje", "ochrona danych osobowych", "sztuczna inteligencja", "globalna konkurencja", "brak specjalistów IT", "chmura obliczeniowa"] },
-    'Medycyna': { activity: ["Spółka prowadzi sieć prywatnych klinik i laboratoriów diagnostycznych.", "Firma biotechnologiczna pracuje nad przełomowym lekiem na choroby cywilizacyjne.", "Zakład jest producentem sprzętu medycznego jednorazowego użytku dla szpitali.", "Firma rozwija innowacyjne oprogramowanie do analizy danych medycznych."], keywords: ["badania kliniczne", "refundacja leków", "demografia", "nowe terapie", "wydatki publiczne na zdrowie", "telemedycyna"] },
-    'Nieruchomości': { activity: ["Spółka specjalizuje się w budowie i wynajmie powierzchni biurowych w centrach miast.", "Firma koncentruje się na rynku mieszkaniowym, realizując duże osiedla deweloperskie.", "Deweloper buduje i zarządza nowoczesnymi centrami logistycznymi i magazynowymi.", "Spółka jest właścicielem portfela centrów handlowych w największych miastach."], keywords: ["stopy procentowe", "popyt na kredyty hipoteczne", "ceny gruntów", "praca zdalna", "koszty budowy", "wskaźnik pustostanów"] },
-    'Przemysł': { activity: ["Firma jest czołowym producentem maszyn dla sektora budowlanego.", "Specjalnością spółki jest produkcja stalowych konstrukcji na potrzeby infrastruktury.", "Zakład produkuje części samochodowe dla największych światowych koncernów.", "Koncern jest liderem w produkcji opakowań dla branży spożywczej i farmaceutycznej."], keywords: ["zamówienia publiczne", "ceny stali", "koszty pracy", "automatyzacja produkcji", "łańcuchy dostaw", "inwestycje infrastrukturalne"] },
-    'Bankowość': { activity: ["Bank uniwersalny oferujący pełen zakres usług dla klientów detalicznych i firm.", "Instytucja finansowa skupia się na obsłudze zamożnych klientów i zarządzaniu aktywami.", "Firma jest liderem na rynku leasingu i faktoringu dla małych i średnich przedsiębiorstw.", "Bank specjalizuje się w kredytach hipotecznych i obsłudze rynku nieruchomości."], keywords: ["polityka monetarna", "jakość portfela kredytowego", "fintech", "regulacje bankowe", "cyfryzacja usług", "marża odsetkowa"] },
-    'Usługi': { activity: ["Firma jest liderem na rynku usług kurierskich i logistycznych.", "Spółka oferuje profesjonalne usługi outsourcingu IT dla międzynarodowych korporacji.", "Sieć prowadzi działalność w zakresie ochrony osób i mienia na terenie całego kraju.", "Firma zarządza dużą siecią agencji pracy tymczasowej."], keywords: ["cyfryzacja", "rynek pracy", "efektywność operacyjna", "pozyskiwanie nowych klientów", "presja płacowa", "automatyzacja"] },
-    'Turystyka': { activity: ["Operator jest jednym z największych touroperatorów w kraju, organizującym wycieczki zagraniczne.", "Spółka zarządza siecią luksusowych hoteli w popularnych miejscowościach wypoczynkowych.", "Firma jest właścicielem dużej platformy rezerwacyjnej online dla obiektów noclegowych.", "Przewoźnik lotniczy oferuje tanie połączenia do najpopularniejszych europejskich miast."], keywords: ["sytuacja geopolityczna", "ruch lotniczy", "preferencje podróżnych", "konkurencja cenowa", "kursy walut", "ceny paliw"] },
-    'Gaming': { activity: ["Studio produkuje gry komputerowe z segmentu AAA, celując w rynek globalny.", "Firma jest wydawcą gier mobilnych opartych na modelu free-to-play, generujących stałe przychody.", "Spółka specjalizuje się w portowaniu gier na różne platformy sprzętowe.", "Firma jest producentem gier planszowych i karcianych, które z sukcesem digitalizuje."], keywords: ["nadchodząca premiera", "silnik graficzny", "monetyzacja", "społeczność graczy", "koszty marketingu", "recenzje w mediach"] },
-    'Finanse': { 
-activity: ["Fundusz specjalizuje się w aktywnym zarządzaniu portfelem akcji spółek giełdowych.", "Spółka jest funduszem inwestycyjnym zamkniętym, skupującym pakiety akcji w wybranych sektorach.", "Podmiot koncentruje się na długoterminowych inwestycjach w spółki o solidnych fundamentach.", "Główną działalnością firmy jest trading i spekulacja na rynkach kapitałowych."], keywords: ["analiza rynkowa", "dywersyfikacja portfela", "stopy procentowe", "wyniki spółek portfelowych", "przepływy kapitału", "globalne trendy"] },
-'Bank komercyjny': { activity: ["Bank oferuje usługi finansowe dla klientów indywidualnych i korporacyjnych.", "Instytucja specjalizuje się w zarządzaniu aktywami i operacjach inwestycyjnych.", "Bank koncentruje się na obsłudze dużych przedsiębiorstw i finansowaniu projektów."], keywords: ["stopy procentowe", "regulacje finansowe", "akcja kredytowa", "marża odsetkowa", "płynność", "ryzyko kredytowe"] }
+// Hasła firm według poziomu giełdy: to, co spółka o sobie mówi, więc nie twierdzą niczego o jej danych.
+const COMPANY_MOTTOS = {
+    small: ['Małe kroki, duże nadzieje', 'Jeszcze o nas usłyszycie', 'Najpierw przetrwać, potem podbijać', 'Skromnie, ale z planem', 'Budżet mały, ambicje większe', 'Dziś parter, jutro piętro'],
+    medium: ['Robimy swoje i pilnujemy marży', 'Bez fajerwerków, za to z raportem na czas', 'Dobra robota broni się sama', 'Solidnie i terminowo', 'Konkurencja niech się martwi', 'Klient płaci, klient ma rację'],
+    large: ['Rynek nas zna, konkurencja też', 'Kiedy kichamy, indeks łapie katar', 'Duzi mogą więcej, ale i płacą więcej', 'Skala to nasz drugi zawód', 'Wyznaczamy kierunek, reszta nadąża', 'Nie gonimy rynku, to rynek wie, gdzie jesteśmy']
 };
 const researchInstituteDescriptions = ["Jesteśmy inkubatorem innowacji. Nie prowadzimy własnych badań komercyjnych, lecz analizujemy i syntetyzujemy postęp technologiczny całego rynku. Nasza wartość rośnie wraz z każdą nową technologią odkrytą przez inne firmy, a nasza obecność stymuluje rozwój sąsiadujących z nami przedsiębiorstw.", "Nasza misja to katalizowanie postępu. Działamy jako centrum analityczne, czerpiąc wartość z globalnego rozwoju technologicznego. Inwestorzy postrzegają nas jako barometr innowacyjności całej gospodarki, a bliska współpraca z nami to gwarancja przyspieszenia dla każdego działu R&D.", "Specjalizujemy się w metaanalizie i prognozowaniu trendów. Każdy sukces badawczy na rynku, niezależnie od sektora, jest cegiełką budującą naszą fundamentalną wartość. Firmy, które lokują się w naszym otoczeniu, zyskują unikalny dostęp do naszej wiedzy, co przyspiesza ich własne projekty.", "Działamy na styku nauki i biznesu, przekuwając odkrycia innych w czystą wartość kapitałową. Nasz model biznesowy opiera się na założeniu, że fala innowacji podnosi wszystkie łodzie - a nasza jest pierwszą, która to odczuwa. Stanowimy również centrum kompetencyjne dla firm w naszym sąsiedztwie.", "Nie tworzymy technologii – my ją udoskonalamy i standaryzujemy. Nasza wartość jest bezpośrednio powiązana z sumą innowacji na rynku. Jesteśmy jak papier lakmusowy postępu; im więcej dzieje się w laboratoriach na całym świecie, tym lepiej dla naszych akcjonariuszy.", "Postrzegamy postęp technologiczny jako ekosystem. Naszą rolą jest bycie jego centralnym hubem, który zyskuje na każdej udanej innowacji. Firmy współpracujące z nami otrzymują od nas wsparcie, które skraca ich cykle badawcze i pozwala szybciej komercjalizować odkrycia."];
 
@@ -482,50 +445,142 @@ function replaceCeo(stock, newCeo = null) {
     }
 }
 
-function getCompanyDescriptor(stock) {
-    const exchangeLevel = exchanges[stock.exchange].level;
-    if (exchangeLevel >= 4) return getRandomElement(companyDescriptors.giant);
-    if (exchangeLevel === 3) return getRandomElement(companyDescriptors.leader);
-    if (exchangeLevel === 2) return getRandomElement(companyDescriptors.experienced.concat(companyDescriptors.renowned));
-    if (exchangeLevel === 1) return getRandomElement(companyDescriptors.stable);
-    return getRandomElement(companyDescriptors.rookie);
-}
-
-function getCEOQuote(stock) {
-    if (stock.financialHealth >= 2) return getRandomElement(ceoQuotes.positive);
-    if (stock.financialHealth <= -2) return getRandomElement(ceoQuotes.negative);
-    return getRandomElement(ceoQuotes.neutral);
-}
-
-function getVolatilitySentence(stock) {
-    if (stock.volatilityFactor < 0.8) return "Spółka cieszy się opinią stabilnej i przewidywalnej inwestycji.";
-    if (stock.volatilityFactor >= 0.8 && stock.volatilityFactor < 2.0) return "Notowania akcji charakteryzują się umiarkowaną zmiennością.";
-    if (stock.volatilityFactor >= 2.0 && stock.volatilityFactor < 3.5) return "Spółka znana jest z dynamicznych wahań kursu, co przyciąga spekulantów.";
-    return "Inwestycja w tę firmę wiąże się z bardzo wysokim ryzykiem i dużą zmiennością notowań.";
-}
-
-// Opisy własne spółek krajowych (po symbolu, więc działają też w starych zapisach); zastępują zdanie o działalności z szablonu sektora.
+// 0.17.8: generator opisów (plany/plan_generator_opisow.md). Liczony na bieżąco, nie trafia do zapisu; warianty wybiera hash, bez losowania.
+// Stałe opisy tylko dla spółek państwowych: zastępują działalność, podpowiedź i zdania ozdobne.
 const COMPANY_DESCRIPTIONS = {
     PES: 'Narodowy koncern paliwowy ze stacjami w każdej gminie i wiecznie „przejściowymi” cenami. Kupuje ropę i sprzedaje paliwa, więc zarabia na marży rafineryjnej, a nie na samym poziomie ceny ropy.',
     NAG: 'Państwowa spółka wydobycia i importu gazu, z kontraktami długoterminowymi ze wschodu „do renegocjacji”. Przychody rosną razem z ceną gazu.',
-    ZST: 'Mała kopalnia złota na Dolnym Śląsku, w której pracuje więcej geologów niż jest złota. Kurs mocno idzie za ceną złota, a ta zwykle rośnie w kryzysach.',
-    SLS: 'Skupuje zboże od rolników i eksportuje je w świat, korzystając z dotacji partii rolniczej. Zarabia przy drogim zbożu, a traci w roku rekordowych zbiorów.',
     GRT: 'Narodowy armator z Gdańska; masowce tak pojemne jak nazwa. Zarabia, gdy rośnie fracht morski, a płaci za paliwo statków.',
     CFL: 'Państwowe cargo lotnicze; dostawa szybka, rachunek za paliwo jeszcze szybszy. Przychody idą za frachtem lotniczym.',
     PKC: 'Kolej towarowa; przepustowość zależy od torów. Przewozi węgiel i kontenery w głąb kraju.',
-    TIR: 'Największa flota ciężarówek w kraju; elastyczna, wrażliwa na paliwo. Zarabia na frachcie lądowym, a ceny diesla zjadają marżę.'
+    ENG: 'Regionalny dostawca prądu z północy, z licznikiem, który nigdy się nie myli na niekorzyść firmy. Zależy od regulowanych taryf i ceny węgla.',
+    TRN: 'Elektrownie węglowe z południa, które coraz głośniej mówią o transformacji. Marża zależy od ceny węgla i taryf, a kurs od polityki.',
+    PUR: 'Państwowa spółka paliwa jądrowego, jeszcze przed pierwszym blokiem. Kurs idzie za ceną uranu i za kolejnymi zapowiedziami budowy elektrowni.',
+    MLD: 'Państwowa kopalnia i huta miedzi, w której każdy nowy rząd obiecuje modernizację. Wynik idzie za ceną metali, a rachunki za prąd zjadają marżę.',
+    NOC: 'Państwowy operator sieci i e-urzędów; działa, gdy akurat nie ma przerwy technicznej. Stałe kontrakty z państwem i wrażliwość na zmianę rządu.'
 };
+
+// does: po przecinku w 1. zdaniu, szeroko, bo to fraza zapasowa dla spółek bez podsektora; gen: dopełniacz do „w stronę …”; mood: zdania ozdobne o charakterze sektora.
+const SECTOR_DESCRIPTION = {
+    'Bankowość': { does: 'prowadzi konta, kredyty i lokaty', gen: 'bankowości', mood: ['W tej branży zaufanie buduje się latami, a traci w jeden weekend.', 'Tu każdy ruch stóp procentowych czuć od razu.'] },
+    'Finanse': { does: 'zarządza kapitałem i udziałami w innych firmach', gen: 'finansów', mood: ['W tej branży najcenniejszym towarem jest zaufanie klientów.', 'Tu dobre lata szybko pokazują, kto naprawdę umie liczyć.'] },
+    'Żywność': { does: 'dostarcza jedzenie i napoje klientom w całym kraju', gen: 'żywności', mood: ['Ludzie jedzą niezależnie od nastrojów na giełdzie.', 'Tu o wyniku często decydują ceny składników.'] },
+    'Rybołówstwo': { does: 'łowi i przetwarza ryby', gen: 'rybołówstwa', mood: ['Morze nie czyta prognoz analityków.', 'W tej branży sezon potrafi zmienić wszystko.'] },
+    'Alkohole': { does: 'produkuje trunki na każdą okazję', gen: 'alkoholi', mood: ['Na dobre i na złe klienci zwykle pozostają wierni marce.', 'W tej branży akcyza bywa groźniejsza od konkurencji.'] },
+    'Dobra konsumpcyjne': { does: 'sprzedaje towary codziennego użytku', gen: 'dóbr konsumpcyjnych', mood: ['Wynik zależy tu od tego, ile klientom zostaje w portfelach.', 'W tej branży marka bywa warta więcej niż fabryka.'] },
+    'Turystyka': { does: 'organizuje wyjazdy i wypoczynek', gen: 'turystyki', mood: ['Dobre lato potrafi odrobić cały rok.', 'W tej branży wszystko zależy od pogody i nastrojów podróżnych.'] },
+    'Media': { does: 'dostarcza treści i sprzedaje reklamy', gen: 'mediów', mood: ['Uwaga widzów to tu główna waluta.', 'W tej branży przebój potrafi uratować cały sezon.'] },
+    'Gaming': { does: 'tworzy i wydaje gry', gen: 'gier', mood: ['Jedna premiera potrafi przesądzić o całym roku.', 'Gracze wybaczają wiele, ale błędów na premierę już rzadko.'] },
+    'Przemysł': { does: 'dostarcza towary i usługi innym firmom', gen: 'przemysłu', mood: ['Gdy gospodarka zwalnia, ta branża czuje to jako jedna z pierwszych.', 'Tu liczy się pełny portfel zamówień.'] },
+    'Motoryzacja': { does: 'produkuje pojazdy i części', gen: 'motoryzacji', mood: ['Klienci odkładają zakup auta, gdy tylko robi się niepewnie.', 'W tej branży kolejne modele planuje się na lata naprzód.'] },
+    'Chemia': { does: 'wytwarza surowce i półprodukty dla przemysłu', gen: 'chemii', mood: ['W tej branży dużo zależy od tego, co dzieje się z kosztem energii.', 'Mało kto widzi te produkty, ale korzysta z nich prawie każdy.'] },
+    'Energia': { does: 'dostarcza energię firmom i domom', gen: 'energetyki', mood: ['Energia to branża, w której państwo zawsze ma coś do powiedzenia.', 'Inwestycje liczy się tu w dekadach, nie w kwartałach.'] },
+    'Budowlany': { does: 'realizuje budowy dla firm i państwa', gen: 'budownictwa', mood: ['W tej branży wszystko zależy od przetargów i terminów.', 'Tu dobra koniunktura potrafi zapełnić portfel zleceń na lata.'] },
+    'Transport i logistyka': { does: 'przewozi towary i ludzi', gen: 'logistyki', mood: ['Kiedy gospodarka przyspiesza, widać to najpierw w przewozach.', 'W tej branży liczy się każdy kilometr i każdy litr paliwa.'] },
+    'Medycyna': { does: 'dostarcza leki i usługi dla pacjentów', gen: 'medycyny', mood: ['Popyt na zdrowie rzadko zależy od koniunktury.', 'W tej branży regulator ma często ostatnie słowo.'] },
+    'Badania': { does: 'prowadzi prace badawcze na zlecenie', gen: 'badań', mood: ['Tu wyniki przychodzą po latach, a koszty od razu.', 'W tej branży jeden patent potrafi zmienić wszystko.'] },
+    'Technologia': { does: 'dostarcza usługi i rozwiązania cyfrowe', gen: 'technologii', mood: ['W tej branży dzisiejszy lider jutro może być historią.', 'Tu rynek płaci głównie za przyszłość, nie za przeszłość.'] },
+    'Nieruchomości': { does: 'buduje i wynajmuje powierzchnie', gen: 'nieruchomości', mood: ['W tej branży koszt kredytu znaczy tyle samo, co lokalizacja.', 'Tu czynsze płyną powoli, ale regularnie.'] },
+    'Obronność': { does: 'produkuje sprzęt dla wojska i służb', gen: 'obronności', mood: ['Klient jest tu jeden, za to nie narzeka na brak budżetu.', 'W tej branży kontrakty zależą od polityki i napięć na świecie.'] },
+    'Usługi': { does: 'obsługuje firmy i klientów indywidualnych', gen: 'usług', mood: ['W tej branży najważniejszym aktywem są ludzie.', 'Tu klient szybko odchodzi, gdy poczuje się zlekceważony.'] }
+};
+// Działalność dokładniejsza niż sektor; typ aktywa ma pierwszeństwo przed podsektorem.
+const ASSET_TYPE_ACTIVITY = {
+    REIT: 'wynajmuje nieruchomości i dzieli się czynszem z akcjonariuszami', DebtCollector: 'odzyskuje długi na zlecenie i na własny rachunek',
+    PawnShop: 'pożycza pieniądze pod zastaw', Accounting: 'prowadzi księgi innym firmom'
+};
+const SUBSECTOR_ACTIVITY = {
+    'Bank komercyjny': 'prowadzi konta, kredyty i lokaty', 'Bank inwestycyjny': 'obsługuje emisje i duże transakcje', 'Bank międzynarodowy': 'obsługuje klientów w kraju i za granicą',
+    'Pożyczki konsumenckie': 'udziela drobnych pożyczek', 'Rynki kapitałowe': 'obsługuje inwestorów i transakcje giełdowe', 'Fintech': 'obsługuje klientów przez internet',
+    'Rolnictwo': 'uprawia i skupuje płody rolne', 'Słodycze': 'produkuje słodycze', 'Herbata': 'sprzedaje herbatę', 'Piwowarstwo i napoje': 'warzy piwo i rozlewa napoje',
+    'Robotyka': 'buduje roboty dla fabryk', 'Przemysł ciężki': 'wytwarza stal i ciężkie maszyny', 'Wydobycie': 'wydobywa surowce spod ziemi', 'Handel surowcami': 'handluje surowcami',
+    'Energetyka jądrowa': 'rozwija energetykę jądrową', 'OZE': 'wytwarza prąd ze źródeł odnawialnych', 'Rafinerie': 'przerabia ropę na paliwa', 'Gaz': 'dostarcza gaz firmom i domom',
+    'Logistyka': 'organizuje przewozy i magazyny', 'Lotnictwo': 'przewozi ludzi i ładunki samolotami', 'Morski': 'przewozi ładunki morzem', 'Lądowy': 'przewozi ładunki koleją i drogami',
+    'Biotechnologia': 'rozwija nowe terapie w laboratoriach', 'Sprzęt medyczny': 'produkuje sprzęt dla lekarzy i pacjentów', 'Półprzewodniki': 'projektuje i produkuje układy scalone',
+    'Sztuczna inteligencja': 'rozwija sztuczną inteligencję', 'Magazyny': 'buduje i wynajmuje magazyny', 'Drony': 'buduje drony'
+};
+const COMMODITY_WORDS = { // dopełniacz; mianownik z czasownikiem
+    gold: ['złota', 'złoto drożeje'], oil: ['ropy', 'ropa drożeje'], gas: ['gazu', 'gaz drożeje'], coal: ['węgla', 'węgiel drożeje'],
+    metals: ['metali', 'metale drożeją'], grain: ['zboża', 'zboże drożeje'], uranium: ['uranu', 'uran drożeje']
+};
+const DESCRIPTION_RULES = { calmVol: 0.8, wildVol: 1.3, minInput: 0.15, minProduct: 0.3, noDebt: 0.02, highDebt: 0.33 };
+
+/** Stały hash tekstu, wzór jak w getStockCommodityHedge. */
+function descriptionHash(text) {
+    const key = String(text);
+    let h = 0;
+    for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) % 99991;
+    return h;
+}
+const pickByHash = (list, text) => list[descriptionHash(text) % list.length];
+
+/** Mediana zmienności sektora ze spółek startowych: stała w całej grze, więc podpowiedź nie miga przy debiutach. */
+let sectorVolMedians = null;
+function getSectorVolMedian(sector) {
+    if (!sectorVolMedians) {
+        const bySector = {};
+        for (const s of initialStocks) (bySector[getMainSector(s)] ||= []).push(s.volatilityFactor);
+        const median = a => { const v = [...a].sort((x, y) => x - y), m = v.length >> 1; return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2; };
+        sectorVolMedians = Object.fromEntries(Object.entries(bySector).map(([k, v]) => [k, median(v)]));
+    }
+    return sectorVolMedians[sector] ?? null;
+}
+const getVolToSector = stock => stock.volatilityFactor / (getSectorVolMedian(getMainSector(stock)) || stock.volatilityFactor);
+const getTopCommodity = map => Object.entries(map || {}).sort((a, b) => b[1] - a[1])[0] || [null, 0];
+const getDebtRatio = stock => stock.balanceSheet?.assets > 0 ? (Number(stock.balanceSheet.liabilities) || 0) / stock.balanceSheet.assets : null; // jak kafelek „Zadłużenie”; banki mają depozyty poza bilansem
+const getActivityPhrase = stock => ASSET_TYPE_ACTIVITY[stock.assetType] || SUBSECTOR_ACTIVITY[getMainSubsector(stock)] || SECTOR_DESCRIPTION[getMainSector(stock)]?.does || null;
+const getSecondSector = stock => getStockSegments(stock).map(seg => seg.sector).find(sector => sector !== getMainSector(stock) && SECTOR_DESCRIPTION[sector]) || null;
+
+// Każda podpowiedź czyta te same dane co silnik; pierwszy tekst to słowa zamiast liczb.
+const DESCRIPTION_HINTS = [
+    { id: 'calm', test: s => getVolToSector(s) <= DESCRIPTION_RULES.calmVol, text: () => ['Trzyma się stabilnie w sektorze, który lubi nerwowe ruchy.', 'Kurs chodzi spokojniej niż u większości sąsiadów z branży.'] },
+    { id: 'wild', test: s => getVolToSector(s) >= DESCRIPTION_RULES.wildVol, text: () => ['Kurs potrafi zaskoczyć nawet w spokojnej branży.', 'Akcje ruszają się mocniej niż u większości sąsiadów z branży.'] },
+    { id: 'direction', test: s => Boolean(getSecondSector(s)), text: s => [`Od lat planuje rozwój w stronę ${SECTOR_DESCRIPTION[getSecondSector(s)].gen}.`, `Coraz chętniej zerka w stronę ${SECTOR_DESCRIPTION[getSecondSector(s)].gen}.`] },
+    { id: 'input', test: s => getTopCommodity(getStockCommodityProfile(s).input)[1] >= DESCRIPTION_RULES.minInput, text: s => { const w = COMMODITY_WORDS[getTopCommodity(getStockCommodityProfile(s).input)[0]][0]; return [`Uważnie patrzy na ceny ${w}.`, `Nerwowo śledzi notowania ${w}.`]; } },
+    { id: 'product', test: s => getTopCommodity(getStockCommodityProfile(s).product)[1] >= DESCRIPTION_RULES.minProduct, text: s => { const w = COMMODITY_WORDS[getTopCommodity(getStockCommodityProfile(s).product)[0]][1]; return [`Lubi, gdy ${w}.`, `Najlepsze kwartały ma wtedy, gdy ${w}.`]; } },
+    { id: 'dividend', test: s => ['Aggressive', 'Total'].includes(s.dividendPolicy), text: () => ['Chętnie dzieli się zyskiem z akcjonariuszami.', 'Akcjonariusze rzadko czekają tu na dywidendę z pustymi rękami.'] },
+    { id: 'research', test: s => (s.research?.unlockedTechs?.length || 0) > 0, text: () => ['Mocno stawia na własne badania.', 'Własne laboratorium to jej oczko w głowie.'] },
+    { id: 'noDebt', test: s => !s.isBankStock && getDebtRatio(s) !== null && getDebtRatio(s) <= DESCRIPTION_RULES.noDebt, text: () => ['Nie ma długów, więc banki rzadko o niej słyszą.', 'Radzi sobie bez kredytów.'] },
+    { id: 'highDebt', test: s => !s.isBankStock && getDebtRatio(s) >= DESCRIPTION_RULES.highDebt, text: () => ['Sporą część majątku finansuje długiem.', 'Bank jest tu ważnym wspólnikiem, choć nie ma akcji.'] },
+    { id: 'defensive', test: s => DEFENSIVE_SECTORS.includes(getMainSector(s)), text: () => ['Klienci wracają tu także w gorszych czasach.', 'Popyt nie znika tu nawet w recesji.'] }
+];
+const DESCRIPTION_FALLBACK = 'Na tle branży nie wyróżnia się na razie niczym szczególnym.';
+
+/** Dokładnie 1 podpowiedź: spośród prawdziwych ta z najwyższym stałym numerem, więc nowa prawdziwa rzadko wypiera starą. */
+function getDescriptionHint(stock) {
+    const rank = hint => descriptionHash(`${stock.symbol}:${hint.id}`);
+    const best = DESCRIPTION_HINTS.filter(hint => hint.test(stock)).sort((a, b) => rank(b) - rank(a))[0];
+    return best ? { id: best.id, text: pickByHash(best.text(stock), stock.symbol) } : { id: 'fallback', text: DESCRIPTION_FALLBACK };
+}
+
+const getStockExchangeLevel = stock => exchanges[stock.exchange]?.level ?? 0;
+function getCompanyDescriptor(stock) {
+    const level = getStockExchangeLevel(stock);
+    const pool = level >= 5 ? companyDescriptors.giant : level >= 3 ? companyDescriptors.leader
+        : level === 2 ? companyDescriptors.experienced.concat(companyDescriptors.renowned) : level === 1 ? companyDescriptors.stable : companyDescriptors.rookie;
+    return pickByHash(pool, `${stock.symbol}:${level}`);
+}
+function getCompanyMotto(stock) {
+    const level = getStockExchangeLevel(stock);
+    return pickByHash(level >= 4 ? COMPANY_MOTTOS.large : level >= 2 ? COMPANY_MOTTOS.medium : COMPANY_MOTTOS.small, stock.symbol);
+}
+
+/** Zdania opisu: [pozycja, ...środek, cytat]. */
+function getDescriptionSentences(stock) {
+    const sector = getMainSector(stock), info = SECTOR_DESCRIPTION[sector], activity = getActivityPhrase(stock);
+    const fixed = stock.isStateOwned && COMPANY_DESCRIPTIONS[stock.symbol];
+    const where = sector ? `w sektorze ${sector}` : 'w swojej branży';
+    const position = `${stock.name} to ${getCompanyDescriptor(stock)} ${where}${!fixed && activity ? `, ${activity}` : ''}.`;
+    const quotes = ceoQuotes.neutral.concat(ceoQuotes.positive);
+    const quote = `„${pickByHash(quotes, `${stock.ceo.name}:${stock.symbol}`)}” — mówi prezes ${stock.ceo.name.split(' ').pop()}.`;
+    if (fixed) return [position, fixed, quote];
+    const middle = [getDescriptionHint(stock).text, `Hasło firmy: „${getCompanyMotto(stock)}”.`];
+    if (info && descriptionHash(`${stock.symbol}:len`) % 2) middle.push(pickByHash(info.mood, stock.symbol));
+    return [position, ...middle, quote];
+}
 
 function initializeDescriptionParts(stock) {
     generateCEO(stock);
-    
-    const sectorInfo = sectorSpecifics[getMainSubsector(stock)] || sectorSpecifics[getMainSector(stock)] || { activity: ["Firma działa w swojej branży."], keywords: ["rynek", "konkurencja", "klienci"] };
-
-    stock.descriptionParts = {
-        activitySentence: getRandomElement(sectorInfo.activity),
-        keywordsSentence: `Kluczowe dla rozwoju firmy są czynniki takie jak ${getRandomElement(sectorInfo.keywords)} oraz ${getRandomElement(sectorInfo.keywords)}.`,
-        mottoSentence: getRandomElement(companyMottos)
-    };
 }
 
 function assembleDescription(stock) {
@@ -548,25 +603,11 @@ function assembleDescription(stock) {
         return stock.description || INSTITUTE_DESCRIPTIONS[stock.symbol] || `${stock.name} to instytut badawczy. Zarabia na grantach i licencjach od technologii odblokowanych na rynku.`; // 0.14.2 P1
     } 
     else {
-        if (!stock.descriptionParts || !stock.ceo || !stock.ceo.name) {
+        if (!stock.ceo || !stock.ceo.name) {
             initializeDescriptionParts(stock);
-            if (!stock.descriptionParts || !stock.ceo || !stock.ceo.name) {
-                 return "Brak danych do wygenerowania opisu.";
-            }
+            if (!stock.ceo || !stock.ceo.name) return "Brak danych do wygenerowania opisu.";
         }
-        
-        const parts = stock.descriptionParts;
-        const ceoName = stock.ceo.name;
-        
-        const sentence1_dynamic = `${stock.name} to ${getCompanyDescriptor(stock)} w kategorii ${getMainSector(stock)}.`;
-        const sentence3_dynamic = getVolatilitySentence(stock);
-        const sentence7_dynamic = `'${getCEOQuote(stock)}' - komentuje ${ceoName.split(' ').pop()}.`;
-        const sentence2_static = COMPANY_DESCRIPTIONS[stock.symbol] || parts.activitySentence;
-        const sentence4_static = parts.keywordsSentence;
-        const sentence5_static = parts.mottoSentence;
-        const sentence6_static = `Na czele spółki stoi prezes ${ceoName}.`;
-
-        return `${sentence1_dynamic} ${sentence2_static} ${sentence3_dynamic} ${sentence4_static} ${sentence5_static} ${sentence6_static} ${sentence7_dynamic}`;
+        return getDescriptionSentences(stock).join(' ');
     }
 }
 
@@ -2604,7 +2645,6 @@ function createBankStockObject(bank, exchangeLevel = 'SILVER') {
         quarterlyEarnings: 0,
         bankAccountId: null, // Banki nie mają konta w innym banku
         cash: bank.cash, // Gotówka banku
-        descriptionParts: null, // Zostaną wygenerowane
         ceo: null, // Zostanie wygenerowany
         isBankStock: true, // Flaga oznaczająca akcje banku
         bankData: { id: bank.id, type: bank.type }, // Dane powiązane z obiektem banku

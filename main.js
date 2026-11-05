@@ -1978,7 +1978,6 @@ function createNewWorld() {
              stock.cash = stock.balanceSheet ? stock.balanceSheet.assets * getRandomInRange(0.01, 0.05) : 0;
         }
         if (!stock.ceo && !stock.assetType) generateCEO(stock);
-        if (!stock.descriptionParts && !stock.description && !stock.assetType) initializeDescriptionParts(stock);
         if (!stock.analytical && !stock.assetType) initializeAnalyticalProperties(stock);
         if (!stock.research && !stock.assetType) initializeResearchForStock(stock);
         if (stock.playerHasFinancialAccess === undefined) stock.playerHasFinancialAccess = false;
