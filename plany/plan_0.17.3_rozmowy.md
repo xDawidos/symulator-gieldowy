@@ -55,6 +55,10 @@ Reakcje dają najwyżej +2 kwartalnie na osobę. Przy zaniku 5% sufit z samych r
 
 Polubienie: raz na post, +1. Komentarz: raz na post, +1, wybór 1 z 3 tekstów z puli. Oba wliczają się w limit +2.
 
+### Spadek relacji z prezesem
+
+Start: duża sprzedaż akcji spółki −5, głos przeciw prezesowi na walnym −8, próba odwołania −20. Wartości do strojenia.
+
 ### Premia do reputacji
 
 Relacja z prezesem ≥ +40: +1 kwartalnie do `stock.reputation.player`, przez `changeReputation`, do górnej granicy +30 z tego źródła.
@@ -69,7 +73,7 @@ Ustalenia użytkownika z 2026-11-05.
 - **Profil osoby:** otwierany kliknięciem w autora. Rola, spółka, staż, relacja słowem i miernikiem, ostatnie posty. Akcje: Obserwuj, Napisz, Dodaj do znajomych, odnośnik do karty spółki.
 - **Profil firmowy:** spółki mają własne konta i posty. Profil pokazuje sektor, giełdę, zarząd z Tied, ostatnie posty i przycisk Obserwuj.
 - **Obserwowanie:** posty obserwowanych trafiają do zakładki Kontakty. Lista w `playerProfile.follows`. Obserwowanie nie zmienia relacji.
-- **Znajomi:** gracz dodaje osobę z profilu. Szczegóły przyjmowania do ustalenia w rozmowie o mechanikach.
+- **Znajomi:** gracz może wysłać prośbę w każdej chwili. Akceptacja zależy od relacji (próg +20) i charakteru osoby, próg i charakter działają razem lub osobno według tabeli do strojenia. Plan nie pokazuje graczowi powodu odmowy.
 - **Odznaki przy nazwisku:** „Zweryfikowany” dla ok. 20% kont, stała z hasha, bez wpływu na mechanikę. Ikona „Znajomy” przy osobach ze znajomych. Nazwa „zweryfikowany” odróżnia odznakę od poziomu „zaufany znajomy”.
 - **Kadry w kanale:** wpis, gdy prezes lub wiceprezes obejmuje stanowisko i gdy odchodzi ze spółki. Źródło: `replaceCeo` i zmiany w `stock.deputies`.
 - **Reakcje innych:** boty lubią i komentują posty między sobą. Liczniki i komentarze liczone hashem z identyfikatora posta, bez zapisu, teksty z tej samej puli co komentarze gracza.
@@ -95,6 +99,7 @@ Ustalenia użytkownika z 2026-11-05.
 - Plan powstaje 1–2 kwartały wcześniej i to on wykonuje decyzję. Częstość zdarzeń ma zostać taka jak dziś, co sprawdza kontrola.
 - Prawdziwość zależy od charakteru autora, patrz tabela. Plan może też odpaść z przyczyn zewnętrznych, więc podpowiedź nigdy nie jest pewnikiem.
 - Podpowiedź bez liczb i dat, tylko kierunek.
+- Boty-inwestorzy postują opinie o sektorach i spółkach, które trzymają. Część to uczciwe rady, część próby wypchnięcia akcji przed własną sprzedażą, zależnie od charakteru.
 - `TIED_POST_LIMIT` zostaje 60. Zmiana limitu tylko po pomiarze zapisu.
 
 ## R3. Wiceprezesi
@@ -201,6 +206,11 @@ Bot wybiera cel zgodnie ze swoim portfelem, np. poleca spółkę, którą sam tr
   - nowy preset „czytelnik Tied”, który handluje po zapowiedziach: przewaga nad presetem bazowym poniżej progu do ustalenia;
   - rozmiar zapisu: średnia w limicie;
   - czas kroku: bez wzrostu ponad 2%.
+
+## Odrzucone pomysły
+
+- Podsumowanie kwartału z liczbą nowych postów: niepotrzebne. Przegapienie posta jest kosztem gracza.
+- Licznik sprawdzonych zapowiedzi w profilu: za bardzo ułatwia rozpoznanie charakteru.
 
 ## Interfejs
 
