@@ -43,6 +43,5 @@ Odstępstwa od projektu:
 - „(wolne: N)” przy slotach widać tylko, gdy gracz ma firmę budowlaną.
 
 ## Co zostało
-1. **Figma:** bez aktualizacji (import `img/ikony/arkusz.html` i komponentów, gdy serwer zadziała).
-2. **Emoji w kodzie danych** (`icon` w `CRISIS_LINES`, hasła Akademii, `infrastructure.js`, ikony ustaw w `SOCIAL_LAWS`) zostają. W tabeli ustaw `law.icon` jest wypisywany wprost, więc na ekranie to emoji, w tym 🛣️ przy ustawie infrastruktury z S5.
-3. **Nazwa `flags.js`:** plik trzyma już tylko ikony walut.
+1. **Emoji w kodzie danych** (`icon` w `CRISIS_LINES`, hasła Akademii, `infrastructure.js`, ikony ustaw w `SOCIAL_LAWS`) zostają. W tabeli ustaw `law.icon` jest wypisywany wprost, więc na ekranie to emoji, w tym 🛣️ przy ustawie infrastruktury z S5.
+2. **Nazwa `flags.js`:** plik trzyma już tylko ikony walut.

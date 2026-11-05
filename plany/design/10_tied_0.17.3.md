@@ -2,7 +2,7 @@
 
 Data: 2026-11-05 · zlecenie: `plany/plan_0.17.3_rozmowy.md` (R1, R2, R4, R5, Interfejs) · system: [03_system.md](03_system.md) · makieta z działającymi przejściami: [makiety/10_tied_0173.html](makiety/10_tied_0173.html) · zrzuty: `zrzuty/z0173/`.
 
-To projekt dla czatu kodu. CSS jest w grze (blok „0.17.3” na końcu `style.css`), 9 ikon w `UI_ICON_PATHS` i `img/ikony/`. Logiki nie ma. Stitch posłużył jako punkt wyjścia, z makiety odpadły lewa kolumna, „TLS 1.3”, „Węzeł”, „Stan terminala”, „GPW”, dekoracyjne odznaki i blok „Poziom relacji” z rangami. Figma łączy się, ale konto ma fotel „View”, więc źródłem pozostaje makieta HTML.
+To projekt dla czatu kodu. CSS jest w grze (blok „0.17.3” na końcu `style.css`), 9 ikon w `UI_ICON_PATHS` i `img/ikony/`. Logiki nie ma. Stitch posłużył jako punkt wyjścia, z makiety odpadły lewa kolumna, „TLS 1.3”, „Węzeł”, „Stan terminala”, „GPW”, dekoracyjne odznaki i blok „Poziom relacji” z rangami. Źródłem projektu jest makieta HTML, Figmy nie używamy (decyzja użytkownika 2026-11-05).
 
 ## Zasady
 1. **Charakter nigdy w interfejsie.** Ani słowem, ani ikoną, ani kolorem. Ton opcji w rozmowie („Liczby”, „Wizja”) opisuje wybór gracza, nie rozmówcę.
