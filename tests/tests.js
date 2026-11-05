@@ -13637,6 +13637,8 @@ group('0.16.5 Internet i TeamedUP!', () => {
         assert(noteTiedEvent(`${s.name} podpisuje kontrakt na dostawę`, 'company'), 'post z dobrej wieści');
         assertEq(noteTiedEvent(`${s.name} podpisuje kontrakt na dostawę`, 'company'), null, 'bez duplikatu');
         assertEq(noteTiedEvent(`${s.name} traci płynność, upadłość`, 'company'), null, 'zła wieść bez posta');
+        addTiedPost({ kind: 'hr', hr: 'in', symbol: s.symbol, author: 'Nowy', ceoId: s.ceo.id });
+        assert(noteTiedEvent(`${s.name} podpisuje nowy kontrakt`, 'company'), 'wpis kadrowy bez tekstu nie przerywa logEvent');
         assertEq(getTiedPosts()[0].author, 'Jan Testowy', 'autor to prezes');
     });
 
@@ -16053,6 +16055,9 @@ group('0.17.3 R2 Zapowiedzi, opinie, KNF', () => {
         ai.portfolio = { AAA: { shares: 100, avgPrice: 100 } }; stocks[0].sharesHeld = 100;
         const bots = aiCompetitors.splice(0, aiCompetitors.length, ai);
         try {
+            const only = ai.portfolio; ai.portfolio = Object.fromEntries(stocks.filter(x => !x.assetType).slice(0, 6).map(x => [x.symbol, { shares: 1, avgPrice: 100 }]));
+            for (let i = 0; i < 40; i++) assert(postTiedInvestorOpinion(), 'opinia przy kilku spółkach');
+            ai.portfolio = only;
             const post = withRandom(0.1, () => postTiedInvestorOpinion());
             assert(post && post.botId === ai.id && post.symbol === 'AAA', 'post inwestora');
             assert(ai.tiedPump, 'plan sprzedaży');

@@ -60,7 +60,7 @@ function noteTiedEvent(message, category) {
     const kind = /współprac|kooperac/i.test(message) ? 'coop' : 'result';
     const lead = kind === 'coop' ? 'Cieszymy się, że możemy to ogłosić:' : 'Z dumą dzielę się wiadomością:';
     const text = `${lead} ${String(message).replace(/\p{Extended_Pictographic}|️/gu, '').replace(/\s+/g, ' ').trim()}`;
-    if (getTiedPosts().some(p => p.symbol === stock.symbol && p.text.startsWith(text))) return null;
+    if (getTiedPosts().some(p => p.symbol === stock.symbol && p.text?.startsWith(text))) return null;
     const closing = stock.ceo.id ? ` ${pickByHash(getPersonCharacterData(ceoKey(stock.ceo.id)).closing, text)}` : '';
     return addTiedPost(kind === 'coop' ? { symbol: stock.symbol, text, kind } : { symbol: stock.symbol, author: stock.ceo.name, ceoId: stock.ceo.id, text: text + closing, kind });
 }
@@ -592,7 +592,7 @@ function postTiedInvestorOpinion() {
     if (!bots.length) return null;
     const person = getRandomElement(bots), ai = person.entity, symbols = Object.keys(ai.portfolio).filter(symbol => stocks.some(s => s.symbol === symbol && !s.assetType));
     if (!symbols.length) return null;
-    const stock = stocks.find(s => s.symbol === getRandomElement(symbols)), character = getPersonCharacter(person.id), fair = typeof getDisplayedFairValue === 'function' ? getDisplayedFairValue(stock) : 0;
+    const symbol = getRandomElement(symbols), stock = stocks.find(s => s.symbol === symbol), character = getPersonCharacter(person.id), fair = typeof getDisplayedFairValue === 'function' ? getDisplayedFairValue(stock) : 0;
     const pump = (character === 'manipulator' || character === 'blefiarz') && Math.random() < 0.5;
     if (pump) ai.tiedPump = { symbol: stock.symbol, q: macro.quarter };
     const cheap = pump || (fair > 0 && stock.price < fair);

@@ -466,7 +466,7 @@ const STUB = `(function () {
             t = next.at;
             if (next.iv) next.at += next.iv; else timers.delete(next.id);
             try { typeof next.fn === 'function' ? next.fn(...next.args) : (0, eval)(next.fn); }
-            catch (e) { if (window.__vt.errors.length < 20) window.__vt.errors.push(String(e && e.stack || e).slice(0, 400)); }
+            catch (e) { window.__vt.errorCount = (window.__vt.errorCount || 0) + 1; if (window.__vt.errors.length < 20) window.__vt.errors.push(String(e && e.stack || e).slice(0, 400)); }
         }
         t = end;
     } };
@@ -1385,7 +1385,7 @@ async function oneRun(index) {
     const saveCheck = await w.eval('typeof __sim.saveCheckAsync === "function" ? __sim.saveCheckAsync() : null').catch(e => ({ error: String(e) }));
     const result = { run: index, quarters: w.eval('__sim.quarters'), ...JSON.parse(JSON.stringify(finish)),
         msPerQuarter: msPerQuarter.slice(2).reduce((a, b) => a + b, 0) / Math.max(1, msPerQuarter.length - 2),
-        realMs: performance.now() - realStart, errors: w.__vt.errors.slice(0, 5), saveCheck };
+        realMs: performance.now() - realStart, errors: w.__vt.errors.slice(0, 5), errorCount: w.__vt.errorCount || 0, saveCheck };
     return JSON.parse(JSON.stringify(result));
 }
 
