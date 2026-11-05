@@ -15615,7 +15615,7 @@ group('0.17 S7 Mistrz Opcji i Akademia', () => {
 group('0.17.8 Generator opisów spółek', () => {
     const company = (symbol, extra = {}) => Object.assign(structuredClone(initialStocks.find(s => s.symbol === symbol)), { ceo: { name: 'Anna Kowalska', traits: [] } }, extra);
     const all = () => initialStocks.filter(s => s.assetType !== 'ResearchInstitute' && s.assetType !== 'Startup').map(s => company(s.symbol));
-    const count = stock => assembleDescription(stock).split(stock.name).join('Spółka').replace(/„[^”]*”/, 'Cytat').split(/(?<=[.!?])\s+/).length;
+    const count = stock => assembleDescription(stock).split(stock.name).join('Spółka').replace(/„[^”]*”/g, 'Cytat').split(/(?<=[.!?])\s+/).length;
     const fixed = stock => stock.isStateOwned && COMPANY_DESCRIPTIONS[stock.symbol];
 
     test('opis nie zmienia się między wywołaniami i nie trafia do spółki', () => {
@@ -15644,12 +15644,14 @@ group('0.17.8 Generator opisów spółek', () => {
             assert(info?.does && info.gen && info.mood?.length, `sektor ${sector}`);
         }
     });
-    test('zmiana poziomu giełdy zmienia tylko pierwsze zdanie; zmiana prezesa tylko cytat', () => {
+    test('zmiana giełdy: pierwsze zdanie, a hasło tylko między grupami poziomów; zmiana prezesa tylko cytat', () => {
         for (const symbol of ['ECL', 'BUL', 'PES']) {
             const base = company(symbol, { exchange: 'JUNK' }), a = getDescriptionSentences(base);
             const b = getDescriptionSentences({ ...base, exchange: 'GOLD' });
             assert(a[0] !== b[0], `${symbol}: nowe pierwsze zdanie`);
-            assertEq(a.slice(1).join('|'), b.slice(1).join('|'), `${symbol}: reszta bez zmian`);
+            const noMotto = list => list.slice(1).filter(x => !x.startsWith('Hasło firmy')).join('|');
+            assertEq(noMotto(a), noMotto(b), `${symbol}: reszta bez zmian`);
+            assertEq(a.slice(1).join('|'), getDescriptionSentences({ ...base, exchange: 'BRONZE' }).slice(1).join('|'), `${symbol}: ta sama grupa haseł`);
             let changed = false;
             for (const name of ['Jan Nowak', 'Piotr Wrona', 'Maria Lis']) {
                 const c = getDescriptionSentences({ ...base, ceo: { name, traits: [] } });
@@ -15674,6 +15676,33 @@ group('0.17.8 Generator opisów spółek', () => {
         assert(hint('dividend').test(company('BUL', { dividendPolicy: 'Aggressive' })) && !hint('dividend').test(company('BUL', { dividendPolicy: 'Balanced' })), 'dywidenda');
         assert(hint('research').test(company('BUL', { research: { unlockedTechs: ['x'] } })) && !hint('research').test(company('BUL', { research: { unlockedTechs: [] } })), 'badania');
         assert(hint('defensive').test(company('BUL')) && !hint('defensive').test(company('DPB')), 'odporność');
+        const sheet = (assets, liabilities) => ({ balanceSheet: { assets, liabilities } });
+        assert(hint('noDebt').test(company('BUL', sheet(100, 0))) && !hint('noDebt').test(company('BUL', sheet(100, 20))), 'bez długów');
+        assert(hint('highDebt').test(company('BUL', sheet(100, 40))) && !hint('highDebt').test(company('BUL', sheet(100, 20))), 'duży dług');
+        assert(!hint('noDebt').test(company('BUL', { ...sheet(100, 0), isBankStock: true })) && !hint('highDebt').test(company('BUL', { ...sheet(100, 40), isBankStock: true })), 'bank bez podpowiedzi o długu');
+    });
+    test('frazy: typ aktywa przed podsektorem, podsektor przed sektorem; każdy podsektor ma frazę', () => {
+        for (const [sector, def] of Object.entries(SECTORS)) for (const sub of Object.keys(def.subsectors || {})) assert(SUBSECTOR_ACTIVITY[sub], `podsektor ${sub} (${sector})`);
+        assertEq(getActivityPhrase(company('ZST', { segments: [{ sector: 'Przemysł', subsector: 'Wydobycie', share: 1 }] })), SUBSECTOR_ACTIVITY.Wydobycie, 'podsektor');
+        assertEq(getActivityPhrase(company('WRN')), ASSET_TYPE_ACTIVITY.DebtCollector, 'typ aktywa przed podsektorem');
+        assertEq(getActivityPhrase(company('GRET')), ASSET_TYPE_ACTIVITY.REIT, 'REIT');
+        assertEq(getActivityPhrase(company('ORT')), SECTOR_DESCRIPTION.Technologia.does, 'bez podsektora: fraza sektora');
+        for (const symbol of ['ORT', 'KWM']) assert(!/oprogramowanie|wytwarza produkty/.test(assembleDescription(company(symbol))), `${symbol}: fraza nie kłamie`);
+    });
+    test('pula pozycji składa się ze zdaniem i nie przeczy podpowiedziom o kursie; hasła zależą od poziomu', () => {
+        const pool = Object.values(companyDescriptors).flat();
+        for (const word of ['bezpieczna przystań', 'konglomerat', 'nowicjusz na rynku', 'gigant na rynku', 'lider rynku']) assert(!pool.includes(word), `usunięte: ${word}`);
+        assert(pool.every(word => !/w branży|na rynku|rynku$|segmentu$/.test(word)), 'bez podwójnego „w …”');
+        const calmWords = /stabiln|bezpieczn|pewny|spokojn/i, wildWords = /dynamiczn|nerwow|gwałtown/i;
+        assert(pool.every(word => !calmWords.test(word) && !wildWords.test(word)), 'pula nie mówi o kursie');
+        for (const stock of all()) {
+            const first = getDescriptionSentences(stock)[0], id = fixed(stock) ? '' : getDescriptionHint(stock).id;
+            assert(id !== 'wild' || !calmWords.test(first), `${stock.symbol}: nerwowa przy spokojnej pozycji`);
+            assert(id !== 'calm' || !wildWords.test(first), `${stock.symbol}: spokojna przy nerwowej pozycji`);
+        }
+        const motto = exchange => getCompanyMotto(company('ECL', { exchange }));
+        assert(COMPANY_MOTTOS.small.includes(motto('JUNK')) && COMPANY_MOTTOS.medium.includes(motto('GOLD')) && COMPANY_MOTTOS.large.includes(motto('EMERALD')), 'pule haseł');
+        assert(Object.values(COMPANY_MOTTOS).flat().every(m => !/liderem|innowacj/i.test(m)), 'bez wielkich słów');
     });
     test('spółki państwowe: stały opis tylko z isStateOwned i wpisem; reszta przez generator', () => {
         for (const symbol of ['PES', 'NAG', 'GRT', 'CFL', 'PKC', 'ENG', 'TRN', 'PUR', 'NOC']) {
