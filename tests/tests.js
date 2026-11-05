@@ -15705,7 +15705,7 @@ group('0.17.8 Generator opisów spółek', () => {
         assert(Object.values(COMPANY_MOTTOS).flat().every(m => !/liderem|innowacj/i.test(m)), 'bez wielkich słów');
     });
     test('spółki państwowe: stały opis tylko z isStateOwned i wpisem; reszta przez generator', () => {
-        for (const symbol of ['PES', 'NAG', 'GRT', 'CFL', 'PKC', 'ENG', 'TRN', 'PUR', 'NOC']) {
+        for (const symbol of ['PES', 'NAG', 'GRT', 'CFL', 'PKC', 'ENG', 'TRN', 'PUR', 'NOC', 'MLD']) {
             const stock = company(symbol), s = getDescriptionSentences(stock);
             assert(stock.isStateOwned, `${symbol}: państwowa`);
             assertEq(s.length, 3, `${symbol}: pozycja, stały opis, cytat`);

@@ -7,10 +7,10 @@ Gałąź `claude/impl-017-s0b-891539` po scaleniu `zmiany-AI` 5fe70bd, nie scalo
 - **Pierwsze zdanie:** pozycja według poziomu giełdy i fraza działalności. Fraza pochodzi kolejno z typu aktywa (REIT, windykator, lombard, biuro rachunkowe), podsektora (28 fraz, po jednej na każdy), a na końcu z sektora (21 fraz).
 - **Środek:** dokładnie 1 podpowiedź, hasło firmy zależne od poziomu giełdy i czasem zdanie o charakterze sektora.
 - **Ostatnie zdanie:** cytat prezesa z puli `neutral` i `positive`.
-- **Stałe opisy:** przeniesione ENG, TRN, PUR, NOC; usunięte ZST, SLS, TIR. Testy S2 i S4 poprawione. Po prywatyzacji stały opis znika i działa generator.
+- **Stałe opisy:** przeniesione ENG, TRN, PUR, NOC; dodany zaakceptowany opis MLD; usunięte ZST, SLS, TIR. Testy S2 i S4 poprawione. Po prywatyzacji stały opis znika i działa generator.
 - **Stare zapisy:** pole `descriptionParts` jest pomijane. Nowe spółki go nie dostają.
 - **Usunięty martwy kod:** `sectorSpecifics`, `getCEOQuote`, `getVolatilitySentence`, `companyMottos`, pula `innovator`.
-- **Bez zmian:** startupy, instytuty i spółki zagraniczne. Opisu MLD nie dodałem.
+- **Bez zmian:** startupy, instytuty i spółki zagraniczne.
 
 ## Poprawki po pierwszym przeglądzie
 1. **Frazy:** frazy sektorów są teraz szerokie, bo to zapas dla spółek bez podsektora. Przemysł: „dostarcza towary i usługi innym firmom”, Technologia: „dostarcza usługi i rozwiązania cyfrowe”, Żywność: „dostarcza jedzenie i napoje klientom w całym kraju”.
@@ -19,7 +19,7 @@ Gałąź `claude/impl-017-s0b-891539` po scaleniu `zmiany-AI` 5fe70bd, nie scalo
 4. **Nowe podpowiedzi:** „bez długów” (zobowiązania ≤ 2% aktywów) i „duży dług” (≥ 33%). Czytają ten sam bilans co kafelek „Zadłużenie”. Banki są wyłączone, bo depozyty mają poza bilansem.
 5. **Test sprzeczności:** pula pozycji nie zawiera już słów o kursie, a test sprawdza to na puli i na wszystkich spółkach.
 
-## Progi i rozkład podpowiedzi (66 spółek przez generator, jedna nowa gra)
+## Progi i rozkład podpowiedzi (66 spółek przez generator, jedna nowa gra, pomiar przed dodaniem opisu MLD)
 Progi: stabilna ≤ 0,8 mediany sektora, nerwowa ≥ 1,3, wsad ≥ 0,15, produkt ≥ 0,3, dywidenda `Aggressive` i `Total`, bez długów ≤ 2%, duży dług ≥ 33%.
 
 | Podpowiedź | Pasuje | Wybrana |
@@ -88,7 +88,7 @@ Sprawdzone w grze, konsola bez błędów. Tekst mieści się w sekcji „O spó�
 - Spółka prywatna: [BurgerLand](zrzuty_0.17.8/karta_prywatna_BUL.jpg)
 - Spółka państwowa ze stałym opisem: [NatGaz](zrzuty_0.17.8/karta_panstwowa_NAG.jpg)
 
-## Propozycja opisu MLD (do akceptacji, nie w grze)
+## Opis MLD (zaakceptowany, w grze)
 > Państwowa kopalnia i huta miedzi, w której każdy nowy rząd obiecuje modernizację. Wynik idzie za ceną metali, a rachunki za prąd zjadają marżę.
 
 ## Odstępstwa od planu

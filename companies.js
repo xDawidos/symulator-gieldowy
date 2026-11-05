@@ -456,6 +456,7 @@ const COMPANY_DESCRIPTIONS = {
     ENG: 'Regionalny dostawca prądu z północy, z licznikiem, który nigdy się nie myli na niekorzyść firmy. Zależy od regulowanych taryf i ceny węgla.',
     TRN: 'Elektrownie węglowe z południa, które coraz głośniej mówią o transformacji. Marża zależy od ceny węgla i taryf, a kurs od polityki.',
     PUR: 'Państwowa spółka paliwa jądrowego, jeszcze przed pierwszym blokiem. Kurs idzie za ceną uranu i za kolejnymi zapowiedziami budowy elektrowni.',
+    MLD: 'Państwowa kopalnia i huta miedzi, w której każdy nowy rząd obiecuje modernizację. Wynik idzie za ceną metali, a rachunki za prąd zjadają marżę.',
     NOC: 'Państwowy operator sieci i e-urzędów; działa, gdy akurat nie ma przerwy technicznej. Stałe kontrakty z państwem i wrażliwość na zmianę rządu.'
 };
 
