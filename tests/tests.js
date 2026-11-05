@@ -15985,3 +15985,80 @@ group('0.17.3 R1 Tied: kontakty, reakcje, znajomi', () => {
         assert(page.includes('Jan Dawny') && page.includes('Stary post'), 'stary post');
     });
 });
+
+group('0.17.3 R2 Zapowiedzi, opinie, KNF', () => {
+    const start = () => {
+        const list = [makeCompany('AAA'), makeCompany('BBB')];
+        list.forEach(company => { company.insiderShares = 0; company.reputation = { player: 0 }; });
+        resetWorld(list); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        playerCash = 5_000_000; botRelations = createBotRelations(); delete oversight.records.player; mailbox = createMailbox(); macro.quarter = 10;
+        for (const stock of stocks) { stock.ceo = null; generateCEO(stock); }
+    };
+    const withRandom = (v, fn) => { const r = Math.random; Math.random = () => v; try { return fn(); } finally { Math.random = r; } };
+    const key = () => getCeoRelationKey(stocks[0].ceo.id);
+
+    test('plan dywidendy: decyzja teraz, wykonanie po 1–2 kw.; drugi plan wykonuje się od razu; częstość losowania bez zmian', () => {
+        start(); const s = stocks[0];
+        s.dividendPolicy = 'Growth'; s.financialHealth = 4; s.corporatePhase = null;
+        assert(planCompanyMove(s, 'dividend', { policy: 'Balanced' }), 'plan');
+        assert(!planCompanyMove(s, 'strategy', {}), 'jeden plan na spółkę');
+        assertEq(s.dividendPolicy, 'Growth', 'bez zmiany przed terminem');
+        assert(s.plannedMove.atQ === 11 || s.plannedMove.atQ === 12, 'termin 1–2 kw.');
+        macro.quarter = s.plannedMove.atQ;
+        processCompanyPlansQuarterly();
+        assertEq(s.dividendPolicy, 'Balanced', 'wykonanie z planu');
+        assert(!s.plannedMove, 'plan zdjęty');
+    });
+    test('zapowiedź: bez liczb i dat, tylko dla znajomych lub zaufanych; plan bez pokrycia niczego nie wykonuje', () => {
+        start(); const s = stocks[0];
+        for (const type of TIED_PLAN_TYPES) for (const audience of ['friends', 'trusted']) for (const text of TIED_HINTS[type][audience]) assert(!/\d/.test(text), `bez liczb: ${text}`);
+        const post = withRandom(0.1, () => postTiedHint(s, 'dividend'));
+        assert(post && post.audience === 'trusted' && post.kind === 'hint', 'post');
+        s.dividendPolicy = 'Growth';
+        s.plannedMove = { type: 'dividend', atQ: 10, real: false, data: { policy: 'Total' } };
+        processCompanyPlansQuarterly();
+        assertEq(s.dividendPolicy, 'Growth', 'bez skutku');
+    });
+    test('prawdziwość według charakteru: częściej bez pokrycia u blefiarza niż u rachmistrza; boty z osobowości; charakter stały', () => {
+        const chance = id => COMPANY_PLAN_RULES.fakeBase * (1 - TIED_CHARACTERS[id].truth) / TIED_CHARACTERS[id].truth;
+        assert(chance('blefiarz') > chance('zachowawczy') && chance('zachowawczy') > chance('rachmistrz'), 'kolejność');
+        assertEq(Object.keys(TIED_CHARACTERS).length, 7, '7 charakterów');
+        assertEq(getPersonCharacter('ceo:c1'), getPersonCharacter('ceo:c1'), 'stały');
+        const seen = new Set(Array.from({ length: 400 }, (_, i) => getPersonCharacter(`ceo:c${i}`)));
+        assertEq(seen.size, 7, 'wszystkie się trafiają');
+    });
+    test('KNF: zakup po poście dla zaufanych przy prawdziwym planie; pierwsze ostrzeżenie bez kwoty, drugie kara 5% gotówki', () => {
+        start(); const s = stocks[0];
+        addTiedFriend(key()); botRelations.values[key()] = 70;
+        s.plannedMove = { type: 'dividend', atQ: 11, real: true, data: { policy: 'Balanced' } };
+        addTiedPost({ symbol: 'AAA', author: s.ceo.name, ceoId: s.ceo.id, text: 'x', kind: 'hint', audience: 'trusted', q: 10 });
+        buyStock('AAA', 10);
+        assertEq(playerProfile.tied.tips.length, 1, 'zakup zanotowany');
+        const cash = playerCash;
+        withRandom(0.5, () => resolveTiedTips(s));
+        assertEq(playerProfile.tied.tips.length, 0, 'poza szansą nic');
+        assertEq(playerProfile.tied.knfHits || 0, 0, 'bez wykrycia');
+        playerProfile.tied.tips = [{ symbol: 'AAA', q: 10 }];
+        withRandom(0, () => resolveTiedTips(s));
+        assertEq(playerProfile.tied.knfHits, 1, 'pierwsze wykrycie');
+        assertEq(playerCash, cash, 'bez kary');
+        assert(mailbox.messages[0].sender === 'KNF' && !/\d/.test(mailbox.messages[0].body) && mailbox.messages[0].importance === 3, 'ostrzeżenie bez kwoty');
+        playerProfile.tied.tips = [{ symbol: 'AAA', q: 10 }];
+        withRandom(0, () => resolveTiedTips(s));
+        assertNear(playerCash, cash * 0.95, 'kara 5%', 1e-6);
+    });
+    test('bot: opinia o spółce, którą trzyma; reklama przed sprzedażą kończy się sprzedażą w następnym kwartale', () => {
+        start();
+        const ai = aiCompetitors.find(bot => bot.personality === 'yolo_trader') || aiCompetitors.find(bot => bot.personality === 'reckless');
+        ai.portfolio = { AAA: { shares: 100, avgPrice: 100 } }; stocks[0].sharesHeld = 100;
+        const bots = aiCompetitors.splice(0, aiCompetitors.length, ai);
+        try {
+            const post = withRandom(0.1, () => postTiedInvestorOpinion());
+            assert(post && post.botId === ai.id && post.symbol === 'AAA', 'post inwestora');
+            assert(ai.tiedPump, 'plan sprzedaży');
+            macro.quarter++;
+            processTiedChatterQuarterly();
+            assert(!ai.tiedPump && ai.portfolio.AAA.shares < 100, 'sprzedał część');
+        } finally { aiCompetitors.splice(0, aiCompetitors.length, ...bots); ai.portfolio = {}; delete ai.tiedPump; }
+    });
+});

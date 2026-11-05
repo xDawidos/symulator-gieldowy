@@ -3487,10 +3487,15 @@ function reviewDividendPolicy(stock) {
     // Arystokrata pilnuje serii: nie obniża polityki bez recesji.
     if (stock.isDividendAristocrat && next < index && economyCycle.phase !== 'recession') next = index;
 
-    if (next !== index) {
-        setCompanyDividendPolicy(stock, DIVIDEND_POLICY_ORDER[next]);
-        logEvent(`💼 Zarząd ${stock.name} zmienia strategię dywidendową na: ${getDividendPolicyLabel(stock.dividendPolicy)}.`, 'company');
-    }
+    if (next === index) return;
+    const policy = DIVIDEND_POLICY_ORDER[next];
+    if (typeof planCompanyMove === 'function' && planCompanyMove(stock, 'dividend', { policy })) return; // 0.17.3 R2: zapowiedź przed wykonaniem
+    applyDividendPolicyChange(stock, policy);
+}
+function applyDividendPolicyChange(stock, policy) {
+    setCompanyDividendPolicy(stock, policy);
+    logEvent(`💼 Zarząd ${stock.name} zmienia strategię dywidendową na: ${getDividendPolicyLabel(stock.dividendPolicy)}.`, 'company');
+    return true;
 }
 
 // 0.15.4 P3: minimalna dywidenda — większa z dwóch: 0,01 zł na akcję albo 0,1% kursu; poniżej spółka nie wypłaca (EcoLube płacił 0,0077 zł).
@@ -6666,6 +6671,8 @@ function processCeoActions(deltaTime) {
                 if (stock.ceo.timers.buyback === undefined) {
                     stock.ceo.timers.buyback = getRandomIntInRange(4 * 60 * 1000, 7 * 60 * 1000);
                 }
+                // 0.17.3 R2: skup działa na liczniku, więc plan to prognoza z licznika; zdarzenie nie przesuwa się w czasie
+                if (typeof planCompanyMove === 'function' && stock.ceo.timers.buyback <= BASE_DELAYS.weekly * WEEKS_PER_QUARTER) planCompanyMove(stock, 'buyback', null, macro.quarter + 1);
                 stock.ceo.timers.buyback -= deltaTime;
 
                 if (stock.ceo.timers.buyback <= 0) {
@@ -6680,6 +6687,7 @@ function processCeoActions(deltaTime) {
                         stock.treasuryShares += sharesToBuy;
                         
                         logEvent(`📈 [Kapitalista] Zarząd ${stock.name} ogłasza skup akcji własnych w celu podniesienia wartości dla akcjonariuszy!`, 'company');
+                        if (stock.plannedMove?.type === 'buyback') { delete stock.plannedMove; if (typeof resolveTiedTips === 'function') resolveTiedTips(stock); }
                     }
                     stock.ceo.timers.buyback = getRandomIntInRange(4 * 60 * 1000, 7 * 60 * 1000); // Reset timera
                 }
@@ -7338,7 +7346,9 @@ function checkForPotentialMA() {
         
         if (finalInitiatorStock) {
             // Przekaż wybraną metodę finansowania
-            initiateMergerProcess(finalInitiatorStock, targetStock, preferredType, preferredFinancing, getRandomInRange(0.15, 0.35));
+            const premium = getRandomInRange(0.15, 0.35);
+            if (typeof planCompanyMove === 'function' && planCompanyMove(finalInitiatorStock, 'takeover', { target: targetStock.symbol, targetSector: getMainSector(targetStock), kind: preferredType, financing: preferredFinancing, premium })) return; // 0.17.3 R2
+            initiateMergerProcess(finalInitiatorStock, targetStock, preferredType, preferredFinancing, premium);
         }
     }
 }
@@ -11614,7 +11624,11 @@ function processStrategyQuarterly(quarter = getStrategyQuarter()) {
         else if (canStartExpansion(stock) && Math.random() < getCeoExpansionChance(stock)) proposal = { type: 'expand', target: pickExpansionSector(stock) };
         else if (canEnterSubsector(stock) && Math.random() < SUBSECTOR_ENTRY_CHANCE) proposal = { type: 'subsector', target: null };
         else if (canChooseNiche(stock) && !getNicheCandidate(stock).niche && Math.random() < NICHE_CHANCE) proposal = { type: 'niche', target: null }; // prezes nie przełącza nisz
-        if (proposal && (proposal.type === 'subsector' || proposal.type === 'niche' || proposal.target)) proposeStrategy(stock, proposal, quarter);
+        if (proposal && (proposal.type === 'subsector' || proposal.type === 'niche' || proposal.target)) {
+            const ceoDecides = !(typeof canFundControlAgm === 'function' && canFundControlAgm(stock)); // decyzję większościowca gracza zostawia T3.6
+            if (ceoDecides && typeof planCompanyMove === 'function' && planCompanyMove(stock, 'strategy', { proposal })) continue; // 0.17.3 R2
+            proposeStrategy(stock, proposal, quarter);
+        }
     }
 }
 

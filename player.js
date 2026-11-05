@@ -342,6 +342,7 @@ function buyStock(symbol, quantity) {
 
     // Logika transakcji
     if (typeof noteCeoContact === 'function') noteCeoContact(stockToBuy); // 0.17.3 R0
+    if (typeof noteTiedTip === 'function') noteTiedTip(stockToBuy); // 0.17.3 R2: kontrola KNF
     if (!stockToBuy.playerTransactions) stockToBuy.playerTransactions = [];
     stockToBuy.playerTransactions.push({
         type: 'buy',

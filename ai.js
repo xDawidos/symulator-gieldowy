@@ -2545,7 +2545,7 @@ function processRelationsQuarterly() {
     botRelations.blockOffer = null; // oferta pakietu ważna do końca kwartału
     botRelations.mockedThisQuarter = false;
     for (const id of Object.keys(botRelations.values)) {
-        botRelations.values[id] *= 1 - RELATION_DECAY;
+        botRelations.values[id] *= 1 - RELATION_DECAY * (typeof getRelationDecayFactor === 'function' ? getRelationDecayFactor(id) : 1); // 0.17.3 R4: charakter
         if (Math.abs(botRelations.values[id]) < 0.5) delete botRelations.values[id];
     }
     if (typeof processTiedQuarterly === 'function') processTiedQuarterly(); // 0.17.3 R1: prośby do znajomych

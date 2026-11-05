@@ -14,13 +14,14 @@ const TIED_RULES = {
 };
 const TIED_POSITIVE_NEWS = /wynik|kontrakt|raport|współprac|kooperac|dywidend|rekord|przełom|technolog|nowa (oferta|placówk)/i;
 const TIED_COMMENT_POOL = ['Super!', 'Gratuluję!', 'Trzymamy za was kciuki :)', 'Brawo!', 'Świetna wiadomość.', 'Tak trzymać!', 'Mocne.', 'Powodzenia w kolejnym kwartale!'];
-const TIED_POST_KINDS = { result: 'Wyniki', coop: 'Współpraca' };
+const TIED_POST_KINDS = { result: 'Wyniki', coop: 'Współpraca', note: 'Wpis', opinion: 'Opinia' };
 const TIED_AUDIENCE = { friends: 'Dla znajomych', trusted: 'Dla zaufanych' };
 const TIED_LOCKED_TEXT = { friends: 'Treść dla znajomych', trusted: 'Treść dla zaufanych' };
 
 let tiedView = { feed: 'main', side: 'me', pane: 'feed', person: null, company: null, message: null, filter: 'all', pool: null };
 const initials = name => String(name || '?').split(/\s+/).map(w => w.charAt(0)).join('').slice(0, 2).toUpperCase();
 const ceoKey = id => getCeoRelationKey(id);
+const tiedPostKey = post => post.botId || (post.ceoId ? ceoKey(post.ceoId) : null);
 const companyFollowKey = symbol => `co:${symbol}`;
 
 function ensureTiedState() {
@@ -35,7 +36,7 @@ function getTiedPosts() { return (mailbox && mailbox.tied) || []; }
 
 function isWatchedTiedPost(post) {
     if (!playerProfile) return false;
-    const key = post.ceoId ? ceoKey(post.ceoId) : null, follows = playerProfile.follows || [];
+    const key = tiedPostKey(post), follows = playerProfile.follows || [];
     return Boolean((post.ceoId && playerProfile.contacts?.some(contact => contact.id === post.ceoId)) || (key && (follows.includes(key) || isTiedFriend(key))) || follows.includes(companyFollowKey(post.symbol)));
 }
 function trimTiedPosts() {
@@ -59,8 +60,9 @@ function noteTiedEvent(message, category) {
     const kind = /współprac|kooperac/i.test(message) ? 'coop' : 'result';
     const lead = kind === 'coop' ? 'Cieszymy się, że możemy to ogłosić:' : 'Z dumą dzielę się wiadomością:';
     const text = `${lead} ${String(message).replace(/\p{Extended_Pictographic}|️/gu, '').replace(/\s+/g, ' ').trim()}`;
-    if (getTiedPosts().some(p => p.symbol === stock.symbol && p.text === text)) return null;
-    return addTiedPost(kind === 'coop' ? { symbol: stock.symbol, text, kind } : { symbol: stock.symbol, author: stock.ceo.name, ceoId: stock.ceo.id, text, kind });
+    if (getTiedPosts().some(p => p.symbol === stock.symbol && p.text.startsWith(text))) return null;
+    const closing = stock.ceo.id ? ` ${pickByHash(getPersonCharacterData(ceoKey(stock.ceo.id)).closing, text)}` : '';
+    return addTiedPost(kind === 'coop' ? { symbol: stock.symbol, text, kind } : { symbol: stock.symbol, author: stock.ceo.name, ceoId: stock.ceo.id, text: text + closing, kind });
 }
 
 /** Wpis kadrowy z replaceCeo: objęcie stanowiska albo odejście ze spółki. */
@@ -78,7 +80,7 @@ function getTiedLevel(key) {
 }
 function canSeeTiedPost(post) {
     if (!post.audience || post.audience === 'public') return true;
-    const key = post.ceoId ? ceoKey(post.ceoId) : null;
+    const key = tiedPostKey(post);
     if (!key || !isTiedFriend(key)) return false;
     return post.audience === 'friends' || getRelation(key) >= TIED_RULES.trustedAt;
 }
@@ -139,8 +141,9 @@ function processTiedQuarterly() {
 
 // --- Reakcje ---
 function grantTiedReaction(post) {
-    if (!post.ceoId) return;
-    const tied = ensureTiedState(), key = ceoKey(post.ceoId);
+    const key = tiedPostKey(post);
+    if (!key) return;
+    const tied = ensureTiedState();
     if (tied.reacted.q !== macro.quarter) tied.reacted = { q: macro.quarter, gains: {} };
     if ((tied.reacted.gains[key] || 0) >= TIED_RULES.reactionCap) return;
     tied.reacted.gains[key] = (tied.reacted.gains[key] || 0) + 1;
@@ -218,7 +221,6 @@ function renderTiedBadges(key) {
     return `${isTiedVerified(key) ? tiedBadge('', 'zweryfikowany', 'Zweryfikowany') : ''}${isTiedFriend(key) ? tiedBadge(' is-friend', 'znajomy', 'Znajomy') : ''}`;
 }
 const tiedPostName = post => post.author || stocks.find(s => s.symbol === post.symbol)?.name || post.symbol;
-const tiedPostKey = post => post.ceoId ? ceoKey(post.ceoId) : null;
 
 function renderTiedStaffPost(post) {
     const stock = stocks.find(s => s.symbol === post.symbol), key = tiedPostKey(post), joined = post.hr === 'in';
@@ -237,7 +239,7 @@ function renderTiedPost(post) {
     const stock = stocks.find(s => s.symbol === post.symbol), bots = getTiedBotReactions(post);
     const who = key || post.author ? `<span class="tied-who">${known ? tiedPersonLink(key, name) : `<strong>${escapeHtml(name)}</strong>`}${known ? renderTiedBadges(key) : ''}</span>`
         : `<span class="tied-who">${stock ? tiedCompanyLink(stock) : `<strong>${escapeHtml(name)}</strong>`}${isTiedVerified(companyFollowKey(post.symbol)) ? tiedBadge('', 'zweryfikowany', 'Zweryfikowany') : ''}</span>`;
-    const meta = post.author ? `Prezes · ${stock ? tiedCompanyLink(stock) : escapeHtml(post.symbol)}` : `Konto spółki · ${escapeHtml(stock ? getMainSector(stock) || '' : '')}`;
+    const meta = post.botId ? 'Inwestor' : post.author ? `${post.role || 'Prezes'} · ${stock ? tiedCompanyLink(stock) : escapeHtml(post.symbol)}` : `Konto spółki · ${escapeHtml(stock ? getMainSector(stock) || '' : '')}`;
     const chip = TIED_AUDIENCE[post.audience] ? `${uiIcon(post.audience === 'friends' ? 'znajomy' : 'klodka', 12)} ${TIED_AUDIENCE[post.audience]}` : TIED_POST_KINDS[post.kind] || 'Wyniki';
     const comments = [...(post.comment ? [{ me: true, text: post.comment }] : []), ...bots.comments].map(item => {
         const label = item.me ? (playerProfile?.name || 'Ty') : item.person.name;
@@ -284,7 +286,7 @@ function renderTiedPerson(key) {
     const value = getRelation(key), friend = isTiedFriend(key), level = getTiedLevel(key);
     const next = friend ? (value < TIED_RULES.trustedAt ? ['Zaufany znajomy', TIED_RULES.trustedAt] : null) : ['Znajomy', TIED_RULES.friendAt];
     const meter = renderLimitMeter((value + 100) / 2, next ? (next[1] + 100) / 2 : NaN, `Relacja ${tiedRelationText(value)}${next ? `, następny poziom od +${next[1]}` : ''}`);
-    const posts = getTiedPosts().filter(post => post.ceoId && ceoKey(post.ceoId) === key && post.kind !== 'hr');
+    const posts = getTiedPosts().filter(post => tiedPostKey(post) === key && post.kind !== 'hr');
     const tags = [isTiedVerified(key) ? `<span class="tied-tag tied-badge">${uiIcon('zweryfikowany', 14)} Zweryfikowany</span>` : '', friend ? `<span class="tied-tag tied-badge is-friend">${uiIcon('znajomy', 14)} Znajomy</span>` : ''].join('');
     const place = person.stock ? ` · ${tiedCompanyLink(person.stock)}` : '', tenure = Number.isFinite(person.tenure) ? ` · staż ${person.tenure} lat` : '';
     return `<section class="tied-view">${tiedBackButton()}<article class="tied-profile">
@@ -388,4 +390,178 @@ function openTiedProfile(key) {
     if (card) card.style.display = 'none';
     tiedCenter({ person: key });
     openInternetPage('tied');
+}
+
+// =================================================================================
+// 0.17.3 R2 i R4: charaktery (tylko dane, nigdy w interfejsie), zapowiedzi, opinie botów, KNF
+// =================================================================================
+// truth: udział prawdziwych zapowiedzi, hint: szansa posta przy prawdziwym planie, decay: mnożnik zaniku relacji,
+// tones: ocena tonu w rozmowie (−2…+2), closing i flavor: styl, po którym gracz czyta rozmówcę.
+const TIED_CHARACTERS = {
+    rachmistrz: { weight: 18, truth: 0.9, hint: 0.7, decay: 1, invite: 1, accept: 0,
+        tones: { numbers: 2, vision: -1, safety: 1, relation: 0, pressure: -1 },
+        closing: ['Liczby się zgadzają.', 'Marża zostaje naszym priorytetem.', 'Pilnujemy kosztów.'],
+        flavor: ['Przejrzałem koszty za ostatni kwartał. Marża to nie przypadek, tylko dyscyplina.', 'Każdą złotówkę wydatków liczymy dwa razy.', 'Rozmawialiśmy dziś o marży. Tym razem bardzo długo.'],
+        reply: { good: 'Konkretnie. Takie rozmowy lubię.', bad: 'Proszę o liczby, nie o wrażenia.', neutral: 'Sprawdzę to w arkuszu.' } },
+    mentor: { weight: 16, truth: 0.85, hint: 0.9, decay: 1, invite: 1.3, accept: 0,
+        tones: { numbers: 0, vision: 1, safety: 0, relation: 2, pressure: -2 },
+        closing: ['Warto się tym podzielić.', 'To była dobra lekcja.', 'Tego uczę młodszych kolegów.'],
+        flavor: ['Najcenniejszą lekcję dostałem w najgorszym kwartale, nie w najlepszym.', 'Spokój w zarządzie jest wart więcej niż jeden dobry raport.', 'Młodym menedżerom powtarzam: najpierw słuchaj rynku.'],
+        reply: { good: 'Miło to słyszeć. Porozmawiajmy jeszcze.', bad: 'Spokojnie, nie w tym tonie.', neutral: 'Dobre pytanie, pomyślmy nad nim.' } },
+    lojalista: { weight: 16, truth: 0.8, hint: 0.7, decay: 0.5, invite: 1, accept: 0,
+        tones: { numbers: -1, vision: 0, safety: 1, relation: 2, pressure: -2 },
+        closing: ['Dziękuję całemu zespołowi.', 'Dziękuję naszym partnerom.', 'To zasługa ludzi.'],
+        flavor: ['Dziękuję zespołowi za ten kwartał. Bez was nie byłoby tych wyników.', 'Dobrzy partnerzy to największy kapitał spółki.', 'Kolejny rok z tymi samymi dostawcami. Takie relacje się ceni.'],
+        reply: { good: 'Dziękuję, doceniam to.', bad: 'Myślałem, że się rozumiemy.', neutral: 'Dobrze, że o tym mówimy.' } },
+    zachowawczy: { weight: 16, truth: 0.7, hint: 0.35, decay: 1, invite: 0.7, accept: 0,
+        tones: { numbers: 1, vision: -2, safety: 2, relation: 0, pressure: -1 },
+        closing: ['Bez pośpiechu.', 'Stabilnie, krok po kroku.', 'Działamy ostrożnie.'],
+        flavor: ['Stabilnie i bez pośpiechu. Tak zamierzamy pracować także w tym roku.', 'Nie zmieniamy czegoś, co działa.', 'Ostrożność kosztuje mniej niż pośpiech.'],
+        reply: { good: 'Rozsądnie. Tak wolę rozmawiać.', bad: 'To brzmi zbyt ryzykownie.', neutral: 'Muszę to przemyśleć.' } },
+    sceptyk: { weight: 14, truth: 0.7, hint: 0.6, decay: 1, invite: 0.7, accept: 0,
+        tones: { numbers: 2, vision: -2, safety: 1, relation: -1, pressure: 0 },
+        closing: ['Zobaczymy, czy to przetrwa.', 'Wolę poczekać na dane.', 'Moda szybko mija.'],
+        flavor: ['Wszyscy mówią o tym samym trendzie. Dlatego wolę poczekać.', 'Czy naprawdę tym razem jest inaczej?', 'Rynek lubi opowieści. Ja wolę sprawdzać.'],
+        reply: { good: 'Tu mogę się zgodzić.', bad: 'Nie przekonuje mnie to.', neutral: 'Może. Pokaż dane.' } },
+    blefiarz: { weight: 12, truth: 0.4, hint: 0.9, decay: 1, invite: 1, accept: 0,
+        tones: { numbers: -2, vision: 2, safety: -1, relation: 1, pressure: 0 },
+        closing: ['Będzie wielki rok!!!', 'To dopiero początek!!!', 'Najlepsi na rynku!!!'],
+        flavor: ['Absolutnie rewolucyjny kwartał!!! Rynek jeszcze nie wie, co nadchodzi!!!', 'Jesteśmy najlepsi i wszyscy to widzą!!!', 'Niesamowite rzeczy dzieją się w naszej firmie!!!'],
+        reply: { good: 'Właśnie o to chodzi!!!', bad: 'Nie rozumiesz naszej skali!', neutral: 'Zobaczysz, będzie wielkie!!!' } },
+    manipulator: { weight: 8, truth: 0.5, hint: 0.8, decay: 1, invite: 2, accept: 0,
+        tones: { numbers: -1, vision: 1, safety: -1, relation: 2, pressure: -1 },
+        closing: ['Cenię ludzi, którzy to rozumieją.', 'Liczę na wsparcie.', 'Mądrzy inwestorzy już wiedzą.'],
+        flavor: ['Mądrzy inwestorzy widzą to, czego inni jeszcze nie zauważyli.', 'Doceniam tych, którzy są z nami od początku. Pamiętam o nich.', 'Przydałoby się kilka dobrych głosów przy tej sprawie.'],
+        reply: { good: 'Od początku wiedziałem, że można na Ciebie liczyć.', bad: 'Szkoda, liczyłem na więcej zrozumienia.', neutral: 'Pomyślmy, jak możemy sobie pomóc.' } }
+};
+const TIED_BOT_CHARACTERS = { calm: 'zachowawczy', pro_investor: 'rachmistrz', dividend_chaser: 'lojalista', graham: 'sceptyk', whale: 'mentor', banker: 'rachmistrz', reckless: 'blefiarz', yolo_trader: 'manipulator', guard: 'lojalista' };
+
+/** Charakter osoby: stały dla klucza, boty z osobowości. Tylko do logiki. */
+function getPersonCharacter(key) {
+    const bot = typeof aiCompetitors !== 'undefined' ? aiCompetitors.find(ai => ai.id === key) : null;
+    if (bot) return bot.customLogic === 'wolf' ? 'manipulator' : TIED_BOT_CHARACTERS[bot.personality] || 'sceptyk';
+    const list = Object.entries(TIED_CHARACTERS), total = list.reduce((sum, [, c]) => sum + c.weight, 0);
+    let roll = descriptionHash(`char:${key}`) % total;
+    for (const [id, c] of list) { if (roll < c.weight) return id; roll -= c.weight; }
+    return 'sceptyk';
+}
+const getPersonCharacterData = key => TIED_CHARACTERS[getPersonCharacter(key)];
+/** Zanik relacji (processRelationsQuarterly). */
+const getRelationDecayFactor = key => key.startsWith('ceo:') || aiCompetitors.some(ai => ai.id === key) ? getPersonCharacterData(key).decay : 1;
+
+const COMPANY_PLAN_RULES = { delay: [1, 2], audienceTrusted: 0.35, fakeBase: 0.03, tipChance: 0.15, fineShare: 0.05, flavorPosts: 2, investorPostChance: 0.5, pumpShare: 0.3 };
+const TIED_HINTS = {
+    dividend: { friends: ['Coraz częściej rozmawiamy w zarządzie o akcjonariuszach.', 'Akcjonariusze pytają o wypłaty. Słuchamy.'], trusted: ['Na najbliższym posiedzeniu wracamy do polityki wypłat.', 'Inaczej patrzymy dziś na podział zysku.'] },
+    buyback: { friends: ['Uważamy, że rynek nie docenia naszej spółki.', 'Sporo mówimy ostatnio o własnych akcjach.'], trusted: ['Gotówkę można dziś wykorzystać lepiej niż na lokacie, także na rynku.', 'Nasze akcje wyglądają ciekawie. Tyle mogę powiedzieć.'] },
+    strategy: { friends: ['Szukamy nowych kierunków rozwoju.', 'Układamy strategię na nowo.'], trusted: ['Rozważamy wejście w coś, czego jeszcze nie robiliśmy.', 'Zarząd dyskutuje o zmianie profilu działalności.'] },
+    takeover: { friends: ['Patrzymy szerzej na nasz sektor.', 'Rynek się konsoliduje, a my to widzimy.'], trusted: ['Przyglądamy się mniejszemu graczowi z sektora {sector}.', 'Mamy na oku spółkę z sektora {sector}.'] }
+};
+const TIED_PLAN_TYPES = Object.keys(TIED_HINTS);
+
+/** Post-zapowiedź: bez liczb i dat, styl zdradza autora. */
+function postTiedHint(stock, type, sectorName = null) {
+    if (!stock.ceo?.id) return null;
+    const key = ceoKey(stock.ceo.id), character = getPersonCharacterData(key);
+    if (Math.random() >= character.hint) return null;
+    const audience = Math.random() < COMPANY_PLAN_RULES.audienceTrusted ? 'trusted' : 'friends';
+    const text = getRandomElement(TIED_HINTS[type][audience]).replace('{sector}', sectorName || getMainSector(stock) || 'podobnego');
+    return addTiedPost({ symbol: stock.symbol, author: stock.ceo.name, ceoId: stock.ceo.id, text: `${text} ${getRandomElement(character.closing)}`, kind: 'hint', audience, q: macro.quarter });
+}
+
+/** Plan spółki: decyzja zapada teraz, wykonanie po 1–2 kwartałach. false, gdy spółka ma już plan: wtedy kod wykonuje decyzję od razu, więc częstość się nie zmienia. */
+function planCompanyMove(stock, type, data = null, atQ = null) {
+    if (stock.plannedMove || !stock.ceo?.id || stock.assetType) return false;
+    stock.plannedMove = { type, atQ: atQ ?? macro.quarter + getRandomIntInRange(...COMPANY_PLAN_RULES.delay), real: true, ...(data ? { data } : {}) };
+    postTiedHint(stock, type, data?.targetSector);
+    return true;
+}
+function executeCompanyPlan(stock, plan) {
+    const data = plan.data || {};
+    if (plan.type === 'dividend') return !stock.dividendPolicyLockedByOwner && applyDividendPolicyChange(stock, data.policy);
+    if (plan.type === 'strategy') return proposeStrategy(stock, data.proposal) === 'started';
+    if (plan.type === 'takeover') {
+        const target = stocks.find(s => s.symbol === data.target);
+        if (!target || target.isBankrupt || target.mergerProcess || stock.mergerProcess) return false; // plan odpada z przyczyn zewnętrznych
+        return Boolean(initiateMergerProcess(stock, target, data.kind, data.financing, data.premium));
+    }
+    return false;
+}
+/** Co kwartał: plany z nadchodzącym terminem i zapowiedzi bez pokrycia (ich liczba wynika z prawdziwości charakteru). */
+function processCompanyPlansQuarterly() {
+    const quarter = macro.quarter;
+    for (const stock of stocks) {
+        const plan = stock.plannedMove;
+        if (plan && plan.atQ <= quarter) {
+            delete stock.plannedMove;
+            if (plan.real && plan.type !== 'buyback' && executeCompanyPlan(stock, plan)) resolveTiedTips(stock);
+            continue;
+        }
+        if (plan || !stock.ceo?.id || stock.assetType || stock.isBankrupt) continue;
+        const truth = getPersonCharacterData(ceoKey(stock.ceo.id)).truth;
+        if (Math.random() < COMPANY_PLAN_RULES.fakeBase * (1 - truth) / truth) {
+            const type = getRandomElement(TIED_PLAN_TYPES);
+            stock.plannedMove = { type, atQ: quarter + getRandomIntInRange(...COMPANY_PLAN_RULES.delay), real: false };
+            postTiedHint(stock, type);
+        }
+    }
+    processTiedChatterQuarterly();
+}
+
+// --- Posty bez zapowiedzi: styl prezesów i opinie inwestorów ---
+function processTiedChatterQuarterly() {
+    if (!mailbox) return;
+    const authors = stocks.filter(s => s.ceo?.id && !s.isBankrupt && !s.assetType);
+    for (let i = 0; i < COMPANY_PLAN_RULES.flavorPosts && authors.length; i++) {
+        const stock = getRandomElement(authors);
+        addTiedPost({ symbol: stock.symbol, author: stock.ceo.name, ceoId: stock.ceo.id, text: getRandomElement(getPersonCharacterData(ceoKey(stock.ceo.id)).flavor), kind: 'note' });
+    }
+    for (const ai of aiCompetitors) { // wypchnięcie akcji po własnej reklamie
+        if (ai.tiedPump && ai.tiedPump.q < macro.quarter) {
+            const shares = Math.floor((ai.portfolio?.[ai.tiedPump.symbol]?.shares || 0) * COMPANY_PLAN_RULES.pumpShare);
+            if (shares > 0) aiSellStock(ai, ai.tiedPump.symbol, shares);
+            delete ai.tiedPump;
+        }
+    }
+    if (Math.random() < COMPANY_PLAN_RULES.investorPostChance) postTiedInvestorOpinion();
+}
+function postTiedInvestorOpinion() {
+    const bots = getRelationPeople().filter(person => person.kind === 'investor' && Object.keys(person.entity.portfolio || {}).length);
+    if (!bots.length) return null;
+    const person = getRandomElement(bots), ai = person.entity, symbols = Object.keys(ai.portfolio).filter(symbol => stocks.some(s => s.symbol === symbol && !s.assetType));
+    if (!symbols.length) return null;
+    const stock = stocks.find(s => s.symbol === getRandomElement(symbols)), character = getPersonCharacter(person.id), fair = typeof getDisplayedFairValue === 'function' ? getDisplayedFairValue(stock) : 0;
+    const pump = (character === 'manipulator' || character === 'blefiarz') && Math.random() < 0.5;
+    if (pump) ai.tiedPump = { symbol: stock.symbol, q: macro.quarter };
+    const cheap = pump || (fair > 0 && stock.price < fair);
+    const text = pump ? `${stock.name} to okazja, jakiej dawno nie było. ${getRandomElement(TIED_CHARACTERS[character].closing)}`
+        : cheap ? `Trzymam ${stock.name} i uważam, że kurs jest niżej, niż powinien.` : `Trzymam ${stock.name}, ale po tych wzrostach nie dokładałbym.`;
+    return addTiedPost({ symbol: stock.symbol, author: person.name, botId: person.id, text, kind: 'opinion' });
+}
+
+// --- KNF: zakup po poście dla zaufanych ---
+/** buyStock: gracz czytał post dla zaufanych o tej spółce, a plan jest prawdziwy. */
+function noteTiedTip(stock) {
+    if (!playerProfile || !stock.plannedMove?.real) return;
+    const seen = getTiedPosts().some(post => post.symbol === stock.symbol && post.audience === 'trusted' && post.kind === 'hint' && macro.quarter - post.q <= 1 && canSeeTiedPost(post));
+    if (!seen) return;
+    const tied = ensureTiedState();
+    tied.tips ||= [];
+    if (!tied.tips.some(tip => tip.symbol === stock.symbol)) tied.tips.push({ symbol: stock.symbol, q: macro.quarter });
+}
+/** Zapowiedź się sprawdziła: szansa wykrycia, pierwsze wykrycie to ostrzeżenie, kolejne kara. */
+function resolveTiedTips(stock) {
+    const tied = playerProfile?.tied;
+    if (!tied?.tips?.length) return;
+    const hit = tied.tips.some(tip => tip.symbol === stock.symbol);
+    tied.tips = tied.tips.filter(tip => tip.symbol !== stock.symbol);
+    if (!hit || Math.random() >= COMPANY_PLAN_RULES.tipChance) return;
+    tied.knfHits = (tied.knfHits || 0) + 1;
+    if (tied.knfHits === 1) {
+        addMail({ sender: 'KNF', subject: `Zapytanie w sprawie transakcji na akcjach ${stock.name}`, body: `Kupiłeś akcje ${stock.name} tuż przed decyzją zarządu, o której spółka wcześniej nie informowała publicznie. Tym razem kończy się na ostrzeżeniu. Przy kolejnym wykryciu nałożymy karę.`, importance: 3, symbol: stock.symbol });
+        return;
+    }
+    const fine = Math.max(0, playerCash) * COMPANY_PLAN_RULES.fineShare;
+    playerCash -= fine; governmentTreasury += fine;
+    if (typeof recordPayment === 'function') recordPayment('player-fund', 'external:knf', fine, `Kara KNF: ${stock.name}`);
+    addMail({ sender: 'KNF', subject: `Kara za transakcje na akcjach ${stock.name}`, body: `Ponownie stwierdziliśmy zakup akcji tuż przed decyzją zarządu, którą znałeś z zamkniętego kręgu. Kara: pięć procent gotówki funduszu, czyli ${formatZl(fine, 0)}.`, importance: 3, symbol: stock.symbol });
 }
