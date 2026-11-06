@@ -291,7 +291,10 @@ const tiedBackButton = () => `<button class="tied-back" onclick="tiedBack()">${u
 
 function renderTiedTalkAction(key) {
     const access = getTiedTalkAccess(key);
-    if (!access) return '';
+    if (!access) { // kontakt daje zakup akcji, więc tekst pasuje tylko do zarządu notowanej spółki; inwestorzy i VIP-y zostają bez przycisku
+        const person = getTiedPerson(key);
+        return ['ceo', 'deputy'].includes(person?.kind) && person.stock && !person.stock.isBankrupt ? `<button class="tied-act" disabled>${uiIcon('komentarz', 14)}Rozmowa po zakupie akcji tej spółki</button>` : '';
+    }
     if (hasTalkedThisQuarter(key)) return `<button class="tied-act" disabled>${uiIcon('komentarz', 14)}Następna rozmowa w kolejnym kwartale</button>`;
     return `<button class="tied-act" onclick="tiedOpenTalk('${escapeHtml(key)}')">${uiIcon('komentarz', 14)}Napisz</button>`;
 }

@@ -73,3 +73,7 @@ Zmiany strategii na tej serii: 37,59 na grę (−15,7%), dywidendy −6,7%, skup
 | 6. Formularz wpisu gracza | nieaktualny | R4 ma `.tied-compose` i 3 wpisy jak makieta, bez zmian |
 
 Testy: 1016/1016. W grze: pasek zostaje tym samym węzłem i startują trzy przejścia po 200 ms, profil przy +34 bez kreski, ikona 12 px, konsola czysta. Panel przeglądarki był ukryty, więc samego zwijania nie widać na ekranie, a komentarzy i 390 px nie oglądałem w grze; komentarze pokrywa test.
+
+## „Napisz” poza kontaktami (plan 3c058d3)
+
+Scalone zmiany-AI (67b98d9). `renderTiedTalkAction` pokazuje wyłączony przycisk „Rozmowa po zakupie akcji tej spółki” u prezesa i wiceprezesa spoza kontaktów, którzy nie są autorami widocznego posta. Inwestorzy i VIP-y zostają bez przycisku, bo kontakt z nimi nie wynika z zakupu akcji, więc tekst byłby nieprawdziwy. Bez przycisku jest też zarząd spółki upadłej. Warunek dostępu `getTiedTalkAccess` bez zmian. Testy: 1016/1016.

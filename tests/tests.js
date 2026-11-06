@@ -16253,8 +16253,17 @@ group('0.17.3 R4 Rozmowy, posty gracza, VIP', () => {
         assertEq(getTiedTalkAccess(key()), null, 'obcy');
         tiedOpenPerson(key());
         assert(!html().includes('Napisz'), 'bez przycisku');
+        const locked = 'Rozmowa po zakupie akcji tej spółki';
+        assert(html().includes(locked) && renderTiedTalkAction(key()).includes('disabled'), 'prezes spoza kontaktów: przycisk wyłączony');
+        stocks[1].deputies = [{ id: 'd900', name: 'Ewa Testowa', trait: 'gadula', traits: [] }];
+        assert(renderTiedTalkAction(getCeoRelationKey('d900')).includes(locked), 'wiceprezes spoza kontaktów');
+        assertEq(renderTiedTalkAction(aiCompetitors[0].id), '', 'inwestor bez przycisku, bo kontakt nie wynika z zakupu');
+        stocks[0].isBankrupt = true;
+        assertEq(renderTiedTalkAction(key()), '', 'upadła spółka bez przycisku');
+        stocks[0].isBankrupt = false;
         addTiedPost({ symbol: 'AAA', author: stocks[0].ceo.name, ceoId: stocks[0].ceo.id, text: 'Post' });
         assertEq(getTiedTalkAccess(key()), 'quick', 'autor widocznego posta');
+        assert(!renderTiedTalkAction(key()).includes('Rozmowa po zakupie'), 'autor posta ma szybką rozmowę');
         assert(!startTiedTalk(key()), 'bez kontaktu bez pełnej rozmowy');
         const gain = quickTiedTalk(key());
         assert(gain >= 1 && gain <= 2 && getRelation(key()) === gain, 'szybka do +2');
