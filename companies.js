@@ -386,7 +386,7 @@ function ensureCeoIds() {
     const used = [
         ...Object.keys(botRelations?.values || {}).filter(key => key.startsWith('ceo:')).map(key => key.slice(4)),
         ...(playerProfile?.contacts || []).map(contact => contact.id),
-        ...stocks.map(stock => stock.ceo?.id)
+        ...stocks.flatMap(stock => [stock.ceo?.id, ...(stock.deputies || []).map(deputy => deputy.id)])
     ];
     nextCeoId = Math.max(nextCeoId, ...used.map(id => numberOf(id) + 1));
     const seen = new Set();
@@ -438,10 +438,14 @@ function generateCEO(stock, isReplacement = false) {
 
 function replaceCeo(stock, newCeo = null) {
     const oldCeo = stock.ceo; // Zapisujemy starego CEO do późniejszej analizy
+    const deputy = !newCeo && typeof pickDeputySuccessor === 'function' ? pickDeputySuccessor(stock) : null; // 0.17.3 R3: awans wiceprezesa
+    if (deputy) newCeo = promoteDeputy(stock, deputy);
+    else if (newCeo?.id && stock.deputies?.some(item => item.id === newCeo.id)) { const chosen = stock.deputies.find(item => item.id === newCeo.id); newCeo = promoteDeputy(stock, chosen); } // wiceprezes wybrany na walnym
 
     // Jeśli przekazano konkretnego kandydata (od gracza lub AI), powołaj go.
     if (newCeo) {
-        newCeo.tenure = 0; // Nowy prezes zaczyna z zerowym stażem w tej firmie
+        newCeo.tenure = newCeo.keepTenure || 0; // Nowy prezes zaczyna z zerowym stażem w tej firmie (Stary wyga zachowuje staż ze spółki)
+        delete newCeo.keepTenure;
         if (!newCeo.id) newCeo.id = newCeoId(); // podkupiony prezes zachowuje id, a z nim relację
         stock.ceo = newCeo;
     }
@@ -451,6 +455,7 @@ function replaceCeo(stock, newCeo = null) {
     }
 
     if (typeof noteTiedStaffChange === 'function') noteTiedStaffChange(stock, oldCeo, stock.ceo); // 0.17.3 R1: wpis kadrowy
+    if (typeof settleDeputiesAfterCeoChange === 'function') settleDeputiesAfterCeoChange(stock); // 0.17.3 R3
 
     // Sprawdź, czy nowy CEO ma cechę "Midas"
     if (stock.ceo && stock.ceo.traits && stock.ceo.traits.some(t => t.id === 'midas')) {
@@ -517,11 +522,11 @@ const SUBSECTOR_ACTIVITY = {
     'Bank komercyjny': 'prowadzi konta, kredyty i lokaty', 'Bank inwestycyjny': 'obsługuje emisje i duże transakcje', 'Bank międzynarodowy': 'obsługuje klientów w kraju i za granicą',
     'Pożyczki konsumenckie': 'udziela drobnych pożyczek', 'Rynki kapitałowe': 'obsługuje inwestorów i transakcje giełdowe', 'Fintech': 'obsługuje klientów przez internet',
     'Rolnictwo': 'uprawia i skupuje płody rolne', 'Słodycze': 'produkuje słodycze', 'Herbata': 'sprzedaje herbatę', 'Piwowarstwo i napoje': 'warzy piwo i rozlewa napoje',
-    'Robotyka': 'buduje roboty dla fabryk', 'Przemysł ciężki': 'wytwarza stal i ciężkie maszyny', 'Wydobycie': 'wydobywa surowce spod ziemi', 'Handel surowcami': 'handluje surowcami',
+    'Robotyka': 'buduje roboty dla fabryk', 'Przemysł ciężki': 'wytwarza stal, beton, statki i ciężkie maszyny', 'Wydobycie': 'wydobywa surowce spod ziemi', 'Handel surowcami': 'handluje surowcami',
     'Energetyka jądrowa': 'rozwija energetykę jądrową', 'OZE': 'wytwarza prąd ze źródeł odnawialnych', 'Rafinerie': 'przerabia ropę na paliwa', 'Gaz': 'dostarcza gaz firmom i domom',
     'Logistyka': 'organizuje przewozy i magazyny', 'Lotnictwo': 'przewozi ludzi i ładunki samolotami', 'Morski': 'przewozi ładunki morzem', 'Lądowy': 'przewozi ładunki koleją i drogami',
     'Biotechnologia': 'rozwija nowe terapie w laboratoriach', 'Sprzęt medyczny': 'produkuje sprzęt dla lekarzy i pacjentów', 'Półprzewodniki': 'projektuje i produkuje układy scalone',
-    'Sztuczna inteligencja': 'rozwija sztuczną inteligencję', 'Magazyny': 'buduje i wynajmuje magazyny', 'Drony': 'buduje drony'
+    'Sztuczna inteligencja': 'rozwija sztuczną inteligencję', 'Magazyny': 'buduje i wynajmuje magazyny', 'Drony': 'buduje drony', 'Telekomunikacja': 'prowadzi sieci telefoniczne i internetowe'
 };
 const COMMODITY_WORDS = { // dopełniacz; mianownik z czasownikiem
     gold: ['złota', 'złoto drożeje'], oil: ['ropy', 'ropa drożeje'], gas: ['gazu', 'gaz drożeje'], coal: ['węgla', 'węgiel drożeje'],
@@ -3232,7 +3237,7 @@ function computeQuarterResults(stock) {
     const quarterFactor = (typeof getStrikeRevenueFactor === 'function' ? getStrikeRevenueFactor(stock) : 1) * (typeof getSocietyRevenueFactor === 'function' ? getSocietyRevenueFactor(stock) : 1) * consumeNicheRevenueFactor(stock) * getCooperationShockFactor(stock) * (typeof getCrisisRevenueFactor === 'function' ? getCrisisRevenueFactor(stock) : 1); // T3: sezon TV/Rozrywka; T5: strajk kooperanta (połowa szoku)
     const commodityAdj = typeof getCommodityResultAdj === 'function' ? getCommodityResultAdj(stock) : { revenueFactor: 1, marginAdj: 0 }; // 0.17 S2: produkt i wsad względem Ś8
     const baseRevenue = fundamentals.revenue;
-    const revenue = baseRevenue * quarterFactor * commodityAdj.revenueFactor * (typeof getDefenseRevenueFactor === 'function' ? getDefenseRevenueFactor(stock, baseRevenue) : 1); // 0.17 S6: zamówienia obronne
+    const revenue = baseRevenue * quarterFactor * commodityAdj.revenueFactor * (typeof getDefenseRevenueFactor === 'function' ? getDefenseRevenueFactor(stock, baseRevenue) : 1) * (stock.deputies ? getDeputyFactor(stock, 'revenue') : 1); // 0.17 S6: zamówienia obronne; 0.17.3 R3: Sprzedawca
     const lostRevenue = baseRevenue - revenue; // dźwignia operacyjna: 40% kosztów jest sztywnych w krótkim terminie
     const inflationSqueeze = Math.max(0, inflation - 0.04) * 0.5; // wysoka inflacja zjada marże
     // 0.13: marża = marża_0.12 + udział_kosztu_pracy × (1 − indeks); neutralnie (indeks 1,0) bez zmian.
@@ -3245,7 +3250,8 @@ function computeQuarterResults(stock) {
     const competitiveErosion = excessMargin * 0.35;
     const stabilizedBaseMargin = baseMargin - competitiveErosion;
     // 0.13: marża = marża_bazowa + udział_kosztu_pracy × (1 − indeks); neutralnie (indeks 1,0) bez zmian.
-    const margin = Math.max(-0.4, Math.min(0.6, stabilizedBaseMargin + laborAdj + commodityAdj.marginAdj));
+    const controller = stock.deputies ? (1 - getDeputyFactor(stock, 'costs')) * (1 - stabilizedBaseMargin) : 0; // 0.17.3 R3: Kontroler, koszty −0,5%
+    const margin = Math.max(-0.4, Math.min(0.6, stabilizedBaseMargin + laborAdj + commodityAdj.marginAdj + controller));
     const fixedExpenses = Math.max(0, Number(stock.fixedExpenses) || 0);
 
     // Działające inwestycje: kwartalny zysk lub strata (investments.js).
@@ -3487,10 +3493,15 @@ function reviewDividendPolicy(stock) {
     // Arystokrata pilnuje serii: nie obniża polityki bez recesji.
     if (stock.isDividendAristocrat && next < index && economyCycle.phase !== 'recession') next = index;
 
-    if (next !== index) {
-        setCompanyDividendPolicy(stock, DIVIDEND_POLICY_ORDER[next]);
-        logEvent(`💼 Zarząd ${stock.name} zmienia strategię dywidendową na: ${getDividendPolicyLabel(stock.dividendPolicy)}.`, 'company');
-    }
+    if (next === index) return;
+    const policy = DIVIDEND_POLICY_ORDER[next];
+    if (typeof planCompanyMove === 'function' && planCompanyMove(stock, 'dividend', { policy })) return; // 0.17.3 R2: zapowiedź przed wykonaniem
+    applyDividendPolicyChange(stock, policy);
+}
+function applyDividendPolicyChange(stock, policy) {
+    setCompanyDividendPolicy(stock, policy);
+    logEvent(`💼 Zarząd ${stock.name} zmienia strategię dywidendową na: ${getDividendPolicyLabel(stock.dividendPolicy)}.`, 'company');
+    return true;
 }
 
 // 0.15.4 P3: minimalna dywidenda — większa z dwóch: 0,01 zł na akcję albo 0,1% kursu; poniżej spółka nie wypłaca (EcoLube płacił 0,0077 zł).
@@ -6328,7 +6339,7 @@ function updateResearchProgress(deltaTime) {
                 }
 
                 // Dodaj punkty postępu
-                stock.research.progress += researchPoints * baseSpeedMultiplier * ceoMultiplier * phaseMultiplier;
+                stock.research.progress += researchPoints * baseSpeedMultiplier * ceoMultiplier * phaseMultiplier * (stock.deputies ? getDeputyFactor(stock, 'research') : 1); // 0.17.3 R3: Inżynier
 
                 // Sprawdź, czy badanie zostało ukończone
                 const currentTechCost = technologies[stock.research.currentTech]?.cost;
@@ -6666,6 +6677,8 @@ function processCeoActions(deltaTime) {
                 if (stock.ceo.timers.buyback === undefined) {
                     stock.ceo.timers.buyback = getRandomIntInRange(4 * 60 * 1000, 7 * 60 * 1000);
                 }
+                // 0.17.3 R2: skup działa na liczniku, więc plan to prognoza z licznika; zdarzenie nie przesuwa się w czasie
+                if (typeof planCompanyMove === 'function' && stock.ceo.timers.buyback <= BASE_DELAYS.weekly * WEEKS_PER_QUARTER) planCompanyMove(stock, 'buyback', null, macro.quarter + 1);
                 stock.ceo.timers.buyback -= deltaTime;
 
                 if (stock.ceo.timers.buyback <= 0) {
@@ -6680,6 +6693,7 @@ function processCeoActions(deltaTime) {
                         stock.treasuryShares += sharesToBuy;
                         
                         logEvent(`📈 [Kapitalista] Zarząd ${stock.name} ogłasza skup akcji własnych w celu podniesienia wartości dla akcjonariuszy!`, 'company');
+                        if (stock.plannedMove?.type === 'buyback') { delete stock.plannedMove; if (typeof resolveTiedTips === 'function') resolveTiedTips(stock); }
                     }
                     stock.ceo.timers.buyback = getRandomIntInRange(4 * 60 * 1000, 7 * 60 * 1000); // Reset timera
                 }
@@ -6713,11 +6727,8 @@ function initiateCeoChange(symbol) {
     }
 
     // Generujemy 3 kandydatów
-    const candidates = [
-        generateCeoCandidate(stock),
-        generateCeoCandidate(stock),
-        generateCeoCandidate(stock)
-    ];
+    const deputies = (stock.deputies || []).slice(0, 2); // 0.17.3 R3: wiceprezesi na liście kandydatów
+    const candidates = [...deputies, ...Array.from({ length: 3 - deputies.length }, () => generateCeoCandidate(stock))];
     
     // Obliczamy szansę na sukces
     const baseChance = 0.50;
@@ -6766,6 +6777,7 @@ function confirmCeoChange(symbol, candidateIndex) {
     const baseChance = 0.50;
     const bonusChance = (ownershipPct - 50) * 0.01;
     const successChance = Math.min(1.0, baseChance + bonusChance);
+    if (typeof noteCeoRelationLoss === 'function') noteCeoRelationLoss(stock, CEO_RELATION_RULES.dismissalLoss, 'próba odwołania prezesa'); // 0.17.3
 
     if (Math.random() < successChance) {
         
@@ -7114,6 +7126,7 @@ function changeReputation(entityId, stockSymbol, change) {
 function applyPriceEffect(stockSymbol, percentageChange, eventType, eventCategory = 'company') {
     const stock = stocks.find(s => s.symbol === stockSymbol);
     if (!stock) return;
+    if (percentageChange < 0 && eventCategory === 'company' && stock.deputies) percentageChange *= getDeputyFactor(stock, 'resistance'); // 0.17.3 R3: Prawnik
 
     // ===>>> NOWY BLOK: TARCZA PR (PR SHIELD CHECK) <<<===
     if (percentageChange < 0 && stock.prShieldExpiry && Date.now() < stock.prShieldExpiry) {
@@ -7338,7 +7351,9 @@ function checkForPotentialMA() {
         
         if (finalInitiatorStock) {
             // Przekaż wybraną metodę finansowania
-            initiateMergerProcess(finalInitiatorStock, targetStock, preferredType, preferredFinancing, getRandomInRange(0.15, 0.35));
+            const premium = getRandomInRange(0.15, 0.35);
+            if (typeof planCompanyMove === 'function' && planCompanyMove(finalInitiatorStock, 'takeover', { target: targetStock.symbol, targetSector: getMainSector(targetStock), kind: preferredType, financing: preferredFinancing, premium })) return; // 0.17.3 R2
+            initiateMergerProcess(finalInitiatorStock, targetStock, preferredType, preferredFinancing, premium);
         }
     }
 }
@@ -10837,7 +10852,7 @@ function getUnionChance(stock) {
     const wf = stock.workforce;
     const policy = LABOR_POLICIES[wf.policy] || LABOR_POLICIES.standard;
     const strike = stock.ceo?.traits?.some(t => t.id === 'greve_generale') ? 2 : 1; // 0.16.3: Grève générale — silniejsze związki
-    return UNION_BASE_CHANCE * Math.max(0.2, (50 - wf.satisfaction) / 10) * policy.union * RIGHTS_UNION_MULT[getRightsLevel()] * (wf.employees >= 200 ? 1 : 0.3) * strike;
+    return UNION_BASE_CHANCE * Math.max(0.2, (50 - wf.satisfaction) / 10) * policy.union * RIGHTS_UNION_MULT[getRightsLevel()] * (wf.employees >= 200 ? 1 : 0.3) * strike * (stock.deputies ? getDeputyFactor(stock, 'union') : 1); // 0.17.3 R3: Kadrowy
 }
 
 function processUnionFormation(companies) {
@@ -11614,7 +11629,11 @@ function processStrategyQuarterly(quarter = getStrategyQuarter()) {
         else if (canStartExpansion(stock) && Math.random() < getCeoExpansionChance(stock)) proposal = { type: 'expand', target: pickExpansionSector(stock) };
         else if (canEnterSubsector(stock) && Math.random() < SUBSECTOR_ENTRY_CHANCE) proposal = { type: 'subsector', target: null };
         else if (canChooseNiche(stock) && !getNicheCandidate(stock).niche && Math.random() < NICHE_CHANCE) proposal = { type: 'niche', target: null }; // prezes nie przełącza nisz
-        if (proposal && (proposal.type === 'subsector' || proposal.type === 'niche' || proposal.target)) proposeStrategy(stock, proposal, quarter);
+        if (proposal && (proposal.type === 'subsector' || proposal.type === 'niche' || proposal.target)) {
+            const ceoDecides = !(typeof canFundControlAgm === 'function' && canFundControlAgm(stock)); // decyzję większościowca gracza zostawia T3.6
+            if (ceoDecides && typeof planCompanyMove === 'function' && planCompanyMove(stock, 'strategy', { proposal })) continue; // 0.17.3 R2
+            proposeStrategy(stock, proposal, quarter);
+        }
     }
 }
 

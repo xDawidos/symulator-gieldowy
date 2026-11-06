@@ -1890,6 +1890,7 @@ const SECTORS = {
     'Badania':               { icon: '🔬', profile: { beta: 0.9, rateSens: 0.8, pe: 25, margin: 0.20, growth: 0.07, ps: 4.0, da: 0.05 } },
     'Technologia':           { icon: '💻', profile: { beta: 1.3, rateSens: 1.2, pe: 22, margin: 0.28, growth: 0.08, ps: 3.5, da: 0.05 },
         subsectors: {
+            'Telekomunikacja': { listedOnly: true },                                                        // 0.17.3: tylko przypisane spółki
             'Półprzewodniki': { profile: { beta: 1.8 }, cycleDepth: 1.5, specialist: true },
             'Sztuczna inteligencja': { profile: { pe: 35 }, delta: { growth: 0.06 }, vol: 1.3, specialist: true }
         },
@@ -2045,7 +2046,11 @@ const SUBSECTOR_START_ASSIGNMENTS = {
     GRT: ['Transport i logistyka', 'Morski'],      // 0.17 S4: GrubyTransport
     CFL: ['Transport i logistyka', 'Lotnictwo'],   // CargoFLY
     PKC: ['Transport i logistyka', 'Lądowy'],      // PKP Cargo
-    TIR: ['Transport i logistyka', 'Lądowy']       // Tir-Pol Spedycja
+    TIR: ['Transport i logistyka', 'Lądowy'],      // Tir-Pol Spedycja
+    KWM: ['Przemysł', 'Wydobycie'],                // 0.17.3: Kopalnie Węgla Mine
+    STM: ['Przemysł', 'Przemysł ciężki'],          // Stocznia Morska
+    BTX: ['Przemysł', 'Przemysł ciężki'],          // Betonex
+    ORT: ['Technologia', 'Telekomunikacja']        // Orzeł Telekom
 };
 // Spółki przekształcone przy przydziale (decyzja użytkownika: jedna istniejąca spółka staje się fintechem).
 const SUBSECTOR_START_SEGMENTS = {
@@ -3956,7 +3961,7 @@ function updateStockPrices() {
 
         // --- Ruch ceny jako zmiana PROCENTOWA ---
         // Δ% = szum + powrót do wartości godziwej + nastrój rynku + dryf (fazy, CEO, M&A) + boosty
-        let effectiveVolatility = stock.volatilityFactor * volatilityModifier * (typeof getCorruptionVolatilityFactor === 'function' ? getCorruptionVolatilityFactor() : 1) * getSubsectorModifier(stock, 'vol') * (typeof getStrategyVolatilityFactor === 'function' ? getStrategyVolatilityFactor(stock) : 1) * (typeof getMarketVolatilityFactor === 'function' ? getMarketVolatilityFactor(stock) : 1); // korupcja (0.11); T2: podsektor (SI ×1,3); T3: pivot ×1,3
+        let effectiveVolatility = stock.volatilityFactor * volatilityModifier * (stock.deputies ? getDeputyFactor(stock, 'volatility') : 1) * (typeof getCorruptionVolatilityFactor === 'function' ? getCorruptionVolatilityFactor() : 1) * getSubsectorModifier(stock, 'vol') * (typeof getStrategyVolatilityFactor === 'function' ? getStrategyVolatilityFactor(stock) : 1) * (typeof getMarketVolatilityFactor === 'function' ? getMarketVolatilityFactor(stock) : 1); // korupcja (0.11); T2: podsektor (SI ×1,3); T3: pivot ×1,3
         if (isVolatilityCapped) {
             effectiveVolatility = Math.max(0.5, Math.min(effectiveVolatility, 3.0));
         }

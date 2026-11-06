@@ -114,6 +114,32 @@ PRESETS['kontrakty'] = PRESETS['fundusz-gig'] + `(function () {
         return orig.apply(this, arguments);
     };
 })();`;
+// 0.17.3 R6: czytelnik Tied, wirtualne pozycje po każdej zapowiedzi (kupno po poście, sprzedaż po 2 kw.), bez wpływu na rynek. Porównanie: ta sama spółka z losowego kwartału bez zapowiedzi. Wynik w s017.tiedReader.
+PRESETS['czytelnik-tied'] = PRESETS['fundusz-gig'] + `(function () {
+    const T = window.__tiedReader = { hint: [], base: [] }, open = [];
+    const gig = () => Number(marketIndexes.find(i => i.id === 'GIG')?.value) || 0;
+    const orig = addTiedPost;
+    addTiedPost = function (fields) {
+        const post = orig.apply(this, arguments), stock = post && fields.kind === 'hint' ? stocks.find(s => s.symbol === fields.symbol) : null;
+        if (stock) open.push({ list: T.hint, symbol: stock.symbol, q: macro.quarter, price: stock.price, gig: gig(), real: Boolean(stock.plannedMove?.real) });
+        return post;
+    };
+    const quarter = advanceMacroQuarter;
+    advanceMacroQuarter = function () {
+        try {
+            const pool = stocks.filter(s => !s.assetType && !s.isBankrupt && !s.plannedMove);
+            if (pool.length) { const s = pool[Math.floor(Math.random() * pool.length)]; open.push({ list: T.base, symbol: s.symbol, q: macro.quarter, price: s.price, gig: gig() }); }
+            for (let i = open.length - 1; i >= 0; i--) {
+                const p = open[i];
+                if (macro.quarter - p.q < 2) continue;
+                const s = stocks.find(x => x.symbol === p.symbol);
+                if (s && s.price > 0 && !s.isBankrupt && p.price > 0) p.list.push({ r: s.price / p.price - 1, m: gig() / p.gig - 1, real: p.real });
+                open.splice(i, 1);
+            }
+        } catch (e) { (window.__presetErrors = window.__presetErrors || []).push(String(e)); }
+        return quarter.apply(this, arguments);
+    };
+})();`;
 PRESETS['bez-p6'] = `getCatalogSectorsForCompany = c => (Array.isArray(c?.sector) ? c.sector : []); meetsCatalogRequirements = () => true;`;
 // bez-p9: stare kotwice (bank z zysku po 4 kw., typy specjalne bez kotwicy, strata = 0,7 × WK) i bez rewizji > 10×.
 PRESETS['bez-p9'] = `(function () {
@@ -440,7 +466,7 @@ const STUB = `(function () {
             t = next.at;
             if (next.iv) next.at += next.iv; else timers.delete(next.id);
             try { typeof next.fn === 'function' ? next.fn(...next.args) : (0, eval)(next.fn); }
-            catch (e) { if (window.__vt.errors.length < 20) window.__vt.errors.push(String(e && e.stack || e).slice(0, 400)); }
+            catch (e) { window.__vt.errorCount = (window.__vt.errorCount || 0) + 1; if (window.__vt.errors.length < 20) window.__vt.errors.push(String(e && e.stack || e).slice(0, 400)); }
         }
         t = end;
     } };
@@ -1223,6 +1249,11 @@ const PROBE_0156 = `(function () {
 const PROBE_017 = `(function () {
     const s = window.__sim, T = s.s017 = { d3: { n: 0, domAcq: 0, domTgt: 0 } };
     T.frEv = {}; if (typeof startFreightEvent === 'function') { const o = startFreightEvent; startFreightEvent = function (k) { T.frEv[k] = (T.frEv[k] || 0) + 1; return o.apply(this, arguments); }; } // 0.17 S4: zakłócenia frachtu
+    // 0.17.3 R6: częstość zdarzeń spółek (ten sam licznik w bazie i w nowej wersji)
+    T.ev = { dividend: 0, buyback: 0, strategy: 0, takeover: 0 };
+    if (typeof logEvent === 'function') { const o = logEvent; logEvent = function (m) { const t = String(m); if (t.includes('zmienia strategię dywidendową')) T.ev.dividend++; else if (t.includes('skup akcji własnych')) T.ev.buyback++; return o.apply(this, arguments); }; }
+    if (typeof executeStrategy === 'function') { const o = executeStrategy; executeStrategy = function () { const r = o.apply(this, arguments); if (r) T.ev.strategy++; return r; }; }
+    if (typeof initiateMergerProcess === 'function') { const o = initiateMergerProcess; initiateMergerProcess = function () { const r = o.apply(this, arguments); if (r) T.ev.takeover++; return r; }; }
     if (typeof executeIssuerTakeover === 'function') { const o = executeIssuerTakeover; executeIssuerTakeover = function (a, t) { const r = o.apply(this, arguments); if (r && r.ok) { T.d3.n++; if (!acqForeignOf(a)) T.d3.domAcq++; if (!acqForeignOf(t)) T.d3.domTgt++; } return r; }; }
     // 0.17 S5: co kwartał — sloty Budowlanego zajęte przez infrastrukturę, saldo budżetu, poziom ustawy; zerwane budowy
     T.inf = { q: [] };
@@ -1254,7 +1285,8 @@ const PROBE_017 = `(function () {
             const k = Array.isArray(x.sector) ? x.sector[0] : x.sector, h = x.fundamentals.history.slice(-4), a = sec[k] || (sec[k] = [0, 0, 0]);
             a[0] += h.reduce((t, y) => t + (Number(y.ebitda) || 0), 0); a[1] += h.reduce((t, y) => t + (Number(y.revenue) || 0), 0); a[2]++;
         }
-        r.s017 = { ...T, kontrakty: window.__kontrakty, capPl: Math.round(capPl), capForeign: Math.round(capForeign), secMargin: Object.fromEntries(Object.entries(sec).filter(([, a]) => a[1] > 0).map(([k, a]) => [k, [+(a[0] / a[1]).toFixed(4), a[2]]])),
+        const tiedStats = typeof getDeputies === 'function' ? { posts: getTiedPosts().length, plans: stocks.filter(x => x.plannedMove).length, deputies: stocks.reduce((a, x) => a + getDeputies(x).length, 0), withDeputies: stocks.filter(x => getDeputies(x).length).length } : null;
+        r.s017 = { ...T, kontrakty: window.__kontrakty, tiedReader: window.__tiedReader, tiedStats, capPl: Math.round(capPl), capForeign: Math.round(capForeign), secMargin: Object.fromEntries(Object.entries(sec).filter(([, a]) => a[1] > 0).map(([k, a]) => [k, [+(a[0] / a[1]).toFixed(4), a[2]]])),
             // 0.17 S3: surowce na koniec (cena / średnia), wynik botów na kontraktach, otwarte pozycje gracza na towarach
             com: typeof commodityState === 'object' && commodityState ? { px: Object.fromEntries(COMMODITY_IDS.map(id => [id, +(commodityState.prices[id] / COMMODITY_DEFS[id].mean).toFixed(3)])), bots: commodityState.bots?.stats || null, botOpen: commodityState.bots?.pos?.length || 0, ev: commodityState.events.map(e => e.id), playerPos: typeof getMarginPositions === 'function' ? getMarginPositions('commodities').length : null,
                 fr: commodityState.freight ? Object.fromEntries(Object.keys(commodityState.freight.idx).map(id => [id, +commodityState.freight.idx[id].toFixed(1)])) : null } : null }; // 0.17 S4: indeks frachtu na koniec
@@ -1353,7 +1385,7 @@ async function oneRun(index) {
     const saveCheck = await w.eval('typeof __sim.saveCheckAsync === "function" ? __sim.saveCheckAsync() : null').catch(e => ({ error: String(e) }));
     const result = { run: index, quarters: w.eval('__sim.quarters'), ...JSON.parse(JSON.stringify(finish)),
         msPerQuarter: msPerQuarter.slice(2).reduce((a, b) => a + b, 0) / Math.max(1, msPerQuarter.length - 2),
-        realMs: performance.now() - realStart, errors: w.__vt.errors.slice(0, 5), saveCheck };
+        realMs: performance.now() - realStart, errors: w.__vt.errors.slice(0, 5), errorCount: w.__vt.errorCount || 0, saveCheck };
     return JSON.parse(JSON.stringify(result));
 }
 

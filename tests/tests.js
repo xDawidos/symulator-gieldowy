@@ -13637,6 +13637,8 @@ group('0.16.5 Internet i TeamedUP!', () => {
         assert(noteTiedEvent(`${s.name} podpisuje kontrakt na dostawę`, 'company'), 'post z dobrej wieści');
         assertEq(noteTiedEvent(`${s.name} podpisuje kontrakt na dostawę`, 'company'), null, 'bez duplikatu');
         assertEq(noteTiedEvent(`${s.name} traci płynność, upadłość`, 'company'), null, 'zła wieść bez posta');
+        addTiedPost({ kind: 'hr', hr: 'in', symbol: s.symbol, author: 'Nowy', ceoId: s.ceo.id });
+        assert(noteTiedEvent(`${s.name} podpisuje nowy kontrakt`, 'company'), 'wpis kadrowy bez tekstu nie przerywa logEvent');
         assertEq(getTiedPosts()[0].author, 'Jan Testowy', 'autor to prezes');
     });
 
@@ -15682,10 +15684,22 @@ group('0.17.8 Generator opisów spółek', () => {
     test('frazy: typ aktywa przed podsektorem, podsektor przed sektorem; każdy podsektor ma frazę', () => {
         for (const [sector, def] of Object.entries(SECTORS)) for (const sub of Object.keys(def.subsectors || {})) assert(SUBSECTOR_ACTIVITY[sub], `podsektor ${sub} (${sector})`);
         assertEq(getActivityPhrase(company('ZST', { segments: [{ sector: 'Przemysł', subsector: 'Wydobycie', share: 1 }] })), SUBSECTOR_ACTIVITY.Wydobycie, 'podsektor');
+        assert(SUBSECTOR_ACTIVITY['Przemysł ciężki'].includes('beton') && SUBSECTOR_ACTIVITY['Przemysł ciężki'].includes('statki'), 'fraza pasuje do Betonexu i stoczni');
         assertEq(getActivityPhrase(company('WRN')), ASSET_TYPE_ACTIVITY.DebtCollector, 'typ aktywa przed podsektorem');
         assertEq(getActivityPhrase(company('GRET')), ASSET_TYPE_ACTIVITY.REIT, 'REIT');
         assertEq(getActivityPhrase(company('ORT')), SECTOR_DESCRIPTION.Technologia.does, 'bez podsektora: fraza sektora');
         for (const symbol of ['ORT', 'KWM']) assert(!/oprogramowanie|wytwarza produkty/.test(assembleDescription(company(symbol))), `${symbol}: fraza nie kłamie`);
+    });
+    test('0.17.3: KWM, STM, BTX i ORT mają od startu podsektor w głównym segmencie i pasującą frazę', () => {
+        resetWorld(JSON.parse(JSON.stringify(initialStocks)));
+        ensureAllStockSegments();
+        macro.subsectorsAssigned = false; applyStartSubsectors();
+        for (const [symbol, sub] of [['KWM', 'Wydobycie'], ['STM', 'Przemysł ciężki'], ['BTX', 'Przemysł ciężki'], ['ORT', 'Telekomunikacja']]) {
+            const stock = stocks.find(s => s.symbol === symbol);
+            assertEq(getMainSubsector(stock), sub, symbol);
+            assertEq(getActivityPhrase(stock), SUBSECTOR_ACTIVITY[sub], `fraza ${symbol}`);
+        }
+        assert(getSubsectorDef('Technologia', 'Telekomunikacja').listedOnly, 'bez wejścia innych spółek');
     });
     test('pula pozycji składa się ze zdaniem i nie przeczy podpowiedziom o kursie; hasła zależą od poziomu', () => {
         const pool = Object.values(companyDescriptors).flat();
@@ -15818,6 +15832,43 @@ group('0.17.3 R1 Tied: kontakty, reakcje, znajomi', () => {
         try { renderTiedPage(); return root.innerHTML; } finally { root.remove(); }
     };
 
+    test('widok: pasek kanału zostaje tym samym węzłem przy wejściu w rozmowę, a polubienie nie zamyka komentarzy', () => {
+        start();
+        const item = post({ comment: 'Mój komentarz' });
+        addMail({ sender: 'PULS', subject: 'A', body: 'a' });
+        const root = document.createElement('div'); root.id = 'net-tied-body'; document.body.appendChild(root);
+        try {
+            renderTiedPage();
+            const bar = root.querySelector('.tied-feedbar'), details = () => root.querySelector(`.tied-comments[data-post="${item.id}"]`);
+            details().open = true;
+            tiedLike(item.id);
+            assert(item.liked, 'polubione');
+            assert(details().open, 'komentarze zostają otwarte');
+            assertEq(root.querySelector('.tied-feedbar'), bar, 'ten sam węzeł po polubieniu');
+            tiedCenter({ message: mailbox.messages[0].id });
+            assertEq(root.querySelector('.tied-feedbar'), bar, 'ten sam węzeł w rozmowie');
+            assert(root.querySelector('.tied').classList.contains('is-talk'), 'klasa rozmowy');
+            assert(root.querySelector('.tied-center .tied-talk'), 'treść rozmowy');
+            assert(root.querySelector('.tied-center .tied-talk').textContent.includes('Zamknij rozmowę'), 'pełna nazwa przycisku');
+            tiedBack();
+            assertEq(root.querySelector('.tied-feedbar'), bar, 'ten sam węzeł po powrocie');
+            assert(!root.querySelector('.tied').classList.contains('is-talk'), 'pasek wraca');
+            assertEq(root.querySelectorAll('.tied-side').length, 1, 'jeden panel boczny');
+        } finally { root.remove(); }
+    });
+    test('profil: przy relacji +20 lub wyższej bez znajomości nie ma kreski, jest informacja o prośbie', () => {
+        start();
+        botRelations.values[key()] = 34;
+        tiedView.person = key();
+        const view = html();
+        assert(!view.includes('Kreska: następny poziom') && !view.includes('--limit'), 'bez kreski');
+        assert(view.includes('Możesz wysłać prośbę do znajomych'), 'informacja');
+        requestTiedFriend(key());
+        assert(!html().includes('Możesz wysłać prośbę do znajomych'), 'po prośbie bez informacji');
+        const other = stocks[1].ceo.id ? getCeoRelationKey(stocks[1].ceo.id) : null; tiedView.person = other; botRelations.values[other] = 10;
+        assert(html().includes('Kreska: następny poziom, Znajomy'), 'poniżej progu kreska zostaje');
+    });
+
     test('widoczność: post dla znajomych i zaufanych wg poziomu; post niedostępny bez treści, roli, daty i reakcji', () => {
         start();
         const friends = post({ audience: 'friends', text: 'Dla znajomych tekst' }), trusted = post({ audience: 'trusted', text: 'Dla zaufanych tekst' });
@@ -15923,7 +15974,7 @@ group('0.17.3 R1 Tied: kontakty, reakcje, znajomi', () => {
         assertEq(getTiedPosts().filter(p => p.symbol === 'BBB').length, 40, 'cały rynek: 40');
         assertEq(getTiedFeedPosts('contacts').length, 40, 'zakładka Kontakty');
     });
-    test('kanały: Kontakty i Portfel; obserwowanie nie zmienia relacji; profil firmowy i osoby bez „Napisz”', () => {
+    test('kanały: Kontakty i Portfel; obserwowanie nie zmienia relacji; profil firmowy i osoby', () => {
         start();
         const p = post();
         assertEq(getTiedFeedPosts('contacts').length, 0, 'pusto bez kontaktu');
@@ -15938,7 +15989,7 @@ group('0.17.3 R1 Tied: kontakty, reakcje, znajomi', () => {
         tiedOpenPerson(key());
         const person = html();
         assert(person.includes('tied-profile') && person.includes('Dodaj do znajomych') && person.includes('Obserwuj') && person.includes('Karta spółki') && person.includes('skali od'), 'profil osoby');
-        assert(!person.includes('Napisz') && !person.includes('Porozmawiaj'), 'bez rozmowy przed R4');
+        assert(person.includes('Napisz'), 'kontakt może pisać');
         tiedOpenCompany('AAA');
         const company = html();
         assert(company.includes('Konto spółki') && company.includes('Zarząd') && company.includes('Karta spółki'), 'profil firmy');
@@ -15969,13 +16020,13 @@ group('0.17.3 R1 Tied: kontakty, reakcje, znajomi', () => {
         assertEq(getUnreadMailCount('important'), 1, 'licznik');
         assert(MAIL_FOLDER_LABELS.important.includes('Ważne'), 'etykieta');
     });
-    test('w HTML Tied nie ma nazw charakterów ani elementów z R2–R5', () => {
+    test('w HTML Tied nie ma nazw charakterów', () => {
         start(); buyStock('AAA', 10); post(); post({ audience: 'friends' });
         const pages = [];
         for (const side of ['me', 'msgs', 'people']) { tiedView.side = side; pages.push(html()); }
         tiedOpenPerson(key()); pages.push(html());
         const all = pages.join(' ');
-        for (const word of ['Rachmistrz', 'Mentor', 'Lojalista', 'Zachowawczy', 'Sceptyk', 'Blefiarz', 'Manipulator', 'Wiceprezes', 'VIP', 'Opublikuj', 'Wpis na ten kwartał']) assert(!all.includes(word), `bez: ${word}`);
+        for (const word of ['Rachmistrz', 'Mentor', 'Lojalista', 'Zachowawczy', 'Sceptyk', 'Blefiarz', 'Manipulator']) assert(!all.includes(word), `bez: ${word}`);
     });
     test('karta spółki ma link do profilu w Tied; stary post bez ceoId nadal się wyświetla', () => {
         start();
@@ -15983,5 +16034,449 @@ group('0.17.3 R1 Tied: kontakty, reakcje, znajomi', () => {
         const old = { id: 5, at: 0, symbol: 'AAA', author: 'Jan Dawny', text: 'Stary post', kind: 'result' };
         const page = renderTiedPost(old);
         assert(page.includes('Jan Dawny') && page.includes('Stary post'), 'stary post');
+    });
+});
+
+group('0.17.3 R2 Zapowiedzi, opinie, KNF', () => {
+    const start = () => {
+        const list = [makeCompany('AAA'), makeCompany('BBB')];
+        list.forEach(company => { company.insiderShares = 0; company.reputation = { player: 0 }; });
+        resetWorld(list); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        playerCash = 5_000_000; botRelations = createBotRelations(); delete oversight.records.player; mailbox = createMailbox(); macro.quarter = 10;
+        for (const stock of stocks) { stock.ceo = null; generateCEO(stock); }
+    };
+    const withRandom = (v, fn) => { const r = Math.random; Math.random = () => v; try { return fn(); } finally { Math.random = r; } };
+    const key = () => getCeoRelationKey(stocks[0].ceo.id);
+
+    test('plan dywidendy: decyzja teraz, wykonanie po 1–2 kw.; drugi plan wykonuje się od razu; częstość losowania bez zmian', () => {
+        start(); const s = stocks[0];
+        s.dividendPolicy = 'Growth'; s.financialHealth = 4; s.corporatePhase = null;
+        assert(planCompanyMove(s, 'dividend', { policy: 'Balanced' }), 'plan');
+        assert(!planCompanyMove(s, 'strategy', {}), 'jeden plan na spółkę');
+        assertEq(s.dividendPolicy, 'Growth', 'bez zmiany przed terminem');
+        assert(s.plannedMove.atQ === 11 || s.plannedMove.atQ === 12, 'termin 1–2 kw.');
+        macro.quarter = s.plannedMove.atQ;
+        processCompanyPlansQuarterly();
+        assertEq(s.dividendPolicy, 'Balanced', 'wykonanie z planu');
+        assert(!s.plannedMove, 'plan zdjęty');
+    });
+    test('zapowiedź: bez liczb i dat, tylko dla znajomych lub zaufanych; plan bez pokrycia niczego nie wykonuje', () => {
+        start(); const s = stocks[0];
+        for (const type of TIED_PLAN_TYPES) for (const audience of ['friends', 'trusted']) for (const text of TIED_HINTS[type][audience]) assert(!/\d/.test(text), `bez liczb: ${text}`);
+        const post = withRandom(0.1, () => postTiedHint(s, 'dividend'));
+        assert(post && post.audience === 'trusted' && post.kind === 'hint', 'post');
+        s.dividendPolicy = 'Growth';
+        s.plannedMove = { type: 'dividend', atQ: 10, real: false, data: { policy: 'Total' } };
+        processCompanyPlansQuarterly();
+        assertEq(s.dividendPolicy, 'Growth', 'bez skutku');
+    });
+    test('prawdziwość według charakteru: częściej bez pokrycia u blefiarza niż u rachmistrza; boty z osobowości; charakter stały', () => {
+        const chance = id => COMPANY_PLAN_RULES.fakeBase * (1 - TIED_CHARACTERS[id].truth) / TIED_CHARACTERS[id].truth;
+        assert(chance('blefiarz') > chance('zachowawczy') && chance('zachowawczy') > chance('rachmistrz'), 'kolejność');
+        assertEq(Object.keys(TIED_CHARACTERS).length, 7, '7 charakterów');
+        assertEq(getPersonCharacter('ceo:c1'), getPersonCharacter('ceo:c1'), 'stały');
+        const seen = new Set(Array.from({ length: 400 }, (_, i) => getPersonCharacter(`ceo:c${i}`)));
+        assertEq(seen.size, 7, 'wszystkie się trafiają');
+    });
+    test('KNF: zakup po poście dla zaufanych przy prawdziwym planie; pierwsze ostrzeżenie bez kwoty, drugie kara 5% gotówki', () => {
+        start(); const s = stocks[0];
+        addTiedFriend(key()); botRelations.values[key()] = 70;
+        s.plannedMove = { type: 'dividend', atQ: 11, real: true, data: { policy: 'Balanced' } };
+        addTiedPost({ symbol: 'AAA', author: s.ceo.name, ceoId: s.ceo.id, text: 'x', kind: 'hint', audience: 'trusted', q: 10 });
+        buyStock('AAA', 10);
+        assertEq(playerProfile.tied.tips.length, 1, 'zakup zanotowany');
+        const cash = playerCash;
+        withRandom(0.5, () => resolveTiedTips(s));
+        assertEq(playerProfile.tied.tips.length, 0, 'poza szansą nic');
+        assertEq(playerProfile.tied.knfHits || 0, 0, 'bez wykrycia');
+        playerProfile.tied.tips = [{ symbol: 'AAA', q: 10 }];
+        withRandom(0, () => resolveTiedTips(s));
+        assertEq(playerProfile.tied.knfHits, 1, 'pierwsze wykrycie');
+        assertEq(playerCash, cash, 'bez kary');
+        assert(mailbox.messages[0].sender === 'KNF' && !/\d/.test(mailbox.messages[0].body) && mailbox.messages[0].importance === 3, 'ostrzeżenie bez kwoty');
+        playerProfile.tied.tips = [{ symbol: 'AAA', q: 10 }];
+        withRandom(0, () => resolveTiedTips(s));
+        assertNear(playerCash, cash * 0.95, 'kara 5%', 1e-6);
+    });
+    test('bot: opinia o spółce, którą trzyma; reklama przed sprzedażą kończy się sprzedażą w następnym kwartale', () => {
+        start();
+        const ai = aiCompetitors.find(bot => bot.personality === 'yolo_trader') || aiCompetitors.find(bot => bot.personality === 'reckless');
+        ai.portfolio = { AAA: { shares: 100, avgPrice: 100 } }; stocks[0].sharesHeld = 100;
+        const bots = aiCompetitors.splice(0, aiCompetitors.length, ai);
+        try {
+            const only = ai.portfolio; ai.portfolio = Object.fromEntries(stocks.filter(x => !x.assetType).slice(0, 6).map(x => [x.symbol, { shares: 1, avgPrice: 100 }]));
+            for (let i = 0; i < 40; i++) assert(postTiedInvestorOpinion(), 'opinia przy kilku spółkach');
+            ai.portfolio = only;
+            const post = withRandom(0.1, () => postTiedInvestorOpinion());
+            assert(post && post.botId === ai.id && post.symbol === 'AAA', 'post inwestora');
+            assert(ai.tiedPump, 'plan sprzedaży');
+            macro.quarter++;
+            processTiedChatterQuarterly();
+            assert(!ai.tiedPump && ai.portfolio.AAA.shares < 100, 'sprzedał część');
+        } finally { aiCompetitors.splice(0, aiCompetitors.length, ...bots); ai.portfolio = {}; delete ai.tiedPump; }
+    });
+});
+
+group('0.17.3 R3 Wiceprezesi', () => {
+    const start = () => {
+        const list = [makeCompany('AAA'), makeCompany('BBB'), makeCompany('CCC')];
+        list.forEach(company => { company.insiderShares = 0; company.reputation = { player: 0 }; company.exchange = 'GOLD'; company.price = 500; });
+        list[2].exchange = 'SILVER';
+        resetWorld(list); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        playerCash = 5_000_000; botRelations = createBotRelations(); delete oversight.records.player; mailbox = createMailbox(); macro.quarter = 10;
+        for (const stock of stocks) { stock.ceo = null; generateCEO(stock); }
+    };
+    const withRandom = (v, fn) => { const r = Math.random; Math.random = () => v; try { return fn(); } finally { Math.random = r; } };
+
+    test('warunek: giełda Złota i próg kapitalizacji; poniżej progu nowi nie przychodzą, obecni zostają do końca kadencji', () => {
+        start();
+        processDeputiesQuarterly();
+        assert(getDeputies(stocks[0]).length === 1 && getDeputies(stocks[1]).length === 1, 'spółki ze Złotej');
+        assertEq(getDeputies(stocks[2]).length, 0, 'Srebrna bez wiceprezesa');
+        const deputy = getDeputies(stocks[0])[0];
+        assert(deputy.id && DEPUTY_TRAITS[deputy.trait] && deputy.traits.length <= 1, 'jedna cecha wiceprezesa, najwyżej 1 z ceoTraits');
+        assert(getTiedPosts().some(p => p.kind === 'hr' && p.role === 'wiceprezes' && p.author === deputy.name), 'wpis kadrowy');
+        stocks[0].exchange = 'SILVER'; deputy.trait = 'gadula';
+        processDeputiesQuarterly();
+        assert(getDeputies(stocks[0]).includes(deputy), 'zostaje pod progiem');
+        macro.quarter = deputy.untilQ;
+        processDeputiesQuarterly();
+        assert(!getDeputies(stocks[0]).includes(deputy), 'odchodzi po kadencji');
+        assertEq(getDeputies(stocks[0]).length, 0, 'bez następcy pod progiem');
+    });
+    test('awans: relacja zostaje przy id, nowy prezes ma zwykły zestaw cech, następny wiceprezes z opóźnieniem', () => {
+        start();
+        processDeputiesQuarterly();
+        const s = stocks[0], deputy = getDeputies(s)[0], key = getCeoRelationKey(deputy.id);
+        deputy.trait = 'wyga'; deputy.hiredQ = 2; deputy.traits = [{ id: 'wyjadacz', name: 'Wyjadacz' }];
+        playerProfile.contacts = [{ id: deputy.id, name: deputy.name, symbol: 'AAA', role: 'wiceprezes' }];
+        changeRelation(key, 30, 'test');
+        withRandom(0.1, () => replaceCeo(s));
+        assertEq(s.ceo.id, deputy.id, 'to samo id');
+        assertEq(getRelation(key), 30, 'relacja zostaje');
+        assert(s.ceo.traits.some(t => t.id === 'wyjadacz'), 'cecha z ceoTraits zostaje');
+        assertEq(s.ceo.formerDeputyTrait, 'wyga', 'historia');
+        assertEq(s.ceo.tenure, 8, 'Stary wyga zachowuje staż');
+        assertEq(getDeputies(s).length, 0, 'zszedł z listy');
+        assert(s.deputyWaitQ > macro.quarter, 'opóźnienie następcy');
+        assert(getTiedPosts().find(p => p.hr === 'in').promoted, 'wpis: wcześniej wiceprezes');
+    });
+    test('bez wiceprezesa i przy szansie poza progiem przychodzi ktoś z zewnątrz; pominięty aspirant odchodzi, lojalny zostaje', () => {
+        start();
+        processDeputiesQuarterly();
+        const s = stocks[0], a = getDeputies(s)[0], loyal = { ...a, id: 'c777', trait: 'lojalny', name: 'Ewa Stała' };
+        a.trait = 'aspirant'; s.deputies.push(loyal);
+        withRandom(0.95, () => replaceCeo(s));
+        assert(s.ceo.id !== a.id && s.ceo.id !== loyal.id, 'osoba z zewnątrz');
+        assert(!getDeputies(s).includes(a), 'aspirant odszedł');
+        assert(getDeputies(s).includes(loyal), 'lojalny został');
+    });
+    test('cechy działają przez parametry gry: zmienność, przychód, koszty, odporność, związek, limit reakcji, plotkarz', () => {
+        start();
+        const s = stocks[0], d = (trait, id = 'c500') => ({ id, name: 'Jan Test', trait, traits: [], hiredQ: 0, untilQ: 99 });
+        const check = (trait, field, value) => { s.deputies = [d(trait)]; assertNear(getDeputyFactor(s, field), value, trait, 1e-12); };
+        check('skarbnik', 'volatility', 0.98); check('inzynier', 'research', 1.05); check('sprzedawca', 'revenue', 1.005); check('kontroler', 'costs', 0.995); check('prawnik', 'resistance', 0.95); check('kadrowy', 'union', 0.8);
+        s.deputies = [];
+        delete s.deputies;
+        assertEq(getDeputyFactor(s, 'revenue'), 1, 'bez wiceprezesa 1');
+        assertEq(Object.keys(DEPUTY_TRAITS).length, 15, '15 cech');
+        s.deputies = [d('towarzyski')];
+        const key = getCeoRelationKey('c500'), posts = [0, 1, 2, 3].map(() => addTiedPost({ symbol: 'AAA', author: 'Jan Test', ceoId: 'c500', text: 'x', role: 'Wiceprezes' }));
+        posts.forEach(p => likeTiedPost(p.id));
+        assertEq(getRelation(key), 3, 'towarzyski: limit +3');
+        s.deputies = [d('plotkarz')]; addTiedFriend(key); botRelations.values[key] = 25;
+        assert(canSeeTiedPost({ audience: 'trusted', ceoId: 'c500', gossip: true }), 'plotkarz: znajomy widzi');
+        assert(!canSeeTiedPost({ audience: 'trusted', ceoId: 'c500' }), 'zwykły post dla zaufanych nie');
+    });
+    test('kontakt obejmuje wiceprezesów; karta spółki i profil firmy pokazują ich bez cech', () => {
+        start();
+        processDeputiesQuarterly();
+        const s = stocks[0], deputy = getDeputies(s)[0];
+        noteCeoContact(s);
+        assert(playerProfile.contacts.some(c => c.id === deputy.id && c.role === 'wiceprezes'), 'kontakt');
+        assertEq(getTiedPerson(getCeoRelationKey(deputy.id)).role, 'Wiceprezes', 'rola');
+        const card = renderCompanyCardOverview(s);
+        assert(card.includes('Wiceprezesi') && card.includes(deputy.name) && !card.includes(DEPUTY_TRAITS[deputy.trait].name), 'karta bez cechy');
+        assert(renderTiedCompany('AAA').includes(deputy.name), 'profil firmy');
+    });
+});
+
+group('0.17.3 R4 Rozmowy, posty gracza, VIP', () => {
+    const start = () => {
+        const list = [makeCompany('AAA'), makeCompany('BBB')];
+        list.forEach(company => { company.insiderShares = 0; company.reputation = { player: 0 }; });
+        resetWorld(list); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        playerCash = 5_000_000; botRelations = createBotRelations(); delete oversight.records.player; mailbox = createMailbox(); macro.quarter = 10;
+        tiedView = { feed: 'main', side: 'me', pane: 'feed', person: null, company: null, message: null, filter: 'all', pool: null, talk: null, draft: 'good' };
+        for (const stock of stocks) { stock.ceo = null; generateCEO(stock); }
+    };
+    const key = () => getCeoRelationKey(stocks[0].ceo.id);
+    const html = () => { const root = document.createElement('div'); root.id = 'net-tied-body'; document.body.appendChild(root); try { renderTiedPage(); return root.innerHTML; } finally { root.remove(); } };
+
+    test('macierz charakter × ton: wszystkie tony w skali −2…+2, wynik bez losowania, nastrój daje zmianę od −6 do +6', () => {
+        start();
+        const tones = Object.keys(TALK_TONES);
+        for (const [id, c] of Object.entries(TIED_CHARACTERS)) {
+            assertEq(Object.keys(c.tones).sort().join(), [...tones].sort().join(), `${id}: wszystkie tony`);
+            assert(Object.values(c.tones).every(v => v >= -2 && v <= 2), `${id}: skala`);
+        }
+        const random = Math.random; Math.random = () => { throw new Error('losowanie po wyborze'); };
+        try {
+            const a = resolveTalk(key(), ['numbers', 'vision']), b = resolveTalk(key(), ['numbers', 'vision']);
+            assertEq(JSON.stringify(a), JSON.stringify(b), 'ten sam wynik');
+        } finally { Math.random = random; }
+        for (const choices of [['numbers'], ['pressure', 'pressure', 'pressure'], ['relation', 'vision', 'safety']]) {
+            const r = resolveTalk(key(), choices);
+            assert(r.mood >= -2 && r.mood <= 2 && r.delta === r.mood * 3, 'zakres');
+        }
+    });
+    test('sukces rozmów: gracz według charakteru 40–70%, losowy ok. 25%', () => {
+        start();
+        const tones = Object.keys(TALK_TONES), N = 4000;
+        const trial = (reader, i) => {
+            const person = `ceo:c${i}`, turns = 2 + i % 2, picks = [], used = {}, chars = getPersonCharacterData(person).tones;
+            for (let t = 0; t < turns; t++) {
+                const options = [...tones].sort(() => Math.random() - 0.5).slice(0, 3 + (Math.random() < 0.5 ? 1 : 0));
+                let choice = options[Math.floor(Math.random() * options.length)];
+                if (reader) for (const tone of options) if (chars[tone] - (used[tone] || 0) > chars[choice] - (used[choice] || 0)) choice = tone;
+                picks.push(choice); used[choice] = (used[choice] || 0) + 1;
+            }
+            return resolveTalk(person, picks).success;
+        };
+        const rate = reader => Array.from({ length: N }, (_, i) => trial(reader, i)).filter(Boolean).length / N;
+        const reader = rate(true), random = rate(false);
+        assert(reader >= 0.4 && reader <= 0.7, `według charakteru ${(reader * 100).toFixed(1)}%`);
+        assert(random >= 0.18 && random <= 0.32, `losowy ${(random * 100).toFixed(1)}%`);
+    });
+    test('dostęp: kontakt pełna rozmowa, autor widocznego posta bez kontaktu tylko szybka, inaczej brak; 1 na kwartał', () => {
+        start();
+        assertEq(getTiedTalkAccess(key()), null, 'obcy');
+        tiedOpenPerson(key());
+        assert(!html().includes('Napisz'), 'bez przycisku');
+        const locked = 'Rozmowa po zakupie akcji tej spółki';
+        assert(html().includes(locked) && renderTiedTalkAction(key()).includes('disabled'), 'prezes spoza kontaktów: przycisk wyłączony');
+        stocks[1].deputies = [{ id: 'd900', name: 'Ewa Testowa', trait: 'gadula', traits: [] }];
+        assert(renderTiedTalkAction(getCeoRelationKey('d900')).includes(locked), 'wiceprezes spoza kontaktów');
+        assertEq(renderTiedTalkAction(aiCompetitors[0].id), '', 'inwestor bez przycisku, bo kontakt nie wynika z zakupu');
+        stocks[0].isBankrupt = true;
+        assertEq(renderTiedTalkAction(key()), '', 'upadła spółka bez przycisku');
+        stocks[0].isBankrupt = false;
+        addTiedPost({ symbol: 'AAA', author: stocks[0].ceo.name, ceoId: stocks[0].ceo.id, text: 'Post' });
+        assertEq(getTiedTalkAccess(key()), 'quick', 'autor widocznego posta');
+        assert(!renderTiedTalkAction(key()).includes('Rozmowa po zakupie'), 'autor posta ma szybką rozmowę');
+        assert(!startTiedTalk(key()), 'bez kontaktu bez pełnej rozmowy');
+        const gain = quickTiedTalk(key());
+        assert(gain >= 1 && gain <= 2 && getRelation(key()) === gain, 'szybka do +2');
+        assert(!quickTiedTalk(key()), 'raz na kwartał');
+        macro.quarter++;
+        noteCeoContact(stocks[0]);
+        assertEq(getTiedTalkAccess(key()), 'full', 'kontakt');
+        assert(startTiedTalk(key()), 'start');
+        assert(html().includes('is-talk'), 'pasek zwinięty');
+    });
+    test('rozmowa w widoku: tury, 3–4 opcje, wynik zmienia relację; prośby od 5% udziału', () => {
+        start(); noteCeoContact(stocks[0]);
+        startTiedTalk(key());
+        const talk = tiedView.talk;
+        assert(talk.turns >= 2 && talk.turns <= 3 && talk.options.length >= 3 && talk.options.length <= 4, 'tury i opcje');
+        talk.turns = 2;
+        chooseTalkOption(0);
+        assertEq(talk.turn, 2, 'druga tura');
+        const page = html();
+        assert(page.includes('Prośby do zarządu') && page.includes('Masz 0,0%') && page.includes('disabled'), 'prośby zablokowane');
+        chooseTalkOption(0);
+        assert(talk.result, 'koniec');
+        assertEq(getRelation(key()), talk.result.delta, 'relacja zmieniona');
+        assert(hasTalkedThisQuarter(key()), 'limit kwartału');
+        assert(html().includes('tied-result'), 'wynik');
+    });
+    test('prośba do zarządu przy sukcesie tworzy plan spółki', () => {
+        start(); const s = stocks[0];
+        s.dividendPolicy = 'Growth';
+        assert(executeTalkRequest(s, 'dividend'), 'dywidenda');
+        assertEq(s.plannedMove.data.policy, 'Balanced', 'plan podwyżki');
+        delete s.plannedMove;
+        assert(executeTalkRequest(s, 'buyback'), 'skup');
+        const before = s.treasuryShares || 0, atQ = s.plannedMove.atQ;
+        macro.quarter = atQ;
+        processCompanyPlansQuarterly();
+        assert((s.treasuryShares || 0) > before, 'skup wykonany');
+    });
+    test('VIP: rozmowa rozstrzyga o wpłacie, skutki jak dawniej; mail ważny z przejściem do Tied', () => {
+        start();
+        playerFund.vip = { offers: [{ id: 7, profile: 'rentier', name: 'Katarzyna Lis', expiresQ: 12 }], yearOffers: { year: 2, n: 1 }, pauseUntilQ: -1, won: 0, lost: 0, nextId: 8 };
+        tiedView.side = 'msgs';
+        assert(html().includes('Oferta VIP'), 'oferta w Wiadomościach');
+        assert(startVipTalk(7), 'rozmowa');
+        const nav = getFundNav();
+        settleVipTalk('vip:7', { success: true, delta: 0 });
+        assertEq(playerFund.vip.won, 1, 'wygrana');
+        assert(!getVipOffers().length, 'oferta zamknięta');
+        assert(Math.abs(getFundNav() / nav - 1) < 0.002, 'NAV bez zmian poza kosztem wpłaty jak dawniej');
+        assert(playerFund.clients.some(c => c.vip && c.name === 'Katarzyna Lis'), 'klient VIP');
+        assert(getTiedContacts().some(p => p.kind === 'vip'), 'kontakt VIP');
+        const lost = { id: 8, profile: 'rentier', name: 'Jan Tomek', expiresQ: 12 };
+        playerFund.vip.offers = [lost];
+        settleVipTalk('vip:8', { success: false, delta: 0 });
+        assertEq(playerFund.vip.lost, 1, 'przegrana');
+        assert(playerFund.vip.pauseUntilQ > macro.quarter, 'pauza');
+    });
+    test('wpis gracza: raz na kwartał, zgodny +1, chwałba przy słabym wyniku −2', () => {
+        start();
+        playerFund.trust = 50; playerFund.periods = [{ fundReturn: -0.05, benchmarkReturn: 0.02 }];
+        assert(publishTiedPlayerPost('brag'), 'publikacja');
+        assertEq(playerFund.trust, 48, 'chwałba −2');
+        assert(!publishTiedPlayerPost('good'), 'raz na kwartał');
+        macro.quarter++;
+        assert(publishTiedPlayerPost('hard'), 'kolejny kwartał');
+        assertEq(playerFund.trust, 49, 'zgodny +1');
+        macro.quarter++; playerFund.periods = [{ fundReturn: 0.05, benchmarkReturn: 0.02 }];
+        publishTiedPlayerPost('good');
+        assertEq(playerFund.trust, 50, 'zgodny +1');
+        assert(getTiedPosts()[0].kind === 'player' && renderTiedPost(getTiedPosts()[0]).includes('Zarządca funduszu'), 'post gracza');
+    });
+    test('relacja z prezesem: premia reputacji od +40 do +30 z tego źródła; spadki za sprzedaż i próbę odwołania; zanik lojalisty wolniejszy', () => {
+        start(); const s = stocks[0];
+        botRelations.values[key()] = 50;
+        processCeoRelationBonus();
+        assertEq(s.reputation.player, 1, '+1');
+        playerProfile.tied.repGain = { AAA: 30 };
+        processCeoRelationBonus();
+        assertEq(s.reputation.player, 1, 'limit +30');
+        noteCeoRelationLoss(s, CEO_RELATION_RULES.dismissalLoss, 'test');
+        assertEq(getRelation(key()), 30, 'odwołanie −20');
+        assertEq(TIED_CHARACTERS.lojalista.decay, 0.5, 'lojalista');
+        assertEq(getRelationDecayFactor('kolega'), 1, 'poza osobami 1');
+    });
+});
+
+group('0.17.3 R5 Obietnice botów', () => {
+    const start = () => {
+        const list = [makeCompany('AAA'), makeCompany('BBB')];
+        list.forEach(company => { company.insiderShares = 0; company.reputation = { player: 0 }; });
+        resetWorld(list); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        playerCash = 1_000_000; botRelations = createBotRelations(); delete oversight.records.player; mailbox = createMailbox(); macro.quarter = 10;
+        for (const stock of stocks) { stock.ceo = null; generateCEO(stock); }
+        return getRelationPeople().find(person => person.kind === 'investor').entity;
+    };
+    const live = (ai, type, goal, amount = 5000, dueQ = 12) => { const tied = ensurePromises(); const promise = { id: tied.promiseNext++, bot: ai.id, name: ai.name, type, goal, amount, dueQ, offerQ: 10, status: 'live' }; tied.promises.unshift(promise); return promise; };
+
+    test('spełnienie: bot kupuje po NAV z własnej gotówki; pieniądze przechodzą, NAV bez zmian, relacja +5, lock-up 1 rok', () => {
+        const ai = start(); ai.cash = 100_000;
+        const promise = live(ai, 'cashShare', {});
+        const nav = getFundNav(), cash = playerCash, total = ai.cash + playerCash, units = playerFund.units, clients = playerFund.clients.length;
+        macro.quarter = 12;
+        checkPromises(true);
+        assertEq(promise.status, 'done', 'spełniona');
+        assertEq(ai.cash, 95_000, 'gotówka bota maleje o wpłatę');
+        assertEq(playerCash, cash + 5000, 'gotówka funduszu rośnie o wpłatę');
+        assertEq(ai.cash + playerCash, total, 'obietnica nie tworzy pieniędzy');
+        assertNear(getFundNav(), nav, 'NAV bez zmian', 1e-9);
+        assertNear(playerFund.units, units + 5000 / nav, 'jednostki po NAV', 1e-9);
+        assertEq(playerFund.clients.length, clients + 1, 'klient funduszu');
+        assertEq(playerFund.clients.at(-1).name, ai.name, 'bot jest klientem');
+        assertEq(getTranches(playerFund.clients.at(-1))[0].lockedUntilQ, 16, 'lock-up 1 rok');
+        assertEq(getRelation(ai.id), 5, 'relacja +5');
+    });
+    test('brak gotówki: bot kupuje tyle, ile ma, bez utraty relacji, karteczka to pokazuje', () => {
+        const ai = start(); ai.cash = 1500;
+        const promise = live(ai, 'cashShare', {});
+        macro.quarter = 12;
+        checkPromises(true);
+        assertEq(promise.paid, 1500, 'tyle miał');
+        assertEq(ai.cash, 0, 'bez ujemnej gotówki');
+        assert(getRelation(ai.id) > 0, 'bez utraty relacji');
+        assert(renderTeamedPromises().includes('tyle miał gotówki'), 'opis na karteczce');
+    });
+    test('niespełnienie −10, rezygnacja −5, utrzymanie akcji pęka od razu po sprzedaży', () => {
+        const ai = start(); ai.cash = 100_000;
+        playerCash = 0; playerPortfolio.AAA = { shares: 10, avgPrice: 100 };
+        const money = ai.cash;
+        const failed = live(ai, 'cashShare', {});
+        macro.quarter = 12;
+        checkPromises(true);
+        assertEq(failed.status, 'failed', 'termin minął');
+        assertEq(getRelation(ai.id), -10, '−10');
+        assertEq(ai.cash, money, 'bez wpłaty');
+        const resigned = live(ai, 'beatGig', {}, 5000, 20);
+        assert(resignPromise(resigned.id), 'rezygnacja');
+        assertEq(getRelation(ai.id), -15, '−5');
+        const hold = live(ai, 'holdShares', { symbol: 'AAA', base: 10 }, 5000, 20);
+        checkPromises(false);
+        assertEq(hold.status, 'live', 'trzyma');
+        playerPortfolio.AAA.shares = 5;
+        checkPromises(false);
+        assertEq(hold.status, 'failed', 'sprzedał');
+        delete playerPortfolio.AAA;
+    });
+    test('oferty: relacja od +20, najwyżej 3 aktywne, kwota 1–3% aktywów i do 25% gotówki bota', () => {
+        const ai = start(); ai.cash = 100_000;
+        const random = Math.random; Math.random = () => 0.5;
+        try { const offer = createPromiseOffer(ai); assert(offer && offer.amount <= 25_000 && offer.amount >= getFundAssets() * 0.01 - 1, `kwota ${offer?.amount}`); }
+        finally { Math.random = random; }
+        assert(acceptPromiseOffer(ensurePromises().promiseOffers[0].id), 'przyjęcie');
+        assertEq(getActivePromises().length, 1, 'aktywna');
+        live(ai, 'beatGig', {}); live(ai, 'beatGig', {});
+        const offer = createPromiseOffer(ai);
+        assert(!acceptPromiseOffer(offer?.id ?? -1), 'limit 3');
+        assert(renderTiedPromiseOffers().includes('3 z 3') || !offer, 'licznik');
+        ensurePromises().promiseOffers = []; ensurePromises().promises = [];
+        botRelations.values[ai.id] = 10;
+        const r = Math.random; Math.random = () => 0;
+        try { maybeOfferPromises(); } finally { Math.random = r; }
+        assertEq(ensurePromises().promiseOffers.length, 0, 'poniżej progu bez oferty');
+    });
+    test('cele: każdy ma tekst i stan; postęp przy zakupie; karteczka z miernikiem i słowem', () => {
+        const ai = start(); ai.portfolio = { AAA: { shares: 5, avgPrice: 100 } }; ai.cash = 100_000;
+        assertEq(Object.keys(PROMISE_GOALS).length, 11, '11 celów');
+        const goals = { buyShares: { symbol: 'AAA', shares: 10, base: 0 }, sellHolding: { symbol: 'AAA' }, sectorShare: { sector: 'Technologia' }, holdShares: { symbol: 'AAA', base: 0 }, maxPosition: {}, cashShare: {}, closeShorts: {}, noDebt: {}, beatGig: {}, agmVote: { symbol: 'AAA', item: 'x', label: 'Test', vote: 'for' }, safeShare: {} };
+        for (const [type, goal] of Object.entries(goals)) { assert(PROMISE_GOALS[type].text(goal).length > 5, `tekst ${type}`); assert(typeof PROMISE_GOALS[type].state(goal).done === 'boolean', `stan ${type}`); }
+        const promise = live(ai, 'buyShares', goals.buyShares);
+        buyStock('AAA', 4);
+        assert(renderTeamedPromises().includes('4 z 10 akcji') && renderTeamedPromises().includes('W toku'), 'miernik');
+        assertEq(promise.status, 'live', 'jeszcze nie');
+        buyStock('AAA', 6);
+        assertEq(promise.status, 'done', 'spełniona po transakcji');
+    });
+    test('zapis: obietnice w profilu gracza wracają po wczytaniu', () => {
+        const ai = start(); live(ai, 'beatGig', {});
+        const saved = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
+        assertEq(saved.playerProfile.tied.promises.length, 1, 'w zapisie');
+    });
+});
+
+group('0.17.3 R6 Akademia i zapis', () => {
+    test('3 hasła Akademii: tekst, quiz, przykład; bez liczb o charakterach', () => {
+        resetWorld([makeCompany('AAA')]); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' }); mailbox = createMailbox();
+        for (const id of ['jakCzytacTied', 'relacjeKontakty', 'obietniceInwestorow']) {
+            const entry = ACADEMY_ENTRIES[id];
+            assert(entry?.text.length > 100 && entry.quiz.length >= 3 && entry.quiz.every(q => q.a[q.c]), `hasło ${id}`);
+            assert(typeof entry.example() === 'string' && !/undefined|NaN/.test(entry.example()), `przykład ${id}`);
+            for (const word of ['Rachmistrz', 'Blefiarz', 'Manipulator']) assert(!entry.text.includes(word), `bez nazwy: ${word}`);
+        }
+        assert(!/\d+%/.test(ACADEMY_ENTRIES.jakCzytacTied.text), 'bez liczb o prawdziwości');
+    });
+    test('zapis: plany, wiceprezesi, znajomi i posty wracają po wczytaniu; stary zapis bez nich działa', () => {
+        const list = [makeCompany('AAA'), makeCompany('BBB')];
+        resetWorld(list); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' }); mailbox = createMailbox();
+        for (const stock of stocks) { stock.ceo = null; generateCEO(stock); }
+        const s = stocks[0], deputy = { id: 'c900', name: 'Ewa Mazur', age: 50, trait: 'skarbnik', traits: [], hiredQ: 1, untilQ: 40 };
+        s.deputies = [deputy]; s.plannedMove = { type: 'dividend', atQ: 99, real: true, data: { policy: 'Balanced' } };
+        addTiedFriend(getCeoRelationKey(deputy.id));
+        addTiedPost({ symbol: 'AAA', author: 'Ewa Mazur', ceoId: 'c900', text: 'Post', audience: 'friends', kind: 'hint', q: 1 });
+        const snapshot = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
+        applySaveSnapshot(JSON.parse(JSON.stringify(snapshot)));
+        const back = stocks.find(x => x.symbol === 'AAA');
+        assertEq(back.deputies[0].trait, 'skarbnik', 'wiceprezes');
+        assertEq(back.plannedMove.data.policy, 'Balanced', 'plan');
+        assert(isTiedFriend('ceo:c900'), 'znajomy');
+        assertEq(getTiedPosts()[0].audience, 'friends', 'post');
+        assert(findRelationPerson('ceo:c900')?.name === 'Ewa Mazur', 'osoba');
+        const old = JSON.parse(JSON.stringify(snapshot));
+        old.version = 21; delete old.playerProfile.tied;
+        for (const stock of old.stocks) { delete stock.deputies; delete stock.plannedMove; }
+        const report = applySaveSnapshot(old);
+        assert(!report?.errors?.length, 'stary zapis');
+        assertEq(ensureTiedState().friends.length, 0, 'pusty stan Tied');
     });
 });

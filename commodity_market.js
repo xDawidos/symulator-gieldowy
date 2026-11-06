@@ -9,7 +9,7 @@
 const COMMODITY_CODES = { gold: 'GOLD', oil: 'OIL', gas: 'GAS', coal: 'COAL', metals: 'MET', grain: 'GRN', uranium: 'URA' };
 const COMMODITY_MARKET = {
     leverage: { gold: 10, oil: 5, metals: 5, grain: 5, gas: 3, coal: 3, uranium: 3 },          // decyzja 11
-    carry: { gold: 0.005, oil: 0.03, gas: 0.06, coal: 0.02, metals: 0.015, grain: 0.05, uranium: 0.01 }, // koszt przechowania rocznie
+    carry: { gold: 0.005, oil: 0.03, gas: 0.02, coal: 0.02, metals: 0.015, grain: 0.05, uranium: 0.01 }, // koszt przechowania rocznie
     entrySpread: 0.003,
     series: 4,           // 4 zapadalności naprzód
     minWeeksLeft: 2,     // seria bieżącego kwartału znika z oferty na 2 tygodnie przed końcem

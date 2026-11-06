@@ -1995,6 +1995,7 @@ function setAgmVote(symbol, itemId, vote) {
     const stock = findGovernedStock(symbol);
     const item = stock?.governance?.pendingAgm?.items.find(i => i.id === itemId);
     if (!item || !['for', 'against', 'abstain'].includes(vote) || !canFundControlAgm(stock)) return false;
+    if (vote === 'against' && item.playerVote !== 'against' && item.by !== 'player' && item.kind !== 'activist') noteCeoRelationLoss(stocks.find(x => x.symbol === symbol), CEO_RELATION_RULES.voteLoss, 'głos przeciw zarządowi'); // 0.17.3
     item.playerVote = vote;
     return true;
 }
@@ -2007,6 +2008,7 @@ function submitShareholderProposal(symbol, type) {
     const agenda = gov.pendingAgm?.items || [];
     if (agenda.some(i => i.by === 'player') || gov.proposals.length) { showToast('Fundusz zgłosił już wniosek na to zgromadzenie.', 'warning'); return false; }
     const item = { id: `p-${type}`, kind: 'activist', type, by: 'player', label: `Wniosek funduszu: ${ACTIVIST_PROPOSALS[type].label}`, playerVote: 'for' };
+    if (type === 'replaceCeo') noteCeoRelationLoss(stocks.find(x => x.symbol === symbol), CEO_RELATION_RULES.dismissalLoss, 'próba odwołania prezesa'); // 0.17.3
     if (gov.pendingAgm) gov.pendingAgm.items.push(item);
     else gov.proposals.push({ type });
     logEvent(`📝 Fundusz zgłasza wniosek do walnego ${stock.name}: ${ACTIVIST_PROPOSALS[type].label}.`, 'review');

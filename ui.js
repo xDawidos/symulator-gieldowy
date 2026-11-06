@@ -4362,9 +4362,10 @@ function renderCompanyCardOverview(stock) {
         <div class="cc-grid">
             <section><h4>O spółce</h4><div class="text-sm text-justify">${foreign ? escapeHtml(describeForeignCompany(stock)) : assembleDescription(stock)}</div>${phase}${splitInfo}${research}</section>
             <section>
-                ${stock.ceo?.name ? `<h4>Prezes</h4><p class="m-0"><strong>${uiIcon('zarzad', 14)} ${escapeHtml(stock.ceo.name)}</strong>${!foreign && stock.ceo.id ? ` <button class="ceo-link" onclick="openTiedProfile('${escapeHtml(getCeoRelationKey(stock.ceo.id))}')">Profil w Tied</button>` : ''}</p>
+                ${stock.ceo?.name ? `<h4>Prezes</h4><p class="m-0"><strong>${uiIcon('zarzad', 14)} ${escapeHtml(stock.ceo.name)}</strong>${!foreign && stock.ceo.id ? ` <button class="ceo-link" onclick="openTiedProfile('${escapeHtml(getCeoRelationKey(stock.ceo.id))}')">${uiIcon('grupa', 12)} Profil w Tied</button>` : ''}</p>
                     <p class="text-xs text-muted mt-0">wiek ${stock.ceo.age ?? '—'}, staż ${Math.floor((stock.ceo.tenure || 0) / 4)} lat</p>
                     <div class="ceo-traits-container">${traits}</div>` : ''}
+                ${stock.deputies?.length ? `<h4>Wiceprezesi</h4><ul class="ceo-deputies">${stock.deputies.map(deputy => `<li>${escapeHtml(deputy.name)} <button class="ceo-link" onclick="openTiedProfile('${escapeHtml(getCeoRelationKey(deputy.id))}')">${uiIcon('grupa', 12)} Profil w Tied</button></li>`).join('')}</ul>` : ''}
                 ${insights.length ? `<h4>Analityk</h4>${insights.map(line => `<p class="text-sm">${uiIcon('szukaj', 14)} ${escapeHtml(line)}</p>`).join('')}` : ''}
             </section>
         </div>`;
@@ -7742,10 +7743,11 @@ function renderTeamedUp() {
     if (introFlow?.bossShown) { introRenderChat(); return; } // 0.16.10: rozmowa z szefem ze scenki startowej
     const unread = getTeamedUnread();
     const item = (pane, icon, label, extra = '') => `<button class="mail-folder ${teamedView.pane === pane ? 'active' : ''}" ${teamedView.pane === pane ? 'aria-current="page"' : ''} onclick="setTeamedPane('${pane}')"><span>${uiIcon(icon, 16)} ${label}</span>${extra}</button>`;
-    document.getElementById('teamedup-nav').innerHTML = item('tasks', 'cel', 'Zadania i oceny') + item('messages', 'poczta', 'Wiadomości', unread ? `<b>${unread}</b>` : '') + item('hiring', 'pracownik', 'Zatrudnianie');
+    document.getElementById('teamedup-nav').innerHTML = item('tasks', 'cel', 'Zadania i oceny') + item('messages', 'poczta', 'Wiadomości', unread ? `<b>${unread}</b>` : '') + item('hiring', 'pracownik', 'Zatrudnianie') + item('promises', 'karteczka', 'Obietnice', getActivePromises().length ? `<b>${getActivePromises().length}</b>` : '');
     const body = document.getElementById('teamedup-content');
     if (teamedView.pane === 'tasks') { body.innerHTML = renderTeamedTasks(); return; }
     if (teamedView.pane === 'hiring') { body.innerHTML = renderTeamedHiring(); return; }
+    if (teamedView.pane === 'promises') { body.innerHTML = renderTeamedPromises(); return; } // 0.17.3 R5
     const msgs = getTeamedMessages();
     const selected = msgs.find(m => m.id === teamedView.selectedId);
     body.innerHTML = `<div class="mail-list te-contacts" aria-label="Wiadomości">${msgs.length ? msgs.slice(0, 60).map(m => { // 0.16.6 S5: karty kontaktów jak we wzorze Stitcha (awatar, rola, godzina, zajawka, kropka nieprzeczytanej)
@@ -7934,7 +7936,7 @@ function renderMailPreview(message) {
     if (message.action?.type === 'vip') { // 0.15.2 K7: rozmowa z inwestorem VIP (3 argumenty sprawdzane danymi funduszu)
         const offer = playerFund?.vip?.offers.find(o => o.id === message.action.vipId && o.expiresQ > currentQuarter());
         action = offer
-            ? `<div class="mail-action"><p>Wybierz argument — gra sprawdzi go na danych funduszu:</p><div class="vip-args">${Object.entries(VIP_ARGUMENTS).map(([k, a]) => `<button type="button" class="btn-secondary vip-arg" title="${escapeHtml(a.hint)}" onclick="mailAction(pitchVip, ${offer.id}, '${k}')"><strong>${a.label}</strong><span>${escapeHtml(a.hint)}</span></button>`).join('')}</div></div>`
+            ? `<div class="mail-action"><button class="btn-primary" onclick="openTiedVip(${offer.id})">Porozmawiaj w Tied</button></div>`
             : '<p class="fund-muted">Oferta VIP została już rozstrzygnięta albo wygasła.</p>';
     }
     if (message.action?.type === 'pppRestructure') {

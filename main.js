@@ -1453,6 +1453,8 @@ function runQuarterlyTick() {
         sendPoolQuarterReport(); // 0.14.1 R1: zbiorczy raport rozliczeń puli (tylko gdy były)
         maybeInstituteCompetitionEvent(); // 0.14.2 P1: rzadka konkurencja instytutów (bez dymku)
         expireRescueOffers(); // 0.14.2 P2: oferty emisji ratunkowej bez decyzji wygasają
+        if (typeof processDeputiesQuarterly === 'function') processDeputiesQuarterly(); // 0.17.3 R3
+        if (typeof processCompanyPlansQuarterly === 'function') processCompanyPlansQuarterly(); // 0.17.3 R2: plany spółek i posty przed nowymi decyzjami
         processStrategyQuarterly(); // 0.14 T3: rozszerzenia, podsektory, nisze, pivoty (strategy.js)
         processSpinoffsQuarterly(); // 0.14 T4: plotki, zapowiedzi i wydzielenia spółek córek
         processCooperationsQuarterly(); // 0.14 T5: koncerny, kooperacje, skargi do KNF
