@@ -58,7 +58,7 @@ Stan widoku w grze: `tiedView = { feed, side, pane, person, company, talk }`, po
 ## Decyzje użytkownika (2026-11-05)
 1. **Relacja na profilu:** słowo, miernik i liczba („Znajomy (+34)”).
 2. **Odrzucenie prośby od prezesa lub bota:** relacja −2, jak w drugą stronę. Uzupełnia plan, do dopisania w R1.
-3. **„Napisz” poza kontaktami:** przycisk `disabled` z tekstem „Rozmowa po zakupie akcji tej spółki”.
+3. **„Napisz” poza kontaktami:** wersja z planu. U autora posta widocznego w kanale działa tylko „Szybka rozmowa”, a „Porozmawiaj” jest `disabled` z tekstem „Pełna rozmowa po zakupie akcji tej spółki”. U pozostałych osób przycisk „Napisz” jest `disabled` z tekstem „Rozmowa po zakupie akcji tej spółki”.
 4. **Limit +2 za reakcje:** ukryty, bez komunikatu.
 5. **Wpisy gracza:** 3 na kwartał: uczciwy o wyniku, ostrożny, chwałba.
 6. **Kara KNF:** ostrzeżenie nie podaje kwoty, tylko „Następne wykrycie: kara”.
