@@ -16361,6 +16361,35 @@ group('0.17.3 R5 Obietnice botów', () => {
     };
     const live = (ai, type, goal, amount = 5000, dueQ = 12) => { const tied = ensurePromises(); const promise = { id: tied.promiseNext++, bot: ai.id, name: ai.name, type, goal, amount, dueQ, offerQ: 10, status: 'live' }; tied.promises.unshift(promise); return promise; };
 
+    test('prośba o zakup: od relacji +20, udana rozmowa daje ofertę, nieudana nic; limity te same co przy ofertach', () => {
+        const ai = start(); ai.cash = 1_000_000; ai.portfolio = { AAA: { shares: 10, avgPrice: 100 } };
+        const root = document.createElement('div'); root.id = 'net-tied-body'; document.body.appendChild(root);
+        const talkTo = () => { tiedView = { feed: 'main', side: 'me', pane: 'feed', person: null, company: null, message: null, filter: 'all', pool: null, talk: null }; delete ensureTiedState().talked; assert(startTiedTalk(ai.id), 'rozmowa'); tiedView.talk.turns = 1; renderTiedPage(); return root.textContent; };
+        try {
+            botRelations.values[ai.id] = 10;
+            assert(!talkTo().includes('Prośba do inwestora'), 'poniżej progu bez prośby');
+            botRelations.values[ai.id] = 30;
+            assert(talkTo().includes('Prośba do inwestora'), 'od progu prośba');
+            const offers = () => ensurePromises().promiseOffers.length;
+            const tones = TIED_CHARACTERS[getPersonCharacter(ai.id)].tones, pressure = tones.pressure, bias = getTalkBias;
+            getTalkBias = () => ({ liked: 'pressure', disliked: 'vision' }); tones.pressure = 2;
+            try { chooseTalkOption(0, 'pitch'); } finally { getTalkBias = bias; tones.pressure = pressure; }
+            assert(tiedView.talk.result.success && tiedView.talk.result.requested, 'udana rozmowa');
+            assertEq(offers(), 1, 'oferta');
+            assert(root.textContent !== null && (renderTiedPage(), root.textContent.includes('propozycję obietnicy')), 'wynik w rozmowie');
+            ensurePromises().promiseOffers = [{ id: 90, bot: ai.id, name: ai.name, type: 'x', goal: {}, amount: 1000, dueQ: 12, offerQ: 10 }];
+            assert(getPitchBlock(ai.id), 'bot z ofertą zablokowany');
+            ensurePromises().promiseOffers = [1, 2, 3].map(id => ({ id, bot: `inny${id}`, name: 'X', type: 'x', goal: {}, amount: 1000, dueQ: 12, offerQ: 10 }));
+            assert(getPitchBlock(ai.id), 'limit 3');
+            ensurePromises().promiseOffers = [];
+            const cash = ai.cash;
+            botRelations.values[ai.id] = -50; talkTo();
+            const sure = TIED_CHARACTERS[getPersonCharacter(ai.id)].tones; const old = sure.pressure; sure.pressure = -2;
+            try { chooseTalkOption(0, 'pitch'); } finally { sure.pressure = old; }
+            assert(!tiedView.talk.result.requested, 'nieudana rozmowa bez oferty');
+            assertEq(ai.cash, cash, 'prośba nie rusza gotówki bota');
+        } finally { root.remove(); tiedView.talk = null; }
+    });
     test('spełnienie: bot kupuje po NAV z własnej gotówki; pieniądze przechodzą, NAV bez zmian, relacja +5, lock-up 1 rok', () => {
         const ai = start(); ai.cash = 100_000;
         const promise = live(ai, 'cashShare', {});

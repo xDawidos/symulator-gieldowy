@@ -347,13 +347,14 @@ function renderTiedConversation(talk) {
     const thread = talk.log.map(line => `<div class="tied-bubble${line.me ? ' is-me' : ''}">${escapeHtml(line.text)}</div>`).join('');
     if (talk.result) {
         const { delta, requested } = talk.result, sign = delta > 0 ? '▲ +' : delta < 0 ? '▼ −' : '■ ';
-        const text = talk.name ? (talk.result.success ? `${escapeHtml(name)} wpłaca środki do funduszu.` : `${escapeHtml(name)} rezygnuje z wpłaty.`) : `Rozmowa zakończona. Relacja <strong>${sign}${Math.abs(delta)}</strong>, teraz ${tiedRelationText(getRelation(key))}. Następna rozmowa w kolejnym kwartale.${talk.request ? (requested ? ' Zarząd wróci do Twojej prośby.' : ' Prośba została bez odpowiedzi.') : ''}`;
+        const text = talk.name ? (talk.result.success ? `${escapeHtml(name)} wpłaca środki do funduszu.` : `${escapeHtml(name)} rezygnuje z wpłaty.`) : `Rozmowa zakończona. Relacja <strong>${sign}${Math.abs(delta)}</strong>, teraz ${tiedRelationText(getRelation(key))}. Następna rozmowa w kolejnym kwartale.${talk.request === 'pitch' ? (requested ? ' Inwestor przesłał propozycję obietnicy, znajdziesz ją w Wiadomościach.' : ' Inwestor nie składa teraz propozycji.') : talk.request ? (requested ? ' Zarząd wróci do Twojej prośby.' : ' Prośba została bez odpowiedzi.') : ''}`;
         return `<section class="tied-view"><div class="tied-talk">${head}<div class="tied-thread">${thread}</div><div class="tied-result">${uiIcon('ok', 16)}<span>${text}</span></div></div></section>`;
     }
     const choices = talk.options.map((option, index) => `<button onclick="tiedChoose(${index})"><small>${TALK_TONES[option.tone].label}</small>${escapeHtml(option.text)}</button>`).join('');
     const stock = !talk.name && person?.stock && !person.former ? person.stock : null, stake = getTalkStake(stock), last = talk.turn === talk.turns, open = stake >= TALK_RULES.minStake;
+    const pitch = !talk.name && last && person?.kind === 'investor' && getRelation(key) >= PROMISE_RULES.relationAt ? renderTiedPitch(key) : '';
     const requests = stock && last ? `<h4 class="tied-section">Prośby do zarządu</h4><div class="tied-choices">${Object.entries(TALK_REQUESTS).map(([id, item]) => `<button ${open ? `onclick="tiedChoose(0, '${id}')"` : 'disabled'}><small>${item.label}</small>${item.text}</button>`).join('')}</div>${open ? '' : `<p class="notice-inline">${uiIcon('klodka', 14)}<span>Prośby wymagają co najmniej 5% udziałów w spółce. Masz ${formatNumberPl(stake * 100, 1)}%.</span></p>`}` : '';
-    return `<section class="tied-view"><div class="tied-talk">${head}<div class="tied-thread">${thread}<p class="tied-turn">Tura ${talk.turn} z ${talk.turns}. Jedna rozmowa z tą osobą na kwartał.</p><div class="tied-choices">${choices}</div>${requests}</div></div></section>`;
+    return `<section class="tied-view"><div class="tied-talk">${head}<div class="tied-thread">${thread}<p class="tied-turn">Tura ${talk.turn} z ${talk.turns}. Jedna rozmowa z tą osobą na kwartał.</p><div class="tied-choices">${choices}</div>${requests}${pitch}</div></div></section>`;
 }
 
 const getTiedMessages = () => mailbox.messages.filter(m => getMailChannel(m) === 'tied');
@@ -803,7 +804,7 @@ function executeTalkRequest(stock, request) {
 function chooseTalkOption(index, request = null) {
     const talk = tiedView.talk;
     if (!talk || talk.result) return null;
-    const option = request ? { tone: 'pressure', text: TALK_REQUESTS[request].text } : talk.options[index];
+    const option = request ? { tone: 'pressure', text: (request === 'pitch' ? TALK_PITCH : TALK_REQUESTS[request]).text } : talk.options[index];
     if (!option) return null;
     const used = {};
     for (const tone of talk.choices) used[tone] = (used[tone] || 0) + 1;
@@ -820,6 +821,12 @@ function finishTiedTalk(talk) {
     markTalked(talk.key);
     if (talk.key.startsWith('vip:')) { settleVipTalk(talk.key, result); talk.result = result; return; }
     changeRelation(talk.key, result.delta, 'rozmowa w Tied');
+    if (talk.request === 'pitch') {
+        const ai = aiCompetitors.find(bot => bot.id === talk.key);
+        result.requested = result.success && !getPitchBlock(talk.key) && Boolean(ai && createPromiseOffer(ai));
+        talk.result = result;
+        return;
+    }
     const stock = getTiedPerson(talk.key)?.stock;
     if (talk.request && stock) result.requested = result.success && executeTalkRequest(stock, talk.request);
     talk.result = result;
@@ -924,6 +931,18 @@ function maybeOfferPromises() {
         const pushy = getPersonCharacter(person.id) === 'manipulator' ? (person.entity.tiedPump ? 3 : 2) : 1;
         if (Math.random() < PROMISE_RULES.offerChance * pushy) createPromiseOffer(person.entity);
     }
+}
+const TALK_PITCH = { label: 'Udziały w funduszu', text: 'Czy rozważysz zakup udziałów w moim funduszu?' };
+/** Czy inwestor może teraz dostać prośbę o zakup: powód blokady albo null. Limity te same co przy ofertach bota. */
+function getPitchBlock(key) {
+    if (!playerFund) return 'Prośba wymaga własnego funduszu.';
+    const tied = ensurePromises();
+    if (tied.promiseOffers.some(offer => offer.bot === key) || getActivePromises().some(promise => promise.bot === key)) return 'Ten inwestor ma już obietnicę lub ofertę.';
+    return getActivePromises().length + tied.promiseOffers.length >= PROMISE_RULES.maxActive ? `Masz już ${PROMISE_RULES.maxActive} obietnice lub oferty.` : null;
+}
+function renderTiedPitch(key) {
+    const block = getPitchBlock(key);
+    return `<h4 class="tied-section">Prośba do inwestora</h4><div class="tied-choices"><button ${block ? 'disabled' : `onclick="tiedChoose(0, 'pitch')"`}><small>${TALK_PITCH.label}</small>${TALK_PITCH.text}</button></div>${block ? `<p class="notice-inline">${uiIcon('klodka', 14)}<span>${block}</span></p>` : ''}`;
 }
 function createPromiseOffer(ai) {
     const tied = ensurePromises(), types = Object.keys(PROMISE_GOALS).sort(() => Math.random() - 0.5);
@@ -1041,7 +1060,7 @@ Object.assign(ACADEMY_ENTRIES, {
     },
     obietniceInwestorow: {
         title: 'Obietnice inwestorów', get icon() { return academyIcon('moneta'); },
-        text: 'Inwestor z dobrą relacją może obiecać zakup jednostek Twojego funduszu, jeśli wykonasz cel. Płaci po NAV, z własnej gotówki, więc obietnica nie zmienia wartości jednostki dla pozostałych klientów. Kiedy nie ma tyle pieniędzy, kupuje mniej. Cel bywa jednak na rękę jemu, na przykład zakup spółki, którą sam trzyma. Zanim się zgodzisz, zapytaj, czy zrobiłbyś to samo bez jego pieniędzy, bo obowiązek wobec klientów masz cały czas.',
+        text: 'Inwestor z dobrą relacją może obiecać zakup jednostek Twojego funduszu, jeśli wykonasz cel. Sam proponuje to co jakiś czas, a w rozmowie możesz go też o to poprosić. Płaci po NAV, z własnej gotówki, więc obietnica nie zmienia wartości jednostki dla pozostałych klientów. Kiedy nie ma tyle pieniędzy, kupuje mniej. Cel bywa jednak na rękę jemu, na przykład zakup spółki, którą sam trzyma. Zanim się zgodzisz, zapytaj, czy zrobiłbyś to samo bez jego pieniędzy, bo obowiązek wobec klientów masz cały czas.',
         example: () => `Aktywne obietnice: ${getActivePromises().length} z ${PROMISE_RULES.maxActive}.`,
         quiz: [
             { q: 'Po jakiej cenie inwestor kupuje jednostki?', a: ['po NAV', 'z premią', 'z dyskontem'], c: 0 },
