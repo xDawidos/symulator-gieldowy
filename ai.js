@@ -2408,7 +2408,26 @@ function getRelationPeople() {
 }
 
 function findRelationPerson(id) {
-    return getRelationPeople().find(person => person.id === id) || null;
+    return getRelationPeople().find(person => person.id === id) || findCeoRelationPerson(id);
+}
+
+// 0.17.3 R0: relacje z prezesami pod kluczem ceo:<id>, poza getRelationPeople, więc tabela prezentów ich nie pokazuje.
+const getCeoRelationKey = ceoId => `ceo:${ceoId}`;
+function findCeoRelationPerson(key) {
+    if (!String(key).startsWith('ceo:')) return null;
+    const ceoId = key.slice(4), ceo = stocks.find(stock => stock.ceo?.id === ceoId)?.ceo;
+    const name = ceo?.name || playerProfile?.contacts?.find(contact => contact.id === ceoId)?.name;
+    return name ? { id: key, name, kind: 'ceo', entity: ceo || null } : null;
+}
+
+/** Kontakt w Tied: prezes spółki, której akcje gracz kupił. Wpis zostaje po sprzedaży i po odejściu prezesa; spółki zagraniczne poza zakresem. */
+function noteCeoContact(stock) {
+    if (!playerProfile || !stock?.ceo?.name || (typeof isForeignShare === 'function' && isForeignShare(stock))) return;
+    if (!stock.ceo.id) stock.ceo.id = newCeoId();
+    const contacts = playerProfile.contacts || (playerProfile.contacts = []);
+    const entry = { id: stock.ceo.id, name: stock.ceo.name, symbol: stock.symbol, role: 'prezes' }, known = contacts.find(contact => contact.id === entry.id);
+    if (known) Object.assign(known, entry);
+    else contacts.push(entry);
 }
 
 function getRelation(id) {
@@ -2433,6 +2452,7 @@ function changeRelation(id, delta, reason) {
     const before = getRelation(id);
     const after = Math.max(-100, Math.min(100, before + delta));
     botRelations.values[id] = after;
+    if (after < 0 && typeof dropTiedFriendIfHostile === 'function') dropTiedFriendIfHostile(id); // 0.17.3 R1
     botRelations.log.unshift({ id, name: person.name, delta: after - before, reason, at: typeof getMailClockMs === 'function' ? getMailClockMs() : Date.now() });
     botRelations.log.length = Math.min(botRelations.log.length, RELATION_LOG_LIMIT);
     return after - before;
@@ -2528,6 +2548,7 @@ function processRelationsQuarterly() {
         botRelations.values[id] *= 1 - RELATION_DECAY;
         if (Math.abs(botRelations.values[id]) < 0.5) delete botRelations.values[id];
     }
+    if (typeof processTiedQuarterly === 'function') processTiedQuarterly(); // 0.17.3 R1: prośby do znajomych
     if (!playerFund) return;
     for (const person of getRelationPeople()) {
         const value = getRelation(person.id);

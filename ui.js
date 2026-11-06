@@ -4362,7 +4362,7 @@ function renderCompanyCardOverview(stock) {
         <div class="cc-grid">
             <section><h4>O spółce</h4><div class="text-sm text-justify">${foreign ? escapeHtml(describeForeignCompany(stock)) : assembleDescription(stock)}</div>${phase}${splitInfo}${research}</section>
             <section>
-                ${stock.ceo?.name ? `<h4>Prezes</h4><p class="m-0"><strong>${uiIcon('zarzad', 14)} ${escapeHtml(stock.ceo.name)}</strong></p>
+                ${stock.ceo?.name ? `<h4>Prezes</h4><p class="m-0"><strong>${uiIcon('zarzad', 14)} ${escapeHtml(stock.ceo.name)}</strong>${!foreign && stock.ceo.id ? ` <button class="ceo-link" onclick="openTiedProfile('${escapeHtml(getCeoRelationKey(stock.ceo.id))}')">Profil w Tied</button>` : ''}</p>
                     <p class="text-xs text-muted mt-0">wiek ${stock.ceo.age ?? '—'}, staż ${Math.floor((stock.ceo.tenure || 0) / 4)} lat</p>
                     <div class="ceo-traits-container">${traits}</div>` : ''}
                 ${insights.length ? `<h4>Analityk</h4>${insights.map(line => `<p class="text-sm">${uiIcon('szukaj', 14)} ${escapeHtml(line)}</p>`).join('')}` : ''}
@@ -7691,7 +7691,7 @@ function showVictoryScreen(victory) {
 let mailView = { folder: 'inbox', selectedId: null, pane: 'mail' }; // pane: mail | subscriptions | media
 
 const MAIL_FOLDER_LABELS = {
-    inbox: `${uiIcon('poczta', 14)} Odebrane`, starred: `${uiIcon('gwiazdka', 14)} Oznaczone`, corporation: `${uiIcon('firma', 14)} Korporacja`,
+    inbox: `${uiIcon('poczta', 14)} Odebrane`, important: `${uiIcon('wazne', 14)} Ważne`, starred: `${uiIcon('gwiazdka', 14)} Oznaczone`, corporation: `${uiIcon('firma', 14)} Korporacja`,
     PULS: `${uiIcon('news', 14)} Puls Rynku`, FLESZ: `${uiIcon('news', 14)} Flesz Giełdowy`, OBSER: `${uiIcon('news', 14)} Obserwator`, spam: `${uiIcon('blokada', 14)} Spam`
 };
 
