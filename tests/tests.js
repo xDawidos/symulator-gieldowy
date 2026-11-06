@@ -15684,10 +15684,22 @@ group('0.17.8 Generator opisów spółek', () => {
     test('frazy: typ aktywa przed podsektorem, podsektor przed sektorem; każdy podsektor ma frazę', () => {
         for (const [sector, def] of Object.entries(SECTORS)) for (const sub of Object.keys(def.subsectors || {})) assert(SUBSECTOR_ACTIVITY[sub], `podsektor ${sub} (${sector})`);
         assertEq(getActivityPhrase(company('ZST', { segments: [{ sector: 'Przemysł', subsector: 'Wydobycie', share: 1 }] })), SUBSECTOR_ACTIVITY.Wydobycie, 'podsektor');
+        assert(SUBSECTOR_ACTIVITY['Przemysł ciężki'].includes('beton') && SUBSECTOR_ACTIVITY['Przemysł ciężki'].includes('statki'), 'fraza pasuje do Betonexu i stoczni');
         assertEq(getActivityPhrase(company('WRN')), ASSET_TYPE_ACTIVITY.DebtCollector, 'typ aktywa przed podsektorem');
         assertEq(getActivityPhrase(company('GRET')), ASSET_TYPE_ACTIVITY.REIT, 'REIT');
         assertEq(getActivityPhrase(company('ORT')), SECTOR_DESCRIPTION.Technologia.does, 'bez podsektora: fraza sektora');
         for (const symbol of ['ORT', 'KWM']) assert(!/oprogramowanie|wytwarza produkty/.test(assembleDescription(company(symbol))), `${symbol}: fraza nie kłamie`);
+    });
+    test('0.17.3: KWM, STM, BTX i ORT mają od startu podsektor w głównym segmencie i pasującą frazę', () => {
+        resetWorld(JSON.parse(JSON.stringify(initialStocks)));
+        ensureAllStockSegments();
+        macro.subsectorsAssigned = false; applyStartSubsectors();
+        for (const [symbol, sub] of [['KWM', 'Wydobycie'], ['STM', 'Przemysł ciężki'], ['BTX', 'Przemysł ciężki'], ['ORT', 'Telekomunikacja']]) {
+            const stock = stocks.find(s => s.symbol === symbol);
+            assertEq(getMainSubsector(stock), sub, symbol);
+            assertEq(getActivityPhrase(stock), SUBSECTOR_ACTIVITY[sub], `fraza ${symbol}`);
+        }
+        assert(getSubsectorDef('Technologia', 'Telekomunikacja').listedOnly, 'bez wejścia innych spółek');
     });
     test('pula pozycji składa się ze zdaniem i nie przeczy podpowiedziom o kursie; hasła zależą od poziomu', () => {
         const pool = Object.values(companyDescriptors).flat();

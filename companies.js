@@ -522,11 +522,11 @@ const SUBSECTOR_ACTIVITY = {
     'Bank komercyjny': 'prowadzi konta, kredyty i lokaty', 'Bank inwestycyjny': 'obsługuje emisje i duże transakcje', 'Bank międzynarodowy': 'obsługuje klientów w kraju i za granicą',
     'Pożyczki konsumenckie': 'udziela drobnych pożyczek', 'Rynki kapitałowe': 'obsługuje inwestorów i transakcje giełdowe', 'Fintech': 'obsługuje klientów przez internet',
     'Rolnictwo': 'uprawia i skupuje płody rolne', 'Słodycze': 'produkuje słodycze', 'Herbata': 'sprzedaje herbatę', 'Piwowarstwo i napoje': 'warzy piwo i rozlewa napoje',
-    'Robotyka': 'buduje roboty dla fabryk', 'Przemysł ciężki': 'wytwarza stal i ciężkie maszyny', 'Wydobycie': 'wydobywa surowce spod ziemi', 'Handel surowcami': 'handluje surowcami',
+    'Robotyka': 'buduje roboty dla fabryk', 'Przemysł ciężki': 'wytwarza stal, beton, statki i ciężkie maszyny', 'Wydobycie': 'wydobywa surowce spod ziemi', 'Handel surowcami': 'handluje surowcami',
     'Energetyka jądrowa': 'rozwija energetykę jądrową', 'OZE': 'wytwarza prąd ze źródeł odnawialnych', 'Rafinerie': 'przerabia ropę na paliwa', 'Gaz': 'dostarcza gaz firmom i domom',
     'Logistyka': 'organizuje przewozy i magazyny', 'Lotnictwo': 'przewozi ludzi i ładunki samolotami', 'Morski': 'przewozi ładunki morzem', 'Lądowy': 'przewozi ładunki koleją i drogami',
     'Biotechnologia': 'rozwija nowe terapie w laboratoriach', 'Sprzęt medyczny': 'produkuje sprzęt dla lekarzy i pacjentów', 'Półprzewodniki': 'projektuje i produkuje układy scalone',
-    'Sztuczna inteligencja': 'rozwija sztuczną inteligencję', 'Magazyny': 'buduje i wynajmuje magazyny', 'Drony': 'buduje drony'
+    'Sztuczna inteligencja': 'rozwija sztuczną inteligencję', 'Magazyny': 'buduje i wynajmuje magazyny', 'Drony': 'buduje drony', 'Telekomunikacja': 'prowadzi sieci telefoniczne i internetowe'
 };
 const COMMODITY_WORDS = { // dopełniacz; mianownik z czasownikiem
     gold: ['złota', 'złoto drożeje'], oil: ['ropy', 'ropa drożeje'], gas: ['gazu', 'gaz drożeje'], coal: ['węgla', 'węgiel drożeje'],
