@@ -10,7 +10,7 @@ Energia dostaje własny rynek, a kraj nowy wskaźnik poziomu życia. Wersja ma b
 
 - Energia ma 9 spółek w `initialStocks`. Podsektory: Energetyka jądrowa, OZE, Rafinerie, Gaz. Węglowego brak.
 - Przypisania: PUR i TRN jądrowa, BEW i ENG OZE, PES Rafinerie, NAG Gaz. ESA, WIW i MEF bez podsektora.
-- Atom: `nuclearBlock` w `companies.js:11231`, patrz „Do decyzji”.
+- Atom: `nuclearBlock` w `companies.js:11231`, zmiany w sekcji „Atom”.
 - OZE: dotacja przez `partySubsidy` (`core.js:1873`).
 - Wsad surowców: `COMMODITY_SECTOR_INPUTS` i `COMMODITY_SUBSECTOR_INPUTS` w `commodities.js`.
 - Katalog inwestycji Energii: `energy_plant`, `wind_farm`, `solar_park` (`companies.js:2387`).
@@ -119,7 +119,7 @@ Nowy wskaźnik krajowy 0–100, średnia ważona 5 czynników:
 ## E7. OZE i atom z udziałem państwa
 
 - OZE finansowane z opłat za emisje. Wydatek w nowej linii budżetu.
-- Atom po decyzji użytkownika w „Do decyzji”.
+- Atom według sekcji „Atom”.
 - Superprojekty OZE i atom na zasadach S5. 0.18 przebuduje blok na 3 etapy.
 
 ## E8. Opinia publiczna
@@ -145,18 +145,18 @@ Bez nowego katalogu. Istniejące pozycje z `technologies` dostają efekt na emis
 
 - **Handel energią między państwami:** do Polityki 2 (`plan_0.19.1_polityka_2.md`).
 
-## Do decyzji
+## Atom (decyzja użytkownika 2026-11-07)
 
-1. **Atom.** Działa dziś tak:
-   - spółka ma najwyżej 1 blok na całą grę;
-   - start: prywatna 4% na kwartał przy gotówce ≥ 30% kosztu, państwowa 3,5% × mnożnik partii, bez warunku gotówki, bo płaci Skarb Państwa;
-   - budowa 8–16 kwartałów, koszt ok. 2 kwartały przychodów;
-   - przed uruchomieniem 35% szans na opóźnienie o 2–4 kw., najwyżej 2 razy;
-   - po uruchomieniu przychody +15% na stałe, zmienność −10%, a kontrakt z państwem do 2% przychodów kwartału zależnie od partii.
+- Kilka bloków w jednej spółce, kolejny wymaga działającego poprzedniego.
+- Każdy blok daje realną moc w miksie kraju. Przychody kolejnych bloków maleją (start +15%, +10%, +5%, do strojenia).
+- Zgodę wydaje UEiE zamiast ogólnego regulatora.
+- Kontrakt z państwem zależy od ustaw „Polityka energetyczna” i „Dostawcy energii”, nie tylko od partii.
+- Nowa państwowa spółka atomowa od giełdy Platynowej, bez NewHorizons, po kilku latach subsydiów OZE, z możliwą prywatyzacją. Istniejące spółki atomowe działają dalej.
+- Bez zmian: budowa 8–16 kw., koszt ok. 2 kw. przychodów, szanse startu 4% i 3,5% × mnożnik partii.
 
-   Propozycja: wiele bloków w spółce, każdy daje moc, zgoda z UEiE, kontrakt państwowy zależny od ustawy zamiast samej partii. Nowa państwowa spółka atomowa od giełdy Platynowej po kilku latach subsydiów.
+## Założenie do potwierdzenia
 
-2. **Znaczenie punktu 10.** Plan przyjmuje, że „dorzuć produkcję” to dodatkowy skutek zanieczyszczeń.
+„Dorzuć produkcję” z decyzji 10 plan przyjmuje jako dodatkowy skutek zanieczyszczeń.
 
 ## Zależności i ryzyka
 
