@@ -245,3 +245,12 @@ Starsze pomysły z notatek (`roadmap.txt`, dawny „plany poprawione przez ai.tx
 - **Zdefiniowanie celu gry** (pkt 1.2 starego planu): nadal otwarte.
 
 **Rozpisane w `plan_cel_gry.md`** (uwaga: cel CEO/przejęcie istnieje już w kodzie, plan opisuje jego rozwinięcie). Zakres: ścieżka CEO (progi stanowisk z CV, szansa na fotel prezesa), przejęcie funduszu (jednostki uczestnictwa, kontrola zarządu, reakcja botów i KNF), warunki porażki, długość gry (6,5 roku / 20 lat) i tryb symulowanych funduszy.
+
+## 13. Dopiski z 0.17.2 (2026-11-06)
+
+- **Prąd powszechny:** w łańcuchach niemal każdy sektor bierze prąd. Trzeba to zbalansować i zmierzyć.
+- **Miasta:** mają własne zużycie prądu (0.19.2), także do pomiaru.
+- **ESG:** rozwinięcie ścieżki z 0.17.2: spółki idą w ekologię, oceny i koszty, wymaga poziomu UEiE.
+- **Podwykonawcy:** rozbudowa i uporządkowanie rynku. Powstawanie nowych, specjalności, geolodzy i energetyczni z 0.17.2.
+- **Poziom życia:** wskaźnik z 0.17.2 (konsumpcja i zadowolenie, zdrowie, bezpieczeństwo, edukacja i nauka, informacja) pogłębia 0.19.1, a 0.19.2 przenosi go na miasta.
+- **Blok jądrowy:** 3 etapy zastępują mechanikę z 0.17.2.

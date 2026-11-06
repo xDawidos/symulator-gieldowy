@@ -36,3 +36,7 @@ Cel: polityka dotyczy wszystkich otwartych krajów, partie się zmieniają, a gr
 1. Karta kraju z partią rządzącą i programem; panel sponsoringu i lobbingu.
 2. Poziomy Nepotyzmu w drzewku umiejętności.
 3. Wymogi 0.14.5: kolor nigdy jedynym nośnikiem.
+
+## Dopisek z 0.17.2 (2026-11-06)
+
+**Handel energią między państwami:** przeniesiony z 0.17.2. Cena i przepływ prądu między krajami, później cła i embarga. W 0.17.2 niedobór mocy pokrywa tylko budowa i cena.
