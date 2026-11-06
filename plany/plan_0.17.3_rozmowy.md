@@ -213,8 +213,10 @@ Bot wybiera cel zgodnie ze swoim portfelem, np. poleca spółkę, którą sam tr
 
 ## Decyzje po projekcie Tied (2026-11-05)
 
-Zastępują punkt 3 w sekcji „Do decyzji użytkownika” w `plany/design/10_tied_0.17.3.md`, pozostałe przyjęte jak w dokumencie.
+Zgodne z sekcją decyzji użytkownika w `plany/design/10_tied_0.17.3.md`.
 
+- „Napisz” u osób spoza kontaktów, które nie są autorami posta widocznego w kanale: przycisk wyłączony z tekstem „Rozmowa po zakupie akcji tej spółki”.
+- Bez Figmy: źródłem designu są makiety HTML, tokeny i ikony w kodzie.
 - Profil pokazuje też liczbę relacji, np. „+34”.
 - Odrzucenie prośby od prezesa lub bota: relacja −2.
 - Limit +2 za reakcje pozostaje ukryty.
