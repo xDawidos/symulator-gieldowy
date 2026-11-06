@@ -260,7 +260,7 @@ function renderTiedPost(post) {
         <div class="tied-react"><button class="tied-act" aria-pressed="${Boolean(post.liked)}" onclick="tiedLike(${post.id})">${uiIcon('serce', 14)}<span>${post.liked ? 'Polubione' : 'Lubię to'}</span> <b>${bots.likes + (post.liked ? 1 : 0)}</b></button>
             <button class="tied-act" aria-expanded="${tiedView.pool === post.id}" ${post.comment ? 'disabled' : ''} onclick="tiedTogglePool(${post.id})">${uiIcon('komentarz', 14)}Skomentuj <b>${comments.length}</b></button>
             ${stock ? `<span class="tied-quote">Kurs ${escapeHtml(post.symbol)}: <strong>${formatZl(stock.price, 2)}</strong><button class="btn-ghost btn-sm" onclick="openStockDetailsModal('${escapeHtml(post.symbol)}')">${uiIcon('rynek', 14)} Pokaż spółkę</button></span>` : ''}</div>
-        ${pool}${comments.length ? `<details class="tied-comments"><summary>Komentarze (${comments.length})</summary><ul>${comments.join('')}</ul></details>` : ''}</article>`;
+        ${pool}${comments.length ? `<details class="tied-comments" data-post="${post.id}"><summary>Komentarze (${comments.length})</summary><ul>${comments.join('')}</ul></details>` : ''}</article>`;
 }
 
 function getTiedFeedPosts(feed) {
@@ -300,7 +300,7 @@ function renderTiedPerson(key) {
     const person = getTiedPerson(key);
     if (!person) return `<section class="tied-view">${tiedBackButton()}<p class="net-empty">Tej osoby nie ma już w Tied.</p></section>`;
     const value = getRelation(key), friend = isTiedFriend(key), level = getTiedLevel(key);
-    const next = friend ? (value < TIED_RULES.trustedAt ? ['Zaufany znajomy', TIED_RULES.trustedAt] : null) : ['Znajomy', TIED_RULES.friendAt];
+    const next = friend ? (value < TIED_RULES.trustedAt ? ['Zaufany znajomy', TIED_RULES.trustedAt] : null) : value < TIED_RULES.friendAt ? ['Znajomy', TIED_RULES.friendAt] : null;
     const meter = renderLimitMeter((value + 100) / 2, next ? (next[1] + 100) / 2 : NaN, `Relacja ${tiedRelationText(value)}${next ? `, następny poziom od +${next[1]}` : ''}`);
     const posts = getTiedPosts().filter(post => tiedPostKey(post) === key && post.kind !== 'hr');
     const tags = [isTiedVerified(key) ? `<span class="tied-tag tied-badge">${uiIcon('zweryfikowany', 14)} Zweryfikowany</span>` : '', friend ? `<span class="tied-tag tied-badge is-friend">${uiIcon('znajomy', 14)} Znajomy</span>` : ''].join('');
@@ -308,7 +308,7 @@ function renderTiedPerson(key) {
     return `<section class="tied-view">${tiedBackButton()}<article class="tied-profile">
         <div class="tied-profile-head"><span class="net-avatar lg" aria-hidden="true">${escapeHtml(initials(person.name))}</span><div><h4>${escapeHtml(person.name)}</h4>
             <span class="tied-meta">${person.role}${place}${tenure}</span>${tags ? `<div class="tied-tags">${tags}</div>` : ''}</div></div>
-        <div class="tied-rel"><strong>Relacja: ${level}</strong> (${tiedRelationText(value)} w skali od −100 do +100) ${meter}${next ? `<span class="tied-note">Kreska: następny poziom, ${next[0]}.</span>` : ''}</div>
+        <div class="tied-rel"><strong>Relacja: ${level}</strong> (${tiedRelationText(value)} w skali od −100 do +100) ${meter}${next ? `<span class="tied-note">Kreska: następny poziom, ${next[0]}.</span>` : !friend && getTiedFriendState(key).status === 'none' ? '<span class="tied-note">Możesz wysłać prośbę do znajomych</span>' : ''}</div>
         <div class="tied-actions">${renderTiedFollowAction(key)}${renderTiedTalkAction(key)}${renderTiedFriendAction(key)}${person.stock ? `<button class="tied-act" onclick="openDescriptionModal('${escapeHtml(person.stock.symbol)}')">${uiIcon('rynek', 14)}Karta spółki</button>` : ''}</div></article>
         ${posts.length ? `<h4 class="tied-section">Ostatnie posty</h4>${posts.slice(0, 5).map(renderTiedPost).join('')}` : ''}</section>`;
 }
@@ -331,7 +331,7 @@ function renderTiedCompany(symbol) {
 function renderTiedTalk(message) {
     const sender = getMailSenderName(message.sender).replace(/^\P{L}+/u, '');
     return `<section class="tied-view"><div class="tied-talk"><div class="tied-talk-head"><span class="net-avatar" aria-hidden="true">${escapeHtml(initials(sender))}</span><div><strong>${escapeHtml(sender)}</strong><span class="tied-meta">${escapeHtml(message.subject)}</span></div>
-        <button class="tied-act" onclick="tiedBack()">${uiIcon('zamknij', 14)}Zamknij</button></div>
+        <button class="tied-act" onclick="tiedBack()">${uiIcon('zamknij', 14)}Zamknij rozmowę</button></div>
         <div class="tied-thread"><div class="tied-bubble">${escapeHtml(message.body)}<small>${formatMailTime(message.at)}</small></div></div>${String(message.sender).startsWith('bot:') ? `<div class="tied-actions">${renderTiedTalkAction(String(message.sender).slice(4))}</div>` : ''}</div></section>`;
 }
 
@@ -396,10 +396,24 @@ function renderTiedPage() {
     const center = talk ? renderTiedConversation(talk) : message ? renderTiedTalk(message) : tiedView.person ? renderTiedPerson(tiedView.person) : tiedView.company ? renderTiedCompany(tiedView.company) : renderTiedFeed();
     const feedTab = (id, label) => `<button role="tab" aria-selected="${tiedView.feed === id && !tiedView.person && !tiedView.company}" onclick="tiedSetFeed('${id}')">${label}</button>`;
     const paneTab = (id, label) => `<button role="tab" aria-selected="${tiedView.pane === id}" onclick="tiedSetPane('${id}')">${label}</button>`;
-    root.innerHTML = `<div class="tied${message || talk ? ' is-talk' : ''}" data-pane="${tiedView.pane}">
-        <div class="tied-tabs tied-switch" role="tablist" aria-label="Widok Tied">${paneTab('feed', 'Kanał')}${paneTab('side', 'Profil i kontakty')}</div>
-        <div class="tied-main"><div class="tied-feedbar"><div><div class="tied-tabs" role="tablist" aria-label="Kanał">${feedTab('main', 'Główna')}${feedTab('contacts', 'Kontakty')}${feedTab('portfolio', 'Portfel')}</div></div></div>${center}</div>
+    const className = `tied${message || talk ? ' is-talk' : ''}`, switchTabs = paneTab('feed', 'Kanał') + paneTab('side', 'Profil i kontakty'), feedTabs = feedTab('main', 'Główna') + feedTab('contacts', 'Kontakty') + feedTab('portfolio', 'Portfel');
+    const tied = root.querySelector(':scope > .tied');
+    if (!tied) {
+        root.innerHTML = `<div class="${className}" data-pane="${tiedView.pane}">
+        <div class="tied-tabs tied-switch" role="tablist" aria-label="Widok Tied">${switchTabs}</div>
+        <div class="tied-main"><div class="tied-feedbar"><div><div class="tied-tabs" role="tablist" aria-label="Kanał">${feedTabs}</div></div></div><div class="tied-center">${center}</div></div>
         ${renderTiedSide()}</div>`;
+        return;
+    }
+    // Węzeł paska zostaje, żeby przejście CSS z .is-talk ruszyło; otwarte komentarze wracają po podmianie treści.
+    const openComments = new Set([...root.querySelectorAll('.tied-comments[open]')].map(details => details.dataset.post));
+    tied.className = className;
+    tied.dataset.pane = tiedView.pane;
+    tied.querySelector('.tied-switch').innerHTML = switchTabs;
+    tied.querySelector('.tied-feedbar .tied-tabs').innerHTML = feedTabs;
+    tied.querySelector('.tied-center').innerHTML = center;
+    tied.querySelector('.tied-side').outerHTML = renderTiedSide();
+    for (const details of root.querySelectorAll('.tied-comments')) if (openComments.has(details.dataset.post)) details.open = true;
 }
 
 // --- Akcje widoku ---

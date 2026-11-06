@@ -15832,6 +15832,43 @@ group('0.17.3 R1 Tied: kontakty, reakcje, znajomi', () => {
         try { renderTiedPage(); return root.innerHTML; } finally { root.remove(); }
     };
 
+    test('widok: pasek kanału zostaje tym samym węzłem przy wejściu w rozmowę, a polubienie nie zamyka komentarzy', () => {
+        start();
+        const item = post({ comment: 'Mój komentarz' });
+        addMail({ sender: 'PULS', subject: 'A', body: 'a' });
+        const root = document.createElement('div'); root.id = 'net-tied-body'; document.body.appendChild(root);
+        try {
+            renderTiedPage();
+            const bar = root.querySelector('.tied-feedbar'), details = () => root.querySelector(`.tied-comments[data-post="${item.id}"]`);
+            details().open = true;
+            tiedLike(item.id);
+            assert(item.liked, 'polubione');
+            assert(details().open, 'komentarze zostają otwarte');
+            assertEq(root.querySelector('.tied-feedbar'), bar, 'ten sam węzeł po polubieniu');
+            tiedCenter({ message: mailbox.messages[0].id });
+            assertEq(root.querySelector('.tied-feedbar'), bar, 'ten sam węzeł w rozmowie');
+            assert(root.querySelector('.tied').classList.contains('is-talk'), 'klasa rozmowy');
+            assert(root.querySelector('.tied-center .tied-talk'), 'treść rozmowy');
+            assert(root.querySelector('.tied-center .tied-talk').textContent.includes('Zamknij rozmowę'), 'pełna nazwa przycisku');
+            tiedBack();
+            assertEq(root.querySelector('.tied-feedbar'), bar, 'ten sam węzeł po powrocie');
+            assert(!root.querySelector('.tied').classList.contains('is-talk'), 'pasek wraca');
+            assertEq(root.querySelectorAll('.tied-side').length, 1, 'jeden panel boczny');
+        } finally { root.remove(); }
+    });
+    test('profil: przy relacji +20 lub wyższej bez znajomości nie ma kreski, jest informacja o prośbie', () => {
+        start();
+        botRelations.values[key()] = 34;
+        tiedView.person = key();
+        const view = html();
+        assert(!view.includes('Kreska: następny poziom') && !view.includes('--limit'), 'bez kreski');
+        assert(view.includes('Możesz wysłać prośbę do znajomych'), 'informacja');
+        requestTiedFriend(key());
+        assert(!html().includes('Możesz wysłać prośbę do znajomych'), 'po prośbie bez informacji');
+        const other = stocks[1].ceo.id ? getCeoRelationKey(stocks[1].ceo.id) : null; tiedView.person = other; botRelations.values[other] = 10;
+        assert(html().includes('Kreska: następny poziom, Znajomy'), 'poniżej progu kreska zostaje');
+    });
+
     test('widoczność: post dla znajomych i zaufanych wg poziomu; post niedostępny bez treści, roli, daty i reakcji', () => {
         start();
         const friends = post({ audience: 'friends', text: 'Dla znajomych tekst' }), trusted = post({ audience: 'trusted', text: 'Dla zaufanych tekst' });

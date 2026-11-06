@@ -4362,10 +4362,10 @@ function renderCompanyCardOverview(stock) {
         <div class="cc-grid">
             <section><h4>O spółce</h4><div class="text-sm text-justify">${foreign ? escapeHtml(describeForeignCompany(stock)) : assembleDescription(stock)}</div>${phase}${splitInfo}${research}</section>
             <section>
-                ${stock.ceo?.name ? `<h4>Prezes</h4><p class="m-0"><strong>${uiIcon('zarzad', 14)} ${escapeHtml(stock.ceo.name)}</strong>${!foreign && stock.ceo.id ? ` <button class="ceo-link" onclick="openTiedProfile('${escapeHtml(getCeoRelationKey(stock.ceo.id))}')">Profil w Tied</button>` : ''}</p>
+                ${stock.ceo?.name ? `<h4>Prezes</h4><p class="m-0"><strong>${uiIcon('zarzad', 14)} ${escapeHtml(stock.ceo.name)}</strong>${!foreign && stock.ceo.id ? ` <button class="ceo-link" onclick="openTiedProfile('${escapeHtml(getCeoRelationKey(stock.ceo.id))}')">${uiIcon('grupa', 12)} Profil w Tied</button>` : ''}</p>
                     <p class="text-xs text-muted mt-0">wiek ${stock.ceo.age ?? '—'}, staż ${Math.floor((stock.ceo.tenure || 0) / 4)} lat</p>
                     <div class="ceo-traits-container">${traits}</div>` : ''}
-                ${stock.deputies?.length ? `<h4>Wiceprezesi</h4><ul class="ceo-deputies">${stock.deputies.map(deputy => `<li>${escapeHtml(deputy.name)} <button class="ceo-link" onclick="openTiedProfile('${escapeHtml(getCeoRelationKey(deputy.id))}')">Profil w Tied</button></li>`).join('')}</ul>` : ''}
+                ${stock.deputies?.length ? `<h4>Wiceprezesi</h4><ul class="ceo-deputies">${stock.deputies.map(deputy => `<li>${escapeHtml(deputy.name)} <button class="ceo-link" onclick="openTiedProfile('${escapeHtml(getCeoRelationKey(deputy.id))}')">${uiIcon('grupa', 12)} Profil w Tied</button></li>`).join('')}</ul>` : ''}
                 ${insights.length ? `<h4>Analityk</h4>${insights.map(line => `<p class="text-sm">${uiIcon('szukaj', 14)} ${escapeHtml(line)}</p>`).join('')}` : ''}
             </section>
         </div>`;

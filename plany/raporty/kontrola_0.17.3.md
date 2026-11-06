@@ -35,3 +35,41 @@ Ramiona: nowa i baza po 120 gier, 27 kw., preset `fundusz-gig`; czytelnik Tied 2
 - **Czytelnik:** zapowiedzi prawdziwe w 80,4%. Wynik 2 kw. ponad GIG: po zapowiedzi 1,73 pp, losowa spółka 2,19 pp; po ucięciu 1% skrajnych −0,18 pp i 1,07 pp. Tied nie daje przewagi finansowej.
 - **Rozmowy:** 64% gracz według charakteru i 25% losowy to wynik symulacji z R4; kontrola ×200 tego nie mierzy, a poprawka nie dotyka `resolveTalk`.
 - **Czas w seriach równoległych** (2549 → 1594 ms) zależy od obciążenia i nie jest miarą; liczy się pomiar sekwencyjny.
+
+## Decyzje użytkownika po kontroli (2026-11-06)
+
+- **Strategie −15%:** zostaje. Niespełnione zapowiedzi są częścią gry.
+- **„Napisz”:** zostaje wersja z planu.
+- **Zapowiedzi:** mogą dawać przewagę, ale nie muszą, więc próg presetu „czytelnik Tied” nie obowiązuje.
+- **GIG +1,09 pp z S7:** zamknięte. W obecnej kontroli GIG nie odbiega od bazy.
+- **Limity czasu i zapisu:** bez zmian.
+
+## Gaz i podsektory (commity po 5fc1f41)
+
+Koszt przechowania gazu: 6% → 3% → 2%, bo przy 3% krótkie na gazie miały na depozycie 14,0%. Podsektory: KWM Wydobycie, STM i BTX Przemysł ciężki, ORT nowy Telekomunikacja (`listedOnly`). Fraza przemysłu ciężkiego rozszerzona o beton i statki. Przydział działa raz na świat, więc tylko w nowej grze; stare zapisy zostają bez podsektorów.
+
+| Miara | Baza | Nowa | Cel | Wynik |
+|---|---|---|---|---|
+| Krótkie na gazie, na depozycie | 27,8% (przed zmianą) | 5,47% łącznie, −42,6% średnia gier (SE 27,9) | do 11,11% | OK |
+| Krótkie na gazie, na wartości pozycji | 9,3% (przed zmianą) | 1,82% | do 11,11% | OK |
+| Powrót do średniej, na depozycie | 9,6% (przed zmianą) | 8,78% | do 11,11% | OK |
+| GIG | 10,71% | 10,55% (Δ −0,16, SE 0,54) | w widełkach | OK |
+| Średnia odchyłek marż (20 sektorów) | | −0,08 pp (SE 0,13) | 0 ± 0,3 pp | OK |
+| Indeks zysków | 7,15% | 7,28% | w widełkach | OK |
+| Zapis, średnia | 2 408 979 | 2 405 184 (−0,2%) | do 2,49 mln | OK |
+| Błędy JS, niezmienniki | 0 | 0 | 0 | OK |
+
+Zmiany strategii na tej serii: 37,59 na grę (−15,7%), dywidendy −6,7%, skupy +0,9%, przejęcia +3,5%. Czasu kroku nie mierzyłem ponownie, bo zmiany dotyczą danych.
+
+## Uwagi designu (sprawdzał stan R1)
+
+| Punkt | Stan na gałęzi | Co zrobione |
+|---|---|---|
+| 1. Pasek nie zwija się płynnie | aktualny | `renderTiedPage` podmienia części i zachowuje węzeł `.tied-feedbar`; test regresji |
+| 2. Polubienie zamyka komentarze | aktualny | otwarte `<details>` wracają po renderze; test regresji |
+| 3. Kreska przy relacji od +20 | aktualny | bez kreski, tekst tymczasowy „Możesz wysłać prośbę do znajomych”, tylko gdy prośba jest możliwa; test |
+| 4. Ikona przy „Profil w Tied” | aktualny | `grupa` 12 px przy prezesie i wiceprezesach |
+| 5. „Zamknij rozmowę” | częściowo nieaktualny | rozmowa z R4 już to miała, poprawiony wątek wiadomości |
+| 6. Formularz wpisu gracza | nieaktualny | R4 ma `.tied-compose` i 3 wpisy jak makieta, bez zmian |
+
+Testy: 1016/1016. W grze: pasek zostaje tym samym węzłem i startują trzy przejścia po 200 ms, profil przy +34 bez kreski, ikona 12 px, konsola czysta. Panel przeglądarki był ukryty, więc samego zwijania nie widać na ekranie, a komentarzy i 390 px nie oglądałem w grze; komentarze pokrywa test.
