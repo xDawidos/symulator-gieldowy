@@ -717,6 +717,34 @@ function processEnergyQuarterly() {
 }
 
 // ---------------------------------------------------------------------------------
+// Polecenia właściciela (> 50% akcji): blok, zlecenie, ESG
+// ---------------------------------------------------------------------------------
+function getOwnedEnergyStock(symbol) {
+    const stock = stocks.find(item => item.symbol === symbol);
+    if (stock && typeof canFundControlAgm === 'function' && canFundControlAgm(stock)) return stock;
+    if (typeof showToast === 'function') showToast('Zlecać może tylko większościowy akcjonariusz (> 50%).', 'warning');
+    return null;
+}
+function orderOwnerPowerBlock(symbol) {
+    const stock = getOwnedEnergyStock(symbol);
+    if (!stock) return null;
+    if (!canStartPowerBlock(stock)) { if (typeof showToast === 'function') showToast('Poprzedni blok jest jeszcze w budowie.', 'warning'); return null; }
+    if ((Number(stock.cash) || 0) < getPowerBlockCost(stock) * ENERGY_RULES.minCashShare) { if (typeof showToast === 'function') showToast('Za mało gotówki na start budowy.', 'warning'); return null; }
+    return startPowerBlock(stock);
+}
+function orderOwnerEnergyContract(symbol, kind) {
+    const stock = getOwnedEnergyStock(symbol);
+    if (!stock) return null;
+    const order = orderEnergyContract(stock, kind);
+    if (!order && typeof showToast === 'function') showToast('Tego zlecenia nie można teraz złożyć.', 'warning');
+    return order;
+}
+function orderOwnerEsg(symbol) {
+    const stock = getOwnedEnergyStock(symbol);
+    return stock ? orderEsg(stock) : false;
+}
+
+// ---------------------------------------------------------------------------------
 // E10: Akademia
 // ---------------------------------------------------------------------------------
 Object.assign(ACADEMY_ENTRIES, {

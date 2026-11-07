@@ -6121,6 +6121,21 @@ group('0.17.2 E6-E9: poziom życia, OZE, atom, opinia, technologie', () => {
 });
 
 group('0.17.2 E10: Akademia i zapis', () => {
+    test('polecenia właściciela: tylko większościowy akcjonariusz', () => {
+        const c = makeCompany('COAL', { sector: ['Energia'], cash: 1e8 });
+        c.segments = [{ sector: 'Energia', share: 1, subsector: 'Energetyka węglowa' }];
+        c.fundamentals = { ...(c.fundamentals || {}), revenue: 5000 };
+        resetWorld([c]);
+        delete society.energy; ensureEnergy();
+        const control = canFundControlAgm;
+        try {
+            canFundControlAgm = () => false;
+            assertEq(orderOwnerPowerBlock('COAL'), null, 'bez kontroli');
+            canFundControlAgm = () => true;
+            assert(orderOwnerPowerBlock('COAL'), 'właściciel buduje');
+            assertEq(orderOwnerPowerBlock('COAL'), null, 'po kolei');
+        } finally { canFundControlAgm = control; delete society.energy; }
+    });
     test('5 haseł Akademii: tekst, quiz, przykład', () => {
         delete society.energy;
         for (const id of ['miksEnergetyczny', 'cenaPradu', 'emisjeLimity', 'poziomZycia', 'esg']) {
