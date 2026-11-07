@@ -30,7 +30,7 @@ To projekt dla czatu kodu. CSS jest w grze (blok „0.17.2” na końcu `style.c
 | Bilans | `.en-state`, `limit-meter.en-wide` | skala 0–110% mocy, kreska na 100%; plakietka Nadwyżka (`badge--up`), Równowaga (`--neutral`), Niedobór (`--warn`), Blackout (`--down`) |
 | Cena prądu | `asset-mini-table` | udział i koszt typu, zdanie o ustawie „Dostawcy energii” |
 | Bloki w budowie | `.en-rows` | spółka, typ, kw. X z Y, moc; projekt państwowy z limitem typu i „Przetarg” |
-| Zanieczyszczenie | `.en-value`, `limit-meter` z kreską limitu | poziom słowem, zmiana ▲▼, opłata; najwięksi emitenci od poziomu UEiE ze spółkami |
+| Zanieczyszczenie | `.en-value`, `limit-meter` z kreską limitu | poziom słowem, zmiana ▲▼, opłata; najwięksi emitenci od poziomu 2 UEiE |
 | Poziom życia | `.en-factors` | 5 czynników: ikona, słowo, liczba, pasek; czynnik poniżej 50 `is-warn` i powód w `<small>` |
 | Blok | `.en-block` + `.is-run`, `.is-build`, `.is-wait`, `.is-locked` | Budowa, Czeka na zgodę, Działa, Awaria, Zablokowany; zawsze powód i liczba |
 | Zlecenie | `.en-orders` > `.en-order` | koszt, czas, wykonawca, „Zleć”; w toku pasek; wynik jako zwykła karta |
@@ -42,8 +42,10 @@ To projekt dla czatu kodu. CSS jest w grze (blok „0.17.2” na końcu `style.c
 | Przed pierwszym kwartałem | „Dane pojawią się po pierwszym kwartale gry.” |
 | Brak budów | „Żadna spółka nie buduje teraz nowych bloków. Budowy ruszają przy niedoborze mocy i wysokiej cenie prądu.” |
 | UEiE poziom 0 | `notice-inline`: „Urząd nie mierzy emisji i nie ma limitów. Pomiar pojawi się od poziomu 1.” |
+| Zdrowie przy UEiE 0 | w `.en-factors` „brak pomiaru” zamiast liczby i paska |
 | Debug | `notice-inline.is-warn`: „Tryb debug: emisje widoczne mimo braku pomiaru.” |
 | Niedobór | `alert--warn` z liczbą GW i procentem |
+| Zanieczyszczenie krytyczne | `alert--warn`, skutki słowem i liczbą |
 | Blackout | `alert--warn`, ikona `blackout`, skutki i czas |
 | Ponad limit UEiE | `alert--warn` w sekcji Energia spółki: kwota kary i co zrobić |
 | Bez kontroli | „Zlecać może tylko większościowy akcjonariusz. Teraz masz 12%.” |
@@ -51,21 +53,19 @@ To projekt dla czatu kodu. CSS jest w grze (blok „0.17.2” na końcu `style.c
 
 Spółka spoza energetyki nie ma sekcji Energia ani kafelka Moc. Kafelki Emisje i Limit widać u każdej spółki z emisjami, gdy urząd je mierzy.
 
-## Rozbieżności i decyzje
-Mechaniki nie zmieniałem. Poniższe wymaga decyzji albo potwierdzenia. Propozycje są w makiecie, ale nie są ustalone.
-
-1. **Jednostki.** Plan nie podaje jednostek mocy ani ceny. Makieta używa GW i PLN/MWh. Trzeba przeliczyć `capacity`, inaczej pokazać punkty mocy.
-2. **Widoczność przy UEiE 0.** Plan mówi tylko, że debug pokazuje emisje od początku. Makieta przyjmuje: poziom 0 bez wartości, 1 kraj, 2 spółki.
-3. **Poziom życia przy UEiE 0.** Czynnik „Zdrowie” zależy od zanieczyszczenia, więc gracz może je wyliczyć mimo braku pomiaru. Makieta nie blokuje poziomu życia.
-4. **Poziomy UEiE.** Plan nie rozpisuje progów. Etykiety 6 kroków i dostęp do ESG od poziomu 3 to propozycja.
-5. **ESG.** Plan nie podaje kosztu ani ścieżki przed 0.18. Makieta ma tylko notkę i kafelek stanu, bez przycisku startu.
-6. **Progi słowne.** Plan nie ma słów dla zanieczyszczenia, poziomu życia i opinii. Makieta używa m.in. „wysokie”, „przeciętny”, „przychylna”. Propozycja: co 20 pkt.
-7. **Skala emisji spółki.** Wzór nie ma jednostki. Makieta pokazuje udział w emisjach kraju, np. „6% kraju”.
-8. **Opłata klimatyczna.** Plan nie podaje stawek ani nazw 5 poziomów. Wartości na osi to przykład.
-9. **Zlecenie „Najnowsze technologie”.** Plan mówi o rynku podwykonawców, ale wykonawcą jest istniejący system R&D. Makieta pokazuje kartę, nie przesądza, czy to zlecenie, czy przejście do badań.
-10. **Dotacja gracza dla UEiE.** Plan mówi „jak KNF”, więc karta ma dotację z portfela prywatnego. Do potwierdzenia, bo to wpływ na limity własnych spółek.
-11. **Bloki poza atomem.** Plan nie mówi, ile bloków ma spółka węglowa, gazowa i OZE. Makieta pokazuje listę.
-12. **„Produkcja” jako skutek zanieczyszczeń** jest w planie do potwierdzenia, a nie ma osobnego widoku.
+## Decyzje użytkownika (2026-11-07)
+1. **Jednostki:** GW i PLN/MWh. Czat kodu przelicza `capacity`.
+2. **Widoczność emisji:** UEiE 0 nic, poziom 1 kraj, poziom 2 spółki. Debug pokazuje wszystko.
+3. **Poziom życia przy UEiE 0:** wskaźnik zostaje, ale czynnik „Zdrowie” ma napis „brak pomiaru”.
+4. **Poziomy UEiE:** 0 bez limitów, 1 pomiar kraju, 2 pomiar spółek i limit z karą, 3 częstsze kontrole i ścieżka ESG, 4 dokładny pomiar i wyższe kary, 5 pełny nadzór.
+5. **ESG:** od poziomu 3 przycisk „Wejdź na ścieżkę ESG”: jednorazowy koszt, potem niższe emisje. Liczby stroi czat kodu, rozwinięcie w 0.18.
+6. **Progi słowne:** 5 słów co 20 pkt. Zanieczyszczenie: bardzo niskie, niskie, umiarkowane, wysokie, krytyczne. Poziom życia: bardzo niski, niski, przeciętny, wysoki, bardzo wysoki. Opinia: bardzo nieprzychylna, nieprzychylna, neutralna, przychylna, bardzo przychylna.
+7. **Emisje spółki:** udział w emisjach kraju, np. „6% kraju”.
+8. **Polityka klimatyczna:** nazwy brak opłat, niska, średnia, wysoka, bardzo wysoka. Stawki 0%, 0,6%, 1,2%, 1,8%, 2,5% to punkt startu do strojenia.
+9. **„Najnowsze technologie”:** osobne zlecenie z kosztem, czasem i wynikiem, jak u geologa. To nowy mechanizm obok R&D. Wykonawcę i powiązanie z R&D ustala czat kodu z planem.
+10. **Dotacja UEiE:** tak, z konta prywatnego, jak KNF.
+11. **Bloki poza atomem:** dowolna liczba, po kolei. Ogranicza je gotówka i niedobór mocy.
+12. **Produkcja:** wysokie zanieczyszczenie daje mały spadek produkcji. Makieta pokazuje to przy poziomie „krytyczne”, próg i wartość do strojenia.
 
 ## Prompt dla czatu kodu (E2, E10)
-> Wdróż wygląd 0.17.2 wg `plany/design/11_energia_0.17.2.md` i makiety `plany/design/makiety/11_energia_0172.html`. Klasy `.en-*` i ikony są gotowe, nie dopisuj tokenów. Zakładka Energia: `renderEnergyPanel` i przycisk w `index.html`, gałąź w `updateStateModalContent`. Spółka: `renderEnergyManage(stock)` w `renderCompanyCardManage`, kafelki w `renderCompanyCardOverview`. Reszta: karta `ueie` w `renderOversightPanel`, `renderCountryPanel`, `renderCountryCard`, `renderMarketModal`, `renderConstructionSubcontractorsList`. Paski przez `renderLimitMeter`. Skale: bilans 0–110% mocy, relacje liczbowe w tekście obok paska. W komunikatach o blokach zamień „regulator” na UEiE, ikony przez `uiIcon` zamiast emoji w nowych tekstach UI. Punkty z sekcji „Rozbieżności i decyzje” zgłoś użytkownikowi, nie rozstrzygaj sam. Testy: 1 na miks (wszystkie typy słowem), 1 na stany bilansu, 1 na blokadę kolejnego bloku, 1 na UEiE poziom 0 bez wartości emisji, 1 na spółkę spoza energetyki. Sprawdź w przeglądarce na desktopie i 390 px, commit po polsku.
+> Wdróż wygląd 0.17.2 wg `plany/design/11_energia_0.17.2.md` i makiety `plany/design/makiety/11_energia_0172.html`. Klasy `.en-*` i ikony są gotowe, nie dopisuj tokenów. Zakładka Energia: `renderEnergyPanel` i przycisk w `index.html`, gałąź w `updateStateModalContent`. Spółka: `renderEnergyManage(stock)` w `renderCompanyCardManage`, kafelki w `renderCompanyCardOverview`. Reszta: karta `ueie` w `renderOversightPanel`, `renderCountryPanel`, `renderCountryCard`, `renderMarketModal`, `renderConstructionSubcontractorsList`. Paski przez `renderLimitMeter`. Skale: bilans 0–110% mocy, relacje liczbowe w tekście obok paska. W komunikatach o blokach zamień „regulator” na UEiE, ikony przez `uiIcon` zamiast emoji w nowych tekstach UI. Trzymaj się sekcji „Decyzje użytkownika”, punkty 5, 9 i 12 wymagają mechaniki poza dotychczasowym planem. Testy: 1 na miks (wszystkie typy słowem), 1 na stany bilansu, 1 na blokadę kolejnego bloku, 1 na UEiE poziom 0 bez wartości emisji, 1 na spółkę spoza energetyki. Sprawdź w przeglądarce na desktopie i 390 px, commit po polsku.

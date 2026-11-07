@@ -35,7 +35,7 @@ body { display: block !important; padding: 24px !important; }
   <div class="bank-ticker-item"><span>Zużycie</span><strong>39,8 GW</strong></div>
   <div class="bank-ticker-item"><span>Bilans</span><strong class="text-up">▲ +1,4 GW</strong></div>
   <div class="bank-ticker-item"><span>Cena prądu</span><strong>412 PLN/MWh</strong><small class="text-muted">▲ +3% w kwartale</small></div>
-  <div class="bank-ticker-item"><span>Zanieczyszczenie</span><strong>58/100</strong></div>
+  <div class="bank-ticker-item"><span>Zanieczyszczenie</span><strong>62/100</strong></div>
   <div class="bank-ticker-item"><span>Poziom życia</span><strong>64/100</strong></div>
 </div>
 
@@ -80,8 +80,8 @@ body { display: block !important; padding: 24px !important; }
   </article>
 
   <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon"><i data-ic="emisje" data-s="20"></i></span><div><h4>Zanieczyszczenie</h4><span class="bank-card-type">UEiE poziom 2 · pomiar dokładny</span></div></header>
-    <div class="en-state"><span class="en-value">58<small> /100</small></span><span class="badge badge--warn"><i data-ic="alert" data-s="12"></i> Wysokie</span> ▲ +4 w kwartale</div>
-    <span class="limit-meter is-warn en-wide" role="img" aria-label="Zanieczyszczenie 58 na 100, limit UEiE 70" style="--v:58;--limit:70"><i></i><b></b></span>
+    <div class="en-state"><span class="en-value">62<small> /100</small></span><span class="badge badge--warn"><i data-ic="alert" data-s="12"></i> Wysokie</span> ▲ +4 w kwartale</div>
+    <span class="limit-meter is-warn en-wide" role="img" aria-label="Zanieczyszczenie 62 na 100, limit UEiE 70" style="--v:62;--limit:70"><i></i><b></b></span>
     <p class="text-sm">Limit UEiE: 70. Polityka klimatyczna: poziom 3, opłata 1,2% przychodów × emisje.</p>
     <h5 class="mb-1">Najwięksi emitenci</h5>
     <ul class="en-rows">
@@ -91,7 +91,7 @@ body { display: block !important; padding: 24px !important; }
   </article>
 
   <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon"><i data-ic="poziom-zycia" data-s="20"></i></span><div><h4>Poziom życia</h4><span class="bank-card-type">5 czynników po 20%</span></div></header>
-    <div class="en-state"><span class="en-value">64<small> /100</small></span><span class="badge badge--neutral">Przeciętny</span> ▼ −1 w kwartale</div>
+    <div class="en-state"><span class="en-value">64<small> /100</small></span><span class="badge badge--up">Wysoki</span> ▼ −1 w kwartale</div>
     <ul class="en-factors">
       <li><i data-ic="koszyk"></i><span>Konsumpcja i zadowolenie</span><strong class="en-num">71</strong><span class="limit-meter" role="img" aria-label="71 na 100" style="--v:71"><i></i></span></li>
       <li><i data-ic="sektor-medycyna"></i><span>Zdrowie</span><strong class="en-num">48</strong><span class="limit-meter is-warn" role="img" aria-label="48 na 100, obniża zanieczyszczenie" style="--v:48"><i></i></span><small>obniża zanieczyszczenie</small></li>
@@ -114,6 +114,11 @@ body { display: block !important; padding: 24px !important; }
 <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon"><i data-ic="emisje" data-s="20"></i></span><div><h4>Zanieczyszczenie</h4><span class="bank-card-type">UEiE poziom 0 · brak pomiaru</span></div></header>
   <p class="notice-inline"><i data-ic="info" data-s="14"></i><span>Urząd nie mierzy emisji i nie ma limitów. Pomiar pojawi się od poziomu 1.</span></p>
 </article>
+<article class="bank-card mt-3"><header class="bank-card-head"><span class="bank-card-icon"><i data-ic="poziom-zycia" data-s="20"></i></span><div><h4>Poziom życia</h4><span class="bank-card-type">czynnik Zdrowie bez pomiaru</span></div></header>
+  <ul class="en-factors"><li><i data-ic="sektor-medycyna"></i><span>Zdrowie</span><strong class="en-num">brak pomiaru</strong><small>Pojawi się od poziomu 1 UEiE.</small></li></ul>
+</article>
+<h3 class="demo-h">Krytyczne zanieczyszczenie: mały spadek produkcji</h3>
+<p class="alert alert--warn"><i data-ic="emisje" data-s="18"></i><span><strong>Zanieczyszczenie krytyczne: 84/100.</strong> Spada poziom życia i przyrost ludności, a produkcja spółek jest niższa o 1%.</span></p>
 <h3 class="demo-h">Pusto i przed pierwszym kwartałem</h3>
 <div class="bank-grid">
   <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon"><i data-ic="blok" data-s="20"></i></span><div><h4>Bloki w budowie</h4></div></header><p class="text-sm text-muted">Żadna spółka nie buduje teraz nowych bloków. Budowy ruszają przy niedoborze mocy i wysokiej cenie prądu.</p></article>
@@ -162,7 +167,7 @@ body { display: block !important; padding: 24px !important; }
 
 <section class="demo"><h2 class="demo-title">5. Karta kraju i okno „Rynek”</h2><p class="demo-sub">Dwa wiersze w <code>.country-facts</code> i kafelek Opinii publicznej w oknie „Rynek”. Bez wskaźnika w górnym pasku.</p>
 <dl class="country-facts">
-  <div><dt>Poziom życia</dt><dd><i data-ic="poziom-zycia" data-s="14"></i> przeciętny (64/100)<span class="limit-meter" role="img" aria-label="Poziom życia 64 na 100" style="--v:64"><i></i></span></dd></div>
+  <div><dt>Poziom życia</dt><dd><i data-ic="poziom-zycia" data-s="14"></i> wysoki (64/100)<span class="limit-meter" role="img" aria-label="Poziom życia 64 na 100" style="--v:64"><i></i></span></dd></div>
   <div><dt>Opinia publiczna</dt><dd><i data-ic="megafon" data-s="14"></i> przychylna (61/100), przychody spółek konsumenckich +0,4%</dd></div>
 </dl>
 <div class="freight-cards mt-3">
@@ -192,7 +197,7 @@ body { display: block !important; padding: 24px !important; }
   <p class="alert alert--warn"><i data-ic="alert" data-s="18"></i><span><strong>Ponad limit UEiE.</strong> Kara w tym kwartale: 48 000 PLN. Niżej zejdziesz przez inwestycje ekologiczne, technologie albo ESG.</span></p>
   <div class="en-block is-run"><div class="en-block-top"><i data-ic="blok" data-s="16"></i><strong>Elektrownia Tarnobrzeg</strong><span class="badge badge--up"><i data-ic="ok" data-s="12"></i> Działa</span></div><small>3,4 GW · od roku 1</small></div>
   <div class="btn-row"><select aria-label="Typ bloku"><option>Blok węglowy</option><option>Blok gazowy</option><option>Farma wiatrowa</option><option>Park słoneczny</option></select><button class="btn-secondary"><i data-ic="blok" data-s="14"></i> Zbuduj blok</button></div>
-  <p class="notice-inline"><i data-ic="lisc" data-s="14"></i><span>Ścieżka ESG: wyższe koszty na początku, niższe emisje. Dostępna od poziomu 3 UEiE, teraz poziom 2.</span></p>
+  <div class="en-order mt-2"><h5><i data-ic="lisc" data-s="16"></i> Ścieżka ESG</h5><p>Jednorazowy koszt 420 000 PLN, potem niższe emisje spółki.</p><div class="btn-row"><button class="btn-secondary" disabled>Wejdź na ścieżkę ESG</button></div><p class="notice-inline"><i data-ic="klodka" data-s="14"></i><span>Dostępna od poziomu 3 UEiE, teraz poziom 2.</span></p></div>
 
   <h4 class="bank-section-title mt-3">Zlecenia dla podwykonawców</h4>
   <div class="en-orders">
@@ -230,6 +235,13 @@ body { display: block !important; padding: 24px !important; }
   <div class="en-block is-build"><div class="en-block-top"><i data-ic="blok" data-s="16"></i><strong>Blok 2</strong><span class="badge badge--accent"><i data-ic="zegar" data-s="12"></i> Budowa</span></div><span class="limit-meter" role="img" aria-label="Postęp budowy 42%" style="--v:42"><i></i></span><small>kw. 5 z 12 · zapłacono 3,1 mln PLN z 7,4 mln PLN · po budowie: zgoda UEiE, przychód +10%</small></div>
   <div class="en-block is-locked"><div class="en-block-top"><i data-ic="klodka" data-s="16"></i><strong>Blok 3</strong><span class="badge badge--neutral">Zablokowany</span></div><small>Wymaga działającego bloku 2. Przychód +5%.</small></div>
   <p class="text-sm mt-2">Kontrakt zależy od ustaw: Polityka energetyczna <strong>atom</strong>, Dostawcy energii <strong>mieszana</strong>.</p>
+  <h4 class="bank-section-title mt-3">Zlecenie: najnowsze technologie</h4>
+  <div class="en-orders">
+    <article class="en-order"><h5><i data-ic="badania" data-s="16"></i> Najnowsze technologie</h5><p>Zlecenie dla OZE i atomu. Daje tańszą moc albo wyższą sprawność.</p>
+      <dl><div><dt>Koszt</dt><dd>350 000 PLN</dd></div><div><dt>Czas</dt><dd>3 kw.</dd></div><div><dt>Wykonawca</dt><dd>Instytut Badań</dd></div></dl>
+      <div class="btn-row"><button class="btn-secondary">Zleć</button></div></article>
+    <article class="en-order"><h5><i data-ic="ok" data-s="16"></i> Wynik zlecenia</h5><p>Sprawność bloków +3%. Koszt prądu tej spółki −12 PLN/MWh.</p></article>
+  </div>
   <h4 class="bank-section-title mt-3">Inne stany bloku</h4>
   <div class="en-block is-wait"><div class="en-block-top"><i data-ic="zegar" data-s="16"></i><strong>Blok 2</strong><span class="badge badge--warn"><i data-ic="alert" data-s="12"></i> Czeka na zgodę</span></div><small>UEiE wstrzymuje uruchomienie: opóźnienie 3 kw., drugi raz z 2 możliwych.</small></div>
   <div class="en-block is-run"><div class="en-block-top"><i data-ic="alert" data-s="16"></i><strong>Blok 1</strong><span class="badge badge--down">Awaria</span></div><small>Moc −0,8 GW do końca kwartału.</small></div>
