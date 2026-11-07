@@ -509,7 +509,11 @@ const EMOJI_ICONS = {
     '🕳': 'dolek',
     '🧪': 'badania',
     '☢': 'atom',
-    '⚡': 'Energia',
+    '⚡': 'prad',
+    '🔌': 'blackout',
+    '🌫': 'emisje',
+    '🌿': 'lisc',
+    '🪨': 'geolog',
     '🥇': 'medal',
     '🥈': 'medal',
     '🥉': 'medal'
@@ -1098,6 +1102,7 @@ function renderMarketModal() {
         ${typeof renderCrisisSection === 'function' ? renderCrisisSection() : ''}
 
         ${typeof renderFreightSection === 'function' ? renderFreightSection() : ''}
+        ${typeof renderEnergyMarketCards === 'function' ? renderEnergyMarketCards() : ''}
 
         <div>
             <h4 class="bank-section-title">Historia faz</h4>
@@ -4374,6 +4379,7 @@ function renderCompanyCardOverview(stock) {
                     <p class="text-xs text-muted mt-0">wiek ${stock.ceo.age ?? '—'}, staż ${Math.floor((stock.ceo.tenure || 0) / 4)} lat</p>
                     <div class="ceo-traits-container">${traits}</div>` : ''}
                 ${stock.deputies?.length ? `<h4>Wiceprezesi</h4><ul class="ceo-deputies">${stock.deputies.map(deputy => `<li>${escapeHtml(deputy.name)} <button class="ceo-link" onclick="openTiedProfile('${escapeHtml(getCeoRelationKey(deputy.id))}')">${uiIcon('grupa', 12)} Profil w Tied</button></li>`).join('')}</ul>` : ''}
+                ${typeof renderCompanyEnergyKpi === 'function' ? renderCompanyEnergyKpi(stock) : ''}
                 ${insights.length ? `<h4>Analityk</h4>${insights.map(line => `<p class="text-sm">${uiIcon('szukaj', 14)} ${escapeHtml(line)}</p>`).join('')}` : ''}
             </section>
         </div>`;
@@ -4509,6 +4515,7 @@ function renderCompanyCardManage(stock) {
             <button class="btn-secondary" onclick="openCompanyInvestments('${stock.symbol}')">${uiIcon('wzrost', 14)} Inwestycje spółki</button>
             ${pct > 0.5 ? `<button onclick="openManagementModal('${stock.symbol}')">${uiIcon('korona', 14)} Zarządzaj spółką</button>` : ''}
         </div>
+        ${typeof renderEnergyManage === 'function' ? renderEnergyManage(stock) : ''}
         ${renderStrategyOrders(stock)}`;
 }
 
@@ -8392,7 +8399,9 @@ function updateStateModalContent() {
 
     const body = document.getElementById('state-body');
     if (!body) return;
-    if (stateTab === 'overview') {
+    if (stateTab === 'energy') {
+        body.innerHTML = renderEnergyPanel();
+    } else if (stateTab === 'overview') {
         body.innerHTML = `
             <div class="bank-grid">
                 <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('waga', 20)}</span><div><h4>Urząd antymonopolowy</h4><span class="bank-card-type">poziom ${antitrustOffice.level}/5</span></div></header>
@@ -9212,7 +9221,7 @@ function renderCountryPanel() {
     const lastGrowth = Number(society.lastGrowth) || 0;
     const laws = Object.entries(SOCIAL_LAWS).map(([id, law]) => {
         const level = society.laws[id];
-        return `<tr><td>${law.icon} ${escapeHtml(law.name)}</td><td><strong>${escapeHtml(describeLawLevel(id))}</strong></td>
+        return `<tr><td>${law.uiIcon ? uiIcon(law.uiIcon, 14) : law.icon} ${escapeHtml(law.name)}</td><td><strong>${escapeHtml(describeLawLevel(id))}</strong></td>
             <td class="text-xs text-muted">${pending?.law === id ? `${uiIcon('raport', 14)} zapowiedź: → ${escapeHtml(describeLawLevel(id, pending.to))} od przyszłego kwartału` : `zmiany: ${society.lawChanges[id] || 0}`}${id === 'tenderThreshold' ? ` · limit KNF (poziom ${oversight?.knf?.level || 0}): ${escapeHtml(describeLawLevel(id, getTenderThresholdKnfCap()))}` : ''}</td>
             <td>${law.levels.map((_, i) => `<span class="law-pip ${i <= level ? 'on' : ''}"></span>`).join('')}</td></tr>`;
     }).join('');
@@ -9248,6 +9257,7 @@ function renderCountryPanel() {
                     <div><dt>Programy socjalne ze skarbu</dt><dd>${formatZl(budget.programSpending || 0, 0)}</dd></div>
                     <div><dt>Infrastruktura</dt><dd>${formatZl(budget.infrastructureSpending || 0, 0)}</dd></div>
                     <div><dt>Obronność</dt><dd>${formatZl(budget.defense || 0, 0)} (${formatNumberPl(getDefenseShare() * 100, 1)}% wpływów)</dd></div>
+                    ${typeof renderEnergyBudgetLines === 'function' ? renderEnergyBudgetLines() : ''}
                     <div><dt>Bezpieczeństwo państwa</dt><dd>${getSecurityLabel(getHomeSecurityLevel())}</dd></div>
                     <div><dt>Podatki od pracy</dt><dd>${formatZl(budget.laborTaxes || 0, 0)}</dd></div>
                     <div><dt>Ubytek przez szarą strefę</dt><dd class="${budget.greyTaxLoss > 0 ? 'text-down' : ''}">${formatZl(budget.greyTaxLoss || 0, 0)}</dd></div>
@@ -9259,7 +9269,9 @@ function renderCountryPanel() {
                 ${renderPartyBars(support)}
                 <p class="text-xs text-muted">Sondaż: poparcie liczone z klas (biedni wolą Ludowców, zamożni Koalicję Rynkową), plus zmęczenie władzą, koniunktura i szum. Zwycięzca poniżej 40% rządzi w koalicji z drugą partią.</p></article>
         </div>
-        ${renderInfraLawSteps()}`;
+        ${typeof renderEnergyCountryFacts === 'function' && hasEnergyState() ? `<dl class="country-facts mt-3">${renderEnergyCountryFacts()}</dl>` : ''}
+        ${renderInfraLawSteps()}
+        ${typeof renderClimateLawSteps === 'function' ? renderClimateLawSteps() : ''}`;
 }
 
 // ---------- Karta spółki: Zatrudnienie ----------

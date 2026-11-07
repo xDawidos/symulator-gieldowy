@@ -5353,9 +5353,9 @@ const SOCIAL_LAWS = {
     // 0.17 S5: wydatki na infrastrukturę, zużycie przepustowości i szansa projektu państwa (INFRA_LEVELS w infrastructure.js)
     infrastructure: { name: 'Finansowanie infrastruktury', icon: '🛣️', levels: ['Porzucenie', 'Łatanie dziur', 'Utrzymanie', 'Rozbudowa', 'Autostrady na wczoraj'], start: 2 },
     // 0.17.2 E3: premia typu elektrowni (ENERGY_POLICY_TYPES), ceny prądu i opłata za emisje (energy.js)
-    energyPolicy: { name: 'Polityka energetyczna', icon: '⚡', levels: ['Brak dofinansowań', 'Węgiel', 'Gaz', 'Atom', 'OZE'], start: 0 },
-    energySuppliers: { name: 'Dostawcy energii', icon: '🔌', levels: ['Prywatna', 'Mieszana', 'Państwowa'], start: 1 },
-    climatePolicy: { name: 'Polityka klimatyczna', icon: '🌍', levels: ['Brak opłat', 'Niska', 'Średnia', 'Wysoka', 'Bardzo wysoka'], start: 1 }
+    energyPolicy: { name: 'Polityka energetyczna', icon: '⚡', uiIcon: 'prad', levels: ['Brak dofinansowań', 'Węgiel', 'Gaz', 'Atom', 'OZE'], start: 0 },
+    energySuppliers: { name: 'Dostawcy energii', icon: '🔌', uiIcon: 'firma', levels: ['Prywatna', 'Mieszana', 'Państwowa'], start: 1 },
+    climatePolicy: { name: 'Polityka klimatyczna', icon: '🌍', uiIcon: 'emisje', levels: ['Brak opłat', 'Niska', 'Średnia', 'Wysoka', 'Bardzo wysoka'], start: 1 }
 };
 // Progi CIT: [mała spółka (dolne 50% kapitalizacji), duża (górne 10%)] — zmiana stawki w pp.
 const CORP_TAX_BRACKETS = [[0, 0], [-0.04, 0.02], [-0.06, 0.05]];

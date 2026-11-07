@@ -1918,8 +1918,10 @@ function renderOversightPanel() {
         <div class="bank-grid mt-3">
             ${card('police', 'Policja', '🚓', 'Ściga korupcję i mafię: co kwartał zbija wpływy mafii, zatrzymuje jej ludzi w zarządach spółek, rekwiruje akcje zdobyte z pomocą „przyjaciół” i ściga fundusze, które z nimi współpracują. Przy wysokiej korupcji sama staje się skorumpowana i działa gorzej.' + (oversight.police.level >= 5 ? ' 🌟 <strong>Program dla policjantów (poz. 5)</strong>: funkcjonariusze kupują JU funduszy defensywnych z dopłatą 20%, zwiększają obrót mniejszościowy, a na rynku inwestuje Komendant Jakub.' : ''))}
             ${card('knf', 'Komisja Nadzoru Finansowego', '🏦', 'Kontroluje fundusze — im większy fundusz, tym częściej. Czysta kontrola podnosi zaufanie klientów.')}
+            ${card('energy', 'Urząd Energii i Ekologii', uiIcon('lisc', 20), 'Mierzy emisje, ustala limity i wydaje zgody na bloki jądrowe.')}
             ${renderMafiaStateCard()}
         </div>
+        ${typeof renderEnergyOfficeLevels === 'function' ? renderEnergyOfficeLevels() : ''}
         ${oversight.corruption >= BRIBE_CORRUPTION_THRESHOLD ? `<p class="text-sm mt-3">💼 Przy tej korupcji komendant „bywa wyrozumiały”: <button class="btn-danger" onclick="bribePolice(); updateStateModalContent();">Łapówka (${formatZl(Math.max(2000, getFundAssets() * 0.01), 0)} z funduszu)</button> — spokój na ${BRIBE_IMMUNITY_QUARTERS} kw.</p>` : ''}
         <h4>Wojny PR</h4>
         ${typeof renderPrWars === 'function' ? renderPrWars() : ''}

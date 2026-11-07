@@ -6158,6 +6158,78 @@ group('0.17.2 E10: Akademia i zapis', () => {
     });
 });
 
+group('0.17.2 E10: widoki', () => {
+    const make = (symbol, sector, subsector, revenue) => {
+        const c = makeCompany(symbol, { sector: [sector], cash: 1e8 });
+        if (subsector) c.segments = [{ sector, share: 1, subsector }];
+        c.fundamentals = { ...(c.fundamentals || {}), revenue };
+        return c;
+    };
+    const fresh = () => {
+        ensureCommodityState();
+        resetWorld([make('COAL', 'Energia', 'Energetyka węglowa', 5000), make('GASY', 'Energia', 'Energetyka gazowa', 3000), make('ZIEL', 'Energia', 'OZE', 3000), make('ATOM', 'Energia', 'Energetyka jądrowa', 2000), make('CHEM', 'Chemia', null, 4000), make('TECH', 'Technologia', null, 4000)]);
+        delete society.energy;
+        oversight.energy = { level: 0, budget: 0 };
+        const e = ensureEnergy();
+        processEnergyQuarterly();
+        return e;
+    };
+    const by = symbol => stocks.find(s => s.symbol === symbol);
+    const noDebug = fn => { const debug = isDebugMode; isDebugMode = () => false; try { return fn(); } finally { isDebugMode = debug; } };
+    test('miks: wszystkie typy słowem w legendzie i etykiecie', () => {
+        const e = fresh(), html = renderEnergyMixCard(e);
+        for (const name of ['Węgiel', 'Gaz', 'Atom', 'OZE']) assert(html.includes(`<span>${name}</span>`), name);
+        assert(html.includes('aria-label="Miks: węgiel'), 'etykieta');
+        assert(renderEnergyPanel().includes('PLN/MWh') && renderEnergyPanel().includes(' GW'), 'jednostki');
+    });
+    test('bilans: Nadwyżka, Równowaga, Niedobór, Blackout', () => {
+        const e = fresh();
+        e.blackoutUntil = -1; e.capacity = 110; e.demand = 100;
+        assertEq(getEnergyBalanceState(e).label, 'Nadwyżka', 'nadwyżka');
+        e.capacity = 101;
+        assertEq(getEnergyBalanceState(e).label, 'Równowaga', 'równowaga');
+        e.capacity = 90;
+        assertEq(getEnergyBalanceState(e).label, 'Niedobór', 'niedobór');
+        assert(renderEnergyAlerts(e).includes('Niedobór mocy'), 'alert');
+        e.blackoutUntil = getEnergyQuarter();
+        assertEq(getEnergyBalanceState(e).label, 'Blackout', 'blackout');
+    });
+    test('kolejny blok jądrowy zablokowany do działania poprzedniego', () => {
+        fresh();
+        const s = by('ATOM');
+        startNuclearBlock(s, 0);
+        const html = renderPowerBlocks(s);
+        assert(html.includes('Blok 1') && html.includes('Budowa'), 'budowa');
+        assert(html.includes('Wymaga działającego bloku 1'), 'blokada');
+    });
+    test('UEiE 0: bez wartości emisji i bez liczby zdrowia; poziom 1 kraj, poziom 2 spółki', () => noDebug(() => {
+        const e = fresh();
+        assert(renderPollutionCard(e).includes('Urząd nie mierzy emisji'), 'brak pomiaru');
+        assert(!renderPollutionCard(e).includes('/100'), 'bez wartości');
+        assert(renderLifeCard(e).includes('brak pomiaru'), 'zdrowie');
+        assert(!renderCompanyEnergyKpi(by('COAL')).includes('kraju'), 'spółka bez emisji');
+        oversight.energy.level = 1;
+        assert(renderPollutionCard(e).includes('/100') && !renderPollutionCard(e).includes('Najwięksi emitenci'), 'kraj');
+        oversight.energy.level = 2;
+        assert(renderPollutionCard(e).includes('Najwięksi emitenci') && renderCompanyEnergyKpi(by('COAL')).includes('kraju'), 'spółki');
+        assert(renderEnergyEsg(by('COAL'), true).includes('Dostępna od poziomu 3'), 'ESG zablokowane');
+    }));
+    test('spółka spoza energetyki bez sekcji Energia i kafelka Moc', () => {
+        fresh();
+        assertEq(renderEnergyManage(by('TECH')), '', 'sekcja');
+        assert(!renderCompanyEnergyKpi(by('TECH')).includes('Moc'), 'kafelek');
+        assert(renderEnergyManage(by('COAL')).includes('Zlecać może tylko większościowy akcjonariusz'), 'bez kontroli');
+    });
+    test('blok innego typu: moc w miksie tego typu, panel przed pierwszym kwartałem', () => {
+        const e = fresh(), s = by('COAL'), oze = getEnergyMix(e).oze;
+        startPowerBlock(s, 'oze');
+        finishPowerBlock(s);
+        assert(getEnergyMix(e).oze > oze, 'OZE');
+        delete society.energy;
+        assert(renderEnergyPanel().includes('Dane pojawią się po pierwszym kwartale gry'), 'pusto');
+    });
+});
+
 group('0.14 T3: rozszerzenie o nowy segment', () => {
     function firm(symbol, sectors = ['Technologia'], opts = {}) {
         const s = makeCompany(symbol, { sector: sectors, cash: opts.cash ?? 2_000_000 });

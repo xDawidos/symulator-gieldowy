@@ -16,3 +16,4 @@ Gałąź `claude/impl-017-s0b-891539`, baza po scaleniu zmiany-AI 965ad54. Nie s
 
 - **Podwykonawcy `energy`:** zostaje minimum 3, nie 2. `auctionMin` to 3, a przy 2 firmach zmienia się wynik aukcji budów. Geologów jest 2, bo ich zlecenia nie idą przez aukcję.
 - **E4 i E5, E6–E9:** jeden commit na grupę, bo kod jest przepleciony.
+- **Widoki:** `energy_ui.js` wg projektu 11. Karta kraju startowego nie istnieje w grze, więc wiersze Poziom życia i Opinia są w zakładce Kraj. NIE SPRAWDZONE: widok w przeglądarce (desktop, 390 px), seria ×200, strojenie liczb, baza E0.

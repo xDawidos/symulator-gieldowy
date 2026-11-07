@@ -107,7 +107,7 @@ function getEnergyMix(e = society.energy) {
     for (const stock of stocks) {
         if (stock.isBankrupt || !stock.power) continue;
         mix[stock.power.type] += Number(stock.power.capacity) || 0;
-        if (stock.power.oze) mix.oze += stock.power.oze;
+        for (const type in stock.power.other || {}) mix[type] += stock.power.other[type];
     }
     if (typeof municipalCompanies !== 'undefined') for (const company of municipalCompanies) if (company.power) mix[company.power.type] += company.power.capacity;
     return mix;
@@ -224,13 +224,13 @@ function getPowerBlockCost(stock, add = getPowerBlockSize(stock), e = society.en
 function canStartPowerBlock(stock) {
     return Boolean(stock?.power && !stock.isBankrupt && !stock.power.build && stock.power.type !== 'nuclear');
 }
-function startPowerBlock(stock) {
-    if (!canStartPowerBlock(stock)) return null;
+function startPowerBlock(stock, type = stock?.power?.type) {
+    if (!canStartPowerBlock(stock) || !ENERGY_RULES.buildQuarters[type]) return null;
     const e = ensureEnergy(), add = getPowerBlockSize(stock, e), cost = getPowerBlockCost(stock, add, e);
-    const quarters = Math.max(1, Math.round(getRandomIntInRange(...ENERGY_RULES.buildQuarters[stock.power.type]) * (stock.power.site ? ENERGY_RULES.siteTime : 1)));
-    stock.power.build = { add, cost, spent: 0, quarters, dueQ: getEnergyQuarter() + quarters };
+    const quarters = Math.max(1, Math.round(getRandomIntInRange(...ENERGY_RULES.buildQuarters[type]) * (stock.power.site ? ENERGY_RULES.siteTime : 1)));
+    stock.power.build = { add, cost, spent: 0, quarters, dueQ: getEnergyQuarter() + quarters, type };
     stock.power.site = false;
-    logEvent(`⚡ ${stock.name} rozpoczyna budowę bloku ${add} MW (${ENERGY_TYPES[stock.power.type].name.toLowerCase()}, ok. ${quarters} kw., koszt ${formatZl(cost, 0)}).`, 'company');
+    logEvent(`⚡ ${stock.name} rozpoczyna budowę bloku ${add} MW (${ENERGY_TYPES[type].name.toLowerCase()}, ok. ${quarters} kw., koszt ${formatZl(cost, 0)}).`, 'company');
     return stock.power.build;
 }
 function payPowerInstallment(stock) {
@@ -247,7 +247,7 @@ function payPowerInstallment(stock) {
 function addStockPower(stock, add, type = stock.power.type) {
     const share = getPowerSegment(stock)?.share || 1, own = Number(stock.power.capacity) || 0;
     if (type === stock.power.type) stock.power.capacity = own + add;
-    else stock.power.oze = (Number(stock.power.oze) || 0) + add;
+    else (stock.power.other = stock.power.other || {})[type] = (Number(stock.power.other?.[type]) || 0) + add;
     if (own > 0 && stock.fundamentals) stock.fundamentals.revenue *= 1 + share * add / own;
     society.energy.stats.blocks++;
 }
@@ -255,7 +255,7 @@ function finishPowerBlock(stock) {
     const build = stock.power.build;
     stock.power.build = null;
     stock.power.techCost = 1;
-    addStockPower(stock, build.add);
+    addStockPower(stock, build.add, build.type || stock.power.type);
     logEvent(`⚡ ${stock.name} uruchamia blok ${build.add} MW.`, 'company');
     if (typeof addChartEvent === 'function') addChartEvent(stock, '⚡', `Nowy blok ${build.add} MW`);
     return build.add;
@@ -323,19 +323,22 @@ function orderEnergyContract(stock, kind) {
 function settleEnergyContract(stock, roll = Math.random()) {
     const order = stock.energyOrder, quarter = getEnergyQuarter();
     stock.energyOrder = null;
-    if (order.kind === 'site') { if (stock.power) stock.power.site = true; return true; }
+    if (order.kind === 'site') { if (stock.power) stock.power.site = true; stock.energyResult = { ok: true, text: 'działka gotowa, następna budowa tańsza i krótsza.' }; return true; }
     if (order.kind === 'tech') {
         if (stock.power) {
             stock.power.techs = (Number(stock.power.techs) || 0) + 1;
             const add = Math.round((Number(stock.power.capacity) || 0) * ENERGY_RULES.techGain);
-            if (add > 0 && roll < 0.5) addStockPower(stock, add); // wynik: +3% mocy albo tańszy następny blok
+            const more = add > 0 && roll < 0.5; // wynik: +3% mocy albo tańszy następny blok
+            if (more) addStockPower(stock, add);
             else stock.power.techCost = ENERGY_RULES.techCost;
+            stock.energyResult = { ok: true, text: more ? 'sprawność +3%.' : 'następny blok tańszy o 5%.' };
         }
         return true;
     }
-    if (roll >= ENERGY_RULES.depositChance) { if (typeof logEvent === 'function') logEvent(`🪨 ${stock.name}: geolodzy nie znaleźli nowego złoża.`, 'company'); return false; }
+    if (roll >= ENERGY_RULES.depositChance) { stock.energyResult = { ok: false, text: 'geolog nie znalazł złoża.' }; logEvent(`🪨 ${stock.name}: geolodzy nie znaleźli nowego złoża.`, 'company'); return false; }
     stock.deposit = { factor: +getRandomInRange(...ENERGY_RULES.depositFactor).toFixed(3), untilQ: quarter + getRandomIntInRange(...ENERGY_RULES.depositQuarters) };
     society.energy.stats.deposits++;
+    stock.energyResult = { ok: true, text: `złoże znalezione, produkcja +${Math.round((stock.deposit.factor - 1) * 100)}% do kw. ${stock.deposit.untilQ}.` };
     logEvent(`🪨 ${stock.name}: nowe złoże, wyższa produkcja na czas eksploatacji.`, 'company');
     return true;
 }
@@ -461,6 +464,7 @@ function processPollution(e) {
         e.pollution = POLLUTION_RULES.start;
     }
     e.emissions = Math.round(emissions);
+    e.pollutionLast = e.pollution;
     e.pollution = +clampValue(POLLUTION_RULES.keep * e.pollution + emissions / e.norm / 10, 0, 100).toFixed(2);
     if (e.pollution > POLLUTION_RULES.healthyLevel) society.population = Math.round(society.population * (1 - (e.pollution - POLLUTION_RULES.healthyLevel) / 60 * POLLUTION_RULES.populationLoss));
     return e.pollution;
@@ -609,8 +613,8 @@ const NUCLEAR_BLOCK_BOOSTS = [0.15, 0.10, 0.05];
 /** Fundusz energii płaci spółkom OZE według mocy. Wpływy i wydatek to opłaty za emisje, więc saldo budżetu się nie zmienia. */
 function payOzeSubsidies(e) {
     society.budget.energyFund = 0;
-    const list = stocks.filter(stock => !stock.isBankrupt && (stock.power?.type === 'oze' || stock.power?.oze > 0));
-    const capacity = stock => (stock.power.type === 'oze' ? stock.power.capacity : 0) + (Number(stock.power.oze) || 0);
+    const list = stocks.filter(stock => !stock.isBankrupt && (stock.power?.type === 'oze' || stock.power?.other?.oze > 0));
+    const capacity = stock => (stock.power.type === 'oze' ? stock.power.capacity : 0) + (Number(stock.power.other?.oze) || 0);
     const total = list.reduce((sum, stock) => sum + capacity(stock), 0), pot = (Number(e.fund) || 0) * ENERGY_STATE_RULES.ozeShare;
     if (!(total > 0) || !(pot >= 1)) return 0;
     for (const stock of list) {
@@ -725,12 +729,12 @@ function getOwnedEnergyStock(symbol) {
     if (typeof showToast === 'function') showToast('Zlecać może tylko większościowy akcjonariusz (> 50%).', 'warning');
     return null;
 }
-function orderOwnerPowerBlock(symbol) {
+function orderOwnerPowerBlock(symbol, type) {
     const stock = getOwnedEnergyStock(symbol);
     if (!stock) return null;
     if (!canStartPowerBlock(stock)) { if (typeof showToast === 'function') showToast('Poprzedni blok jest jeszcze w budowie.', 'warning'); return null; }
     if ((Number(stock.cash) || 0) < getPowerBlockCost(stock) * ENERGY_RULES.minCashShare) { if (typeof showToast === 'function') showToast('Za mało gotówki na start budowy.', 'warning'); return null; }
-    return startPowerBlock(stock);
+    return startPowerBlock(stock, type || stock.power.type);
 }
 function orderOwnerEnergyContract(symbol, kind) {
     const stock = getOwnedEnergyStock(symbol);
