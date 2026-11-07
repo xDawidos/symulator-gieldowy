@@ -11256,7 +11256,7 @@ function processClinicalTrials(quarter = getSubsectorQuarter()) {
     }
 }
 
-// Energetyka jądrowa: budowa bloku 8–16 kw. → zgoda regulatora (ryzyko opóźnienia) → stabilny przychód.
+// Energetyka jądrowa: budowa bloku 8–16 kw. → zgoda Urzędu Energii i Ekologii (ryzyko opóźnienia) → stabilny przychód. 0.17.2: kilka bloków, każdy z mocą w miksie.
 // Kontrakty z państwem zależą od partii rządzącej (0.13): Blok Państwowy i Ludowcy płacą więcej, Koalicja Rynkowa mniej.
 const NUCLEAR_START_CHANCE = 0.04;          // na kwartał, gdy spółka jądrowa nie buduje i ma gotówkę
 const NUCLEAR_BUILD_QUARTERS = [8, 16];
@@ -11285,7 +11285,7 @@ function startNuclearBlock(stock, quarter = getSubsectorQuarter()) {
     const quarters = getRandomIntInRange(...NUCLEAR_BUILD_QUARTERS);
     stock.nuclearBlock = { stage: 'construction', startedQuarter: quarter, dueQuarter: quarter + quarters, cost: Math.round(revenue * NUCLEAR_COST_REVENUE_QUARTERS), spent: 0, quarters, delays: 0, stateFunded: Boolean(stock.isStateOwned) };
     noteSubsectorStat('nuclearBlocks');
-    logEvent(`☢️ ${stock.name} rozpoczyna budowę bloku jądrowego (ok. ${quarters} kw., koszt ${formatZl(stock.nuclearBlock.cost, 0)}). Przychód dopiero po zgodzie regulatora.`, 'company');
+    logEvent(`☢️ ${stock.name} rozpoczyna budowę bloku jądrowego (ok. ${quarters} kw., koszt ${formatZl(stock.nuclearBlock.cost, 0)}). Przychód dopiero po zgodzie urzędu.`, 'company');
     if (typeof addChartEvent === 'function') addChartEvent(stock, '☢️', 'Start budowy bloku jądrowego');
     return stock.nuclearBlock;
 }
@@ -11313,7 +11313,7 @@ function payNuclearInstallment(stock) {
     return installment;
 }
 
-/** Zgoda regulatora po budowie: delayRoll < 35% → opóźnienie 2–4 kw. (najwyżej 2 razy), inaczej blok rusza. */
+/** Zgoda urzędu po budowie: delayRoll < 35% → opóźnienie 2–4 kw. (najwyżej 2 razy), inaczej blok rusza. */
 function reviewNuclearBlock(stock, delayRoll = Math.random(), quarter = getSubsectorQuarter()) {
     const block = stock.nuclearBlock;
     if (block.delays < NUCLEAR_MAX_DELAYS && delayRoll < NUCLEAR_REGULATOR_DELAY_CHANCE) {
@@ -11322,19 +11322,22 @@ function reviewNuclearBlock(stock, delayRoll = Math.random(), quarter = getSubse
         block.delays++;
         block.dueQuarter = quarter + delay;
         applyPriceEffect(stock.symbol, -0.05, 'negative', 'company');
-        logEvent(`⏳ Regulator wstrzymuje uruchomienie bloku jądrowego ${stock.name} — opóźnienie o ${delay} kw.`, 'company');
-        if (typeof addChartEvent === 'function') addChartEvent(stock, '⏳', `Regulator: opóźnienie bloku o ${delay} kw.`);
+        logEvent(`⏳ Urząd Energii i Ekologii wstrzymuje uruchomienie bloku jądrowego ${stock.name} — opóźnienie o ${delay} kw.`, 'company');
+        if (typeof addChartEvent === 'function') addChartEvent(stock, '⏳', `Urząd: opóźnienie bloku o ${delay} kw.`);
         return 'delayed';
     }
     block.stage = 'operating';
     block.operatingSince = quarter;
-    if (stock.fundamentals) stock.fundamentals.revenue *= 1 + NUCLEAR_REVENUE_BOOST;
+    stock.nuclearUnits = (Number(stock.nuclearUnits) || 0) + 1; // 0.17.2: kolejne bloki dają mniej przychodu, ale tyle samo mocy
+    const boost = typeof NUCLEAR_BLOCK_BOOSTS !== 'undefined' ? NUCLEAR_BLOCK_BOOSTS[Math.min(stock.nuclearUnits, NUCLEAR_BLOCK_BOOSTS.length) - 1] : NUCLEAR_REVENUE_BOOST;
+    if (stock.fundamentals) stock.fundamentals.revenue *= 1 + boost;
+    if (typeof addNuclearPower === 'function' && typeof society === 'object' && society) addNuclearPower(stock);
     if (!Number.isFinite(stock.baseVolatilityFactor)) stock.baseVolatilityFactor = stock.volatilityFactor;
     stock.baseVolatilityFactor *= 0.9; // stabilny przychód
     stock.volatilityFactor = Math.min(stock.volatilityFactor, stock.baseVolatilityFactor * 2);
     noteSubsectorStat('nuclearBlocksDone');
     applyPriceEffect(stock.symbol, 0.08, 'positive', 'company');
-    logEvent(`⚡ Blok jądrowy ${stock.name} rusza po ${quarter - block.startedQuarter} kw. — stabilny przychód (+15%) i kontrakty z państwem.`, 'company');
+    logEvent(`⚡ Blok jądrowy ${stock.name} rusza po ${quarter - block.startedQuarter} kw. — stabilny przychód (+${Math.round(boost * 100)}%) i kontrakty z państwem.`, 'company');
     if (typeof addChartEvent === 'function') addChartEvent(stock, '⚡', 'Blok jądrowy uruchomiony');
     if (isPlayerHolding(stock) && typeof unlockAcademyEntry === 'function') unlockAcademyEntry('dlugiHoryzont', `${stock.name}: blok jądrowy`);
     return 'operating';
@@ -11343,7 +11346,8 @@ function reviewNuclearBlock(stock, delayRoll = Math.random(), quarter = getSubse
 /** Kontrakt z państwem dla działającego bloku: zależy od dotacji partii rządzącej (Skarb Państwa płaci). */
 function payNuclearStateContract(stock) {
     const party = typeof getRulingParty === 'function' ? getRulingParty() : null;
-    const factor = Math.max(0, ((Number(party?.subsidies) || 1) - 1) / 0.5);
+    const partyFactor = Math.max(0, ((Number(party?.subsidies) || 1) - 1) / 0.5);
+    const factor = typeof getNuclearContractFactor === 'function' ? getNuclearContractFactor(partyFactor) : partyFactor; // 0.17.2: także ustawy
     const amount = Math.round((Number(stock.fundamentals?.revenue) || 0) * NUCLEAR_STATE_CONTRACT * factor);
     if (!(amount > 0) || typeof governmentTreasury === 'undefined' || governmentTreasury < amount) return 0;
     governmentTreasury -= amount;
@@ -11368,7 +11372,11 @@ function processNuclearBlocks(quarter = getSubsectorQuarter()) {
             if (block.dueQuarter <= quarter) reviewNuclearBlock(stock, Math.random(), quarter);
         } else if (block.stage === 'operating') {
             payNuclearStateContract(stock);
+            // 0.17.2: kolejny blok wymaga działającego poprzedniego
+            if ((Number(stock.nuclearUnits) || 1) < ENERGY_STATE_RULES.nuclearMaxBlocks && Math.random() < getNuclearStartChance(stock) * ENERGY_STATE_RULES.nuclearNextChance) startNuclearBlock(stock, quarter);
+            continue;
         }
+        if ((Number(stock.nuclearUnits) || 0) > 0) payNuclearStateContract(stock); // działające bloki przy budowie kolejnego
     }
 }
 

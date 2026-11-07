@@ -45,7 +45,8 @@ const ENERGY_LAW_RULES = { policyMargin: 0.005, policyStability: 0.99, mixedCap:
 Object.assign(INFRA_TYPES, {
     plant_coal: { name: 'Elektrownia węglowa', energy: 'coal', mode: null, gain: 0, power: 0.04, cost: 3_000_000, quarters: [8, 12], limit: 1 },
     plant_gas:  { name: 'Elektrownia gazowa', energy: 'gas', mode: null, gain: 0, power: 0.04, cost: 2_400_000, quarters: [6, 10], limit: 3 },
-    plant_oze:  { name: 'Farma OZE', energy: 'oze', mode: null, gain: 0, power: 0.03, cost: 2_000_000, quarters: [4, 8], limit: 4 }
+    plant_oze:  { name: 'Farma OZE', energy: 'oze', mode: null, gain: 0, power: 0.03, cost: 2_000_000, quarters: [4, 8], limit: 4 },
+    plant_nuclear: { name: 'Elektrownia jądrowa', energy: 'nuclear', mode: null, gain: 0, power: 0.06, cost: 6_000_000, quarters: [12, 16], limit: 1 }
 });
 
 const getEnergyPolicyType = () => ENERGY_POLICY_TYPES[Number(society?.laws?.energyPolicy) || 0] || null;
@@ -166,7 +167,7 @@ function syncPowerProducers(e) {
 
 function getEnergyDemand(e) {
     const household = (Number(society.population) || e.pop0) / e.pop0;
-    return e.demand0 * ((1 - ENERGY_RULES.householdShare) * e.activity + ENERGY_RULES.householdShare * household);
+    return e.demand0 * ((1 - ENERGY_RULES.householdShare) * e.activity + ENERGY_RULES.householdShare * household) * (1 - getSmartGridCut());
 }
 function getEnergyTrend(e = society.energy) { return e.hist.length ? e.hist.reduce((sum, value) => sum + value, 0) / e.hist.length : 1; }
 function getEnergyShortage(e = society.energy) { return e.capacity > 0 ? Math.max(0, e.demand / e.capacity - 1) : 0; }
@@ -200,6 +201,7 @@ function getPowerResultAdj(stock) {
     if (stock.deposit && stock.deposit.untilQ > getEnergyQuarter()) revenueFactor *= stock.deposit.factor;
     const emission = getStockEmissionFactor(stock);
     if (emission > 0) { marginAdj -= getClimateFee() * emission; revenueFactor *= 1 - getPollutionProductionCut(e); }
+    revenueFactor *= getOpinionRevenueFactor(stock, e);
     if (e.acidUntil >= getEnergyQuarter() && getStockSegments(stock).some(seg => seg.subsector === 'Rolnictwo')) revenueFactor -= ENERGY_EVENT_RULES.acidCut;
     return { revenueFactor, marginAdj };
 }
@@ -367,7 +369,7 @@ function onEnergyProjectCompleted(def) {
 function maybeAnnounceEnergyProject(e) {
     if ((e.capacity + getEnergyBuilding(e)) / Math.max(1, e.demand) >= ENERGY_RULES.stateProjectAt || Math.random() >= ENERGY_RULES.stateProjectChance) return null;
     if ((Number(society.budget?.deficitQuarters) || 0) > 0) return null;
-    const open = getInfraOpenTypes().filter(type => INFRA_TYPES[type].energy);
+    const open = getInfraOpenTypes().filter(type => INFRA_TYPES[type].energy && (type !== 'plant_nuclear' || getEnergyPolicyType() === 'nuclear'));
     return open.length ? announceInfraProject(getRandomElement(open), 'niedobór mocy') : null;
 }
 function maybeSpawnMunicipalEnergy(e) {
@@ -393,7 +395,7 @@ function triggerBlackout(e, quarter = getEnergyQuarter()) {
 }
 function maybeBlackout(e) {
     const quarter = getEnergyQuarter();
-    if (getEnergyShortage(e) >= ENERGY_RULES.blackoutAt && quarter - e.blackoutQ >= ENERGY_RULES.blackoutCooldown && Math.random() < ENERGY_RULES.blackoutChance) triggerBlackout(e, quarter);
+    if (getEnergyShortage(e) >= ENERGY_RULES.blackoutAt + getBatteryMargin() && quarter - e.blackoutQ >= ENERGY_RULES.blackoutCooldown && Math.random() < ENERGY_RULES.blackoutChance) triggerBlackout(e, quarter);
 }
 
 // ---------------------------------------------------------------------------------
@@ -420,7 +422,7 @@ const ENERGY_EVENT_RULES = { smogMood: 1, protestPrice: -0.02, failureQuarters: 
 
 const getEnergyOfficeLevel = () => Number(oversight?.energy?.level) || 0;
 function getClimateFee() { return CLIMATE_FEES[Number(society?.laws?.climatePolicy ?? SOCIAL_LAWS.climatePolicy.start)] || 0; }
-function getStockEcoCut(stock) { return Math.min(ENERGY_OFFICE_RULES.ecoMax, (Number(stock?.ecoCut) || 0)); }
+function getStockEcoCut(stock) { return Math.min(ENERGY_OFFICE_RULES.ecoMax, (Number(stock?.ecoCut) || 0) + getStockTechCut(stock)); }
 /** Emisyjność spółki: średnia sektorów, prąd według typu elektrowni, po obniżkach (technologie, ESG). */
 function getStockEmissionFactor(stock) {
     if (!stock || stock.assetType || stock.isBankStock) return 0;
@@ -554,7 +556,128 @@ function processEnergyEvents(e) {
     return null;
 }
 
-/** Kwartał energetyki: zużycie, moc, cena, budowy, zlecenia, nowe spółki, blackout, zanieczyszczenia. */
+// ---------------------------------------------------------------------------------
+// E6: poziom życia. E7: OZE i atom. E8: opinia publiczna. E9: technologie
+// ---------------------------------------------------------------------------------
+const LIFE_RULES = { factors: ['consumption', 'health', 'safety', 'education', 'information'], attractiveness: 0.1, population: 0.00001, vote: 0.3, voteMax: 3 };
+const LIFE_NAMES = { consumption: 'Konsumpcja i zadowolenie', health: 'Zdrowie', safety: 'Bezpieczeństwo', education: 'Edukacja i nauka', information: 'Informacja' };
+const countSectorStocks = sector => stocks.filter(stock => !stock.isBankrupt && !stock.assetType && getStockSegments(stock).some(seg => seg.sector === sector)).length;
+/** 5 czynników 0–100 z istniejących wskaźników kraju. */
+function getLifeFactors(e = society.energy) {
+    const satisfaction = typeof getAverageSatisfaction === 'function' ? getAverageSatisfaction() : 60;
+    const wage = typeof getAverageWageIndex === 'function' ? getAverageWageIndex() : 1;
+    const budget = society.budget, healthFunding = clampValue((Number(budget.programs?.health) || 0) / Math.max(1, (Number(budget.taxBase) || 0) * SOCIAL_PROGRAM_FULL * 0.3), 0, 1);
+    const pollution = Number(e?.pollution) || POLLUTION_RULES.start, police = typeof oversight === 'object' && oversight?.police ? oversight.police.level : 0;
+    const security = typeof getHomeSecurityLevel === 'function' ? getHomeSecurityLevel() : 50, techs = stocks.reduce((sum, stock) => sum + Object.values(stock.research?.completedInvestments || {}).reduce((a, b) => a + (Number(b) || 0), 0), 0);
+    return {
+        consumption: clampValue(0.5 * satisfaction + 20 * wage + 15 * (Number(society.demandIndex) || 1), 0, 100),
+        health: clampValue(45 + 25 * healthFunding + 1.2 * Math.min(10, countSectorStocks('Medycyna')) - 0.5 * (pollution - POLLUTION_RULES.start), 0, 100),
+        safety: clampValue(0.8 * security + 4 * police, 0, 100),
+        education: clampValue(0.6 * (Number(society.education) || 50) + 1.5 * Math.min(8, countSectorStocks('Badania')) + Math.min(10, techs / Math.max(1, stocks.length) * 2), 0, 100),
+        information: clampValue(50 + 1.5 * Math.min(10, countSectorStocks('Media')) + 3 * Math.min(4, stocks.filter(stock => !stock.isBankrupt && getStockSegments(stock).some(seg => seg.subsector === 'Telekomunikacja')).length) - (Number(oversight?.corruption) || 0) / 5 - Math.min(10, Number(e?.stats?.events?.scandal) || 0), 0, 100)
+    };
+}
+function getLifeQuality(e = society.energy) {
+    const factors = getLifeFactors(e);
+    return LIFE_RULES.factors.reduce((sum, id) => sum + factors[id], 0) / LIFE_RULES.factors.length;
+}
+function processLifeQuality(e) {
+    const value = getLifeQuality(e);
+    if (!(e.life0 > 0)) e.life0 = +value.toFixed(2);
+    e.life = +value.toFixed(2);
+    e.lifeHist = [...(e.lifeHist || []), e.life].slice(-5);
+    society.population = Math.round(society.population * (1 + (e.life - e.life0) * LIFE_RULES.population));
+}
+/** Wkład w atrakcyjność kraju: odchylenie od poziomu startowego, więc na starcie migracja bez zmian. */
+function getLifeAttractiveness() { return hasEnergyState() && society.energy.life0 > 0 ? (society.energy.life - society.energy.life0) * LIFE_RULES.attractiveness : 0; }
+/** Nastroje wyborcze: rząd zyskuje albo traci na zmianie poziomu życia w ostatnim roku. */
+function getLifeVoteAdj() {
+    const hist = society.energy?.lifeHist;
+    return hist?.length > 1 ? clampValue((hist[hist.length - 1] - hist[0]) * LIFE_RULES.vote, -LIFE_RULES.voteMax, LIFE_RULES.voteMax) : 0;
+}
+
+const ENERGY_STATE_RULES = { ozeShare: 0.5, nuclearPower: 0.06, nuclearMaxBlocks: 4, nuclearNextChance: 0.5, atomAfterQuarters: 16, atomChance: 0.05, atomStatePct: 0.8, atomPrice: 1700, atomShares: 1000000 };
+const NUCLEAR_BLOCK_BOOSTS = [0.15, 0.10, 0.05];
+/** Fundusz energii płaci spółkom OZE według mocy. Wpływy i wydatek to opłaty za emisje, więc saldo budżetu się nie zmienia. */
+function payOzeSubsidies(e) {
+    society.budget.energyFund = 0;
+    const list = stocks.filter(stock => !stock.isBankrupt && (stock.power?.type === 'oze' || stock.power?.oze > 0));
+    const capacity = stock => (stock.power.type === 'oze' ? stock.power.capacity : 0) + (Number(stock.power.oze) || 0);
+    const total = list.reduce((sum, stock) => sum + capacity(stock), 0), pot = (Number(e.fund) || 0) * ENERGY_STATE_RULES.ozeShare;
+    if (!(total > 0) || !(pot >= 1)) return 0;
+    for (const stock of list) {
+        const amount = Math.round(pot * capacity(stock) / total);
+        if (!(amount > 0)) continue;
+        adjustCompanyCash(stock, amount);
+        adjustBalanceSheet(stock, { assets: amount, retainedEarnings: amount });
+        if (typeof recordPayment === 'function') recordPayment('external:skarb-panstwa', stock, amount, 'Dopłata do OZE z opłat za emisje');
+    }
+    e.fund -= pot;
+    e.ozeSpent = (Number(e.ozeSpent) || 0) + pot;
+    e.ozeQuarters = (Number(e.ozeQuarters) || 0) + 1;
+    society.budget.energyFund = Math.round(pot);
+    return pot;
+}
+/** Nowy blok działa: moc kraju rośnie o stały udział, przychód liczy mechanika atomu. */
+function addNuclearPower(stock) {
+    const e = ensureEnergy(), add = Math.max(1, Math.round(e.capacity * ENERGY_STATE_RULES.nuclearPower));
+    stock.power = stock.power || { type: 'nuclear', capacity: 0 };
+    if (stock.power.type === 'nuclear') stock.power.capacity += add;
+    else e.pool.nuclear = (Number(e.pool.nuclear) || 0) + add;
+    e.stats.blocks++;
+    return add;
+}
+/** Kontrakt z państwem: partia, a do tego ustawy „Polityka energetyczna” i „Dostawcy energii”. */
+function getNuclearContractFactor(partyFactor) {
+    const suppliers = Number(society?.laws?.energySuppliers ?? 1);
+    return Math.max(0, partyFactor + (getEnergyPolicyType() === 'nuclear' ? 0.5 : 0) + (suppliers === 2 ? 0.25 : suppliers === 0 ? -0.25 : 0));
+}
+/** Państwowa spółka atomowa: po latach dopłat do OZE, od razu na Platynowej, bez NewHorizons. Prywatyzacja zwykłą ścieżką spółek państwowych. */
+function maybeFoundStateAtom(e, roll = Math.random()) {
+    if (e.stateAtom || (Number(e.ozeQuarters) || 0) < ENERGY_STATE_RULES.atomAfterQuarters || roll >= ENERGY_STATE_RULES.atomChance || typeof createListedCompany !== 'function') return null;
+    const stock = createListedCompany({ name: 'Narodowy Atom', symbol: uniqueSymbol('NAT'), sector: ['Energia'], price: ENERGY_STATE_RULES.atomPrice, totalShares: ENERGY_STATE_RULES.atomShares, exchange: 'PLATINUM', market: 'GPW' });
+    stock.segments = [{ sector: 'Energia', share: 1, subsector: 'Energetyka jądrowa' }];
+    Object.assign(stock, { isStateOwned: true, stateOwnershipPct: ENERGY_STATE_RULES.atomStatePct, volatilityFactor: 0.7, power: { type: 'nuclear', capacity: 0 } });
+    initializeFundamentals(stock, true);
+    stocks.push(stock);
+    e.stateAtom = stock.symbol;
+    publishEnergyNews(`☢️ Państwo zakłada spółkę ${stock.name} i wprowadza ją wprost na Giełdę Platynową. Pierwszy blok to dopiero początek drogi.`, `☢️ ${stock.name} na Giełdzie Platynowej`, 2);
+    return stock;
+}
+
+const OPINION_RULES = { start: 50, pull: 0.1, climateStep: 3, pollutionWeight: 0.2, certWeight: 0.3, maxEffect: 0.02, sectors: ['Dobra konsumpcyjne', 'Media', 'Turystyka'] };
+const OPINION_EVENTS = { smog: -2, protest: -1, failure: -1, acidRain: -1, scandal: -4 };
+function noteEnergyOpinion(id) {
+    const e = society.energy;
+    e.opinion = clampValue((e.opinion ?? OPINION_RULES.start) + (OPINION_EVENTS[id] || 0), 0, 100);
+}
+function processOpinion(e) {
+    const climate = Number(society.laws?.climatePolicy ?? 1) - SOCIAL_LAWS.climatePolicy.start;
+    const certificates = stocks.filter(stock => !stock.isBankrupt && stock.research?.completedInvestments?.COMMON_ECO_1 > 0).length;
+    const target = OPINION_RULES.start + climate * OPINION_RULES.climateStep - (e.pollution - POLLUTION_RULES.start) * OPINION_RULES.pollutionWeight + Math.min(5, certificates * OPINION_RULES.certWeight);
+    const value = e.opinion ?? OPINION_RULES.start;
+    e.opinion = +clampValue(value + (target - value) * OPINION_RULES.pull, 0, 100).toFixed(2);
+}
+function getOpinionRevenueFactor(stock, e = society.energy) {
+    const share = getStockSegments(stock).reduce((sum, seg) => sum + (OPINION_RULES.sectors.includes(seg.sector) ? seg.share : 0), 0);
+    return share > 0 ? 1 + share * OPINION_RULES.maxEffect * ((e.opinion ?? OPINION_RULES.start) - OPINION_RULES.start) / OPINION_RULES.start : 1;
+}
+
+// Technologie bez nowego katalogu: istniejące pozycje `technologies` obniżają emisje, zużycie albo próg blackoutu.
+const ENERGY_TECH_EFFECTS = { CHEM_CO2_CAPTURE_1: 0.15, BUILDING_GREEN_MATERIALS_1: 0.10, COMMON_ECO_1: 0.05, ENERGY_ALGAE_1: 0.05 };
+const ENERGY_TECH_RULES = { smartGrid: 0.02, smartGridMax: 0.06, battery: 0.01, batteryMax: 0.03 };
+const hasStockTech = (stock, id) => (Number(stock?.research?.completedInvestments?.[id]) || 0) > 0;
+function getStockTechCut(stock) {
+    if (!stock?.research?.completedInvestments) return 0;
+    let cut = 0;
+    for (const id in ENERGY_TECH_EFFECTS) if (hasStockTech(stock, id)) cut += ENERGY_TECH_EFFECTS[id];
+    return cut;
+}
+const countTechOwners = id => stocks.filter(stock => !stock.isBankrupt && hasStockTech(stock, id)).length;
+const getSmartGridCut = () => Math.min(ENERGY_TECH_RULES.smartGridMax, countTechOwners('ENERGY_SMART_GRID_1') * ENERGY_TECH_RULES.smartGrid);
+const getBatteryMargin = () => Math.min(ENERGY_TECH_RULES.batteryMax, countTechOwners('ENERGY_BATTERY_1') * ENERGY_TECH_RULES.battery);
+
+/** Kwartał energetyki: zużycie, moc, cena, budowy, zlecenia, nowe spółki, blackout, zanieczyszczenia, poziom życia, opinia. */
 function processEnergyQuarterly() {
     if (typeof society !== 'object' || !society || !stocks?.length) return null;
     const e = ensureEnergy();
@@ -577,5 +700,9 @@ function processEnergyQuarterly() {
     processEnergyOffice(e);
     processAiEsg(e);
     processEnergyEvents(e);
+    payOzeSubsidies(e);
+    maybeFoundStateAtom(e);
+    processOpinion(e);
+    processLifeQuality(e);
     return e;
 }

@@ -6016,6 +6016,104 @@ group('0.17.2 E4-E5: urząd i zanieczyszczenia', () => {
     });
 });
 
+group('0.17.2 E6-E9: poziom życia, OZE, atom, opinia, technologie', () => {
+    const make = (symbol, sector, subsector, revenue) => {
+        const c = makeCompany(symbol, { sector: [sector], cash: 1e8 });
+        if (subsector) c.segments = [{ sector, share: 1, subsector }];
+        c.fundamentals = { ...(c.fundamentals || {}), revenue };
+        return c;
+    };
+    const fresh = () => {
+        ensureCommodityState();
+        resetWorld([make('COAL', 'Energia', 'Energetyka węglowa', 5000), make('ZIEL', 'Energia', 'OZE', 3000), make('ATOM', 'Energia', 'Energetyka jądrowa', 2000), make('MEDI', 'Media', null, 4000), make('TECH', 'Technologia', null, 4000)]);
+        delete society.energy;
+        oversight.energy = { level: 0, budget: 0 };
+        const e = ensureEnergy();
+        e.hist = [1]; e.price = 1; e.pollution = 40;
+        return e;
+    };
+    const by = symbol => stocks.find(s => s.symbol === symbol);
+    test('poziom życia: 5 czynników 0-100 po 20%, zanieczyszczenie obniża zdrowie, punkt startowy nie rusza migracji', () => {
+        const e = fresh(), factors = getLifeFactors(e);
+        assertEq(Object.keys(factors).length, 5, '5 czynników');
+        for (const value of Object.values(factors)) assert(value >= 0 && value <= 100, 'zakres');
+        assert(Math.abs(getLifeQuality(e) - Object.values(factors).reduce((a, b) => a + b, 0) / 5) < 1e-9, 'średnia');
+        e.pollution = 90;
+        assert(getLifeFactors(e).health < factors.health, 'zdrowie');
+        e.pollution = 40;
+        processLifeQuality(e);
+        assertEq(getLifeAttractiveness(), 0, 'start bez skutku');
+        e.life = e.life0 + 10;
+        assert(getLifeAttractiveness() > 0, 'wyższy poziom życia przyciąga');
+        e.lifeHist = [50, 40];
+        assert(getLifeVoteAdj() < 0, 'spadek szkodzi rządzącym');
+    });
+    test('OZE: dopłata z funduszu opłat, według mocy, liczy kwartały subsydiów', () => {
+        const e = fresh(), cash = by('ZIEL').cash, coal = by('COAL').cash;
+        e.fund = 1000;
+        assert(payOzeSubsidies(e) > 0, 'wypłata');
+        assert(by('ZIEL').cash > cash, 'OZE dostaje');
+        assertEq(by('COAL').cash, coal, 'węgiel nie');
+        assertEq(e.ozeQuarters, 1, 'kwartał');
+        assertEq(e.fund, 500, 'połowa funduszu');
+    });
+    test('atom: kilka bloków, każdy z mocą, przychód kolejnych maleje, kontrakt zależy od ustaw', () => {
+        const e = fresh(), s = by('ATOM'), cap = getEnergyCapacity(e), laws = { ...society.laws };
+        const run = () => { startNuclearBlock(s, 0); return reviewNuclearBlock(s, 0.99, 10); };
+        const rev0 = s.fundamentals.revenue;
+        assertEq(run(), 'operating', 'blok 1');
+        const r1 = s.fundamentals.revenue / rev0;
+        assert(Math.abs(r1 - 1.15) < 1e-9, '+15%');
+        e.capacity = getEnergyCapacity(e);
+        assert(e.capacity > cap, 'moc w miksie');
+        const rev1 = s.fundamentals.revenue;
+        run();
+        assert(Math.abs(s.fundamentals.revenue / rev1 - 1.10) < 1e-9, '+10%');
+        assertEq(s.nuclearUnits, 2, 'dwa bloki');
+        try {
+            society.laws.energyPolicy = 3; society.laws.energySuppliers = 2;
+            assertEq(getNuclearContractFactor(0), 0.75, 'polityka i dostawcy');
+            society.laws.energyPolicy = 0; society.laws.energySuppliers = 0;
+            assertEq(getNuclearContractFactor(0), 0, 'bez kontraktu');
+        } finally { society.laws = laws; }
+    });
+    test('państwowa spółka atomowa: dopiero po latach dopłat, na Platynowej, jedna', () => {
+        const e = fresh();
+        assertEq(maybeFoundStateAtom(e, 0), null, 'za wcześnie');
+        e.ozeQuarters = ENERGY_STATE_RULES.atomAfterQuarters;
+        assertEq(maybeFoundStateAtom(e, 0.99), null, 'szansa');
+        const stock = maybeFoundStateAtom(e, 0);
+        assert(stock?.isStateOwned && stock.exchange === 'PLATINUM' && stock.market === 'GPW' && stock.power.type === 'nuclear', 'spółka');
+        assertEq(maybeFoundStateAtom(e, 0), null, 'jedna');
+    });
+    test('opinia: zdarzenia obniżają, skutek najwyżej 2% tylko dla wybranych sektorów', () => {
+        const e = fresh();
+        e.opinion = 50;
+        noteEnergyOpinion('scandal');
+        assertEq(e.opinion, 46, 'skandal');
+        e.opinion = 0;
+        assert(Math.abs(getOpinionRevenueFactor(by('MEDI'), e) - 0.98) < 1e-9, 'minimum');
+        e.opinion = 100;
+        assert(Math.abs(getOpinionRevenueFactor(by('MEDI'), e) - 1.02) < 1e-9, 'maksimum');
+        assertEq(getOpinionRevenueFactor(by('TECH'), e), 1, 'inne sektory');
+    });
+    test('technologie: istniejące pozycje obniżają emisje, Smart Grid zużycie', () => {
+        const e = fresh(), s = by('COAL'), demand = getEnergyDemand(e);
+        s.research = { completedInvestments: { CHEM_CO2_CAPTURE_1: 1 } };
+        assert(Math.abs(getStockEmissionFactor(s) - 0.85) < 1e-9, 'wychwyt');
+        s.research.completedInvestments.ENERGY_SMART_GRID_1 = 1;
+        assert(getEnergyDemand(e) < demand, 'Smart Grid');
+    });
+    test('zapis: pola energetyki przechodzą przez JSON', () => {
+        const e = fresh();
+        processEnergyQuarterly();
+        const copy = JSON.parse(JSON.stringify(society.energy));
+        assertEq(copy.v, 1, 'wersja');
+        assert(Number.isFinite(copy.life) && Number.isFinite(copy.pollution), 'pola');
+        delete society.energy;
+    });
+});
+
 group('0.14 T3: rozszerzenie o nowy segment', () => {
     function firm(symbol, sectors = ['Technologia'], opts = {}) {
         const s = makeCompany(symbol, { sector: sectors, cash: opts.cash ?? 2_000_000 });

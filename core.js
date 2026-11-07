@@ -5771,7 +5771,8 @@ function advanceWages() {
 function getCountryAttractiveness() {
     const satisfaction = typeof getAverageSatisfaction === 'function' ? getAverageSatisfaction() : 60;
     const unemployment = Number(macro?.unemployment) || NATURAL_UNEMPLOYMENT;
-    return clampValue(0.4 * satisfaction + 0.3 * 50 * getAverageWageIndex() + 0.3 * (100 - unemployment * 500), 0, 100);
+    const life = typeof getLifeAttractiveness === 'function' ? getLifeAttractiveness() : 0; // 0.17.2 E6: poziom życia
+    return clampValue(0.4 * satisfaction + 0.3 * 50 * getAverageWageIndex() + 0.3 * (100 - unemployment * 500) + life, 0, 100);
 }
 
 function advanceMigration() {
@@ -6076,6 +6077,7 @@ function computePartySupport(withNoise = true) {
         others.forEach(id => { support[id] += penalty * (protest.includes(id) ? (rest.length ? PROTEST_TO_PEOPLE : 1) / protest.length : (1 - PROTEST_TO_PEOPLE) / rest.length); });
     }
     if (badTimes && ruling !== getFourthParty() && support.social !== undefined) support.social += SOCIAL_CRISIS_BONUS;
+    if (support[ruling] !== undefined && typeof getLifeVoteAdj === 'function') support[ruling] += getLifeVoteAdj(); // 0.17.2 E6
     if (support.green !== undefined) support.green += Math.max(0, (Number(society.energy?.pollution) || 0) - 30) * GREENS_POLLUTION_SUPPORT;
     const donations = election.donations || {};
     const assets = Math.max(1, typeof getFundAssets === 'function' && playerFund ? getFundAssets() : 1);
