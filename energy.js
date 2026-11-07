@@ -37,6 +37,9 @@ const ENERGY_CONTRACTS = {
     tech:    { name: 'Inwestowanie w najnowsze technologie', specialty: null, quarters: [2, 4] }
 };
 const DEPOSIT_COMMODITIES = ['oil', 'coal', 'gas'];
+// 0.17.2 E3: ustawy. Polityka: bonus wybranego typu. Dostawcy: limit ceny albo dopłata budżetu.
+const ENERGY_POLICY_TYPES = [null, 'coal', 'gas', 'nuclear', 'oze'];
+const ENERGY_LAW_RULES = { policyMargin: 0.005, policyStability: 0.99, mixedCap: 1.15, statePrice: 0.92 };
 
 // Projekty państwa: przetargi jak infrastruktura S5, moc trafia do państwowej spółki tego typu.
 Object.assign(INFRA_TYPES, {
@@ -44,6 +47,27 @@ Object.assign(INFRA_TYPES, {
     plant_gas:  { name: 'Elektrownia gazowa', energy: 'gas', mode: null, gain: 0, power: 0.04, cost: 2_400_000, quarters: [6, 10], limit: 3 },
     plant_oze:  { name: 'Farma OZE', energy: 'oze', mode: null, gain: 0, power: 0.03, cost: 2_000_000, quarters: [4, 8], limit: 4 }
 });
+
+const getEnergyPolicyType = () => ENERGY_POLICY_TYPES[Number(society?.laws?.energyPolicy) || 0] || null;
+/** Mnożnik zmienności po raporcie: spółka typu wspieranego ustawą jest nieco stabilniejsza. */
+function getEnergyPolicyStability(stock) {
+    return stock?.power && stock.power.type === getEnergyPolicyType() ? ENERGY_LAW_RULES.policyStability : 1;
+}
+/** Cena po ustawie „Dostawcy energii”: prywatna rynkowa, mieszana z limitem, państwowa niższa i z limitem. Reszta to dopłata budżetu. */
+function applyEnergySuppliers(raw) {
+    const level = Number(society?.laws?.energySuppliers ?? SOCIAL_LAWS.energySuppliers.start);
+    if (level === 0) return raw;
+    return level === 1 ? Math.min(raw, ENERGY_LAW_RULES.mixedCap) : Math.min(raw, ENERGY_LAW_RULES.mixedCap) * ENERGY_LAW_RULES.statePrice;
+}
+/** Dopłata budżetu przy cenie poniżej rynkowej: część przychodów producentów prądu. */
+function settleEnergySubsidy(e, raw) {
+    const gap = raw > 0 ? Math.max(0, 1 - e.price / raw) : 0;
+    const revenue = stocks.reduce((sum, stock) => sum + (stock.power && !stock.isBankrupt ? getStockRevenue(stock) * (getPowerSegment(stock)?.share || 0) : 0), 0);
+    const amount = Math.round(gap * revenue);
+    e.subsidy = amount;
+    if (amount > 0) { governmentTreasury -= amount; society.budget.extraSpending = (Number(society.budget.extraSpending) || 0) + amount; }
+    return amount;
+}
 
 function createEnergyState() {
     return { v: 1, scale: 0, demand0: 0, activity: 1, pop0: 0, rate0: 0, price0: 0, fuel0: {}, price: 1, hist: [], demand: 0, capacity: 0, util0: 1 / ENERGY_RULES.startReserve,
@@ -166,6 +190,7 @@ function getPowerResultAdj(stock) {
     if (stock.power) {
         const share = getPowerSegment(stock)?.share || 0, utilization = Math.min(1, e.capacity > 0 ? e.demand / e.capacity : 1) / e.util0 - 1;
         revenueFactor += share * (ENERGY_RULES.producerPrice * deviation + ENERGY_RULES.producerUtil * utilization);
+        if (stock.power.type === getEnergyPolicyType()) marginAdj += ENERGY_LAW_RULES.policyMargin;
     }
     const input = POWER_INPUT_SYMBOLS[stock.symbol] ?? getStockSegments(stock).reduce((sum, seg) => sum + (POWER_INPUTS[seg.sector] || 0) * seg.share, 0);
     if (input > 0) {
@@ -376,7 +401,9 @@ function processEnergyQuarterly() {
     e.activity *= 1 + (Number(economyCycle?.gdpGrowth) || 0);
     e.demand = getEnergyDemand(e);
     e.capacity = getEnergyCapacity(e);
-    e.price = +(getRawEnergyPrice(e) / e.price0 * (1 + ENERGY_RULES.shortagePremium * getEnergyShortage(e))).toFixed(4);
+    const raw = getRawEnergyPrice(e) / e.price0 * (1 + ENERGY_RULES.shortagePremium * getEnergyShortage(e));
+    e.price = +applyEnergySuppliers(raw).toFixed(4);
+    settleEnergySubsidy(e, raw);
     e.hist.push(e.price);
     if (e.hist.length > ENERGY_RULES.histQuarters) e.hist.shift();
     processPowerBuilds(e);

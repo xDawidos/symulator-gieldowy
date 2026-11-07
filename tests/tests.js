@@ -5892,6 +5892,45 @@ group('0.17.2 E2: prąd', () => {
     });
 });
 
+group('0.17.2 E3: ustawy i Zieloni', () => {
+    const withLaws = (laws, fn) => { const old = { ...society.laws }; Object.assign(society.laws, laws); try { return fn(); } finally { society.laws = old; } };
+    test('dostawcy energii: prywatna rynkowa, mieszana z limitem, państwowa niższa', () => {
+        assertEq(withLaws({ energySuppliers: 0 }, () => applyEnergySuppliers(1.5)), 1.5, 'prywatna');
+        assertEq(withLaws({ energySuppliers: 1 }, () => applyEnergySuppliers(1.5)), ENERGY_LAW_RULES.mixedCap, 'mieszana');
+        assert(withLaws({ energySuppliers: 2 }, () => applyEnergySuppliers(1)) < 1, 'państwowa');
+    });
+    test('polityka energetyczna: partia chce konkretnej opcji, a wybrany typ jest stabilniejszy', () => {
+        withLaws({ energyPolicy: 0, climatePolicy: 4, antitrust: 2, rights: 2, benefits: 3 }, () => {
+            assertEq(JSON.stringify(pickLawChange('green')), JSON.stringify(['energyPolicy', 4]), 'skok na OZE');
+        });
+        withLaws({ energyPolicy: 4, climatePolicy: 4, antitrust: 2, rights: 2, benefits: 3 }, () => {
+            assertEq(pickLawChange('green'), null, 'już osiągnięte');
+            assertEq(getEnergyPolicyType(), 'oze', 'typ');
+            assert(getEnergyPolicyStability({ power: { type: 'oze' } }) < 1, 'OZE');
+            assertEq(getEnergyPolicyStability({ power: { type: 'coal' } }), 1, 'węgiel');
+        });
+    });
+    test('Zieloni: stary zapis zostaje przy Socjaldemokratach, zamiana tylko poza rządem i przy zanieczyszczeniu', () => {
+        const greens = society.greens, ruling = macro.election.ruling, coalition = macro.election.coalition;
+        try {
+            delete society.greens; ensureSocietyState();
+            assertEq(getFourthParty(), 'social', 'stary zapis');
+            assert(!maybeSwapGreens(90, 0), 'stary zapis bez zamiany');
+            society.greens = false; macro.election.ruling = 'social'; macro.election.coalition = null;
+            assert(!maybeSwapGreens(90, 0), 'socjaldemokraci rządzą');
+            macro.election.ruling = 'market';
+            assert(!maybeSwapGreens(10, 0), 'czysto');
+            assert(maybeSwapGreens(90, 0) && getFourthParty() === 'green', 'zamiana');
+            const support = computePartySupport(false);
+            assert(support.green > 0 && support.social === undefined, 'poparcie Zielonych');
+            assert(resolveElection(support).winner, 'wybory działają');
+        } finally {
+            if (greens === undefined) delete society.greens; else society.greens = greens;
+            macro.election.ruling = ruling; macro.election.coalition = coalition; syncFourthParty();
+        }
+    });
+});
+
 group('0.14 T3: rozszerzenie o nowy segment', () => {
     function firm(symbol, sectors = ['Technologia'], opts = {}) {
         const s = makeCompany(symbol, { sector: sectors, cash: opts.cash ?? 2_000_000 });
@@ -9152,7 +9191,7 @@ group('0.15.1: Sztuka przejęć (arbitraż, oferty, due diligence, pakiety, wezw
         assert(CLASS_VOTE.poor[3] > CLASS_VOTE.rich[3] && CLASS_VOTE.poor[3] > CLASS_VOTE.poor[2], 'biedni głosują na Socjaldemokratów');
         const support = computePartySupport(false);
         assertNear(PARTY_IDS.reduce((s, id) => s + support[id], 0), 100, 'poparcie sumuje się do 100', 1e-6);
-        for (let i = 0; i < 100; i++) { const c = pickLawChange('social'); assert(!c || ['corpTaxBrackets', 'antitrust', 'benefits', 'tenderThreshold'].includes(c[0]), `program: ${c && c[0]}`); }
+        for (let i = 0; i < 100; i++) { const c = pickLawChange('social'); assert(!c || ['corpTaxBrackets', 'antitrust', 'benefits', 'tenderThreshold', 'energySuppliers', 'climatePolicy'].includes(c[0]), `program: ${c && c[0]}`); }
         assert(PARTY_PROGRAMS.market.moves.some(([law, d]) => law === 'antitrust' && d < 0), 'Koalicja Rynkowa łagodzi ustawę antymonopolową');
     });
 

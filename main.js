@@ -2003,6 +2003,8 @@ function createNewWorld() {
     // i struktura własności (pakiety insiderów).
     economyCycle = createEconomyCycle(getRandomElement(['recovery', 'expansion']));
     macro = createMacroState(); // wskaźniki makro, cykle sektorów, wybory (macro.js)
+    society.greens = Math.random() < GREENS_START_CHANCE; // 0.17.2 E3: Zieloni zamiast Socjaldemokratów
+    syncFourthParty();
     botRelations = createBotRelations(); // relacje z botami (relations.js)
     oversight = createOversight(); // korupcja i nadzór (oversight.js)
     mafia = createMafia(); // mafia (mafia.js)

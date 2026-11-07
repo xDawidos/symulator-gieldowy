@@ -118,7 +118,7 @@ function createInfraTender(p, seg) {
     };
     const tender = {
         id: nextSimulationId('tender'), timerVersion: 2, buildingType: spec, clientCompany: INFRA_CLIENT,
-        budget: Math.round(seg.cost * INFRA_RULES.budgetMult), criteriaWeights: normalizeTenderWeights(INFRA_RULES.weights),
+        budget: Math.round(seg.cost * INFRA_RULES.budgetMult), criteriaWeights: normalizeTenderWeights(def.energy && Number(society.laws?.energySuppliers) === 2 ? { ...INFRA_RULES.weights, isStateOwned: 0.3 } : INFRA_RULES.weights), // 0.17.2 E3: państwowe spółki pierwsze
         bids: [], evaluatedBy: [], status: 'open', createdAt: Date.now(), biddingDurationMs: duration, remainingGameMs: duration, elapsedGameMs: 0,
         closedAt: null, awardedAt: null, winner: null, projectId: null, startDate: null, completionDate: null, cancelReason: null,
         infra: { pid: p.id, seg: seg.n, highway }, advanceRate: INFRA_RULES.advanceRate, milestones: INFRA_RULES.milestones

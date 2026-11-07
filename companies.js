@@ -3707,6 +3707,7 @@ function updateVolatilityAfterReport(stock) {
     } else if (stock.financialHealth < 0) {
         stock.volatilityFactor = Math.min(baseVolatility * 2.5, stock.volatilityFactor * 1.05);
     }
+    if (typeof getEnergyPolicyStability === 'function') stock.volatilityFactor = Math.max(baseVolatility * 0.7, stock.volatilityFactor * getEnergyPolicyStability(stock)); // 0.17.2 E3
     if (stock.volatilityFactor < 0.1) stock.volatilityFactor = 0.1;
 }
 

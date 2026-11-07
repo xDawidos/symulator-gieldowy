@@ -4846,7 +4846,8 @@ const RULING_PARTIES = {
     state:  { name: 'Blok Państwowy',   privatization: 0.4, nationalization: 1.6, subsidies: 1.5, stateMood: 0.03, defenseShare: 0.035 },
     people: { name: 'Ludowcy',          privatization: 0.8, nationalization: 1.0, subsidies: 1.3, stateMood: 0.01, defenseShare: 0.02 }, // 0.13: płaca minimalna, zasiłki, mieszkania
     // 0.15.1: lubią nacjonalizacje, nie lubią koncernów (ustawa antymonopolowa), wspierają małe firmy (progi CIT)
-    social: { name: 'Socjaldemokraci',  privatization: 0.5, nationalization: 1.4, subsidies: 1.2, stateMood: 0.015, defenseShare: 0.015 } // 0.17 S6: defenseShare — udział budżetu obronnego w przychodach budżetu
+    social: { name: 'Socjaldemokraci',  privatization: 0.5, nationalization: 1.4, subsidies: 1.2, stateMood: 0.015, defenseShare: 0.015 }, // 0.17 S6: defenseShare — udział budżetu obronnego w przychodach budżetu
+    green:  { name: 'Zieloni',          privatization: 0.7, nationalization: 1.1, subsidies: 1.4, stateMood: 0.01, defenseShare: 0.015 } // 0.17.2 E3: zamiast Socjaldemokratów (getFourthParty)
 };
 
 let macro = createMacroState();
@@ -5152,6 +5153,7 @@ function advanceElectionCycle() {
     if (election.quartersLeft > 0) return;
 
     const previous = election.ruling;
+    maybeSwapGreens();
     const result = resolveElection(computePartySupport(true));
     election.terms = result.winner === previous ? (Number(election.terms) || 1) + 1 : 1;
     election.ruling = result.winner;
@@ -5349,7 +5351,11 @@ const SOCIAL_LAWS = {
     corpTaxBrackets: { name: 'Progi CIT', icon: '🧾', levels: ['liniowy', 'dwa progi', 'progresywny'], start: 0 },
     antitrust: { name: 'Ustawa antymonopolowa', icon: '⚖️', levels: ['łagodna', 'standardowa', 'surowa'], start: 1 },
     // 0.17 S5: wydatki na infrastrukturę, zużycie przepustowości i szansa projektu państwa (INFRA_LEVELS w infrastructure.js)
-    infrastructure: { name: 'Finansowanie infrastruktury', icon: '🛣️', levels: ['Porzucenie', 'Łatanie dziur', 'Utrzymanie', 'Rozbudowa', 'Autostrady na wczoraj'], start: 2 }
+    infrastructure: { name: 'Finansowanie infrastruktury', icon: '🛣️', levels: ['Porzucenie', 'Łatanie dziur', 'Utrzymanie', 'Rozbudowa', 'Autostrady na wczoraj'], start: 2 },
+    // 0.17.2 E3: premia typu elektrowni (ENERGY_POLICY_TYPES), ceny prądu i opłata za emisje (energy.js)
+    energyPolicy: { name: 'Polityka energetyczna', icon: '⚡', levels: ['Brak dofinansowań', 'Węgiel', 'Gaz', 'Atom', 'OZE'], start: 0 },
+    energySuppliers: { name: 'Dostawcy energii', icon: '🔌', levels: ['Prywatna', 'Mieszana', 'Państwowa'], start: 1 },
+    climatePolicy: { name: 'Polityka klimatyczna', icon: '🌍', levels: ['Brak', 'Łagodna', 'Umiarkowana', 'Ambitna', 'Neutralność'], start: 1 }
 };
 // Progi CIT: [mała spółka (dolne 50% kapitalizacji), duża (górne 10%)] — zmiana stawki w pp.
 const CORP_TAX_BRACKETS = [[0, 0], [-0.04, 0.02], [-0.06, 0.05]];
@@ -5390,14 +5396,31 @@ const RIGHTS_UNION_MULT = [0.7, 1, 1.5];
 
 // Programy partii: kierunek zmian ustaw i priorytet edukacji.
 const PARTY_PROGRAMS = {
-    market: { moves: [['minWage', -1], ['benefits', -1], ['housing', -1], ['rights', -1], ['tenderThreshold', -1], ['corpTaxBrackets', -1], ['antitrust', -1], ['infrastructure', -1]], education: 'high', deficit: 'cut' },
-    social: { moves: [['corpTaxBrackets', 1], ['antitrust', 1], ['benefits', 1], ['tenderThreshold', 1]], education: 'high', deficit: 'cit' },
-    state:  { moves: [['rights', 1], ['housing', 1], ['tenderThreshold', 1], ['infrastructure', 1]], education: 'high', deficit: 'cit' },
-    people: { moves: [['minWage', 1], ['benefits', 1], ['housing', 1], ['tenderThreshold', 1], ['infrastructure', 1]], education: 'medium', deficit: 'cit' }
+    market: { moves: [['minWage', -1], ['benefits', -1], ['housing', -1], ['rights', -1], ['tenderThreshold', -1], ['corpTaxBrackets', -1], ['antitrust', -1], ['infrastructure', -1], ['energySuppliers', -1], ['climatePolicy', -1], ['energyPolicy', 2, 'set']], education: 'high', deficit: 'cut' },
+    social: { moves: [['corpTaxBrackets', 1], ['antitrust', 1], ['benefits', 1], ['tenderThreshold', 1], ['energySuppliers', 1], ['climatePolicy', 1]], education: 'high', deficit: 'cit' },
+    green:  { moves: [['climatePolicy', 1], ['energyPolicy', 4, 'set'], ['antitrust', 1], ['rights', 1], ['benefits', 1]], education: 'high', deficit: 'cit' },
+    state:  { moves: [['rights', 1], ['housing', 1], ['tenderThreshold', 1], ['infrastructure', 1], ['energySuppliers', 1], ['energyPolicy', 3, 'set']], education: 'high', deficit: 'cit' },
+    people: { moves: [['minWage', 1], ['benefits', 1], ['housing', 1], ['tenderThreshold', 1], ['infrastructure', 1], ['climatePolicy', -1], ['energyPolicy', 1, 'set']], education: 'medium', deficit: 'cit' }
 };
 // Preferencje wyborcze klas: [Ludowcy, Blok Państwowy, Koalicja Rynkowa].
 const CLASS_VOTE = { poor: [35, 25, 10, 30], lowerMid: [30, 30, 25, 15], mid: [18, 32, 42, 8], upperMid: [10, 28, 57, 5], rich: [5, 20, 72, 3], veryRich: [5, 15, 78, 2] };
-const PARTY_IDS = ['people', 'state', 'market', 'social'];
+const PARTY_IDS = ['people', 'state', 'market', 'social']; // czwarte miejsce: Socjaldemokraci albo Zieloni (syncFourthParty)
+// 0.17.2 E3: Zieloni. Wagi zamiast kolumny Socjaldemokratów, szansa na start gry, zamiana na wyborach przy wysokim zanieczyszczeniu.
+const GREEN_VOTE = { poor: 14, lowerMid: 14, mid: 14, upperMid: 10, rich: 5, veryRich: 4 };
+const GREENS_START_CHANCE = 0.25, GREENS_SWAP_POLLUTION = 60, GREENS_SWAP_CHANCE = 0.3, GREENS_POLLUTION_SUPPORT = 0.1;
+const getFourthParty = () => PARTY_IDS[3];
+/** Pole society.greens: true po wejściu Zielonych, false w nowej grze bez nich, brak w starych zapisach (Socjaldemokraci na stałe). */
+function syncFourthParty() { PARTY_IDS[3] = society?.greens === true ? 'green' : 'social'; }
+/** Na wyborach: przy wysokim zanieczyszczeniu Zieloni zajmują miejsce Socjaldemokratów poza rządem. */
+function maybeSwapGreens(pollution = Number(society?.energy?.pollution) || 0, roll = Math.random()) {
+    const election = macro.election;
+    if (society.greens !== false || pollution < GREENS_SWAP_POLLUTION || roll >= GREENS_SWAP_CHANCE) return false;
+    if (election.ruling === 'social' || election.coalition?.partner === 'social') return false;
+    society.greens = true;
+    syncFourthParty();
+    logSociety('🌿 Zieloni wchodzą do polityki i zajmują miejsce Socjaldemokratów. Zanieczyszczenie stało się tematem wyborów.');
+    return true;
+}
 const COALITION_THRESHOLD = 0.40;
 // Socjaldemokraci (decyzja użytkownika): sami nie wygrywają — są koalicjantem lewicy i rosną w kryzysie.
 const SOCIAL_COALITION_MIN = 10;     // % poparcia, od którego Ludowcy / Blok Państwowy wolą ich jako koalicjanta
@@ -5451,6 +5474,7 @@ function ensureSocietyState() {
     society = { ...fresh, ...society };
     society.classes = { ...fresh.classes, ...(society.classes || {}) };
     society.laws = { ...fresh.laws, ...(society.laws || {}) };
+    syncFourthParty();
     society.wages = { ...fresh.wages, ...(society.wages || {}) };
     society.migration = { ...fresh.migration, ...(society.migration || {}) };
     society.budget = { ...fresh.budget, ...(society.budget || {}) };
@@ -5812,7 +5836,10 @@ function getLawMakingParty(withPartner = false) {
 
 function pickLawChange(partyId = getLawMakingParty()) {
     const program = PARTY_PROGRAMS[partyId] || PARTY_PROGRAMS.market;
-    const options = program.moves.filter(([law, delta]) => {
+    // ['ustawa', poziom, 'set']: ustawa bez kierunku (polityka energetyczna), partia chce konkretnej opcji
+    const moves = program.moves.map(([law, value, mode]) => [law, mode === 'set' ? value - (Number(society.laws[law]) || 0) : value]);
+    const options = moves.filter(([law, delta]) => {
+        if (!delta) return false;
         const level = Number(society.laws[law]) || 0;
         if (law === 'tenderThreshold' && level + delta > getTenderThresholdKnfCap()) return false; // partia nie przeforsuje progu ponad limit KNF
         return level + delta >= 0 && level + delta < SOCIAL_LAWS[law].levels.length;
@@ -6026,7 +6053,7 @@ function getClassBasedSupport() {
     for (const cls of SOCIETY_CLASSES) {
         const share = Number(society?.classes?.[cls.id]) || 0;
         const prefs = CLASS_VOTE[cls.id];
-        PARTY_IDS.forEach((id, i) => { support[id] += share * prefs[i]; });
+        PARTY_IDS.forEach((id, i) => { support[id] += share * (id === 'green' ? GREEN_VOTE[cls.id] : prefs[i]); });
     }
     return support;
 }
@@ -6045,10 +6072,11 @@ function computePartySupport(withNoise = true) {
         support[ruling] -= penalty;
         const others = PARTY_IDS.filter(id => id !== ruling);
         // Głosy protestu: głównie partie lewicowe (Ludowcy, Socjaldemokraci), reszta po równo.
-        const protest = others.filter(id => id === 'people' || id === 'social'), rest = others.filter(id => !protest.includes(id));
+        const protest = others.filter(id => id === 'people' || id === getFourthParty()), rest = others.filter(id => !protest.includes(id));
         others.forEach(id => { support[id] += penalty * (protest.includes(id) ? (rest.length ? PROTEST_TO_PEOPLE : 1) / protest.length : (1 - PROTEST_TO_PEOPLE) / rest.length); });
     }
-    if (badTimes && ruling !== 'social') support.social += SOCIAL_CRISIS_BONUS;
+    if (badTimes && ruling !== getFourthParty() && support.social !== undefined) support.social += SOCIAL_CRISIS_BONUS;
+    if (support.green !== undefined) support.green += Math.max(0, (Number(society.energy?.pollution) || 0) - 30) * GREENS_POLLUTION_SUPPORT;
     const donations = election.donations || {};
     const assets = Math.max(1, typeof getFundAssets === 'function' && playerFund ? getFundAssets() : 1);
     PARTY_IDS.forEach(id => { support[id] += Math.min(10, (Number(donations[id]) || 0) / assets * 500); });
@@ -6064,7 +6092,7 @@ function resolveElection(support) {
     const ranked = [...PARTY_IDS].sort((a, b) => support[b] - support[a]);
     const winner = ranked[0];
     // Ludowcy i Blok Państwowy wolą Socjaldemokratów jako koalicjanta, jeśli ci mają choć 10%.
-    const partner = (winner === 'people' || winner === 'state') && support.social >= SOCIAL_COALITION_MIN ? 'social' : ranked[1];
+    const left = getFourthParty(), partner = (winner === 'people' || winner === 'state') && support[left] >= SOCIAL_COALITION_MIN ? left : ranked[1];
     const coalition = support[winner] < COALITION_THRESHOLD * 100 ? { partner, weights: { [winner]: support[winner], [partner]: support[partner] } } : null;
     return { winner, coalition, support };
 }
