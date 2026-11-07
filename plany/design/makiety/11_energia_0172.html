@@ -1,0 +1,276 @@
+<!doctype html><html lang="pl"><head><meta charset="utf-8"><title>Makieta UI 0.17.2 — Energia i środowisko</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../../../tokens.css"><link rel="stylesheet" href="../../../style.css">
+<style>
+html, body { overflow: auto !important; height: auto !important; }
+body { display: block !important; padding: 24px !important; }
+.demo { max-width: 1080px; margin: 0 auto 32px; padding: 24px; background: var(--color-bg-base); border: 1px solid var(--color-border-subtle); border-radius: 6px; }
+.demo-title { margin: 0 0 4px; font-size: 20px; }
+.demo-sub { margin: 0 0 16px; color: var(--color-text-muted); font-size: 13px; }
+.demo-h { margin: 20px 0 8px; font-size: 13px; color: var(--color-text-muted); font-weight: 600; }
+.sheet { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+.sheet div { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+@media (max-width: 640px) { body { padding: 8px !important; } .demo { padding: 12px; } }
+</style></head><body class="dark-mode">
+<svg style="display:none" id="ic-defs"></svg>
+
+<section class="demo"><h2 class="demo-title">0. Nowe ikony 0.17.2</h2><p class="demo-sub">24×24, kreska 1,8, currentColor. Typy energii: <code>surowiec-coal</code>, <code>surowiec-gas</code>, <code>atom</code>, <code>wiatrak</code>.</p>
+<div class="sheet">
+  <div><i data-ic="prad" data-s="24"></i><i data-ic="prad"></i> prad</div>
+  <div><i data-ic="blok" data-s="24"></i><i data-ic="blok"></i> blok</div>
+  <div><i data-ic="blackout" data-s="24"></i><i data-ic="blackout"></i> blackout</div>
+  <div><i data-ic="emisje" data-s="24"></i><i data-ic="emisje"></i> emisje</div>
+  <div><i data-ic="lisc" data-s="24"></i><i data-ic="lisc"></i> lisc</div>
+  <div><i data-ic="poziom-zycia" data-s="24"></i><i data-ic="poziom-zycia"></i> poziom-zycia</div>
+  <div><i data-ic="geolog" data-s="24"></i><i data-ic="geolog"></i> geolog</div>
+  <div><i data-ic="dzialka" data-s="24"></i><i data-ic="dzialka"></i> dzialka</div>
+</div></section>
+
+<section class="demo"><h2 class="demo-title">1. Państwo: zakładka Energia</h2><p class="demo-sub">Nowa zakładka za „Kraj”. Stan pełny: UEiE poziom 2, niewielka nadwyżka mocy.</p>
+<nav class="bank-tabs" role="tablist">
+  <button class="bank-tab-btn">Przegląd</button><button class="bank-tab-btn">Makro</button><button class="bank-tab-btn">Kraj</button><button class="bank-tab-btn active" aria-selected="true">Energia</button><button class="bank-tab-btn">Rynki</button><button class="bank-tab-btn">Nadzór</button>
+</nav>
+<div class="bank-ticker">
+  <div class="bank-ticker-item"><span>Moc kraju</span><strong>41,2 GW</strong></div>
+  <div class="bank-ticker-item"><span>Zużycie</span><strong>39,8 GW</strong></div>
+  <div class="bank-ticker-item"><span>Bilans</span><strong class="text-up">▲ +1,4 GW</strong></div>
+  <div class="bank-ticker-item"><span>Cena prądu</span><strong>412 PLN/MWh</strong><small class="text-muted">▲ +3% w kwartale</small></div>
+  <div class="bank-ticker-item"><span>Zanieczyszczenie</span><strong>62/100</strong></div>
+  <div class="bank-ticker-item"><span>Poziom życia</span><strong>64/100</strong></div>
+</div>
+
+<div class="bank-grid mt-3">
+  <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon"><i data-ic="prad" data-s="20"></i></span><div><h4>Miks energetyczny</h4><span class="bank-card-type">udział w mocy kraju</span></div></header>
+    <div class="en-mix" role="img" aria-label="Miks: węgiel 42%, gaz 24%, atom 12%, OZE 22%">
+      <span class="en-t-coal" style="flex:42">Węgiel</span><span class="en-t-gas" style="flex:24">Gaz</span><span class="en-t-nuclear" style="flex:12">Atom</span><span class="en-t-oze" style="flex:22">OZE</span>
+    </div>
+    <ul class="en-legend">
+      <li class="en-t-coal"><i data-ic="surowiec-coal"></i><span>Węgiel</span><b>42%</b><small>17,3 GW</small></li>
+      <li class="en-t-gas"><i data-ic="surowiec-gas"></i><span>Gaz</span><b>24%</b><small>9,9 GW</small></li>
+      <li class="en-t-nuclear"><i data-ic="atom"></i><span>Atom</span><b>12%</b><small>4,9 GW</small></li>
+      <li class="en-t-oze"><i data-ic="wiatrak"></i><span>OZE</span><b>22%</b><small>9,1 GW</small></li>
+    </ul>
+  </article>
+
+  <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon"><i data-ic="waga" data-s="20"></i></span><div><h4>Bilans prądu</h4><span class="bank-card-type">zużycie wobec mocy</span></div></header>
+    <div class="en-state"><span class="badge badge--up"><i data-ic="ok" data-s="12"></i> Nadwyżka</span> rezerwa 3%</div>
+    <span class="limit-meter en-wide" role="img" aria-label="Zużycie 97% mocy, kreska na 100% mocy" style="--v:88;--limit:91"><i></i><b></b></span>
+    <p class="text-sm">Zużycie 97% mocy. Kreska: cała moc kraju.</p>
+    <p class="text-sm text-muted">Niedobór pokrywa tylko budowa nowych bloków albo wyższa cena. Handlu prądem z innymi krajami nie ma.</p>
+  </article>
+
+  <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon"><i data-ic="moneta" data-s="20"></i></span><div><h4>Cena prądu</h4><span class="bank-card-type">udział × koszt typu</span></div></header>
+    <table class="asset-mini-table w-full"><tbody>
+      <tr><td>Węgiel</td><td class="text-right">42%</td><td class="text-right">380 PLN</td></tr>
+      <tr><td>Gaz</td><td class="text-right">24%</td><td class="text-right">510 PLN</td></tr>
+      <tr><td>Atom</td><td class="text-right">12%</td><td class="text-right">430 PLN</td></tr>
+      <tr><td>OZE</td><td class="text-right">22%</td><td class="text-right">350 PLN</td></tr>
+    </tbody></table>
+    <p class="text-sm">Ustawa „Dostawcy energii”: <strong>mieszana</strong>, cena z limitem.</p>
+  </article>
+</div>
+
+<div class="bank-grid mt-3">
+  <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon"><i data-ic="blok" data-s="20"></i></span><div><h4>Bloki w budowie</h4><span class="bank-card-type">spółki i państwo</span></div></header>
+    <ul class="en-rows">
+      <li class="en-t-nuclear"><i data-ic="atom"></i><span><strong>Purenergia, blok 2</strong><small>budowa, kw. 5 z 12 · +1,2 GW</small></span><span class="badge badge--accent">Budowa</span><span class="limit-meter" role="img" aria-label="Postęp 42%" style="--v:42"><i></i></span></li>
+      <li class="en-t-oze"><i data-ic="wiatrak"></i><span><strong>BioEnergia Wschód</strong><small>farma wiatrowa · +0,4 GW · kw. 2 z 4</small></span><span class="badge badge--accent">Budowa</span><span class="limit-meter" role="img" aria-label="Postęp 50%" style="--v:50"><i></i></span></li>
+      <li class="en-t-gas"><i data-ic="surowiec-gas"></i><span><strong>Projekt państwowy: blok gazowy</strong><small>limit typu: 1 z 2 · oferty do tyg. 3</small></span><span class="badge badge--neutral">Przetarg</span></li>
+    </ul>
+  </article>
+
+  <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon"><i data-ic="emisje" data-s="20"></i></span><div><h4>Zanieczyszczenie</h4><span class="bank-card-type">UEiE poziom 2 · pomiar dokładny</span></div></header>
+    <div class="en-state"><span class="en-value">62<small> /100</small></span><span class="badge badge--warn"><i data-ic="alert" data-s="12"></i> Wysokie</span> ▲ +4 w kwartale</div>
+    <span class="limit-meter is-warn en-wide" role="img" aria-label="Zanieczyszczenie 62 na 100, limit UEiE 70" style="--v:62;--limit:70"><i></i><b></b></span>
+    <p class="text-sm">Limit UEiE: 70. Polityka klimatyczna: poziom 3, opłata 1,2% przychodów × emisje.</p>
+    <h5 class="mb-1">Najwięksi emitenci</h5>
+    <ul class="en-rows">
+      <li><i data-ic="surowiec-coal"></i><span>Tarnobrzeg Energia</span><strong>22%</strong></li>
+      <li><i data-ic="Chemia"></i><span>Chemat</span><strong>9%</strong></li>
+    </ul>
+  </article>
+
+  <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon"><i data-ic="poziom-zycia" data-s="20"></i></span><div><h4>Poziom życia</h4><span class="bank-card-type">5 czynników po 20%</span></div></header>
+    <div class="en-state"><span class="en-value">64<small> /100</small></span><span class="badge badge--up">Wysoki</span> ▼ −1 w kwartale</div>
+    <ul class="en-factors">
+      <li><i data-ic="koszyk"></i><span>Konsumpcja i zadowolenie</span><strong class="en-num">71</strong><span class="limit-meter" role="img" aria-label="71 na 100" style="--v:71"><i></i></span></li>
+      <li><i data-ic="sektor-medycyna"></i><span>Zdrowie</span><strong class="en-num">48</strong><span class="limit-meter is-warn" role="img" aria-label="48 na 100, obniża zanieczyszczenie" style="--v:48"><i></i></span><small>obniża zanieczyszczenie</small></li>
+      <li><i data-ic="sektor-obronnosc"></i><span>Bezpieczeństwo</span><strong class="en-num">62</strong><span class="limit-meter" role="img" aria-label="62 na 100" style="--v:62"><i></i></span></li>
+      <li><i data-ic="akademia"></i><span>Edukacja i nauka</span><strong class="en-num">68</strong><span class="limit-meter" role="img" aria-label="68 na 100" style="--v:68"><i></i></span></li>
+      <li><i data-ic="news"></i><span>Informacja</span><strong class="en-num">71</strong><span class="limit-meter" role="img" aria-label="71 na 100" style="--v:71"><i></i></span></li>
+    </ul>
+  </article>
+</div>
+</section>
+
+<section class="demo"><h2 class="demo-title">2. Energia: stany</h2><p class="demo-sub">Alert stoi nad kartami, pod paskiem liczb. Każdy stan: ikona, słowo, liczba.</p>
+<h3 class="demo-h">Niedobór mocy</h3>
+<p class="alert alert--warn"><i data-ic="alert" data-s="18"></i><span><strong>Niedobór mocy: 2,1 GW.</strong> Zużycie 105% mocy. Cena prądu rośnie, a przy większym niedoborze grozi blackout.</span></p>
+<div class="en-state"><span class="badge badge--warn"><i data-ic="alert" data-s="12"></i> Niedobór</span> zużycie 105% mocy</div>
+<span class="limit-meter is-warn en-wide" role="img" aria-label="Zużycie 105% mocy" style="--v:96;--limit:91"><i></i><b></b></span>
+<h3 class="demo-h">Blackout w tym kwartale</h3>
+<p class="alert alert--warn"><i data-ic="blackout" data-s="18"></i><span><strong>Blackout.</strong> Przemysł traci przychody, zadowolenie spada. Skutki trwają do końca kwartału.</span></p>
+<h3 class="demo-h">Urząd na poziomie 0: bez pomiaru</h3>
+<article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon"><i data-ic="emisje" data-s="20"></i></span><div><h4>Zanieczyszczenie</h4><span class="bank-card-type">UEiE poziom 0 · brak pomiaru</span></div></header>
+  <p class="notice-inline"><i data-ic="info" data-s="14"></i><span>Urząd nie mierzy emisji i nie ma limitów. Pomiar pojawi się od poziomu 1.</span></p>
+</article>
+<article class="bank-card mt-3"><header class="bank-card-head"><span class="bank-card-icon"><i data-ic="poziom-zycia" data-s="20"></i></span><div><h4>Poziom życia</h4><span class="bank-card-type">czynnik Zdrowie bez pomiaru</span></div></header>
+  <ul class="en-factors"><li><i data-ic="sektor-medycyna"></i><span>Zdrowie</span><strong class="en-num">brak pomiaru</strong><small>Pojawi się od poziomu 1 UEiE.</small></li></ul>
+</article>
+<h3 class="demo-h">Krytyczne zanieczyszczenie: mały spadek produkcji</h3>
+<p class="alert alert--warn"><i data-ic="emisje" data-s="18"></i><span><strong>Zanieczyszczenie krytyczne: 84/100.</strong> Spada poziom życia i przyrost ludności, a produkcja spółek jest niższa o 1%.</span></p>
+<h3 class="demo-h">Pusto i przed pierwszym kwartałem</h3>
+<div class="bank-grid">
+  <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon"><i data-ic="blok" data-s="20"></i></span><div><h4>Bloki w budowie</h4></div></header><p class="text-sm text-muted">Żadna spółka nie buduje teraz nowych bloków. Budowy ruszają przy niedoborze mocy i wysokiej cenie prądu.</p></article>
+  <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon"><i data-ic="prad" data-s="20"></i></span><div><h4>Miks energetyczny</h4></div></header><p class="text-sm text-muted">Dane pojawią się po pierwszym kwartale gry.</p></article>
+</div>
+<h3 class="demo-h">Debug: emisje przy poziomie 0</h3>
+<p class="notice-inline is-warn"><i data-ic="alert" data-s="14"></i><span>Tryb debug: emisje widoczne mimo braku pomiaru.</span></p>
+</section>
+
+<section class="demo"><h2 class="demo-title">3. Nadzór: UEiE</h2><p class="demo-sub">Trzecia karta obok Policji i KNF, ten sam wzór. Bez łapówek. Pod spodem oś poziomów.</p>
+<div class="bank-grid">
+  <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon"><i data-ic="lisc" data-s="20"></i></span><div><h4>Urząd Energii i Ekologii</h4><span class="bank-card-type">poziom 2/5 · skuteczność 58%</span></div></header>
+    <p class="text-sm">Mierzy emisje, ustala limity i wydaje zgody na bloki jądrowe.</p>
+    <div class="inv-stages"><div class="inv-stage" style="flex:1"><span class="inv-stage-fill" style="width:40%"></span><span class="inv-stage-label">do poziomu 3: 120 000 PLN z 300 000 PLN</span></div></div>
+    <div class="bank-card-form"><input type="text" inputmode="numeric" value="500" aria-label="Kwota dotacji"><button class="btn-secondary">Dotacja (portfel prywatny)</button></div>
+  </article>
+</div>
+<div class="crisis-section mt-3"><h4 class="bank-section-title">Poziomy urzędu</h4>
+<ol class="crisis-axis en-levels" aria-label="Poziomy UEiE">
+  <li class="done"><span class="crisis-step-no">0</span>Bez limitów<small>brak pomiaru</small></li>
+  <li class="done"><span class="crisis-step-no">1</span>Pomiar kraju<small>rzadkie kontrole</small></li>
+  <li class="current" aria-current="step"><span class="crisis-step-no">2</span>Pomiar spółek <em>(teraz)</em><small>limit, kara</small></li>
+  <li><span class="crisis-step-no">3</span>Częstsze kontrole<small>ścieżka ESG</small></li>
+  <li><span class="crisis-step-no">4</span>Dokładny pomiar<small>wyższe kary</small></li>
+  <li><span class="crisis-step-no">5</span>Pełny nadzór<small>najwyższa skuteczność</small></li>
+</ol></div>
+</section>
+
+<section class="demo"><h2 class="demo-title">4. Kraj: ustawy i partie</h2><p class="demo-sub">3 ustawy w istniejącej tabeli (wiersz z ikoną zamiast emoji). Polityka klimatyczna dostaje oś jak ustawa o infrastrukturze. Zieloni tylko jako nazwa na liście partii.</p>
+<table class="asset-mini-table w-full"><tbody>
+  <tr><td><i data-ic="prad" data-s="14"></i> Polityka energetyczna</td><td><strong>OZE</strong></td><td class="text-xs text-muted">zmiany: 1</td></tr>
+  <tr><td><i data-ic="firma" data-s="14"></i> Dostawcy energii</td><td><strong>Mieszana</strong></td><td class="text-xs text-muted">zmiany: 0</td></tr>
+  <tr><td><i data-ic="emisje" data-s="14"></i> Polityka klimatyczna</td><td><strong>Poziom 3</strong></td><td class="text-xs text-muted"><i data-ic="raport" data-s="14"></i> zapowiedź: → Poziom 4 od przyszłego kwartału</td></tr>
+</tbody></table>
+<div class="crisis-section mt-3"><h4 class="bank-section-title">Polityka klimatyczna</h4>
+<ol class="crisis-axis law-steps" aria-label="Poziomy ustawy">
+  <li class="done"><span class="crisis-step-no">1</span>Brak opłat<small>opłata 0%</small></li>
+  <li class="done"><span class="crisis-step-no">2</span>Niska<small>opłata 0,6%</small></li>
+  <li class="current" aria-current="step"><span class="crisis-step-no">3</span>Średnia <em>(teraz)</em><small>opłata 1,2%</small></li>
+  <li><span class="crisis-step-no">4</span>Wysoka<small>opłata 1,8%</small></li>
+  <li><span class="crisis-step-no">5</span>Bardzo wysoka<small>opłata 2,5%</small></li>
+</ol></div>
+<h3 class="demo-h">Budżet: nowa linia</h3>
+<dl class="bank-card-rates"><div><dt>OZE z opłat za emisje</dt><dd>84 000 PLN</dd></div><div><dt>Opłaty za emisje</dt><dd>112 000 PLN</dd></div><div><dt>UEiE</dt><dd>9 000 PLN</dd></div></dl>
+</section>
+
+<section class="demo"><h2 class="demo-title">5. Karta kraju i okno „Rynek”</h2><p class="demo-sub">Dwa wiersze w <code>.country-facts</code> i kafelek Opinii publicznej w oknie „Rynek”. Bez wskaźnika w górnym pasku.</p>
+<dl class="country-facts">
+  <div><dt>Poziom życia</dt><dd><i data-ic="poziom-zycia" data-s="14"></i> wysoki (64/100)<span class="limit-meter" role="img" aria-label="Poziom życia 64 na 100" style="--v:64"><i></i></span></dd></div>
+  <div><dt>Opinia publiczna</dt><dd><i data-ic="megafon" data-s="14"></i> przychylna (61/100), przychody spółek konsumenckich +0,4%</dd></div>
+</dl>
+<div class="freight-cards mt-3">
+  <div class="freight-card"><span class="freight-card-head"><i data-ic="megafon"></i> Opinia publiczna</span><strong>61/100</strong><small>▲ przychylna · Dobra konsumpcyjne, Media, Turystyka +0,4%</small><span class="limit-meter" role="img" aria-label="Opinia publiczna 61 na 100" style="--v:61"><i></i></span></div>
+  <div class="freight-card"><span class="freight-card-head"><i data-ic="prad"></i> Cena prądu</span><strong>412 PLN/MWh</strong><small>▲ +3% w kwartale · bilans +1,4 GW</small></div>
+</div>
+</section>
+
+<section class="demo"><h2 class="demo-title">6. Karta spółki: energetyka</h2><p class="demo-sub">Przegląd: dwa kafelki w siatce. Zarządzanie: blok „Energia” nad zleceniami strategii. Bez kontroli funduszu tylko odczyt.</p>
+<h3 class="demo-h">Przegląd: kafelki i ESG</h3>
+<div class="en-gauges">
+  <div class="cc-kpi"><span>Moc</span><strong><i data-ic="surowiec-coal" data-s="14"></i> 3,4 GW, węgiel</strong></div>
+  <div class="cc-kpi"><span>Emisje</span><strong>6% kraju</strong></div>
+  <div class="cc-kpi"><span>Limit UEiE</span><strong><i data-ic="alert" data-s="14"></i> ponad limit</strong></div>
+  <div class="cc-kpi"><span>ESG</span><strong><i data-ic="lisc" data-s="14"></i> w drodze</strong></div>
+</div>
+
+<h3 class="demo-h">Zarządzanie: spółka węglowa, większościowy akcjonariusz</h3>
+<div class="bank-card">
+  <header class="bank-card-head"><span class="bank-card-icon en-t-coal"><i data-ic="surowiec-coal" data-s="20"></i></span><div><h4>Energia: Tarnobrzeg Energia</h4><span class="bank-card-type">energetyka węglowa</span></div></header>
+  <div class="en-gauges">
+    <div class="cc-kpi"><span>Moc</span><strong>3,4 GW</strong></div>
+    <div class="cc-kpi"><span>Udział w kraju</span><strong>8,3%</strong></div>
+    <div class="cc-kpi"><span>Wsad: węgiel</span><strong>▲ 118 USD/t</strong></div>
+    <div class="cc-kpi"><span>Koszt prądu</span><strong>380 PLN/MWh</strong></div>
+  </div>
+  <p class="alert alert--warn"><i data-ic="alert" data-s="18"></i><span><strong>Ponad limit UEiE.</strong> Kara w tym kwartale: 48 000 PLN. Niżej zejdziesz przez inwestycje ekologiczne, technologie albo ESG.</span></p>
+  <div class="en-block is-run"><div class="en-block-top"><i data-ic="blok" data-s="16"></i><strong>Elektrownia Tarnobrzeg</strong><span class="badge badge--up"><i data-ic="ok" data-s="12"></i> Działa</span></div><small>3,4 GW · od roku 1</small></div>
+  <div class="btn-row"><select aria-label="Typ bloku"><option>Blok węglowy</option><option>Blok gazowy</option><option>Farma wiatrowa</option><option>Park słoneczny</option></select><button class="btn-secondary"><i data-ic="blok" data-s="14"></i> Zbuduj blok</button></div>
+  <div class="en-order mt-2"><h5><i data-ic="lisc" data-s="16"></i> Ścieżka ESG</h5><p>Jednorazowy koszt 420 000 PLN, potem niższe emisje spółki.</p><div class="btn-row"><button class="btn-secondary" disabled>Wejdź na ścieżkę ESG</button></div><p class="notice-inline"><i data-ic="klodka" data-s="14"></i><span>Dostępna od poziomu 3 UEiE, teraz poziom 2.</span></p></div>
+
+  <h4 class="bank-section-title mt-3">Zlecenia dla podwykonawców</h4>
+  <div class="en-orders">
+    <article class="en-order"><h5><i data-ic="geolog" data-s="16"></i> Poszukiwanie nowych złóż</h5><p>Geolog szuka węgla. Wynik jest losowy: większa produkcja na czas złoża albo nic.</p>
+      <dl><div><dt>Koszt</dt><dd>180 000 PLN</dd></div><div><dt>Czas</dt><dd>2 kw.</dd></div><div><dt>Wykonawca</dt><dd>Geomax</dd></div></dl>
+      <div class="btn-row"><button class="btn-secondary">Zleć</button></div></article>
+    <article class="en-order"><h5><i data-ic="dzialka" data-s="16"></i> Szukanie działki</h5><p>Niższy koszt i krótszy czas następnej budowy.</p>
+      <dl><div><dt>Stan</dt><dd>w toku, kw. 1 z 2</dd></div><div><dt>Wykonawca</dt><dd>Terra Survey</dd></div></dl>
+      <span class="limit-meter" role="img" aria-label="Postęp 50%" style="--v:50"><i></i></span></article>
+    <article class="en-order"><h5><i data-ic="badania" data-s="16"></i> Najnowsze technologie</h5><p>Tylko dla OZE i atomu.</p>
+      <p class="notice-inline"><i data-ic="klodka" data-s="14"></i><span>Ta spółka to węgiel. Zlecenie jest dla OZE i atomu.</span></p></article>
+  </div>
+</div>
+
+<h3 class="demo-h">Wynik zlecenia</h3>
+<div class="en-orders">
+  <article class="en-order"><h5><i data-ic="ok" data-s="16"></i> Złoże znalezione</h5><p>Produkcja węgla +12% przez 8 kw.</p></article>
+  <article class="en-order"><h5><i data-ic="zamknij" data-s="16"></i> Bez wyniku</h5><p>Geolog nie znalazł złoża. Koszt 180 000 PLN przepadł.</p></article>
+  <article class="en-order"><h5><i data-ic="dzialka" data-s="16"></i> Działka gotowa</h5><p>Następna budowa: koszt −8%, czas −1 kw. Obowiązuje do jej startu.</p></article>
+</div>
+
+<h3 class="demo-h">Bez kontroli funduszu</h3>
+<p class="text-sm text-muted">Zlecać może tylko większościowy akcjonariusz. Teraz masz 12%.</p>
+</section>
+
+<section class="demo"><h2 class="demo-title">7. Spółka atomowa i kolejne bloki</h2><p class="demo-sub">Bloki po kolei. Kolejny wymaga działającego poprzedniego. Przychód maleje z każdym blokiem, a etapy idą słowem.</p>
+<div class="bank-card">
+  <header class="bank-card-head"><span class="bank-card-icon en-t-nuclear"><i data-ic="atom" data-s="20"></i></span><div><h4>Energia: Purenergia</h4><span class="bank-card-type">energetyka jądrowa · 2 z 3 bloków w pracach</span></div></header>
+  <div class="en-gauges">
+    <div class="cc-kpi"><span>Moc działająca</span><strong>1,6 GW</strong></div>
+    <div class="cc-kpi"><span>Wsad: uran</span><strong>▼ 61 USD/lb</strong></div>
+    <div class="cc-kpi"><span>Kontrakt z państwem</span><strong><i data-ic="umowa" data-s="14"></i> aktywny</strong></div>
+  </div>
+  <div class="en-block is-run"><div class="en-block-top"><i data-ic="blok" data-s="16"></i><strong>Blok 1</strong><span class="badge badge--up"><i data-ic="ok" data-s="12"></i> Działa</span></div><small>1,6 GW · przychód +15% · od roku 5</small></div>
+  <div class="en-block is-build"><div class="en-block-top"><i data-ic="blok" data-s="16"></i><strong>Blok 2</strong><span class="badge badge--accent"><i data-ic="zegar" data-s="12"></i> Budowa</span></div><span class="limit-meter" role="img" aria-label="Postęp budowy 42%" style="--v:42"><i></i></span><small>kw. 5 z 12 · zapłacono 3,1 mln PLN z 7,4 mln PLN · po budowie: zgoda UEiE, przychód +10%</small></div>
+  <div class="en-block is-locked"><div class="en-block-top"><i data-ic="klodka" data-s="16"></i><strong>Blok 3</strong><span class="badge badge--neutral">Zablokowany</span></div><small>Wymaga działającego bloku 2. Przychód +5%.</small></div>
+  <p class="text-sm mt-2">Kontrakt zależy od ustaw: Polityka energetyczna <strong>atom</strong>, Dostawcy energii <strong>mieszana</strong>.</p>
+  <h4 class="bank-section-title mt-3">Zlecenie: najnowsze technologie</h4>
+  <div class="en-orders">
+    <article class="en-order"><h5><i data-ic="badania" data-s="16"></i> Najnowsze technologie</h5><p>Zlecenie dla OZE i atomu. Daje tańszą moc albo wyższą sprawność.</p>
+      <dl><div><dt>Koszt</dt><dd>350 000 PLN</dd></div><div><dt>Czas</dt><dd>3 kw.</dd></div><div><dt>Wykonawca</dt><dd>Instytut Badań</dd></div></dl>
+      <div class="btn-row"><button class="btn-secondary">Zleć</button></div></article>
+    <article class="en-order"><h5><i data-ic="ok" data-s="16"></i> Wynik zlecenia</h5><p>Sprawność bloków +3%. Koszt prądu tej spółki −12 PLN/MWh.</p></article>
+  </div>
+  <h4 class="bank-section-title mt-3">Inne stany bloku</h4>
+  <div class="en-block is-wait"><div class="en-block-top"><i data-ic="zegar" data-s="16"></i><strong>Blok 2</strong><span class="badge badge--warn"><i data-ic="alert" data-s="12"></i> Czeka na zgodę</span></div><small>UEiE wstrzymuje uruchomienie: opóźnienie 3 kw., drugi raz z 2 możliwych.</small></div>
+  <div class="en-block is-run"><div class="en-block-top"><i data-ic="alert" data-s="16"></i><strong>Blok 1</strong><span class="badge badge--down">Awaria</span></div><small>Moc −0,8 GW do końca kwartału.</small></div>
+</div>
+<h3 class="demo-h">Spółka państwowa</h3>
+<p class="notice-inline"><i data-ic="panstwo" data-s="14"></i><span>Raty budowy finansuje Skarb Państwa. Prywatyzacja możliwa później.</span></p>
+</section>
+
+<section class="demo"><h2 class="demo-title">8. Budownictwo: podwykonawcy energetyczni</h2><p class="demo-sub">Istniejące karty, dwie nowe specjalności w plakietce. Filtr bez zmian.</p>
+<div class="bank-grid">
+  <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon"><i data-ic="geolog" data-s="20"></i></span><div><h4>Geomax</h4><span class="bank-card-type">geolog</span></div></header><p class="text-sm">Złoża i działki pod inwestycje. Wolne moce: 2.</p></article>
+  <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon"><i data-ic="prad" data-s="20"></i></span><div><h4>Enerbud</h4><span class="bank-card-type">podwykonawca energetyczny</span></div></header><p class="text-sm">Budowa bloków i linii. Wolne moce: 1.</p></article>
+</div></section>
+
+<section class="demo"><h2 class="demo-title">9. Błędy</h2><p class="demo-sub">Komunikat przy przycisku, przycisk nieaktywny. Toast tylko po kliknięciu, gdy stan zmienił się w trakcie.</p>
+<div class="bank-card">
+  <p class="notice-inline is-warn"><i data-ic="alert" data-s="14"></i><span>Za mało gotówki w spółce: brakuje 240 000 PLN.</span></p>
+  <p class="notice-inline is-warn"><i data-ic="alert" data-s="14"></i><span>Wszyscy geolodzy są zajęci. Pierwszy wolny za 1 kw.</span></p>
+  <p class="notice-inline is-warn"><i data-ic="alert" data-s="14"></i><span>Limit projektów państwowych dla tego typu: 2 z 2.</span></p>
+  <p class="notice-inline is-warn"><i data-ic="alert" data-s="14"></i><span>UEiE nie wydał jeszcze zgody na blok 2.</span></p>
+  <p class="notice-inline"><i data-ic="klodka" data-s="14"></i><span>Blok 3 wymaga działającego bloku 2.</span></p>
+</div></section>
+
+<script>
+// Wstawia sprite i rozwija <i data-ic> w <svg class="ic">; w grze to samo robi uiIcon(nazwa, 16).
+fetch('../../../img/ikony/sprite.svg').then(r => r.text()).then(t => {
+  document.getElementById('ic-defs').outerHTML = t;
+  const alias = { Chemia: 'sektor-chemia' };
+  document.querySelectorAll('i[data-ic]').forEach(el => { const s = el.dataset.s || 16, n = alias[el.dataset.ic] || el.dataset.ic; el.outerHTML = `<svg class="ic" width="${s}" height="${s}" viewBox="0 0 24 24" aria-hidden="true"><use href="#ic-${n}"/></svg>`; });
+});
+</script>
+</body></html>
