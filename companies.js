@@ -7029,7 +7029,8 @@ function runMunicipalCompanyLogic() {
         totalShares: totalShares,
         maxShares: totalShares * 2,
         sharesHeld: 0, insiderShares: 0, // pakiet miasta (stateOwnershipPct) jest poza wolnym obrotem — nie liczy się do sharesHeld
-        sector: ['Usługi', 'Nieruchomości'], // Uogólniony sektor
+        sector: targetCompany.power ? ['Energia'] : ['Usługi', 'Nieruchomości'], // Uogólniony sektor, 0.17.2: miejska spółka energetyczna
+        ...(targetCompany.power ? { power: targetCompany.power } : {}),
         financialHealth: 5, // Bardzo zdrowe
         lastReport: 'good',
         cash: targetCompany.budget,
@@ -8234,6 +8235,7 @@ function finishInvestment(stock, project) {
         applyPriceEffect(stock.symbol, data.incomeBonus * 0.2, 'positive', 'company');
     }
 
+    if (typeof noteEnergyBuilding === 'function' && quality !== 'defects') noteEnergyBuilding(stock, project.id); // 0.17.2 E2: moc z budynku energetycznego
     logEvent(`✅ ${stock.name} zakończył projekt: „${project.name}” (aktywowano ${formatZl(capitalized, 0)}, koszt okresu ${formatZl(expensed, 0)}).`, 'success');
 }
 

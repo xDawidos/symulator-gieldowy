@@ -8,7 +8,7 @@
 const SUBCONTRACTOR_SPECIALTIES = {
     foundations: 'Fundamenty', steel: 'Konstrukcje stalowe', installations: 'Instalacje', electrical: 'Elektryka',
     roofs: 'Dachy', finishing: 'Wykończenia', roads: 'Drogowe', bridges: 'Mosty',
-    it_cabling: 'Okablowanie IT', energy: 'Energetyka', survey: 'Geodezja', industrial: 'Industrial'
+    it_cabling: 'Okablowanie IT', energy: 'Energetyka', survey: 'Geodezja', industrial: 'Industrial', geology: 'Geologia'
 };
 // Specjalności z dawnych zapisów i startowej listy 7 podwykonawców.
 const SUBCONTRACTOR_LEGACY = { technology: 'it_cabling', general: 'installations', office: 'finishing', industrial: 'industrial', residential: 'foundations' };
@@ -35,7 +35,7 @@ const SUBCONTRACTOR_NAME_PARTS = {
         foundations: ['Fundament', 'Pale', 'Geotech', 'Grunt'], steel: ['Stal', 'Konstrukt', 'Spaw', 'Szkielet'], installations: ['Instal', 'Hydro', 'Termo', 'Klima'],
         electrical: ['Elektro', 'Volt', 'Prąd', 'Kabel'], roofs: ['Dach', 'Pokrycia', 'Więźba', 'Blacha'], finishing: ['Wykończ', 'Gips', 'Malar', 'Podłoga'],
         roads: ['Droga', 'Asfalt', 'Nawierzchnia', 'Trasa'], bridges: ['Most', 'Wiadukt', 'Przęsło', 'Estakada'], it_cabling: ['Sieć', 'Światłowód', 'Data', 'Okablowanie'],
-        energy: ['Energo', 'Turbina', 'Fotowolt', 'Sieć Mocy'], survey: ['Geodeta', 'Pomiar', 'Mapa', 'Teodolit'], industrial: ['Industrial', 'Hala', 'Przemysł', 'Linia']
+        energy: ['Energo', 'Turbina', 'Fotowolt', 'Sieć Mocy'], survey: ['Geodeta', 'Pomiar', 'Mapa', 'Teodolit'], industrial: ['Industrial', 'Hala', 'Przemysł', 'Linia'], geology: ['Geo', 'Złoże', 'Odwiert', 'Skała']
     }
 };
 
@@ -167,7 +167,8 @@ function ensureSubcontractorRegistry() {
     for (const spec of specialists) normalizeSubcontractor(spec);
     for (const specialty of Object.keys(SUBCONTRACTOR_SPECIALTIES)) {
         let count = getSubcontractorsBySpecialty(specialty).length;
-        while (count < SUBCONTRACTOR_RULES.minPerSpecialty) { createSubcontractor(specialty); count++; }
+        const min = specialty === 'geology' ? 2 : SUBCONTRACTOR_RULES.minPerSpecialty; // 0.17.2: 2 geologów, zlecenia bez aukcji
+        while (count < min) { createSubcontractor(specialty); count++; }
     }
 }
 

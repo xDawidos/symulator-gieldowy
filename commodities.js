@@ -273,13 +273,13 @@ const COMMODITY_ASSIGNMENTS = {
     TBN: { product: { oil: 0.6 }, lag: 1, input: { oil: 0.6 } },
     UOW: { product: { metals: 1 }, input: {} },
     BHO: { product: { grain: 1 }, input: {} },
-    PKC: { input: { coal: 0.10 } } // 0.17 S4: kolej (energia od 0.17.2)
+    PKC: { input: { coal: 0.05 } } // 0.17 S4: kolej, 0.17.2: reszta wsadu to prąd (POWER_INPUT_SYMBOLS)
 };
 
 // wsad domyślny: sektor → udziały; podsektor nadpisuje (pusty obiekt = brak wsadu). Rolnictwo: produkt zboże.
 const COMMODITY_SECTOR_INPUTS = {
-    'Chemia': { oil: 0.25, gas: 0.15 },
-    'Przemysł': { metals: 0.25, coal: 0.05 },
+    'Chemia': { oil: 0.25, gas: 0.10 },
+    'Przemysł': { metals: 0.25, coal: 0.02 },
     'Motoryzacja': { metals: 0.15, oil: 0.05 },
     'Energia': { coal: 0.35, gas: 0.15 },
     'Transport i logistyka': { oil: 0.20 },
@@ -360,5 +360,6 @@ function getCommodityResultAdj(stock) {
         marginAdj -= share * (r - 1) * (1 - getCommodityPassThrough(id));
     }
     const freight = typeof getFreightResultAdj === 'function' ? getFreightResultAdj(stock) : { revenueFactor: 1, marginAdj: 0 }; // 0.17 S4: przewoźnicy i koszt transportu
-    return { revenueFactor: Math.max(0.2, revenueFactor * freight.revenueFactor), marginAdj: marginAdj + freight.marginAdj };
+    const power = typeof getPowerResultAdj === 'function' ? getPowerResultAdj(stock) : { revenueFactor: 1, marginAdj: 0 }; // 0.17.2 E2: prąd
+    return { revenueFactor: Math.max(0.2, revenueFactor * freight.revenueFactor * power.revenueFactor), marginAdj: marginAdj + freight.marginAdj + power.marginAdj };
 }

@@ -6001,6 +6001,7 @@ function advanceSocialPolicy() {
     settleSocialBudget();
     settleSocialPrograms();
     if (typeof processInfraQuarterly === 'function') processInfraQuarterly(); // 0.17 S5: zużycie, przetargi, nowe projekty
+    if (typeof processEnergyQuarterly === 'function') processEnergyQuarterly(); // 0.17.2 E2: prąd
     if (society.housingProgram > 0) {
         society.housingProgram--;
         if (Math.random() < 0.5 * Math.max(1, Number(society.laws.housing) || 0)) commissionSocialHousing();

@@ -5801,6 +5801,97 @@ group('0.17.2 E1: spółki energetyczne', () => {
     });
 });
 
+group('0.17.2 E2: prąd', () => {
+    const make = (symbol, sector, subsector, revenue) => {
+        const c = makeCompany(symbol, { sector: [sector], cash: 1e8 });
+        if (subsector) c.segments = [{ sector, share: 1, subsector }];
+        c.fundamentals = { ...(c.fundamentals || {}), revenue };
+        return c;
+    };
+    const fresh = () => {
+        ensureCommodityState();
+        const state = make('STAT', 'Energia', 'Energetyka gazowa', 2000); state.isStateOwned = true;
+        resetWorld([make('COAL', 'Energia', 'Energetyka węglowa', 5000), state, make('ZIEL', 'Energia', 'OZE', 3000), make('ATOM', 'Energia', 'Energetyka jądrowa', 1000),
+            make('RAFI', 'Energia', 'Rafinerie', 9000), make('FABR', 'Przemysł', null, 4000), make('DOL', 'Przemysł', 'Wydobycie', 4000)]);
+        delete society.energy;
+        return ensureEnergy();
+    };
+    test('start: moc z przychodu, zużycie mniejsze o rezerwę, atom bez mocy, cena 1', () => {
+        const e = fresh(), mix = getEnergyMix(e);
+        assert(Math.abs(getEnergyCapacity(e) - ENERGY_RULES.startCapacity) < 20, 'moc startowa');
+        assert(Math.abs(e.demand * ENERGY_RULES.startReserve - ENERGY_RULES.startCapacity) < 1, 'rezerwa');
+        assertEq(mix.nuclear, 0, 'atom dopiero z bloków');
+        assert(mix.coal > 0 && mix.gas > 0 && mix.oze > 0, 'miks ma węgiel, gaz i OZE');
+        assert(!stocks.find(s => s.symbol === 'RAFI').power, 'rafineria bez mocy');
+        assert(Math.abs(getRawEnergyPrice(e) / e.price0 - 1) < 1e-9, 'cena startowa');
+    });
+    test('cena: drogi węgiel podnosi, niedobór dolicza premię; odbiorca płaci odchylenie, producent zarabia', () => {
+        const e = fresh(), ind = stocks.find(s => !s.power && !s.assetType && getStockSegments(s).some(x => x.sector === 'Przemysł')), maker = stocks.find(s => s.power?.capacity > 0);
+        const coal = commodityState.prices.coal;
+        commodityState.prices.coal = coal * 2;
+        try { assert(getRawEnergyPrice(e) / e.price0 > 1.1, 'węgiel w cenie'); } finally { commodityState.prices.coal = coal; }
+        e.hist = [1, 1, 1, 1]; e.price = 1.2;
+        assert(getPowerResultAdj(ind).marginAdj < 0, 'odbiorca traci przy drogim prądzie');
+        assert(getPowerResultAdj(maker).revenueFactor > 1, 'producent zyskuje');
+        e.price = 1;
+        assertEq(getPowerResultAdj(ind).marginAdj, 0, 'cena przy średniej: bez skutku');
+        e.demand = e.capacity * 1.1;
+        assert(Math.abs(getEnergyShortage(e) - 0.1) < 1e-9, 'niedobór');
+    });
+    test('blok: raty z gotówki, po terminie moc i przychód rosną', () => {
+        const e = fresh(), s = stocks.find(x => x.power?.type === 'coal'), cap = s.power.capacity, rev = s.fundamentals.revenue;
+        s.cash = 1e9;
+        const build = startPowerBlock(s);
+        assert(build && !canStartPowerBlock(s), 'trwa budowa');
+        const cash = s.cash; payPowerInstallment(s);
+        assert(s.cash < cash, 'rata');
+        finishPowerBlock(s);
+        assertEq(s.power.capacity, cap + build.add, 'moc');
+        assert(s.fundamentals.revenue > rev, 'przychód');
+        assert(!s.power.build, 'koniec budowy');
+    });
+    test('moc po upadku zostaje w kraju; spółka miejska powstaje po długim niedoborze, a blackout odcina odbiorców', () => {
+        const e = fresh(), s = stocks.find(x => x.power?.capacity > 0), cap = getEnergyCapacity(e);
+        syncPowerProducers(e);
+        s.isBankrupt = true;
+        try { syncPowerProducers(e); assert(Math.abs(getEnergyCapacity(e) - cap) < 1e-6, 'moc w puli'); } finally { s.isBankrupt = false; delete e.pool[s.power.type]; }
+        const count = municipalCompanies.length;
+        e.demand = e.capacity * 1.1; e.shortQ = ENERGY_RULES.municipalAfter;
+        const company = maybeSpawnMunicipalEnergy(e);
+        try {
+            assert(company?.power.capacity > 0 && company.willList, 'miejska spółka energetyczna');
+            assert(getEnergyCapacity(e) > cap, 'jej moc w kraju');
+        } finally { municipalCompanies.length = count; }
+        const ind = stocks.find(x => !x.power && !x.assetType && getStockSegments(x).some(y => y.sector === 'Przemysł'));
+        e.hist = [1]; e.price = 1;
+        triggerBlackout(e);
+        assert(getPowerResultAdj(ind).revenueFactor < 1, 'przemysł traci');
+        assertEq(e.stats.blackouts, 1, 'licznik');
+    });
+    test('zlecenia: geolog daje złoże albo nic, działka tanieje, technologie tylko OZE i atom', () => {
+        const e = fresh(), oze = stocks.find(x => x.power?.type === 'oze'), coal = stocks.find(x => x.power?.type === 'coal'), mine = stocks.find(x => x.symbol === 'DOL');
+        assert(!canOrderEnergyContract(coal, 'tech') && canOrderEnergyContract(oze, 'tech'), 'technologie');
+        assert(canOrderEnergyContract(mine, 'deposit') && !canOrderEnergyContract(coal, 'deposit'), 'złoża tylko surowce');
+        mine.cash = coal.cash = oze.cash = 1e8;
+        assert(orderEnergyContract(mine, 'deposit'), 'zlecenie');
+        assert(!canOrderEnergyContract(mine, 'deposit'), 'jedno naraz');
+        assert(!settleEnergyContract(mine, 0.99) && !mine.deposit, 'pudło');
+        mine.energyOrder = { kind: 'deposit', dueQ: 0 };
+        assert(settleEnergyContract(mine, 0) && mine.deposit.factor > 1, 'złoże');
+        const cost = getPowerBlockCost(coal);
+        orderEnergyContract(coal, 'site'); settleEnergyContract(coal);
+        assert(getPowerBlockCost(coal) < cost, 'działka obniża koszt');
+        assert(getSubcontractorsBySpecialty('geology').length >= 2, 'geolodzy');
+    });
+    test('projekt państwa: elektrownia z przetargu nie rusza przepustowości i daje moc', () => {
+        const e = fresh(), before = getEnergyCapacity(e), cap = { ...ensureInfra().cap };
+        assert(!getInfraOpenTypes().filter(t => INFRA_TYPES[t].mode).some(t => INFRA_TYPES[t].energy), 'bez losowania z infrastrukturą');
+        const add = onEnergyProjectCompleted(INFRA_TYPES.plant_gas);
+        assert(add > 0 && getEnergyCapacity(e) > before, 'moc');
+        assertEq(ensureInfra().cap.land, cap.land, 'przepustowość bez zmian');
+    });
+});
+
 group('0.14 T3: rozszerzenie o nowy segment', () => {
     function firm(symbol, sectors = ['Technologia'], opts = {}) {
         const s = makeCompany(symbol, { sector: sectors, cash: opts.cash ?? 2_000_000 });
@@ -10492,10 +10583,10 @@ group('0.15.5: Budownictwo i banki (przetargi, podwykonawcy, przejęcia pionowe,
 
     test('B2: rejestr — 12 specjalności po 3–8 firm, dawni podwykonawcy zachowani i przypisani do nowych specjalności', () => {
         registryWorld();
-        assertEq(Object.keys(SUBCONTRACTOR_SPECIALTIES).length, 12, '12 specjalności');
+        assertEq(Object.keys(SUBCONTRACTOR_SPECIALTIES).length, 13, '13 specjalności');
         for (const specialty of Object.keys(SUBCONTRACTOR_SPECIALTIES)) {
             const n = getSubcontractorsBySpecialty(specialty).length;
-            assert(n >= 3 && n <= 8, specialty + ': ' + n);
+            assert(n >= (specialty === 'geology' ? 2 : 3) && n <= 8, specialty + ': ' + n);
         }
         assertEq(specialists.find(s => s.id === 'spec1').specialty, 'it_cabling', 'technology → okablowanie IT');
         assertEq(specialists.find(s => s.id === 'spec4').specialty, 'industrial', 'industrial bez zmian');
@@ -11056,7 +11147,7 @@ group('0.15.5: Budownictwo i banki (przetargi, podwykonawcy, przejęcia pionowe,
         const spec = groupSpec('roads'); acquireSubcontractor(builder, spec, 100_000);
         withEl('subcontractors-list', 'div', list => withEl('subcontractors-summary', 'div', summary => {
             renderConstructionSubcontractorsList();
-            assert(list.querySelectorAll('.subcontractor-specialty').length === 12, 'nagłówek każdej z 12 specjalności');
+            assert(list.querySelectorAll('.subcontractor-specialty').length === 13, 'nagłówek każdej z 13 specjalności');
             assert(list.textContent.includes('Stawka (cena)') && list.textContent.includes('Udział w zleceniach rynku'), 'cena i udział');
             assert(list.textContent.includes('Należy do grupy') && list.textContent.includes(builder.name), 'grupa wykonawcy');
             assert(summary.textContent.includes('W grupach wykonawców') && summary.textContent.includes('Największy udział'), 'podsumowanie');
@@ -14917,7 +15008,7 @@ group('0.17 S2 Spółki i koszty wsadu', () => {
     test('S2: spółka bez przypisania dostaje wsad sektora i podsektora; rafineria zarabia na zmianie ceny (produkt z opóźnieniem)', () => after(() => {
         setRatio();
         const prof = s => getStockCommodityProfile(s);
-        assertEq(JSON.stringify(prof({ kind: 'share', id: 'X1', sectors: [['Chemia', 1]] }).input), JSON.stringify({ oil: 0.25, gas: 0.15 }), 'Chemia');
+        assertEq(JSON.stringify(prof({ kind: 'share', id: 'X1', sectors: [['Chemia', 1]] }).input), JSON.stringify({ oil: 0.25, gas: 0.10 }), 'Chemia');
         assertEq(JSON.stringify(prof({ kind: 'share', id: 'X2', sectors: [['Transport i logistyka', 1]], subsector: 'Lotnictwo' }).input), JSON.stringify({ oil: 0.3 }), 'Lotnictwo');
         assertEq(JSON.stringify(prof({ kind: 'share', id: 'X3', sectors: [['Energia', 1]], subsector: 'OZE' }).input), '{}', 'OZE bez wsadu');
         assertEq(JSON.stringify(prof({ kind: 'share', id: 'X4', sectors: [['Żywność', 1]], subsector: 'Rolnictwo' }).product), JSON.stringify({ grain: 1 }), 'Rolnictwo: produkt zboże');

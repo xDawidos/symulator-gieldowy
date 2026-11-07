@@ -76,7 +76,7 @@ function getInfraCarrierFactor(mode) { return 1 + INFRA_RULES.carrierBoost * (ge
 
 /** Typ projektu: spośród typów poniżej limitu, częściej tam, gdzie przepustowość niższa. */
 function pickInfraType() {
-    const open = getInfraOpenTypes();
+    const open = getInfraOpenTypes().filter(t => INFRA_TYPES[t].mode); // 0.17.2: elektrownie państwo ogłasza przy niedoborze mocy
     if (!open.length) return null;
     const w = open.map(t => 1 / Math.pow(getInfraCapacity(INFRA_TYPES[t].mode), 4));
     let r = Math.random() * w.reduce((s, v) => s + v, 0);
@@ -292,12 +292,13 @@ function onInfraProjectCompleted(project) {
     if (!p || !seg) return;
     const def = INFRA_TYPES[p.type], inf = ensureInfra();
     seg.status = 'done'; seg.instLeft = 0; inf.stats.segs++;
-    inf.cap[def.mode] = Math.min(getInfraCapUpper(def.mode), inf.cap[def.mode] + def.gain / p.segs.length);
+    if (def.mode) inf.cap[def.mode] = Math.min(getInfraCapUpper(def.mode), inf.cap[def.mode] + def.gain / p.segs.length);
     if (p.segs.every(s => s.status === 'done')) {
         p.status = 'done'; p.doneQ = macro.quarter;
         inf.stats.done[p.type] = (inf.stats.done[p.type] || 0) + 1;
         if (inf.stats.firstQ?.[p.type] === undefined) (inf.stats.firstQ = inf.stats.firstQ || {})[p.type] = macro.quarter;
-        logSociety(`🏗️ Ukończono: ${def.name} — przepustowość (${FREIGHT_MODES[def.mode].name.toLowerCase()}) ${formatNumberPl(inf.cap[def.mode], 2)}.`);
+        if (def.energy) logSociety(`🏗️ Ukończono: ${def.name}, ${onEnergyProjectCompleted(def)} MW nowej mocy.`);
+        else logSociety(`🏗️ Ukończono: ${def.name} — przepustowość (${FREIGHT_MODES[def.mode].name.toLowerCase()}) ${formatNumberPl(inf.cap[def.mode], 2)}.`);
         if (def.firstBonus && countInfraDone(p.type) === 1) applyInfraFirstBonus(p, def);
     }
 }
