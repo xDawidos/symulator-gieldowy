@@ -5781,7 +5781,23 @@ group('0.14 decyzja 12: państwowy program jądrowy', () => {
             const chance = id => { macro.election.ruling = id; return getNuclearStartChance(s); };
             assert(chance('state') > chance('people') && chance('people') > chance('market') && chance('market') > 0, 'kolejność partii');
         } finally { macro.election.ruling = ruling; macro.election.coalition = coalition; }
-        assert(SUBSECTOR_START_ASSIGNMENTS.PUR[1] === 'Energetyka jądrowa' && SUBSECTOR_START_ASSIGNMENTS.TRN[1] === 'Energetyka jądrowa', '2 spółki jądrowe na starcie');
+        assert(SUBSECTOR_START_ASSIGNMENTS.PUR[1] === 'Energetyka jądrowa', 'spółka jądrowa na starcie');
+    });
+});
+
+group('0.17.2 E1: spółki energetyczne', () => {
+    test('podsektory startowe i wsad: węgiel TRN, ESA, gaz PING, OZE WIW; nowe podsektory tylko przypisane', () => {
+        const entry = symbol => SUBSECTOR_START_ASSIGNMENTS[symbol][1];
+        assertEq(entry('TRN'), 'Energetyka węglowa', 'TRN');
+        assertEq(entry('ESA'), 'Energetyka węglowa', 'ESA');
+        assertEq(entry('PING'), 'Energetyka gazowa', 'PING');
+        assertEq(entry('WIW'), 'OZE', 'WIW');
+        assert(!SUBSECTOR_START_ASSIGNMENTS.MEF, 'Meferox bez zmian');
+        assert(getSubsectorDef('Energia', 'Energetyka węglowa').listedOnly && getSubsectorDef('Energia', 'Energetyka gazowa').listedOnly, 'tylko przypisane');
+        assertEq(COMMODITY_SUBSECTOR_INPUTS['Energetyka gazowa'].gas, 0.4, 'wsad gazu');
+        assert(!COMMODITY_ASSIGNMENTS.TRN.input.uranium, 'TRN bez uranu');
+        const ping = initialStocks.find(stock => stock.symbol === 'PING');
+        assert(ping && ping.exchange === 'SILVER' && !ping.isStateOwned, 'PING prywatny na Srebrnej');
     });
 });
 

@@ -1287,6 +1287,13 @@ const PROBE_017 = `(function () {
                 ...(typeof getDefenseShare === 'function' ? { dsh: getDefenseShare(), S: +getHomeSecurityLevel().toFixed(1), dsp: Math.round(Number(society.budget.defense) || 0), gidx: +getGlobalDefenseIndex().toFixed(3), boost: isDefenseBoosted() } : {}),
                 defRev: Math.round(stocks.filter(x => !x.isBankrupt && typeof isDefenseCompany === 'function' && isDefenseCompany(x)).reduce((a, x) => a + (Number(x.fundamentals?.history?.at(-1)?.revenue) || 0), 0)), cit: society.budget.citAdd || 0 });
         }
+        // 0.17.2 E0: przychody kwartału Energii i odbiorców prądu, ceny, ludność, budynki energetyczne. Sonda tylko czyta.
+        if (typeof society === 'object' && society) {
+            const lastRev = x => Number(x.fundamentals?.history?.at(-1)?.revenue) || 0, on = stocks.filter(x => !x.isBankrupt && !x.assetType);
+            const seg = (x, sectors) => getStockSegments(x).filter(y => sectors.includes(y.sector)).reduce((a, y) => a + y.share, 0);
+            const big = ['Przemysł', 'Chemia', 'Motoryzacja', 'Budowlany'], plants = /Elektrowni|Farma Wiatrowa|Park Słoneczny|energy_plant|wind_farm|solar_park/;
+            (T.pow = T.pow || []).push({ en: Math.round(on.reduce((a, x) => a + lastRev(x) * seg(x, ['Energia']), 0)), use: Math.round(on.reduce((a, x) => a + lastRev(x) * seg(x, big), 0) + lastRev(on.find(x => x.symbol === 'PKC') || {})), all: Math.round(on.reduce((a, x) => a + lastRev(x), 0)), n: on.filter(x => seg(x, ['Energia']) > 0).length, pl: +society.priceLevel.toFixed(4), pop: Math.round(society.population), bld: on.reduce((a, x) => a + (x.portfolio?.buildings || []).filter(b => plants.test(`${b.name} ${b.type}`)).length, 0) });
+        }
         return r;
     };
     const origFinish = s.finish; s.finish = function () {

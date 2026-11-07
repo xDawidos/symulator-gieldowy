@@ -523,7 +523,7 @@ const SUBSECTOR_ACTIVITY = {
     'Pożyczki konsumenckie': 'udziela drobnych pożyczek', 'Rynki kapitałowe': 'obsługuje inwestorów i transakcje giełdowe', 'Fintech': 'obsługuje klientów przez internet',
     'Rolnictwo': 'uprawia i skupuje płody rolne', 'Słodycze': 'produkuje słodycze', 'Herbata': 'sprzedaje herbatę', 'Piwowarstwo i napoje': 'warzy piwo i rozlewa napoje',
     'Robotyka': 'buduje roboty dla fabryk', 'Przemysł ciężki': 'wytwarza stal, beton, statki i ciężkie maszyny', 'Wydobycie': 'wydobywa surowce spod ziemi', 'Handel surowcami': 'handluje surowcami',
-    'Energetyka jądrowa': 'rozwija energetykę jądrową', 'OZE': 'wytwarza prąd ze źródeł odnawialnych', 'Rafinerie': 'przerabia ropę na paliwa', 'Gaz': 'dostarcza gaz firmom i domom',
+    'Energetyka jądrowa': 'rozwija energetykę jądrową', 'Energetyka węglowa': 'wytwarza prąd z węgla', 'Energetyka gazowa': 'wytwarza prąd z gazu', 'OZE': 'wytwarza prąd ze źródeł odnawialnych', 'Rafinerie': 'przerabia ropę na paliwa', 'Gaz': 'dostarcza gaz firmom i domom',
     'Logistyka': 'organizuje przewozy i magazyny', 'Lotnictwo': 'przewozi ludzi i ładunki samolotami', 'Morski': 'przewozi ładunki morzem', 'Lądowy': 'przewozi ładunki koleją i drogami',
     'Biotechnologia': 'rozwija nowe terapie w laboratoriach', 'Sprzęt medyczny': 'produkuje sprzęt dla lekarzy i pacjentów', 'Półprzewodniki': 'projektuje i produkuje układy scalone',
     'Sztuczna inteligencja': 'rozwija sztuczną inteligencję', 'Magazyny': 'buduje i wynajmuje magazyny', 'Drony': 'buduje drony', 'Telekomunikacja': 'prowadzi sieci telefoniczne i internetowe'
@@ -2133,6 +2133,16 @@ const initialStocks = [
     },
     quarterlyEarnings: 0,
   lineHistory: [], playerTransactions: [], sector: ['Energia', 'Chemia'], financialHealth: 1, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, isStateOwned: true, stateOwnershipPct: 0.5, eventResistance: 0.6, dividendPolicy: 'Balanced',
+        dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
+        lastQuarterValue: 0, estimatedDividend: 0, bankAccountId: null,
+    cash: 0
+    },
+    {
+    name: 'PING', price: 110.00, volatilityFactor: 1.0, symbol: 'PING', exchange: 'SILVER', totalShares: 60000, maxShares: 60000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
+        assets: 0, liabilities: 0, shareCapital: 0, retainedEarnings: 0
+    },
+    quarterlyEarnings: 0,
+  lineHistory: [], playerTransactions: [], sector: ['Energia'], financialHealth: 1, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'Balanced',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
         lastQuarterValue: 0, estimatedDividend: 0, bankAccountId: null,
     cash: 0

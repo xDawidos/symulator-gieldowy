@@ -255,7 +255,7 @@ const COMMODITY_ASSIGNMENTS = {
     ECL: { input: { oil: 0.25 } },
     KUP: { input: { gas: 0.3 } },
     ESA: { input: { coal: 0.35 } },
-    TRN: { input: { coal: 0.3, uranium: 0.1 } },
+    TRN: { input: { coal: 0.4 } },
     // zagranica (countries_data.js)
     TOB: { product: { oil: 1 }, input: {} },
     NRG: { product: { oil: 0.5, gas: 0.5 }, input: {} },
@@ -287,7 +287,7 @@ const COMMODITY_SECTOR_INPUTS = {
     'Budowlany': { metals: 0.10 },
     'Obronność': { metals: 0.15 }
 };
-const COMMODITY_SUBSECTOR_INPUTS = { 'OZE': {}, 'Energetyka jądrowa': { uranium: 0.20 }, 'Lotnictwo': { oil: 0.30 }, 'Rolnictwo': {} };
+const COMMODITY_SUBSECTOR_INPUTS = { 'OZE': {}, 'Energetyka jądrowa': { uranium: 0.20 }, 'Energetyka węglowa': { coal: 0.40 }, 'Energetyka gazowa': { gas: 0.40 }, 'Lotnictwo': { oil: 0.30 }, 'Rolnictwo': {} };
 const COMMODITY_SUBSECTOR_PRODUCTS = { 'Rolnictwo': { grain: 1 } };
 
 function getCommoditySegments(stock) {

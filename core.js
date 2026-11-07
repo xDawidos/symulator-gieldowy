@@ -1871,7 +1871,8 @@ const SECTORS = {
         subsectors: {
             'Energetyka jądrowa': { profile: { beta: 0.4, da: 0.14, pe: 14 }, mechanic: 'nuclear' },        // T2: budowa bloku
             'OZE': { mult: { rateSens: 1.5 }, partySubsidy: true },                                          // dotacje według partii
-            'Rafinerie': { listedOnly: true }, 'Gaz': { listedOnly: true }                                   // 0.17 S2: tylko przypisane spółki
+            'Rafinerie': { listedOnly: true }, 'Gaz': { listedOnly: true },                                  // 0.17 S2: tylko przypisane spółki
+            'Energetyka węglowa': { listedOnly: true }, 'Energetyka gazowa': { listedOnly: true }            // 0.17.2 E1: tylko przypisane spółki
         } },
     'Budowlany':             { icon: '🏗️', profile: { beta: 1.5, rateSens: 1.3, pe: 11, margin: 0.10, growth: 0.03, ps: 0.7, da: 0.03 } },
     'Transport i logistyka': { icon: '🚚', profile: { beta: 1.2, rateSens: 0.7, pe: 13, margin: 0.14, growth: 0.03, ps: 1.0, da: 0.07 }, // dawny „Transport”
@@ -2028,7 +2029,10 @@ const SUBSECTOR_START_ASSIGNMENTS = {
     BLP: ['Medycyna', 'Sprzęt medyczny'],          // Błyskawiczna Proteza
     VTG: ['Medycyna', 'Biotechnologia'],           // VitaGen
     PUR: ['Energia', 'Energetyka jądrowa'],        // Państwowy Uran
-    TRN: ['Energia', 'Energetyka jądrowa'],        // Tauron (państwowy) — decyzja 12: państwowy program jądrowy
+    TRN: ['Energia', 'Energetyka węglowa'],        // Tauron (państwowy), 0.17.2 E1: opis i dane zgodne, węgiel
+    ESA: ['Energia', 'Energetyka węglowa'],        // Elektrownia SA
+    PING: ['Energia', 'Energetyka gazowa'],        // PING
+    WIW: ['Energia', 'OZE'],                       // WielkiWoltaż
     BEW: ['Energia', 'OZE'],                       // Bałtycka Energia
     ENG: ['Energia', 'OZE'],                       // Energa
     CTX: ['Technologia', 'Sztuczna inteligencja'], // Cortex Neural
