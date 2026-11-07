@@ -16361,6 +16361,16 @@ group('0.17.3 R5 Obietnice botów', () => {
     };
     const live = (ai, type, goal, amount = 5000, dueQ = 12) => { const tied = ensurePromises(); const promise = { id: tied.promiseNext++, bot: ai.id, name: ai.name, type, goal, amount, dueQ, offerQ: 10, status: 'live' }; tied.promises.unshift(promise); return promise; };
 
+    test('debug: relacje ±10 z każdym, także z prezesem spoza kontaktów, w granicach ±100', () => {
+        const ai = start(), ceo = getCeoRelationKey(stocks[0].ceo.id);
+        botRelations.values[ai.id] = 95; botRelations.values[ceo] = 0;
+        debugShiftRelations(10);
+        assertEq(getRelation(ai.id), 100, 'górna granica');
+        assertEq(getRelation(ceo), 10, 'prezes');
+        debugShiftRelations(-10);
+        assertEq(getRelation(ai.id), 90, 'inwestor w dół');
+        assertEq(getRelation(ceo), 0, 'prezes w dół');
+    });
     test('prośba o zakup: od relacji +20, udana rozmowa daje ofertę, nieudana nic; limity te same co przy ofertach', () => {
         const ai = start(); ai.cash = 1_000_000; ai.portfolio = { AAA: { shares: 10, avgPrice: 100 } };
         const root = document.createElement('div'); root.id = 'net-tied-body'; document.body.appendChild(root);
