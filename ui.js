@@ -7365,6 +7365,17 @@ function debugAddFund(amount) {
     refreshFundViews();
 }
 
+/** Zmienia relację z każdym: współpracownicy, inwestorzy, prezesi, wiceprezesi, dawne kontakty i VIP-y. */
+function debugShiftRelations(delta) {
+    const board = stocks.flatMap(stock => [stock.ceo, ...(stock.deputies || [])]).filter(person => person?.id).map(person => getCeoRelationKey(person.id));
+    const contacts = (playerProfile?.contacts || []).map(contact => getCeoRelationKey(contact.id));
+    const vips = [...(playerFund?.vip?.offers || []), ...(playerProfile?.tied?.vips || [])].map(vip => `vip:${vip.id}`);
+    const keys = new Set([...getRelationPeople().map(person => person.id), ...board, ...contacts, ...vips]);
+    keys.forEach(key => changeRelation(key, delta, 'debug'));
+    logEvent(`🛠️ [DEBUG] Relacje ${delta > 0 ? '+' : ''}${delta} z każdym (${keys.size} osób).`, 'review');
+    refreshFundViews();
+}
+
 function debugEndPeriod() {
     if (playerFund) closeFundPeriod();
     refreshFundViews();

@@ -114,6 +114,25 @@ PRESETS['kontrakty'] = PRESETS['fundusz-gig'] + `(function () {
         return orig.apply(this, arguments);
     };
 })();`;
+// 0.17.3: górny limit wpłat z próśb o zakup: wszyscy inwestorzy od +30, 64% udanych rozmów, każda oferta przyjęta, każdy cel spełniony po 2 kw. Wynik w s017.zachety.
+PRESETS['zachety'] = PRESETS['fundusz-gig'] + `(function () {
+    const T = window.__zachety = { offers: 0, paid: 0, assets: 0, q: 0 };
+    const quarter = advanceMacroQuarter;
+    advanceMacroQuarter = function () {
+        try {
+            if (playerFund && playerProfile) {
+                for (const person of getRelationPeople().filter(item => item.kind === 'investor')) {
+                    botRelations.values[person.id] = Math.max(getRelation(person.id), 30);
+                    if (!getPitchBlock(person.id) && Math.random() < 0.64 && createPromiseOffer(person.entity)) T.offers++;
+                }
+                for (const offer of [...ensurePromises().promiseOffers]) acceptPromiseOffer(offer.id);
+                for (const promise of getActivePromises()) if (macro.quarter - promise.offerQ >= 2) T.paid += fulfillPromise(promise);
+                T.q++; T.assets += getFundAssets();
+            }
+        } catch (e) { T.err = String(e); }
+        return quarter.apply(this, arguments);
+    };
+})();`;
 // 0.17.3 R6: czytelnik Tied, wirtualne pozycje po każdej zapowiedzi (kupno po poście, sprzedaż po 2 kw.), bez wpływu na rynek. Porównanie: ta sama spółka z losowego kwartału bez zapowiedzi. Wynik w s017.tiedReader.
 PRESETS['czytelnik-tied'] = PRESETS['fundusz-gig'] + `(function () {
     const T = window.__tiedReader = { hint: [], base: [] }, open = [];
@@ -1286,7 +1305,7 @@ const PROBE_017 = `(function () {
             a[0] += h.reduce((t, y) => t + (Number(y.ebitda) || 0), 0); a[1] += h.reduce((t, y) => t + (Number(y.revenue) || 0), 0); a[2]++;
         }
         const tiedStats = typeof getDeputies === 'function' ? { posts: getTiedPosts().length, plans: stocks.filter(x => x.plannedMove).length, deputies: stocks.reduce((a, x) => a + getDeputies(x).length, 0), withDeputies: stocks.filter(x => getDeputies(x).length).length } : null;
-        r.s017 = { ...T, kontrakty: window.__kontrakty, tiedReader: window.__tiedReader, tiedStats, capPl: Math.round(capPl), capForeign: Math.round(capForeign), secMargin: Object.fromEntries(Object.entries(sec).filter(([, a]) => a[1] > 0).map(([k, a]) => [k, [+(a[0] / a[1]).toFixed(4), a[2]]])),
+        r.s017 = { ...T, kontrakty: window.__kontrakty, tiedReader: window.__tiedReader, zachety: window.__zachety, tiedStats, capPl: Math.round(capPl), capForeign: Math.round(capForeign), secMargin: Object.fromEntries(Object.entries(sec).filter(([, a]) => a[1] > 0).map(([k, a]) => [k, [+(a[0] / a[1]).toFixed(4), a[2]]])),
             // 0.17 S3: surowce na koniec (cena / średnia), wynik botów na kontraktach, otwarte pozycje gracza na towarach
             com: typeof commodityState === 'object' && commodityState ? { px: Object.fromEntries(COMMODITY_IDS.map(id => [id, +(commodityState.prices[id] / COMMODITY_DEFS[id].mean).toFixed(3)])), bots: commodityState.bots?.stats || null, botOpen: commodityState.bots?.pos?.length || 0, ev: commodityState.events.map(e => e.id), playerPos: typeof getMarginPositions === 'function' ? getMarginPositions('commodities').length : null,
                 fr: commodityState.freight ? Object.fromEntries(Object.keys(commodityState.freight.idx).map(id => [id, +commodityState.freight.idx[id].toFixed(1)])) : null } : null }; // 0.17 S4: indeks frachtu na koniec
