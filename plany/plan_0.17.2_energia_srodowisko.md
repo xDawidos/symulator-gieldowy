@@ -52,7 +52,7 @@ Baza po scaleniu 0.17.3: marże Energii i odbiorców prądu, sonda mocy i zużyc
 |---|---|---|---|
 | Poszukiwanie nowych złóż | Ropa, węgiel, gaz | Geolog | Wynik losowy: większa produkcja surowca na czas złoża lub nic |
 | Szukanie działki pod inwestycję | Wszystkie typy | Geolog | Niższy koszt i krótszy czas następnej budowy |
-| Inwestowanie w najnowsze technologie | OZE i atom | Badania (istniejący system R&D) | Tańsza moc lub wyższa sprawność |
+| Inwestowanie w najnowsze technologie | OZE i atom | Podwykonawca energetyczny | Tańsza moc lub wyższa sprawność (patrz „Domknięcie projektu”, pkt 9) |
 
 - **Nowy typ podwykonawcy: geolog.** Obsługuje też szukanie działki, jedna nazwa wystarcza.
 - Start: 2 podwykonawców energetycznych (`energy`) i 2 geologów (`geology`). Mogą powstawać nowi. Liczba geologów to założenie planu.
@@ -82,7 +82,7 @@ Partie dostają preferencje w `PARTY_PROGRAMS.moves`.
 - Poziomy 0–5 i budżet jak `oversight.knf`, bez łapówek na start.
 - **Poziom 0: brak limitów.** Limity powstają z poziomami i ustala je urząd na podstawie pomiaru produkcji i wpływu na zdrowie obywateli.
 - Wyższy poziom: dokładniejszy pomiar, częstsza kontrola, wyższa skuteczność kar.
-- **ESG:** wzmocniony urząd odblokowuje ścieżkę ESG. Spółka może iść w ekologię, płacąc na początku za niższe emisje. Rozwinięcie w 0.18.
+- **ESG:** od poziomu 3 przycisk wejścia na ścieżkę. Spółka płaci raz i ma potem niższe emisje (patrz „Domknięcie projektu”, pkt 5). Rozwinięcie w 0.18.
 - Spółka jądrowa: zgodę na blok wydaje UEiE zamiast ogólnego „regulatora”.
 
 ## E5. Zanieczyszczenia
@@ -90,7 +90,7 @@ Partie dostają preferencje w `PARTY_PROGRAMS.moves`.
 - Krajowy wskaźnik 0–100: `P = 0,9 × P + emisje / norma`.
 - Emisje spółki = produkcja × współczynnik sektora i typu. Start: węgiel 1,0, Chemia 0,7, Przemysł 0,6, gaz 0,5, Motoryzacja 0,3, Budowlany 0,2, atom 0,05, OZE 0,02.
 - **Debug mode:** emisje spółek i kraju widoczne od początku, także przy UEiE poziom 0.
-- **Skutki:** poziom życia (przez zdrowie), ułamek przyrostu populacji i przy wysokim wskaźniku mały spadek produkcji. Punkt „produkcja” z decyzji 10 zapisany jako skutek, do potwierdzenia.
+- **Skutki:** poziom życia (przez zdrowie), ułamek przyrostu populacji i przy wysokim wskaźniku mały spadek produkcji (patrz „Domknięcie projektu”, pkt 12).
 - Opłata za emisje: procent przychodów proporcjonalnie do emisji, według polityki klimatycznej.
 - Przekroczenie limitu: kara.
 - Obniżanie emisji: inwestycje ekologiczne, technologie, ESG.
@@ -154,9 +154,22 @@ Bez nowego katalogu. Istniejące pozycje z `technologies` dostają efekt na emis
 - Nowa państwowa spółka atomowa od giełdy Platynowej, bez NewHorizons, po kilku latach subsydiów OZE, z możliwą prywatyzacją. Istniejące spółki atomowe działają dalej.
 - Bez zmian: budowa 8–16 kw., koszt ok. 2 kw. przychodów, szanse startu 4% i 3,5% × mnożnik partii.
 
-## Założenie do potwierdzenia
+## Domknięcie projektu (decyzje użytkownika 2026-11-07)
 
-„Dorzuć produkcję” z decyzji 10 plan przyjmuje jako dodatkowy skutek zanieczyszczeń.
+Pełne brzmienie i UI: `plany/design/11_energia_0.17.2.md`, sekcja „Decyzje użytkownika”. Mają pierwszeństwo przed resztą planu.
+
+1. Jednostki: GW i PLN/MWh.
+2. Emisje: UEiE 0 nic, 1 kraj, 2 spółki, debug wszystko.
+3. Poziom życia przy UEiE 0: wskaźnik zostaje, czynnik „Zdrowie” ma napis „brak pomiaru”. Silnik liczy zdrowie normalnie, ukryta jest tylko liczba.
+4. Poziomy UEiE: 0 bez limitów, 1 pomiar kraju, 2 pomiar spółek i limit z karą, 3 częstsze kontrole i ESG, 4 dokładny pomiar i wyższe kary, 5 pełny nadzór.
+5. ESG (ustalenia planu, liczby startowe): jednorazowo koszt 1 kwartału przychodów, potem emisje spółki −25%. Decyzja na stałe, zostaje także po spadku poziomu UEiE. Wejść może gracz jako właściciel. AI wchodzi rzadko, zmierzyć w serii.
+6. Progi słowne: 5 słów co 20 pkt.
+7. Emisje spółki pokazane jako udział w emisjach kraju.
+8. Polityka klimatyczna: brak opłat, niska, średnia, wysoka, bardzo wysoka. Stawki 0%, 0,6%, 1,2%, 1,8%, 2,5% przychodów na start.
+9. Najnowsze technologie (ustalenia planu, liczby startowe): osobne zlecenie, nie część drzewka R&D. Wykonawca: podwykonawca `energy`. Koszt 0,25 kwartału przychodów, czas 4 kwartały. Wynik: −5% kosztu następnego bloku albo +3% mocy spółki, najwyżej 3 razy na spółkę. Koszt księgowany przez `recordResearchExpense`. Nie odblokowuje pozycji z `technologies`.
+10. Dotacja UEiE z konta prywatnego, jak KNF.
+11. Bloki poza atomem: dowolna liczba, po kolei. Ogranicza je gotówka i niedobór mocy.
+12. Produkcja: spadek od wskaźnika 80 („krytyczne”), liniowo do −2% przy 100. Dotyczy spółek z emisjami.
 
 ## Zależności i ryzyka
 
