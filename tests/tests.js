@@ -5834,7 +5834,7 @@ group('0.17.2 E2: prąd', () => {
         assert(getPowerResultAdj(ind).marginAdj < 0, 'odbiorca traci przy drogim prądzie');
         assert(getPowerResultAdj(maker).revenueFactor > 1, 'producent zyskuje');
         e.price = 1;
-        assertEq(getPowerResultAdj(ind).marginAdj, 0, 'cena przy średniej: bez skutku');
+        assert(Math.abs(getPowerResultAdj(ind).marginAdj + getClimateFee() * getStockEmissionFactor(ind)) < 1e-12, 'cena przy średniej: bez skutku');
         e.demand = e.capacity * 1.1;
         assert(Math.abs(getEnergyShortage(e) - 0.1) < 1e-9, 'niedobór');
     });
@@ -5928,6 +5928,91 @@ group('0.17.2 E3: ustawy i Zieloni', () => {
             if (greens === undefined) delete society.greens; else society.greens = greens;
             macro.election.ruling = ruling; macro.election.coalition = coalition; syncFourthParty();
         }
+    });
+});
+
+group('0.17.2 E4-E5: urząd i zanieczyszczenia', () => {
+    const make = (symbol, sector, subsector, revenue) => {
+        const c = makeCompany(symbol, { sector: [sector], cash: 1e8 });
+        if (subsector) c.segments = [{ sector, share: 1, subsector }];
+        c.fundamentals = { ...(c.fundamentals || {}), revenue };
+        return c;
+    };
+    const fresh = () => {
+        ensureCommodityState();
+        resetWorld([make('COAL', 'Energia', 'Energetyka węglowa', 5000), make('ZIEL', 'Energia', 'OZE', 3000), make('CHEM', 'Chemia', null, 4000), make('TECH', 'Technologia', null, 4000), make('ROLN', 'Żywność', 'Rolnictwo', 2000)]);
+        delete society.energy;
+        oversight.energy = { level: 0, budget: 0 };
+        return ensureEnergy();
+    };
+    const by = symbol => stocks.find(s => s.symbol === symbol);
+    test('emisyjność: węgiel 1, OZE 0,02, Chemia 0,7, bez przemysłu 0; ESG obniża', () => {
+        fresh();
+        assertEq(getStockEmissionFactor(by('COAL')), 1, 'węgiel');
+        assertEq(getStockEmissionFactor(by('ZIEL')), 0.02, 'OZE');
+        assertEq(getStockEmissionFactor(by('CHEM')), 0.7, 'Chemia');
+        assertEq(getStockEmissionFactor(by('TECH')), 0, 'technologia');
+    });
+    test('zanieczyszczenie: start 40, wzór 0,9 P + emisje / norma, zakres 0-100, wyższe emisje podnoszą', () => {
+        const e = fresh();
+        processPollution(e);
+        assert(Math.abs(e.pollution - 40) < 0.01, 'stan ustalony 40');
+        by('COAL').fundamentals.revenue *= 3;
+        const before = e.pollution;
+        processPollution(e);
+        assert(e.pollution > before, 'rośnie');
+        e.pollution = 99.9; e.norm = 1;
+        processPollution(e);
+        assertEq(e.pollution, 100, 'górna granica');
+    });
+    test('urząd: poziom 0 bez limitów i bez pomiaru, wyższy poziom kontroluje; debug widzi zawsze', () => {
+        const e = fresh(), cash = by('COAL').cash;
+        processPollution(e);
+        assertEq(processEnergyOffice(e), 0, 'poziom 0');
+        assertEq(getMeasuredEmissionFactor(by('COAL')), isDebugMode() ? 1 : null, 'bez pomiaru');
+        assert(getEmissionLimit(e) === Infinity, 'bez limitu');
+        oversight.energy.level = 3;
+        assert(getEmissionLimit(e) < 0.75, 'limit z poziomu i zanieczyszczenia');
+        const stub = Math.random; Math.random = () => 0;
+        try { assert(processEnergyOffice(e) > 0, 'kara'); } finally { Math.random = stub; }
+        assert(by('COAL').cash < cash, 'kara z gotówki');
+        assert(e.fund > 0, 'kara trafia do funduszu');
+    });
+    test('ESG: dopiero po wzmocnieniu urzędu, kosztuje na początku, obniża emisje', () => {
+        fresh();
+        const s = by('COAL');
+        assert(!canOrderEsg(s), 'urząd za słaby');
+        oversight.energy.level = ENERGY_OFFICE_RULES.esgLevel;
+        const cash = s.cash;
+        assert(orderEsg(s), 'ESG');
+        assert(s.cash < cash, 'koszt');
+        assertEq(getStockEmissionFactor(s), 0.8, 'niższe emisje');
+    });
+    test('opłata: obniża marżę według emisyjności, zasila fundusz i urząd', () => {
+        const e = fresh(), laws = { ...society.laws };
+        e.hist = [1]; e.price = 1; e.pollution = 40;
+        try {
+            society.laws.climatePolicy = 3;
+            assert(getPowerResultAdj(by('COAL')).marginAdj < getPowerResultAdj(by('ZIEL')).marginAdj, 'węgiel płaci więcej');
+            assertEq(getPowerResultAdj(by('TECH')).marginAdj, 0, 'bez emisji bez opłaty');
+            assert(collectClimateFee(e) > 0 && e.fund > 0 && oversight.energy.budget > 0, 'fundusz i urząd');
+        } finally { society.laws = laws; }
+    });
+    test('skutki: wysoki wskaźnik obniża produkcję, a kwaśny deszcz rolnictwo; awaria wraca po terminie', () => {
+        const e = fresh();
+        e.hist = [1]; e.price = 1; e.pollution = 100;
+        assert(getPollutionProductionCut(e) > 0, 'produkcja');
+        e.pollution = 40;
+        assertEq(getPollutionProductionCut(e), 0, 'bez skutku przy niskim');
+        runEnergyEvent('acidRain', e);
+        assert(getPowerResultAdj(by('ROLN')).revenueFactor < 1, 'rolnictwo');
+        const cap = by('COAL').power.capacity + by('ZIEL').power.capacity;
+        runEnergyEvent('failure', e);
+        const hit = stocks.find(s => s.power?.outage);
+        assert(hit && by('COAL').power.capacity + by('ZIEL').power.capacity < cap, 'awaria');
+        hit.power.outage.until = -1;
+        processEnergyEvents(e);
+        assertEq(by('COAL').power.capacity + by('ZIEL').power.capacity, cap, 'moc wraca');
     });
 });
 
@@ -15008,6 +15093,7 @@ group('0.17 S2 Spółki i koszty wsadu', () => {
         for (const symbol of ['ZST', 'SLS']) assert(!COMPANY_DESCRIPTIONS[symbol], `${symbol}: bez wpisu`);
     });
     test('S2: cena +20% ponad Ś8 → przychód kopalni +11,5% (wykładnik 0,6); strajk w kopalniach tnie produkcję krajową o 20%', () => after(() => {
+        delete society.energy;
         setRatio({ coal: 1.2 });
         const kwm = { symbol: 'KWM', sector: ['Przemysł'] };
         assertNear(getCommodityResultAdj(kwm).revenueFactor, Math.pow(1.2, 0.6), 'przychód × 1,2^0,6', 1e-9);

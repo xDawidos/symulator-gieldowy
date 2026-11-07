@@ -1570,6 +1570,7 @@ function createOversight() {
         pendingCorruption: 0,
         police: { level: 0, budget: 0 },
         knf: { level: 0, budget: 0 },
+        energy: { level: 0, budget: 0 }, // 0.17.2 E4: Urząd Energii i Ekologii, poziomy jak KNF, budżet z opłaty za emisje
         records: {},          // id → { strikes, suspicion, immuneUntil, blockedUntil, illegalGains }
         history: [],          // ostatnie wykrycia (do panelu)
         hidden: { balance: 0 }, // 0.16.6 S1: rachunek w Waschmabanku (countries.js)

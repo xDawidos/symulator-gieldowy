@@ -198,6 +198,9 @@ function getPowerResultAdj(stock) {
         if (e.blackoutUntil >= getEnergyQuarter()) revenueFactor -= ENERGY_RULES.blackoutCut;
     }
     if (stock.deposit && stock.deposit.untilQ > getEnergyQuarter()) revenueFactor *= stock.deposit.factor;
+    const emission = getStockEmissionFactor(stock);
+    if (emission > 0) { marginAdj -= getClimateFee() * emission; revenueFactor *= 1 - getPollutionProductionCut(e); }
+    if (e.acidUntil >= getEnergyQuarter() && getStockSegments(stock).some(seg => seg.subsector === 'Rolnictwo')) revenueFactor -= ENERGY_EVENT_RULES.acidCut;
     return { revenueFactor, marginAdj };
 }
 
@@ -393,7 +396,165 @@ function maybeBlackout(e) {
     if (getEnergyShortage(e) >= ENERGY_RULES.blackoutAt && quarter - e.blackoutQ >= ENERGY_RULES.blackoutCooldown && Math.random() < ENERGY_RULES.blackoutChance) triggerBlackout(e, quarter);
 }
 
-/** Kwartał energetyki: zużycie, moc, cena, budowy, zlecenia, nowe spółki, blackout. */
+// ---------------------------------------------------------------------------------
+// E4: Urząd Energii i Ekologii. E5: zanieczyszczenia, opłata, limity, zdarzenia
+// ---------------------------------------------------------------------------------
+const SECTOR_EMISSIONS = { 'Chemia': 0.7, 'Przemysł': 0.6, 'Motoryzacja': 0.3, 'Budowlany': 0.2, 'Energia': 0.5 };
+const POLLUTION_RULES = {
+    start: 40, keep: 0.9, healthyLevel: 40, populationLoss: 0.0002, productionFrom: 70, productionCut: 0.015
+};
+const CLIMATE_FEES = [0, 0.002, 0.004, 0.007, 0.010];    // opłata: część przychodu przy emisyjności 1
+const ENERGY_OFFICE_RULES = {
+    limits: [Infinity, 1.1, 0.9, 0.75, 0.6, 0.5],        // limit emisyjności według poziomu urzędu
+    pollutionTight: 400, checkChance: 0.12, fineShare: 0.02, budgetShare: 0.15, greenBudgetShare: 0.30,
+    measureStep: [1, 0.25, 0.1, 0.05, 0.01, 0.01], esgLevel: 2, esgCost: 0.4, esgCut: 0.2, esgMax: 0.5, aiEsgChance: 0.01, ecoMax: 0.7
+};
+const ENERGY_EVENTS = {
+    smog: { minPollution: 50, chance: 0.12, texts: ['🌫️ Smog nad miastami: szkoły odwołują lekcje, a przychodnie są pełne.', '🌫️ Alarm smogowy trzeci dzień z rzędu. Mieszkańcy pytają, kto za to odpowiada.', '🌫️ Gęsty smog zatrzymał lotnisko i zamknął przedszkola.'] },
+    protest: { minPollution: 45, chance: 0.07, texts: ['📢 Protest pod bramą {name}: mieszkańcy żądają ograniczenia emisji.', '📢 Blokada dojazdu do zakładu {name}. Ekolodzy i sąsiedzi idą razem.', '📢 Marsz przeciw {name} przeszedł przez centrum miasta.'] },
+    failure: { minPollution: 0, chance: 0.05, texts: ['⚠️ Awaria w elektrowni {name}: część mocy wypadła z sieci.', '⚠️ {name}: pożar transformatora, blok stoi.', '⚠️ {name}: awaryjne wyłączenie bloku po usterce turbiny.'] },
+    acidRain: { minPollution: 60, chance: 0.06, texts: ['🌧️ Kwaśne deszcze niszczą uprawy, a rolnicy liczą straty.', '🌧️ Rolnicy alarmują: kwaśne deszcze obniżają plony.'] },
+    scandal: { minPollution: 35, chance: 0.04, texts: ['🕵️ Skandal ekologiczny: {name} miała ukrywać prawdziwe emisje.', '🕵️ Dziennikarze ujawniają nielegalny zrzut ścieków spółki {name}.', '🕵️ {name} pod lupą po ujawnieniu sfałszowanych pomiarów emisji.'] }
+};
+const ENERGY_EVENT_RULES = { smogMood: 1, protestPrice: -0.02, failureQuarters: 2, failureShare: 0.5, failurePrice: -0.03, acidCut: 0.05, acidQuarters: 2, scandalPrice: -0.04 };
+
+const getEnergyOfficeLevel = () => Number(oversight?.energy?.level) || 0;
+function getClimateFee() { return CLIMATE_FEES[Number(society?.laws?.climatePolicy ?? SOCIAL_LAWS.climatePolicy.start)] || 0; }
+function getStockEcoCut(stock) { return Math.min(ENERGY_OFFICE_RULES.ecoMax, (Number(stock?.ecoCut) || 0)); }
+/** Emisyjność spółki: średnia sektorów, prąd według typu elektrowni, po obniżkach (technologie, ESG). */
+function getStockEmissionFactor(stock) {
+    if (!stock || stock.assetType || stock.isBankStock) return 0;
+    const factor = getStockSegments(stock).reduce((sum, seg) => {
+        const power = seg.sector === 'Energia' && stock.power && !ENERGY_NO_POWER_SUBSECTORS.includes(seg.subsector);
+        return sum + (power ? ENERGY_TYPES[stock.power.type].emission : SECTOR_EMISSIONS[seg.sector] || 0) * seg.share;
+    }, 0);
+    return factor * (1 - getStockEcoCut(stock));
+}
+/** Emisje kwartału: produkcja (przychód w cenach startowych) × emisyjność. */
+function getStockEmissions(stock) { return getStockRevenue(stock) / (Number(society.priceLevel) || 1) * getStockEmissionFactor(stock); }
+/** Emisje w widokach: bez urzędu nieznane (debug pokazuje zawsze), wyższy poziom mierzy dokładniej. */
+function getMeasuredEmissionFactor(stock) {
+    const debug = typeof isDebugMode === 'function' && isDebugMode(), level = getEnergyOfficeLevel();
+    if (!debug && !level) return null;
+    const step = debug ? 0.01 : ENERGY_OFFICE_RULES.measureStep[level];
+    return Math.round(getStockEmissionFactor(stock) / step) * step;
+}
+function getEmissionLimit(e = society.energy) {
+    return ENERGY_OFFICE_RULES.limits[getEnergyOfficeLevel()] * (1 - (Number(e?.pollution) || 0) / ENERGY_OFFICE_RULES.pollutionTight);
+}
+function getPollutionProductionCut(e = society.energy) {
+    return Math.max(0, (Number(e?.pollution) || 0) - POLLUTION_RULES.productionFrom) / (100 - POLLUTION_RULES.productionFrom) * POLLUTION_RULES.productionCut;
+}
+
+/** Wskaźnik P = 0,9 × P + emisje / norma. Norma z pierwszego kwartału, tak by przy stałych emisjach P wynosiło 40. */
+function processPollution(e) {
+    const emissions = stocks.reduce((sum, stock) => sum + (stock.isBankrupt ? 0 : getStockEmissions(stock)), 0);
+    if (!(e.norm > 0)) {
+        e.norm = emissions > 0 ? emissions * (1 - POLLUTION_RULES.keep) * 100 / POLLUTION_RULES.start / 10 : 1;
+        e.pollution = POLLUTION_RULES.start;
+    }
+    e.emissions = Math.round(emissions);
+    e.pollution = +clampValue(POLLUTION_RULES.keep * e.pollution + emissions / e.norm / 10, 0, 100).toFixed(2);
+    if (e.pollution > POLLUTION_RULES.healthyLevel) society.population = Math.round(society.population * (1 - (e.pollution - POLLUTION_RULES.healthyLevel) / 60 * POLLUTION_RULES.populationLoss));
+    return e.pollution;
+}
+/** Opłata za emisje zbierana z marż (getPowerResultAdj) trafia do funduszu energii, część do urzędu. */
+function collectClimateFee(e) {
+    const fee = getClimateFee();
+    const amount = fee > 0 ? stocks.reduce((sum, stock) => sum + (stock.isBankrupt ? 0 : getStockRevenue(stock) * getStockEmissionFactor(stock) * fee), 0) : 0;
+    e.feeQuarter = Math.round(amount);
+    const greens = macro?.election?.ruling === 'green' || macro?.election?.coalition?.partner === 'green';
+    const office = amount * (greens ? ENERGY_OFFICE_RULES.greenBudgetShare : ENERGY_OFFICE_RULES.budgetShare);
+    if (office > 0) fundInstitution(oversight.energy, office);
+    e.fund = (Number(e.fund) || 0) + amount - office;
+    return amount;
+}
+/** Kontrola urzędu: spółka ponad limitem płaci karę, jej szansa rośnie ze skutecznością urzędu. */
+function processEnergyOffice(e) {
+    if (!getEnergyOfficeLevel()) return 0;
+    const limit = getEmissionLimit(e), chance = getInstitutionEffectiveness(oversight.energy) * ENERGY_OFFICE_RULES.checkChance;
+    let fines = 0;
+    for (const stock of stocks) {
+        if (stock.isBankrupt || stock.assetType) continue;
+        const factor = getStockEmissionFactor(stock);
+        if (factor <= limit || Math.random() >= chance) continue;
+        const fine = Math.round(getStockRevenue(stock) * ENERGY_OFFICE_RULES.fineShare * Math.min(1, (factor - limit) / limit));
+        if (!(fine > 0)) continue;
+        ensureCompanyCash(stock, fine, 'Kredyt na karę za emisje');
+        adjustCompanyCash(stock, -fine);
+        adjustBalanceSheet(stock, { assets: -fine, retainedEarnings: -fine });
+        if (typeof coverNegativeCash === 'function') coverNegativeCash(stock);
+        e.fund = (Number(e.fund) || 0) + fine;
+        e.stats.fines = (e.stats.fines || 0) + 1;
+        fines += fine;
+        logEvent(`🏛️ Urząd Energii i Ekologii: kara ${formatZl(fine, 0)} dla ${stock.name} za przekroczenie limitu emisji.`, 'company');
+    }
+    return fines;
+}
+function canOrderEsg(stock) {
+    return Boolean(stock && !stock.isBankrupt && !stock.assetType && getEnergyOfficeLevel() >= ENERGY_OFFICE_RULES.esgLevel && (Number(stock.ecoCut) || 0) < ENERGY_OFFICE_RULES.esgMax && getStockEmissionFactor(stock) > 0);
+}
+/** Ścieżka ESG: spółka płaci na początku za trwale niższe emisje. */
+function orderEsg(stock) {
+    if (!canOrderEsg(stock)) return false;
+    const cost = Math.round(getStockRevenue(stock) * ENERGY_OFFICE_RULES.esgCost);
+    ensureCompanyCash(stock, cost, 'Kredyt na program ESG');
+    adjustCompanyCash(stock, -cost);
+    adjustBalanceSheet(stock, { assets: -cost, retainedEarnings: -cost });
+    if (typeof coverNegativeCash === 'function') coverNegativeCash(stock);
+    stock.ecoCut = (Number(stock.ecoCut) || 0) + ENERGY_OFFICE_RULES.esgCut;
+    stock.esg = true;
+    society.energy.stats.esg = (society.energy.stats.esg || 0) + 1;
+    logEvent(`🌿 ${stock.name} wchodzi na ścieżkę ESG: wyższe koszty dziś, niższe emisje na stałe.`, 'company');
+    return true;
+}
+function processAiEsg(e) {
+    for (const stock of stocks) {
+        if (!canOrderEsg(stock) || getStockEmissionFactor(stock) <= getEmissionLimit(e)) continue;
+        if (Math.random() < ENERGY_OFFICE_RULES.aiEsgChance && (Number(stock.cash) || 0) > getStockRevenue(stock) && !(typeof canFundControlAgm === 'function' && canFundControlAgm(stock))) orderEsg(stock);
+    }
+}
+
+function fillEnergyText(text, stock) { return text.replace('{name}', stock?.name || 'spółki'); }
+function pickPolluter() {
+    const top = stocks.filter(stock => !stock.isBankrupt && !stock.assetType && getStockEmissionFactor(stock) > 0.3).sort((a, b) => getStockEmissions(b) - getStockEmissions(a)).slice(0, 6);
+    return top.length ? getRandomElement(top) : null;
+}
+/** Zdarzenia: najwyżej jedno na kwartał. */
+function runEnergyEvent(id, e = society.energy) {
+    const def = ENERGY_EVENTS[id], rules = ENERGY_EVENT_RULES, quarter = getEnergyQuarter();
+    let stock = null;
+    if (id === 'smog') { for (const item of stocks) if (item.workforce) item.workforce.satisfaction = clampValue(item.workforce.satisfaction - rules.smogMood, 0, 100); }
+    else if (id === 'protest' || id === 'scandal') {
+        stock = pickPolluter();
+        if (!stock) return null;
+        applyPriceEffect(stock.symbol, id === 'protest' ? rules.protestPrice : rules.scandalPrice, 'negative', 'company');
+    } else if (id === 'failure') {
+        const list = stocks.filter(item => !item.isBankrupt && item.power?.capacity > 0 && !item.power.outage);
+        if (!list.length) return null;
+        stock = getRandomElement(list);
+        stock.power.outage = { until: quarter + rules.failureQuarters, lost: Math.round(stock.power.capacity * rules.failureShare) };
+        stock.power.capacity -= stock.power.outage.lost;
+        applyPriceEffect(stock.symbol, rules.failurePrice, 'negative', 'company');
+    } else if (id === 'acidRain') e.acidUntil = quarter + rules.acidQuarters;
+    e.stats.events = e.stats.events || {};
+    e.stats.events[id] = (e.stats.events[id] || 0) + 1;
+    publishEnergyNews(fillEnergyText(getRandomElement(def.texts), stock), `${def.texts[0].split(' ')[0]} ${stock?.name || 'Środowisko'}`, id === 'scandal' ? 2 : 1);
+    if (typeof noteEnergyOpinion === 'function') noteEnergyOpinion(id);
+    return { id, stock };
+}
+function processEnergyEvents(e) {
+    const quarter = getEnergyQuarter();
+    for (const stock of stocks) {
+        const outage = stock.power?.outage;
+        if (outage && outage.until <= quarter) { stock.power.capacity += outage.lost; stock.power.outage = null; }
+    }
+    const open = Object.keys(ENERGY_EVENTS).filter(id => e.pollution >= ENERGY_EVENTS[id].minPollution).sort(() => Math.random() - 0.5);
+    for (const id of open) if (Math.random() < ENERGY_EVENTS[id].chance) return runEnergyEvent(id, e);
+    return null;
+}
+
+/** Kwartał energetyki: zużycie, moc, cena, budowy, zlecenia, nowe spółki, blackout, zanieczyszczenia. */
 function processEnergyQuarterly() {
     if (typeof society !== 'object' || !society || !stocks?.length) return null;
     const e = ensureEnergy();
@@ -411,5 +572,10 @@ function processEnergyQuarterly() {
     maybeAnnounceEnergyProject(e);
     maybeSpawnMunicipalEnergy(e);
     maybeBlackout(e);
+    processPollution(e);
+    collectClimateFee(e);
+    processEnergyOffice(e);
+    processAiEsg(e);
+    processEnergyEvents(e);
     return e;
 }
