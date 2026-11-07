@@ -5971,8 +5971,11 @@ group('0.17.2 E4-E5: urząd i zanieczyszczenia', () => {
         assertEq(processEnergyOffice(e), 0, 'poziom 0');
         assertEq(getMeasuredEmissionFactor(by('COAL')), isDebugMode() ? 1 : null, 'bez pomiaru');
         assert(getEmissionLimit(e) === Infinity, 'bez limitu');
+        oversight.energy.level = 1;
+        assert(getEmissionLimit(e) === Infinity && canSeeCountryEmissions(), 'poziom 1: tylko pomiar kraju');
         oversight.energy.level = 3;
-        assert(getEmissionLimit(e) < 0.75, 'limit z poziomu i zanieczyszczenia');
+        assert(getEmissionLimit(e) < 0.9, 'limit z poziomu i zanieczyszczenia');
+        assertEq(getMeasuredEmissionFactor(by('COAL')), 1, 'pomiar spółki');
         const stub = Math.random; Math.random = () => 0;
         try { assert(processEnergyOffice(e) > 0, 'kara'); } finally { Math.random = stub; }
         assert(by('COAL').cash < cash, 'kara z gotówki');
@@ -5986,7 +5989,10 @@ group('0.17.2 E4-E5: urząd i zanieczyszczenia', () => {
         const cash = s.cash;
         assert(orderEsg(s), 'ESG');
         assert(s.cash < cash, 'koszt');
-        assertEq(getStockEmissionFactor(s), 0.8, 'niższe emisje');
+        assertEq(getStockEmissionFactor(s), 0.75, 'niższe emisje');
+        oversight.energy.level = 0;
+        assertEq(getStockEmissionFactor(s), 0.75, 'decyzja na stałe');
+        assert(!canOrderEsg(s), 'jednorazowo');
     });
     test('opłata: obniża marżę według emisyjności, zasila fundusz i urząd', () => {
         const e = fresh(), laws = { ...society.laws };
@@ -6110,6 +6116,29 @@ group('0.17.2 E6-E9: poziom życia, OZE, atom, opinia, technologie', () => {
         const copy = JSON.parse(JSON.stringify(society.energy));
         assertEq(copy.v, 1, 'wersja');
         assert(Number.isFinite(copy.life) && Number.isFinite(copy.pollution), 'pola');
+        delete society.energy;
+    });
+});
+
+group('0.17.2 E10: Akademia i zapis', () => {
+    test('5 haseł Akademii: tekst, quiz, przykład', () => {
+        delete society.energy;
+        for (const id of ['miksEnergetyczny', 'cenaPradu', 'emisjeLimity', 'poziomZycia', 'esg']) {
+            const entry = ACADEMY_ENTRIES[id];
+            assert(entry?.text.length > 100 && entry.quiz.length >= 3 && entry.quiz.every(q => q.a[q.c]), `hasło ${id}`);
+            assert(typeof entry.example() === 'string' && !/undefined|NaN/.test(entry.example()), `przykład ${id}`);
+            assert(entry.icon, `ikona ${id}`);
+        }
+    });
+    test('zapis: wersja 23, stara wersja dalej obsługiwana, stary zapis dostaje energię w pierwszym kwartale', () => {
+        assertEq(SAVE_FORMAT_VERSION, 23, 'wersja');
+        assert(SUPPORTED_SAVE_VERSIONS.includes(22), 'stare zapisy');
+        resetWorld([makeCompany('AAA')]);
+        delete society.energy;
+        assert(!hasEnergyState(), 'bez stanu');
+        assertEq(getPowerResultAdj(stocks[0]).marginAdj, 0, 'bez stanu bez skutku');
+        processEnergyQuarterly();
+        assert(hasEnergyState(), 'stan po kwartale');
         delete society.energy;
     });
 });
@@ -14338,7 +14367,7 @@ group('0.16.7 Pełne spółki zagraniczne', () => {
         for (const row of Object.values(snap.issuers)) delete row.c; // zapis v17
         resetGdrState(); applyCountriesSnapshot(snap); const c = foreignIssuers.YA1; assert(c.balanceSheet && c.cash > 0 && !c.fundamentals, 'v17: model z ceny, fundamenty przy pierwszym raporcie');
         quarter(); assert(foreignIssuers.YA1.fundamentals, 'po kwartale są fundamenty'); assertEq(checkWorldInvariants().join(' ; '), '', 'niezmienniki po migracji');
-        assertEq(SAVE_FORMAT_VERSION, 22, 'wersja zapisu'); assert(SUPPORTED_SAVE_VERSIONS.includes(17), 'v17 nadal wczytywany');
+        assertEq(SAVE_FORMAT_VERSION, 23, 'wersja zapisu'); assert(SUPPORTED_SAVE_VERSIONS.includes(17), 'v17 nadal wczytywany');
     }));
 
     test('F2: prezes po 65. roku odchodzi (nowa osoba, cecha kraju z definicji)', () => withYY(() => {
@@ -14578,7 +14607,7 @@ group('0.16.9 Lombard w Internecie, rynek połączony na giełdzie', () => {
             const back = convertCurrency('PLN', 'EUR', getCurrencyCash('player', 'PLN')); assert(back.ok && back.receivedCode === 'EUR', 'wymiana PLN→EUR');
             addCurrencyCash('player', 'EUR', 10); assertNear(playerCash, playerCash, 'brak NaN'); assert(!('EUR' in playerCashByCurrency), 'wpływ w EUR trafia do gotówki bazowej');
             assertEq(checkCurrencyInvariants().length, 0, 'niezmienniki walut'); assertEq(checkWorldInvariants().length, 0, 'niezmienniki świata');
-            const snap = JSON.parse(JSON.stringify(buildSaveSnapshot())); assertEq(snap.version, 22); assertEq(snap.playerProfile.baseCurrency, 'EUR');
+            const snap = JSON.parse(JSON.stringify(buildSaveSnapshot())); assertEq(snap.version, 23); assertEq(snap.playerProfile.baseCurrency, 'EUR');
             const old = JSON.parse(JSON.stringify(snap)); old.version = 20; delete old.playerProfile.baseCurrency;
             const rep = applySaveSnapshot(old); assert(rep.ok, 'v20 się wczytuje: ' + rep.errors.join('; ')); assertEq(getBaseCurrency(), 'PLN', 'stary zapis = PLN');
             assert(FOREIGN_CURRENCIES.includes('EUR') && !FOREIGN_CURRENCIES.includes('PLN'), 'lista walut po migracji');
@@ -14823,7 +14852,7 @@ group('0.16.9 W1 Gotówka w wielu walutach', () => {
         assert(basis > 0 && snap.basis.CHF === basis, 'basis w zapisie');
         applyCurrencySnapshot(snap); assertNear(playerFxBasis.CHF, basis, 'odtworzony kurs nabycia', 1e-12);
         delete snap.basis; fxRates.CHF = fxRates.CHF; applyCurrencySnapshot(snap); assertNear(playerFxBasis.CHF, fxRates.CHF, 'v19: kurs nabycia = bieżący', 1e-12);
-        assertEq(SAVE_FORMAT_VERSION, 22); assert(SUPPORTED_SAVE_VERSIONS.includes(19) && SUPPORTED_SAVE_VERSIONS.includes(20) && SUPPORTED_SAVE_VERSIONS.includes(21), 'v19, v20 i v21 obsługiwane');
+        assertEq(SAVE_FORMAT_VERSION, 23); assert(SUPPORTED_SAVE_VERSIONS.includes(19) && SUPPORTED_SAVE_VERSIONS.includes(20) && SUPPORTED_SAVE_VERSIONS.includes(21), 'v19, v20 i v21 obsługiwane');
         assertEq(checkCurrencyInvariants().length, 0);
         initFxState();
     });
@@ -16119,7 +16148,7 @@ group('0.17.3 R0 Osoby, relacje, kontakty', () => {
         assertNear(getRelation(key), 40 * (1 - RELATION_DECAY) ** 2, 'zanik', 1e-9);
         botRelations.values.zero = 0;
         const saved = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
-        assertEq(saved.version, 22, 'wersja 22');
+        assertEq(saved.version, 23, 'wersja 23');
         assert(!('zero' in saved.botRelations.values) && saved.botRelations.values[key] > 0, 'zero poza zapisem, relacja w zapisie');
         delete botRelations.values.zero;
     });

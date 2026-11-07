@@ -29,12 +29,12 @@ const ENERGY_RULES = {
     municipalAfter: 6, municipalMax: 3, municipalBudget: 150000, municipalShare: 0.02,
     stateProjectAt: 1.02, stateProjectChance: 0.15,
     contractCost: 0.25, depositChance: 0.45, depositFactor: [1.08, 1.20], depositQuarters: [8, 16], siteCost: 0.8, siteTime: 0.75,
-    techCost: 0.9, techGain: 0.03, aiContractChance: 0.012
+    techCost: 0.95, techGain: 0.03, techMax: 3, aiContractChance: 0.012
 };
 const ENERGY_CONTRACTS = {
     deposit: { name: 'Poszukiwanie nowych złóż', specialty: 'geology', quarters: [2, 4] },
     site:    { name: 'Szukanie działki pod inwestycję', specialty: 'geology', quarters: [1, 2] },
-    tech:    { name: 'Inwestowanie w najnowsze technologie', specialty: null, quarters: [2, 4] }
+    tech:    { name: 'Inwestowanie w najnowsze technologie', specialty: 'energy', quarters: [4, 4] }
 };
 const DEPOSIT_COMMODITIES = ['oil', 'coal', 'gas'];
 // 0.17.2 E3: ustawy. Polityka: bonus wybranego typu. Dostawcy: limit ceny albo dopłata budżetu.
@@ -254,6 +254,7 @@ function addStockPower(stock, add, type = stock.power.type) {
 function finishPowerBlock(stock) {
     const build = stock.power.build;
     stock.power.build = null;
+    stock.power.techCost = 1;
     addStockPower(stock, build.add);
     logEvent(`⚡ ${stock.name} uruchamia blok ${build.add} MW.`, 'company');
     if (typeof addChartEvent === 'function') addChartEvent(stock, '⚡', `Nowy blok ${build.add} MW`);
@@ -297,13 +298,12 @@ function canOrderEnergyContract(stock, kind) {
     if (!stock || stock.isBankrupt || stock.energyOrder || !ENERGY_CONTRACTS[kind]) return false;
     if (kind === 'deposit') return Boolean(getDepositCommodity(stock)) && !(stock.deposit?.untilQ > getEnergyQuarter());
     if (kind === 'site') return Boolean(stock.power) && !stock.power.site;
-    return stock.power?.type === 'oze' || stock.power?.type === 'nuclear';
+    return (stock.power?.type === 'oze' || stock.power?.type === 'nuclear') && (Number(stock.power.techs) || 0) < ENERGY_RULES.techMax;
 }
 function getEnergyContractCost(stock) { return Math.round(getStockRevenue(stock) * ENERGY_RULES.contractCost); }
-/** Geolog: najlepsza firma z 3 najtańszych ofert. Technologie płatne do instytutu badawczego (istniejący system R&D). */
+/** Wykonawca: najlepsza firma z 3 najtańszych ofert. */
 function pickEnergyContractor(kind) {
     const specialty = ENERGY_CONTRACTS[kind].specialty;
-    if (!specialty) return stocks.find(stock => stock.assetType === 'ResearchInstitute' && !stock.isBankrupt) || null;
     ensureSubcontractorRegistry();
     return [...getSubcontractorsBySpecialty(specialty)].sort((a, b) => a.priceFactor - b.priceFactor).slice(0, 3).sort((a, b) => b.quality - a.quality)[0] || null;
 }
@@ -313,8 +313,8 @@ function orderEnergyContract(stock, kind) {
     ensureCompanyCash(stock, cost, `Kredyt na zlecenie: ${def.name}`);
     adjustCompanyCash(stock, -cost);
     adjustBalanceSheet(stock, { assets: -cost, retainedEarnings: -cost });
-    if (contractor?.symbol) { adjustCompanyCash(contractor, cost); adjustBalanceSheet(contractor, { assets: cost, retainedEarnings: cost }); }
-    else if (contractor) { contractor.cash = (Number(contractor.cash) || 0) + cost; contractor.hires = (Number(contractor.hires) || 0) + 1; contractor.contractsCompleted = (Number(contractor.contractsCompleted) || 0) + 1; }
+    if (kind === 'tech' && typeof recordResearchExpense === 'function') recordResearchExpense(stock, { amount: cost, techId: 'energy_tech' });
+    if (contractor) { contractor.cash = (Number(contractor.cash) || 0) + cost; contractor.hires = (Number(contractor.hires) || 0) + 1; contractor.contractsCompleted = (Number(contractor.contractsCompleted) || 0) + 1; }
     if (typeof coverNegativeCash === 'function') coverNegativeCash(stock);
     stock.energyOrder = { kind, dueQ: getEnergyQuarter() + getRandomIntInRange(...def.quarters) };
     ensureEnergy().stats.contracts++;
@@ -326,9 +326,10 @@ function settleEnergyContract(stock, roll = Math.random()) {
     if (order.kind === 'site') { if (stock.power) stock.power.site = true; return true; }
     if (order.kind === 'tech') {
         if (stock.power) {
-            stock.power.techCost = (Number(stock.power.techCost) || 1) * ENERGY_RULES.techCost;
+            stock.power.techs = (Number(stock.power.techs) || 0) + 1;
             const add = Math.round((Number(stock.power.capacity) || 0) * ENERGY_RULES.techGain);
-            if (add > 0) addStockPower(stock, add);
+            if (add > 0 && roll < 0.5) addStockPower(stock, add); // wynik: +3% mocy albo tańszy następny blok
+            else stock.power.techCost = ENERGY_RULES.techCost;
         }
         return true;
     }
@@ -390,6 +391,7 @@ function triggerBlackout(e, quarter = getEnergyQuarter()) {
     e.blackoutQ = quarter;
     e.blackoutUntil = quarter + 1;
     e.stats.blackouts++;
+    if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('cenaPradu', 'Blackout');
     for (const stock of stocks) if (stock.workforce) stock.workforce.satisfaction = clampValue(stock.workforce.satisfaction - ENERGY_RULES.blackoutMood, 0, 100);
     publishEnergyNews('🔌 Blackout: zużycie przekroczyło moc kraju, fabryki stoją, a ludzie są wściekli.', '🔌 Blackout w kraju', 2);
 }
@@ -403,13 +405,15 @@ function maybeBlackout(e) {
 // ---------------------------------------------------------------------------------
 const SECTOR_EMISSIONS = { 'Chemia': 0.7, 'Przemysł': 0.6, 'Motoryzacja': 0.3, 'Budowlany': 0.2, 'Energia': 0.5 };
 const POLLUTION_RULES = {
-    start: 40, keep: 0.9, healthyLevel: 40, populationLoss: 0.0002, productionFrom: 70, productionCut: 0.015
+    start: 40, keep: 0.9, healthyLevel: 40, populationLoss: 0.0002, productionFrom: 80, productionCut: 0.02
 };
-const CLIMATE_FEES = [0, 0.002, 0.004, 0.007, 0.010];    // opłata: część przychodu przy emisyjności 1
+const CLIMATE_FEES = [0, 0.006, 0.012, 0.018, 0.025];   // opłata: część przychodu przy emisyjności 1 (decyzja użytkownika, pkt 8)
 const ENERGY_OFFICE_RULES = {
-    limits: [Infinity, 1.1, 0.9, 0.75, 0.6, 0.5],        // limit emisyjności według poziomu urzędu
-    pollutionTight: 400, checkChance: 0.12, fineShare: 0.02, budgetShare: 0.15, greenBudgetShare: 0.30,
-    measureStep: [1, 0.25, 0.1, 0.05, 0.01, 0.01], esgLevel: 2, esgCost: 0.4, esgCut: 0.2, esgMax: 0.5, aiEsgChance: 0.01, ecoMax: 0.7
+    // poziomy: 0 bez limitów, 1 pomiar kraju, 2 pomiar spółek i limit z karą, 3 częstsze kontrole i ESG, 4 dokładny pomiar i wyższe kary, 5 pełny nadzór
+    limits: [Infinity, Infinity, 1.1, 0.9, 0.75, 0.6],
+    checks: [0, 0, 0.12, 0.2, 0.25, 0.3], fines: [0, 0, 0.02, 0.02, 0.03, 0.03],
+    pollutionTight: 400, budgetShare: 0.15, greenBudgetShare: 0.30, countryLevel: 1, companyLevel: 2,
+    measureStep: [1, 1, 0.1, 0.05, 0.01, 0.01], esgLevel: 3, esgCost: 1, esgCut: 0.25, aiEsgChance: 0.003, ecoMax: 0.7
 };
 const ENERGY_EVENTS = {
     smog: { minPollution: 50, chance: 0.12, texts: ['🌫️ Smog nad miastami: szkoły odwołują lekcje, a przychodnie są pełne.', '🌫️ Alarm smogowy trzeci dzień z rzędu. Mieszkańcy pytają, kto za to odpowiada.', '🌫️ Gęsty smog zatrzymał lotnisko i zamknął przedszkola.'] },
@@ -434,13 +438,14 @@ function getStockEmissionFactor(stock) {
 }
 /** Emisje kwartału: produkcja (przychód w cenach startowych) × emisyjność. */
 function getStockEmissions(stock) { return getStockRevenue(stock) / (Number(society.priceLevel) || 1) * getStockEmissionFactor(stock); }
-/** Emisje w widokach: bez urzędu nieznane (debug pokazuje zawsze), wyższy poziom mierzy dokładniej. */
+/** Emisje spółki w widokach: od poziomu 2 (debug zawsze), wyższy poziom mierzy dokładniej. */
 function getMeasuredEmissionFactor(stock) {
     const debug = typeof isDebugMode === 'function' && isDebugMode(), level = getEnergyOfficeLevel();
-    if (!debug && !level) return null;
+    if (!debug && level < ENERGY_OFFICE_RULES.companyLevel) return null;
     const step = debug ? 0.01 : ENERGY_OFFICE_RULES.measureStep[level];
     return Math.round(getStockEmissionFactor(stock) / step) * step;
 }
+const canSeeCountryEmissions = () => (typeof isDebugMode === 'function' && isDebugMode()) || getEnergyOfficeLevel() >= ENERGY_OFFICE_RULES.countryLevel;
 function getEmissionLimit(e = society.energy) {
     return ENERGY_OFFICE_RULES.limits[getEnergyOfficeLevel()] * (1 - (Number(e?.pollution) || 0) / ENERGY_OFFICE_RULES.pollutionTight);
 }
@@ -473,14 +478,15 @@ function collectClimateFee(e) {
 }
 /** Kontrola urzędu: spółka ponad limitem płaci karę, jej szansa rośnie ze skutecznością urzędu. */
 function processEnergyOffice(e) {
-    if (!getEnergyOfficeLevel()) return 0;
-    const limit = getEmissionLimit(e), chance = getInstitutionEffectiveness(oversight.energy) * ENERGY_OFFICE_RULES.checkChance;
+    const level = getEnergyOfficeLevel();
+    if (level < ENERGY_OFFICE_RULES.companyLevel) return 0;
+    const limit = getEmissionLimit(e), chance = getInstitutionEffectiveness(oversight.energy) * ENERGY_OFFICE_RULES.checks[level];
     let fines = 0;
     for (const stock of stocks) {
         if (stock.isBankrupt || stock.assetType) continue;
         const factor = getStockEmissionFactor(stock);
         if (factor <= limit || Math.random() >= chance) continue;
-        const fine = Math.round(getStockRevenue(stock) * ENERGY_OFFICE_RULES.fineShare * Math.min(1, (factor - limit) / limit));
+        const fine = Math.round(getStockRevenue(stock) * ENERGY_OFFICE_RULES.fines[level] * Math.min(1, (factor - limit) / limit));
         if (!(fine > 0)) continue;
         ensureCompanyCash(stock, fine, 'Kredyt na karę za emisje');
         adjustCompanyCash(stock, -fine);
@@ -494,9 +500,9 @@ function processEnergyOffice(e) {
     return fines;
 }
 function canOrderEsg(stock) {
-    return Boolean(stock && !stock.isBankrupt && !stock.assetType && getEnergyOfficeLevel() >= ENERGY_OFFICE_RULES.esgLevel && (Number(stock.ecoCut) || 0) < ENERGY_OFFICE_RULES.esgMax && getStockEmissionFactor(stock) > 0);
+    return Boolean(stock && !stock.isBankrupt && !stock.assetType && !stock.esg && getEnergyOfficeLevel() >= ENERGY_OFFICE_RULES.esgLevel && getStockEmissionFactor(stock) > 0);
 }
-/** Ścieżka ESG: spółka płaci na początku za trwale niższe emisje. */
+/** Ścieżka ESG: jednorazowy koszt i trwale niższe emisje, także po spadku poziomu urzędu. */
 function orderEsg(stock) {
     if (!canOrderEsg(stock)) return false;
     const cost = Math.round(getStockRevenue(stock) * ENERGY_OFFICE_RULES.esgCost);
@@ -507,6 +513,7 @@ function orderEsg(stock) {
     stock.ecoCut = (Number(stock.ecoCut) || 0) + ENERGY_OFFICE_RULES.esgCut;
     stock.esg = true;
     society.energy.stats.esg = (society.energy.stats.esg || 0) + 1;
+    if (typeof unlockAcademyEntry === 'function' && isPlayerHolding(stock)) unlockAcademyEntry('esg', stock.name);
     logEvent(`🌿 ${stock.name} wchodzi na ścieżkę ESG: wyższe koszty dziś, niższe emisje na stałe.`, 'company');
     return true;
 }
@@ -551,6 +558,7 @@ function processEnergyEvents(e) {
         const outage = stock.power?.outage;
         if (outage && outage.until <= quarter) { stock.power.capacity += outage.lost; stock.power.outage = null; }
     }
+    if (e.pollution >= ENERGY_EVENTS.smog.minPollution && typeof unlockAcademyEntry === 'function') unlockAcademyEntry('emisjeLimity', 'Wysokie zanieczyszczenie');
     const open = Object.keys(ENERGY_EVENTS).filter(id => e.pollution >= ENERGY_EVENTS[id].minPollution).sort(() => Math.random() - 0.5);
     for (const id of open) if (Math.random() < ENERGY_EVENTS[id].chance) return runEnergyEvent(id, e);
     return null;
@@ -704,5 +712,62 @@ function processEnergyQuarterly() {
     maybeFoundStateAtom(e);
     processOpinion(e);
     processLifeQuality(e);
+    if (typeof unlockAcademyEntry === 'function' && stocks.some(stock => stock.power && isPlayerHolding(stock))) unlockAcademyEntry('miksEnergetyczny', 'Spółka energetyczna w portfelu');
     return e;
 }
+
+// ---------------------------------------------------------------------------------
+// E10: Akademia
+// ---------------------------------------------------------------------------------
+Object.assign(ACADEMY_ENTRIES, {
+    miksEnergetyczny: {
+        title: 'Miks energetyczny', get icon() { return academyIcon('prad'); },
+        text: 'Miks to udział każdego typu elektrowni w mocy kraju: węgla, gazu, atomu i OZE. Zmienia się powoli, bo moc rośnie tylko przez nowe bloki, a budowa trwa od roku do kilku lat. Węgiel i gaz drożeją razem z surowcem, atom i OZE zależą głównie od kosztu kapitału, więc miks decyduje, co wstrząśnie ceną prądu.',
+        example: () => { if (!hasEnergyState()) return 'Dane pojawią się po pierwszym kwartale gry.'; const mix = getEnergyMix(), total = Object.values(mix).reduce((a, b) => a + b, 0) || 1; return ENERGY_TYPE_IDS.map(type => `${ENERGY_TYPES[type].name} ${Math.round(mix[type] / total * 100)}%`).join(', ') + '.'; },
+        quiz: [
+            { q: 'Co zmienia miks energetyczny?', a: ['nowe bloki', 'kurs akcji spółek', 'wynik wyborów tego samego dnia'], c: 0 },
+            { q: 'Który typ najsilniej reaguje na cenę surowca?', a: ['gaz', 'OZE', 'atom'], c: 0 },
+            { q: 'Co najbardziej zwiększa koszt OZE?', a: ['wyższy koszt kapitału', 'droższy węgiel', 'droższy uran'], c: 0 }
+        ]
+    },
+    cenaPradu: {
+        title: 'Cena prądu', get icon() { return academyIcon('prad'); },
+        text: 'Cena prądu to średnia kosztów typów elektrowni ważona ich udziałem w miksie. Przy niedoborze mocy rośnie jeszcze szybciej, a przy dużym niedoborze grozi blackout. Ustawa „Dostawcy energii” może ją ograniczyć albo obniżyć kosztem budżetu. Przemysł, Chemia, Motoryzacja, Budowlany i kolej płacą za zmianę ceny marżą, a producenci na niej zarabiają.',
+        example: () => hasEnergyState() ? `Rezerwa mocy: ${Math.round((getEnergyReserve() - 1) * 100)}%.` : 'Dane pojawią się po pierwszym kwartale gry.',
+        quiz: [
+            { q: 'Co się dzieje z ceną przy niedoborze mocy?', a: ['rośnie', 'spada', 'nie zmienia się'], c: 0 },
+            { q: 'Kto traci marżę, gdy prąd drożeje?', a: ['odbiorcy, np. Przemysł', 'wszystkie spółki po równo', 'tylko banki'], c: 0 },
+            { q: 'Kto płaci za niższą cenę przy państwowych dostawcach?', a: ['budżet', 'producenci węgla', 'nikt'], c: 0 }
+        ]
+    },
+    emisjeLimity: {
+        title: 'Emisje i limity', get icon() { return academyIcon('emisje'); },
+        text: 'Spółki emitują tyle, ile produkują, razy emisyjność sektora i typu elektrowni. Zanieczyszczenie kraju zmienia się wolno, a wysokie obniża zdrowie, przyrost ludności i przy poziomie krytycznym produkcję. Polityka klimatyczna ustala opłatę, a Urząd Energii i Ekologii mierzy emisje i od poziomu 2 pilnuje limitów. Bez pomiaru emisji nie widać, ale nadal działają.',
+        example: () => hasEnergyState() && canSeeCountryEmissions() ? `Zanieczyszczenie: ${Math.round(society.energy.pollution)} na 100.` : 'Urząd nie mierzy jeszcze emisji.',
+        quiz: [
+            { q: 'Od którego poziomu UEiE działają limity?', a: ['od 2', 'od 0', 'od 5'], c: 0 },
+            { q: 'Kto płaci opłatę za emisje najwięcej?', a: ['spółka o wysokiej emisyjności', 'każda po równo', 'tylko OZE'], c: 0 },
+            { q: 'Na co idzie opłata za emisje?', a: ['na urząd i dopłaty do OZE', 'na dywidendy', 'na podatek dochodowy'], c: 0 }
+        ]
+    },
+    poziomZycia: {
+        title: 'Poziom życia', get icon() { return academyIcon('serce'); },
+        text: 'Poziom życia to średnia 5 czynników: konsumpcji, zdrowia, bezpieczeństwa, edukacji i informacji. Wyższy przyciąga ludzi do kraju i przyspiesza przyrost ludności. Spadek w ciągu roku szkodzi rządzącym w wyborach. Zdrowie obniża zanieczyszczenie, a podnoszą je usługi publiczne i sektor Medycyna.',
+        example: () => hasEnergyState() && society.energy.life ? `Teraz ${Math.round(society.energy.life)} na 100.` : 'Dane pojawią się po pierwszym kwartale gry.',
+        quiz: [
+            { q: 'Ile czynników tworzy poziom życia?', a: ['5', '2', '10'], c: 0 },
+            { q: 'Co wyższy poziom życia robi z migracją?', a: ['przyciąga ludzi', 'wypycha ludzi', 'nic'], c: 0 },
+            { q: 'Co obniża czynnik zdrowia?', a: ['zanieczyszczenie', 'wyższy kurs GIG', 'dywidendy'], c: 0 }
+        ]
+    },
+    esg: {
+        title: 'ESG', get icon() { return academyIcon('lisc'); },
+        text: 'ESG to ścieżka spółki, która płaci raz i na stałe emituje mniej. Otwiera się przy silnym Urzędzie Energii i Ekologii, od poziomu 3. Niższe emisje to mniejsza opłata i mniejsze ryzyko kary, ale koszt przychodzi od razu. Dlatego warto policzyć, czy spółka odzyska te pieniądze w rozsądnym czasie.',
+        example: () => { const s = stocks.find(x => x.esg && !x.isBankrupt); return s ? `${s.name} jest na ścieżce ESG.` : 'Żadna spółka nie weszła jeszcze na ścieżkę ESG.'; },
+        quiz: [
+            { q: 'Kiedy spółka płaci za ESG?', a: ['raz, na początku', 'co kwartał', 'po 10 latach'], c: 0 },
+            { q: 'Od którego poziomu UEiE można wejść na ścieżkę?', a: ['od 3', 'od 0', 'od 5'], c: 0 },
+            { q: 'Co się dzieje, gdy poziom urzędu później spadnie?', a: ['niższe emisje zostają', 'spółka traci ESG', 'spółka dostaje zwrot'], c: 0 }
+        ]
+    }
+});

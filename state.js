@@ -1618,6 +1618,7 @@ function fundInstitution(institution, amount) {
     return false;
 }
 
+const OVERSIGHT_OFFICE_NAMES = { police: 'Policja', knf: 'KNF', energy: 'UEiE' };
 /** Dotacja gracza z konta prywatnego (nie zmniejsza podejrzeń — to nie jest „odpust”). */
 function donateToInstitution(kind, amount) {
     const institution = oversight[kind];
@@ -1626,9 +1627,9 @@ function donateToInstitution(kind, amount) {
     if (playerWallet.cash < amount) { showToast('Za mało pieniędzy w portfelu prywatnym.', 'error'); return false; }
     playerWallet.cash -= amount;
     oversight.decentScore = (Number(oversight.decentScore) || 0) + amount;
-    recordPayment('player-wallet', 'external:skarb-panstwa', amount, `Dotacja: ${kind === 'police' ? 'Policja' : 'KNF'}`);
+    recordPayment('player-wallet', 'external:skarb-panstwa', amount, `Dotacja: ${OVERSIGHT_OFFICE_NAMES[kind]}`);
     const upgraded = fundInstitution(institution, amount);
-    showToast(upgraded ? `${kind === 'police' ? 'Policja' : 'KNF'} awansuje na poziom ${institution.level}!` : 'Dziękujemy za wsparcie.', 'success');
+    showToast(upgraded ? `${OVERSIGHT_OFFICE_NAMES[kind]} awansuje na poziom ${institution.level}!` : 'Dziękujemy za wsparcie.', 'success');
     return true;
 }
 

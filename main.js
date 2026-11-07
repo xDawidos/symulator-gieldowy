@@ -29,8 +29,8 @@ const LEGACY_SAVE_KEYS = ['gra_inwestycyjna_dawid_save_v2', 'gra_inwestycyjna_da
 // v13: społeczeństwo i rynek pracy (society, stock.workforce, trzecia partia). Starsze zapisy: kraj od zera,
 // zatrudnienie według giełdy, polityka według cech prezesa, związki tylko w spółkach państwowych (30%).
 // v16: waluty i kantor (kursy, gotówka w walutach), kwity depozytowe GDR. Zapis v15 migruje: kursy startowe, bez walut i GDR.
-const SAVE_FORMAT_VERSION = 22; // 0.17.3 R0: ceo.id, relacje z prezesami pod ceo:<id>, playerProfile.contacts i follows (pola opcjonalne, stare zapisy dostają je przy wczytaniu); 21 = 0.16.11 K2: waluta bazowa konta (playerProfile.baseCurrency; stare zapisy = PLN); 20 = 0.16.9 W1: średni kurs nabycia sald walutowych funduszu (currencies.basis; stare zapisy: bieżący kurs); 19 = 0.16.10: kraj startowy (playerProfile.country; stare zapisy = PL); 18 = 0.16.7: pełne spółki zagraniczne (bilans, wyniki, dywidendy w zapisie krajów); 17 = 0.16.5: Internet (Tied w skrzynce); wcześniej 16 = waluty, kantor, GDR
-const SUPPORTED_SAVE_VERSIONS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22];
+const SAVE_FORMAT_VERSION = 23; // 0.17.2: society.energy, society.greens, stock.power, deposit, energyOrder, ecoCut, esg, nuclearUnits, oversight.energy (pola opcjonalne, stare zapisy uzupełnia pierwszy kwartał)
+const SUPPORTED_SAVE_VERSIONS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23];
 
 let lastSaveReport = null;
 let saveDisabledUntilReload = false;
