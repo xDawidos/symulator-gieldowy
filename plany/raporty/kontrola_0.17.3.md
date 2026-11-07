@@ -82,4 +82,6 @@ Scalone zmiany-AI (67b98d9). `renderTiedTalkAction` pokazuje wyłączony przycis
 
 W ostatniej turze pełnej rozmowy z inwestorem przy relacji od +20 jest prośba „Udziały w funduszu”. Udana rozmowa daje od razu ofertę obietnicy z `createPromiseOffer`, a dalej działa zwykły mechanizm: cel, zakup po NAV z gotówki bota, limit 3 aktywnych i jedna obietnica na bota. Nieudana rozmowa daje tylko efekt na relacji. Prośba ma ton nacisku, jak prośby do zarządu. VIP-y bez zmian.
 
+Decyzja użytkownika po pomiarze: każda prośba kosztuje relację, także udana, a zwykła zmiana relacji z tej rozmowy nie działa. Kara według nastroju rozmowy od −2 do +2: 8, 6, 4, 2, 1. Serii nie powtarzałem, bo kara może tylko obniżyć górny limit poniżej.
+
 Górny limit z presetu `zachety`, 24 gry: wszyscy inwestorzy od +30, 64% udanych rozmów, każda oferta przyjęta, każdy cel spełniony. Wpłaty 3,35% aktywów funduszu rocznie (największa gra 4,85%), 22,5 oferty na grę, GIG 10,60% wobec 10,55%, 0 błędów JS, 0 naruszeń niezmienników. Wynik dotyczy funduszu z presetu, średnio 12 376 PLN aktywów. Testy: 1017/1017. Widok na 390 px bez poziomego przewijania; desktopu nie oglądałem.

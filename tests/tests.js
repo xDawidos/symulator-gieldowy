@@ -16386,6 +16386,7 @@ group('0.17.3 R5 Obietnice botów', () => {
             try { chooseTalkOption(0, 'pitch'); } finally { getTalkBias = bias; tones.pressure = pressure; }
             assert(tiedView.talk.result.success && tiedView.talk.result.requested, 'udana rozmowa');
             assertEq(offers(), 1, 'oferta');
+            assertEq(getRelation(ai.id), 29, 'najlepsza rozmowa: kara 1');
             assert(root.textContent !== null && (renderTiedPage(), root.textContent.includes('propozycję obietnicy')), 'wynik w rozmowie');
             ensurePromises().promiseOffers = [{ id: 90, bot: ai.id, name: ai.name, type: 'x', goal: {}, amount: 1000, dueQ: 12, offerQ: 10 }];
             assert(getPitchBlock(ai.id), 'bot z ofertą zablokowany');
@@ -16397,6 +16398,8 @@ group('0.17.3 R5 Obietnice botów', () => {
             const sure = TIED_CHARACTERS[getPersonCharacter(ai.id)].tones; const old = sure.pressure; sure.pressure = -2;
             try { chooseTalkOption(0, 'pitch'); } finally { sure.pressure = old; }
             assert(!tiedView.talk.result.requested, 'nieudana rozmowa bez oferty');
+            assert(tiedView.talk.result.delta <= -6, 'zła rozmowa: większa kara');
+            assertEq(getRelation(ai.id), -50 + tiedView.talk.result.delta, 'kara na relacji');
             assertEq(ai.cash, cash, 'prośba nie rusza gotówki bota');
         } finally { root.remove(); tiedView.talk = null; }
     });

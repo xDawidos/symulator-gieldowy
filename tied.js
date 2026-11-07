@@ -820,6 +820,7 @@ function finishTiedTalk(talk) {
     const result = resolveTalk(talk.key, talk.choices);
     markTalked(talk.key);
     if (talk.key.startsWith('vip:')) { settleVipTalk(talk.key, result); talk.result = result; return; }
+    if (talk.request === 'pitch') result.delta = -TALK_PITCH.penalty[result.mood + 2];
     changeRelation(talk.key, result.delta, 'rozmowa w Tied');
     if (talk.request === 'pitch') {
         const ai = aiCompetitors.find(bot => bot.id === talk.key);
@@ -932,7 +933,8 @@ function maybeOfferPromises() {
         if (Math.random() < PROMISE_RULES.offerChance * pushy) createPromiseOffer(person.entity);
     }
 }
-const TALK_PITCH = { label: 'Udziały w funduszu', text: 'Czy rozważysz zakup udziałów w moim funduszu?' };
+// penalty: kara do relacji za każdą prośbę, według nastroju rozmowy od −2 do +2.
+const TALK_PITCH = { label: 'Udziały w funduszu', text: 'Czy rozważysz zakup udziałów w moim funduszu?', penalty: [8, 6, 4, 2, 1] };
 /** Czy inwestor może teraz dostać prośbę o zakup: powód blokady albo null. Limity te same co przy ofertach bota. */
 function getPitchBlock(key) {
     if (!playerFund) return 'Prośba wymaga własnego funduszu.';
@@ -1060,7 +1062,7 @@ Object.assign(ACADEMY_ENTRIES, {
     },
     obietniceInwestorow: {
         title: 'Obietnice inwestorów', get icon() { return academyIcon('moneta'); },
-        text: 'Inwestor z dobrą relacją może obiecać zakup jednostek Twojego funduszu, jeśli wykonasz cel. Sam proponuje to co jakiś czas, a w rozmowie możesz go też o to poprosić. Płaci po NAV, z własnej gotówki, więc obietnica nie zmienia wartości jednostki dla pozostałych klientów. Kiedy nie ma tyle pieniędzy, kupuje mniej. Cel bywa jednak na rękę jemu, na przykład zakup spółki, którą sam trzyma. Zanim się zgodzisz, zapytaj, czy zrobiłbyś to samo bez jego pieniędzy, bo obowiązek wobec klientów masz cały czas.',
+        text: 'Inwestor z dobrą relacją może obiecać zakup jednostek Twojego funduszu, jeśli wykonasz cel. Sam proponuje to co jakiś czas, a w rozmowie możesz go też o to poprosić. Taka prośba zawsze kosztuje relację: mniej po dobrej rozmowie, więcej po złej. Płaci po NAV, z własnej gotówki, więc obietnica nie zmienia wartości jednostki dla pozostałych klientów. Kiedy nie ma tyle pieniędzy, kupuje mniej. Cel bywa jednak na rękę jemu, na przykład zakup spółki, którą sam trzyma. Zanim się zgodzisz, zapytaj, czy zrobiłbyś to samo bez jego pieniędzy, bo obowiązek wobec klientów masz cały czas.',
         example: () => `Aktywne obietnice: ${getActivePromises().length} z ${PROMISE_RULES.maxActive}.`,
         quiz: [
             { q: 'Po jakiej cenie inwestor kupuje jednostki?', a: ['po NAV', 'z premią', 'z dyskontem'], c: 0 },
