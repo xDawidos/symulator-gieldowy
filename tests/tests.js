@@ -6264,6 +6264,14 @@ group('Przegląd 2026-11-08', () => {
             assert(introFlow.awaitingFund && introFlow.pending, 'czeka na nazwę funduszu');
         } finally { introFlow = flow; }
     });
+    test('globus: nazwa tylko przy wybranym kraju', () => {
+        const pin = document.createElement('div');
+        pin.dataset.country = 'DE';
+        markGlobePin(pin, 'PL');
+        assert(!pin.classList.contains('is-selected'), 'inny kraj bez nazwy');
+        markGlobePin(pin, 'DE');
+        assert(pin.classList.contains('is-selected'), 'wybrany z nazwą');
+    });
     test('Bank Bank i biernik giełd', () => {
         assertEq(getBankLabel({ name: 'Bank Powszechny' }), 'Bank Powszechny', 'bez podwójnego słowa');
         assertEq(getBankLabel({ name: 'Galeria Bankowa' }), 'Bank Galeria Bankowa', 'z przedrostkiem');

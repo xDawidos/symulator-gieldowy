@@ -5724,3 +5724,7 @@ body.dark-mode #stock-table tr.sector-subheader td, #stock-table tr.sector-subhe
   .market-mobile-bar { display: flex; margin-block: var(--space-2); }
   .market-filters:not(.is-open) { display: none; }
 }
+/* Przegląd 2026-11-08 pkt 12: pinezki globusa — nazwa tylko wybranego kraju, kraje „wkrótce” bez kliknięcia */
+.cg-pin:not(.is-selected) { width: 10px; height: 10px; padding: 0; }
+.cg-pin:not(.is-selected) span { display: none; }
+.cg-pin.is-soon { cursor: default; opacity: 0.55; }

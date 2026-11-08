@@ -72,6 +72,7 @@ function syncCountryPicker(id) {
     const card = globeOverlay.querySelector('#cg-card'), ok = globeOverlay.querySelector('#cg-confirm');
     if (card) card.innerHTML = renderGlobeCard(id);
     if (ok) ok.disabled = !START_PLAYABLE.includes(id);
+    globeOverlay.querySelectorAll('.cg-pin').forEach(pin => markGlobePin(pin, id));
     globeOverlay.querySelectorAll('.cg-item').forEach(b => { const on = b.dataset.country === id; b.setAttribute('aria-pressed', on); b.classList.toggle('selected', on); });
     if (globeInstance) {
         const { lat, lng } = GLOBE_COUNTRIES[id];
@@ -82,6 +83,8 @@ function syncCountryPicker(id) {
 
 /** Kliknięcie kraju (lista, pinezka, obrys): karta i lot kamery; kraj „wkrótce” można obejrzeć, ale nie potwierdzić. */
 function selectGlobeCountry(id) { syncCountryPicker(id); }
+/** Przegląd 2026-11-08 pkt 12: nazwa tylko przy wybranym kraju, pozostałe pinezki jako kropki (PL, DE, CZ, CH nie nachodzą na siebie). */
+function markGlobePin(pin, selected) { pin.classList.toggle('is-selected', pin.dataset.country === selected); }
 
 function setGlobeAutoRotate(on) {
     globeAutoRotate = on;
@@ -140,7 +143,7 @@ async function showCountryGlobe(onPick) {
             .polygonAltitude(f => { const id = idOf(f); return id === selectedId() ? 0.04 : id ? 0.015 : 0.003; })
             .onPolygonClick(f => { const id = idOf(f); if (id) selectGlobeCountry(id); })
             .htmlElementsData(ids.map(id => ({ id, ...GLOBE_COUNTRIES[id] })))
-            .htmlElement(d => { const el = document.createElement('div'); el.className = 'cg-pin'; el.setAttribute('aria-hidden', 'true'); el.innerHTML = `<span>${escapeHtml(COUNTRY_NAMES[d.id])}</span>`; el.style.pointerEvents = 'auto'; el.onclick = () => selectGlobeCountry(d.id); return el; })
+            .htmlElement(d => { const el = document.createElement('div'); el.className = 'cg-pin'; el.setAttribute('aria-hidden', 'true'); el.innerHTML = `<span>${escapeHtml(COUNTRY_NAMES[d.id])}</span>`; el.dataset.country = d.id; markGlobePin(el, globeCurrent); if (START_PLAYABLE.includes(d.id)) { el.style.pointerEvents = 'auto'; el.onclick = () => selectGlobeCountry(d.id); } else { el.style.pointerEvents = 'none'; el.classList.add('is-soon'); } return el; })
             .pointOfView(GLOBE_HOME_VIEW);
         const c = globeInstance.controls(); c.autoRotateSpeed = 0.6; c.autoRotate = globeAutoRotate;
         window.addEventListener('resize', resizeGlobe);
