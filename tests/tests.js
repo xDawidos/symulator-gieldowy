@@ -14744,7 +14744,8 @@ group('0.16.9 Lombard w Internecie, rynek połączony na giełdzie', () => {
             const ov = document.querySelector('.cg-overlay'); assert(ov && !ov.querySelector('canvas'), 'ekran jest, bez WebGL (tylko lista)');
             const item = id => ov.querySelector(`.cg-item[data-country="${id}"]`), ok = ov.querySelector('#cg-confirm');
             assert(item('PL').getAttribute('aria-pressed') === 'true' && !ok.disabled, 'domyślnie PL');
-            item('JP').click(); assert(ok.disabled && /nie jest dostępny/.test(ov.querySelector('#cg-card').textContent), 'JP: karta, bez potwierdzenia'); ok.click(); assertEq(picked, null, 'JP nie do wyboru');
+            assert(item('JP').disabled, 'JP („wkrótce”) zablokowany na liście'); item('JP').click(); assert(item('PL').getAttribute('aria-pressed') === 'true', 'klik w JP nic nie zmienia');
+            selectGlobeCountry('JP'); assert(ok.disabled && /nie jest dostępny/.test(ov.querySelector('#cg-card').textContent), 'JP z globusa: karta, bez potwierdzenia'); ok.click(); assertEq(picked, null, 'JP nie do wyboru');
             item('CZ').click(); assert(item('CZ').getAttribute('aria-pressed') === 'true' && !ok.disabled, 'CZ wybrany'); ok.click();
             assertEq(picked, 'CZ', 'callback z krajem'); assert(!document.querySelector('.cg-overlay'), 'ekran usunięty z DOM');
         } finally { closeCountryGlobe(); }
@@ -15199,7 +15200,7 @@ group('0.16.10 Nowa scenka startowa', () => {
     const toContract = () => { const c = toSms(); for (let i = 0; i < 5; i++) c.tick(); return c; };
     test('0.16.10 krok 4: po SMS-ach umowa o pracę z imieniem, firmą i datą z gry; „Podpisano” po chwili, potem zanikanie i dopiero wtedy dalej', () => {
         const c = toContract(), f = introFlow; assertEq(f.step, 'contract', 'po babci przechodzi do umowy'); assert(isIntroActive());
-        const doc = getIntroContract(); assertEq(doc.text, 'Ola od dzisiaj jest zatrudniony w Alfa Kapitał.'); assertEq(doc.date, formatGameDate(), 'data z gry'); assertEq(doc.title, 'Umowa o pracę');
+        const doc = getIntroContract(); assertEq(doc.text, 'Ola dołącza od dzisiaj do firmy: Alfa Kapitał.'); assertEq(doc.date, formatGameDate(), 'data z gry'); assertEq(doc.title, 'Umowa o pracę');
         assert(!f.signed && !f.leaving, 'najpierw do podpisu'); c.tick(); assert(f.signed && !f.leaving, 'podpisano'); assertEq(f.step, 'contract');
         c.tick(); assert(f.leaving, 'zanikanie'); assertEq(f.step, 'contract', 'jeszcze widać umowę podczas zanikania'); c.tick(); assertEq(f.step, 'boss', 'dopiero po zaniknięciu umowy otwiera się TeamedUP!');
     });
@@ -15211,7 +15212,7 @@ group('0.16.10 Nowa scenka startowa', () => {
     test('0.16.10 kroki 5–6: szef pisze po opóźnieniu, prosi o nazwę funduszu; walidacja pola; gracz „pisze” gotową wiadomość, szef żegna się; nazwa trafia do profilu', () => {
         const c = toBoss(), f = introFlow; assertEq(f.step, 'boss'); assert(f.bossShown, 'TeamedUP! otwarty'); assertEq(f.chat.length, 0, 'szef jeszcze „pisze”'); assert(!introSubmitFund('X').ok, 'nie wolno odpowiedzieć przed pytaniem');
         c.tick(); assertEq(f.chat[0].from, 'boss');
-        assertEq(f.chat[0].text, 'Cześć Ola, od dzisiaj jestem twoim szefem! Zanim zaczniesz, podaj nazwę swojego funduszu. Pogadam ze stałymi klientami, żebyś miał dobry start, a ty lepiej pomyśl, jak nazwiesz swój fundusz.');
+        assertEq(f.chat[0].text, 'Cześć, Ola! Od dzisiaj jestem twoim szefem! Zanim zaczniesz, podaj nazwę swojego funduszu. Pogadam ze stałymi klientami, żebyś miał dobry start, a ty lepiej pomyśl, jak nazwiesz swój fundusz.');
         assertEq(f.data.fundName, INTRO_DEFAULTS.fundName, 'wartość domyślna pola nazwy funduszu'); assert(f.awaitingFund);
         assert(!introSubmitFund('   ').ok && !introSubmitFund('x'.repeat(41)).ok, 'walidacja'); assertEq(f.chat.length, 1, 'błędna nazwa nie dodaje wiadomości');
         assert(introSubmitFund('  Fundusz   Ola ').ok); assertEq(f.chat[1].text, 'Miło mi cię poznać, mój fundusz będzie się nazywał: Fundusz Ola.'); assert(isIntroActive(), 'szef jeszcze nie odpisał');
