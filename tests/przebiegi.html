@@ -238,6 +238,8 @@ PRESETS['kampanie'] = PRESETS['fundusz-gig'] + `(function () {
         try {
             if (macro.quarter % 4 === 3) {
                 const v = variants[(macro.quarter >> 2) % variants.length];
+                const gg = Number(marketIndexes.find(i => i.id === 'GIG')?.value) || 0, need = getFundNav() * getCampaignTargetUnits(0.15) * CAMPAIGN_COST_TARGET * 1.05 - playerCash; // 0.17.1: koszt kampanii z pozycji indeksowej
+                if (need > 0 && gg > 0 && window.__idx) { const take = Math.min(need, window.__idx.units * gg); window.__idx.units -= take / gg; playerCash += take; }
                 const r = startSubscriptionCampaign({ duration: 'quarter', targetPct: 0.15, ...v });
                 if (r.ok) window.__campStarted.push(JSON.stringify(v)); else window.__campBlocked[r.reason] = (window.__campBlocked[r.reason] || 0) + 1;
             }
@@ -415,9 +417,9 @@ PRESETS['dzwignia'] = PRESETS['fundusz-gig'] + `(function () {
             }
             const live = getMarginPositions('forex'), used = live.reduce((a, p) => a + p.notional, 0), room = getFundAssets() * MARGIN_RULES.fundLeverageCap - used;
             if (room > MARGIN_RULES.minNotional) {
-                const gg = g(), deposit = room / 10, need = deposit * 1.05 - playerCash;
+                const gg = g(), lev = window.__lev || 10, deposit = room / lev, need = deposit * 1.05 - playerCash; // 0.17.1 S6: patch window.__lev=3
                 if (need > 0 && gg > 0 && window.__idx) { const take = Math.min(need, window.__idx.units * gg); window.__idx.units -= take / gg; playerCash += take; }
-                const r = openForexPosition(pairs[macro.quarter % pairs.length], macro.quarter % 2 ? 1 : -1, room, 10);
+                const r = openForexPosition(pairs[macro.quarter % pairs.length], macro.quarter % 2 ? 1 : -1, room, lev);
                 if (r.ok) T.opened++; else { T.refused++; T.reasons[r.reason] = (T.reasons[r.reason] || 0) + 1; }
             }
         } catch (e) { err(e); }

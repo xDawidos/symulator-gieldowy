@@ -6336,6 +6336,19 @@ group('Przegląd 2026-11-08', () => {
             assertEq(gig.value, 1600, 'stary zapis');
         } finally { gig.value = keep; }
     });
+    test('0.17.1 S4/S5: elastyczność zanieczyszczenia gaśnie 3,3 → 2,6; chemia według profilu', () => {
+        assertEq(getPollutionElasticity(0), 3.3, 'start');
+        assertEq(getPollutionElasticity(26), 3.3, '6,5 roku');
+        assert(Math.abs(getPollutionElasticity(53) - 2.95) < 1e-9, 'w połowie');
+        assertEq(getPollutionElasticity(200), 2.6, 'po 20 latach');
+        const seg = { sector: 'Chemia', share: 1 };
+        assertEq(getSegmentEmission({ symbol: 'ECL', name: 'EcoLube' }, seg), 1, 'rafineria');
+        assertEq(getSegmentEmission({ symbol: 'KUP', name: 'KrzeUraFos4' }, seg), 0.2, 'KUP: farmacja');
+        assertEq(getSegmentEmission({ symbol: 'XYZ', name: 'Nova Lab' }, seg), 0.2, 'końcówka Lab');
+        assertEq(getSegmentEmission({ symbol: 'XYZ', name: 'Orbis Synthesis' }, seg), 0.9, 'końcówka Synthesis');
+        assertEq(getSegmentEmission({ symbol: 'XYZ', name: 'Chemix' }, seg), 0.7, 'domyślnie');
+        assertEq(getSegmentEmission({ symbol: 'ECL' }, { sector: 'Przemysł', share: 1 }), 0.6, 'inny sektor bez zmian');
+    });
     test('Bank Bank i biernik giełd', () => {
         assertEq(getBankLabel({ name: 'Bank Powszechny' }), 'Bank Powszechny', 'bez podwójnego słowa');
         assertEq(getBankLabel({ name: 'Galeria Bankowa' }), 'Bank Galeria Bankowa', 'z przedrostkiem');
