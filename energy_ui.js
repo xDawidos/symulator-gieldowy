@@ -9,7 +9,7 @@ const POLLUTION_WORDS = ['bardzo niskie', 'niskie', 'umiarkowane', 'wysokie', 'k
 const LIFE_WORDS = ['bardzo niski', 'niski', 'przeciętny', 'wysoki', 'bardzo wysoki'];
 const OPINION_WORDS = ['bardzo nieprzychylna', 'nieprzychylna', 'neutralna', 'przychylna', 'bardzo przychylna'];
 const UEIE_LEVELS = [['Bez limitów', 'brak pomiaru'], ['Pomiar kraju', 'bez limitów'], ['Pomiar spółek', 'limit, kara'], ['Częstsze kontrole', 'ścieżka ESG'], ['Dokładny pomiar', 'wyższe kary'], ['Pełny nadzór', 'najwyższa skuteczność']];
-const LIFE_ICONS = { consumption: 'koszyk', health: 'sektor-medycyna', safety: 'sektor-obronnosc', education: 'akademia', information: 'news' };
+const LIFE_ICONS = { consumption: 'koszyk', health: 'serce', safety: 'tarcza', education: 'akademia', information: 'news' };
 const LIFE_WEAK = { consumption: 'niskie płace albo słabe zadowolenie', health: 'obniża zanieczyszczenie', safety: 'słabe służby albo obronność', education: 'mało nauki', information: 'korupcja i skandale' };
 
 const formatGw = mw => `${formatNumberPl((Number(mw) || 0) / 1000, 1)} GW`;
