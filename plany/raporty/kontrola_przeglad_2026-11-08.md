@@ -26,3 +26,13 @@ Lista: `plany/design/12_przeglad_2026-11-08.md`, sekcja „Do kodu”, punkty 1�
 - **Pkt 6:** ukrywam tylko wartości paska górnego; inne panele przy starcie mają zwykłe „—”.
 - **Podgląd:** porty 8765 i 8777 zajmują serwery spoza tej gałęzi, więc w `.claude/launch.json` doszła konfiguracja `gra-kod` na porcie 8781.
 - Globusa 3D i scenki z szefem nie przeszedłem w grze do końca; zrzutów brak, bo panel aplikacji był ukryty (sprawdzenie przez DOM).
+
+## Internet i prawa kolumna (zlecenie z 2026-11-08)
+
+- **Pauza:** otwarcie Internetu zatrzymuje czas gry przez `togglePauseGame`. Zamknięcie przywraca stan sprzed otwarcia, a pauza ustawiona wcześniej zostaje. Przejścia między stronami w otwartym oknie pauzy nie ruszają. Zamykają: krzyżyk (`closeInternet`), kliknięcie w tło i inne drogi (obserwator stylu okna).
+- **Okno:** na desktopie 70% × 70% ekranu (1280×800: 896×560, 49% powierzchni), przewijanie w `.net-body`. Tło to istniejąca zasłona modali (`.modal-backdrop`), bez nowych tokenów. Na telefonie bez zmian, pełny ekran.
+- **Prawa kolumna:** bez sekcji „Klienci funduszu” i „Lombard (zastaw akcji)”. Usunięte `renderFundClients` i domyślny kontener `renderPawnPanel`, który rysuje teraz tylko stronę Lombard.
+- **Zobowiązania:** bez przycisków „Lombard” i „Windykator”.
+- **Windykacja:** nowa strona `windykacja` w ulubionych (ikona `umowa`, kolor amber). `openDebtCollectorPanel()` otwiera tę stronę, stare okno `debtcollector-modal` usunięte.
+- **Testy:** pauza (otwarcie, przejścia, zamknięcie, pauza sprzed otwarcia), windykacja (ulubione, strona, brak starego okna i sekcji kolumny). 1057/1057.
+- **Sprawdzone w grze:** 1280 px (okno 49% ekranu, tło, kliknięcie w tło zamyka i wznawia czas) i 375 px (pełny ekran, bez poziomego przewijania). Zrzuty: `zrzuty_2026-11-08/internet_desktop_1280.jpg` i `internet_375.jpg`.
