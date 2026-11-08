@@ -61,6 +61,12 @@ function introHurry() {
     p.cancel?.(); p.cb();
     return true;
 }
+/** Przegląd 2026-11-08 pkt 13: „Pomiń” w rozmowie z szefem — całe bieżące pisanie od razu, do pytania o nazwę funduszu albo do końca. */
+function introSkipTyping() {
+    let n = 0;
+    while (introFlow?.pending && !introFlow.awaitingFund && n++ < 20) introHurry();
+    return n;
+}
 
 /** Krok 1 → 2: kraj startowy z globusa (albo z listy). */
 function introPickCountry(id) {
@@ -227,7 +233,7 @@ function introRenderChat() {
         $('teamedup-nav').innerHTML = [['cel', 'Zadania i oceny'], ['poczta', 'Wiadomości'], ['pracownik', 'Zatrudnianie']].map(([icon, label]) => `<button type="button" class="mail-folder" disabled>${uiIcon(icon, 16)} ${label}</button>`).join('')
             + '<p class="intro-hint">Reszta aplikacji odblokuje się po rozmowie z szefem.</p>';
         body.innerHTML = `<section class="te-intro" aria-label="Rozmowa z szefem">
-            <header class="te-intro-head"><span class="net-avatar" aria-hidden="true">SZ</span><div><strong>Szef</strong><span class="te-role"></span></div><button type="button" class="intro-skip btn-ghost" data-intro-skip hidden onclick="skipIntroScene()">Pomiń</button></header>
+            <header class="te-intro-head"><span class="net-avatar" aria-hidden="true">SZ</span><div><strong>Szef</strong><span class="te-role"></span></div><button type="button" class="intro-skip btn-ghost" id="te-intro-hurry" hidden onclick="introSkipTyping()">Pomiń pisanie</button><button type="button" class="intro-skip btn-ghost" data-intro-skip hidden onclick="skipIntroScene()">Pomiń</button></header>
             <div id="te-intro-log" class="te-intro-log" role="log" aria-live="polite" aria-relevant="additions" onclick="introHurry()"></div>
             <form id="te-intro-form" class="te-intro-form" hidden onsubmit="introFundSubmit(event)" novalidate>
                 <label for="intro-fund">Nazwa funduszu</label>
@@ -248,6 +254,8 @@ function introRenderChat() {
     done.hidden = isIntroActive();
     if (wasHidden && !done.hidden) done.querySelector('button').focus();
     document.querySelectorAll('[data-intro-skip]').forEach(b => { b.hidden = !(isIntroActive() && isDebugMode()); });
+    const hurry = $('te-intro-hurry');
+    if (hurry) hurry.hidden = !(f.typing && f.pending); // dla każdego gracza, gdy szef pisze
 }
 
 function introChatBubble(m) {

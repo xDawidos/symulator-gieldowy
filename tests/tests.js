@@ -6254,6 +6254,16 @@ group('Przegląd 2026-11-08', () => {
         assertEq(migrateLegacyBankSymbols({ stocks: [{ symbol: 'QBF', name: 'Quick Business Finance' }] }).stocks[0].name, 'Quick Business Finance', 'nowy zapis bez zmian');
         for (const name of Object.keys(LEGACY_COMPANY_NAMES)) assert(!initialStocks.some(s => s.name === name) && !(typeof commercialBanks !== 'undefined' && commercialBanks.some(b => b.name === name)), `bez starej nazwy: ${name}`);
     });
+    test('Pomiń pisanie: kończy pisanie szefa bez trybu debug, zatrzymuje się na pytaniu o fundusz', () => {
+        const flow = introFlow;
+        let calls = 0;
+        const step = { cancel() {}, cb() { calls++; introFlow.pending = calls < 3 ? step : null; if (calls === 2) introFlow.awaitingFund = true; } };
+        try {
+            introFlow = { pending: step, awaitingFund: false };
+            assertEq(introSkipTyping(), 2, 'dwa kroki pisania');
+            assert(introFlow.awaitingFund && introFlow.pending, 'czeka na nazwę funduszu');
+        } finally { introFlow = flow; }
+    });
     test('Bank Bank i biernik giełd', () => {
         assertEq(getBankLabel({ name: 'Bank Powszechny' }), 'Bank Powszechny', 'bez podwójnego słowa');
         assertEq(getBankLabel({ name: 'Galeria Bankowa' }), 'Bank Galeria Bankowa', 'z przedrostkiem');
