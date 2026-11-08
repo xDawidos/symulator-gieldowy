@@ -1702,13 +1702,16 @@ function getSig20Value() {
  */
 const CLIENT_BENCHMARK = { senior: 'abs', careful: 'abs', fearful: 'abs', miser: 'abs', officer: 'abs', institution: 'sig20', investor: 'sig20', rich: 'sig20' };
 const CLIENT_ABS_HURDLE = 0.015; // „ma zysk”: wynik okresu ponad ok. 1,5% (inflacja i lokata w skali okresu)
+// 0.17.1 S1: wynik ≈ indeks ma być neutralny. Fundusz jak GIG zostaje za nim o opłatę i gotówkę płynności (ok. 1,4 pp na okres),
+// a przy pogoni za wynikiem 1,5 taka luka spychała zadowolenie pod próg 0,35, więc klienci odchodzili od funduszu równego GIG.
+const CLIENT_EXCESS_TOLERANCE = 0.015;
 
 /** Nadwyżka wyniku funduszu nad punktem odniesienia danego typu klienta (do `performance` w zadowoleniu). */
 function getClientExcess(def, ctx) {
     const bench = CLIENT_BENCHMARK[def.key] || 'gig';
     if (bench === 'abs' && Number.isFinite(ctx.recentReturn)) return ctx.recentReturn - CLIENT_ABS_HURDLE;
-    if (bench === 'sig20' && Number.isFinite(ctx.excessSig)) return ctx.excessSig;
-    return ctx.excess;
+    if (bench === 'sig20' && Number.isFinite(ctx.excessSig)) return ctx.excessSig + CLIENT_EXCESS_TOLERANCE;
+    return ctx.excess + CLIENT_EXCESS_TOLERANCE;
 }
 
 function getBenchmarkValue() {

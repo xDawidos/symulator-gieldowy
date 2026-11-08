@@ -5223,7 +5223,7 @@ group('0.13.1 B5: stabilność funduszu', () => {
         simulateFund(0, 4, 1);
         const def = CLIENT_TYPES.miser;
         const client = { satisfaction: 0.5 };
-        const parts = getClientSatisfactionDrift(client, def, { excess: 0, trust: 50, maxDrawdown: 0, lastRankBad: false, ethicsIssue: null });
+        const parts = getClientSatisfactionDrift(client, def, { excess: -CLIENT_EXCESS_TOLERANCE, trust: 50, maxDrawdown: 0, lastRankBad: false, ethicsIssue: null });
         assert(Math.abs(Object.values(parts).reduce((a, b) => a + b, 0)) < 1e-9, `dryf przy GIG i standardowej opłacie: ${JSON.stringify(parts)}`);
         const low = getClientSatisfactionDrift({ satisfaction: 0.2 }, def, { excess: 0, trust: 20, maxDrawdown: 0, lastRankBad: false, ethicsIssue: null });
         assert(Object.values(low).reduce((a, b) => a + b, 0) > 0, 'niskie zaufanie samo nie spycha zadowolenia w dół od 0,2');
@@ -12838,11 +12838,11 @@ group('0.16.1', () => {
     test('G6: punkt odniesienia zależy od typu klienta — emeryt patrzy na zysk w ostatnim czasie, instytucja na SIG20, reszta na GIG', () => {
         const ctx = { excess: -0.05, excessSig: 0.03, recentReturn: 0.06 };
         assertNear(getClientExcess(CLIENT_TYPES.senior, ctx), 0.06 - CLIENT_ABS_HURDLE, 'emeryt: zysk absolutny, GIG go nie obchodzi', 1e-12);
-        assertNear(getClientExcess(CLIENT_TYPES.institution, ctx), 0.03, 'instytucja: SIG20', 1e-12);
-        assertNear(getClientExcess(CLIENT_TYPES.brave, ctx), -0.05, 'odważny: GIG', 1e-12);
+        assertNear(getClientExcess(CLIENT_TYPES.institution, ctx), 0.03 + CLIENT_EXCESS_TOLERANCE, 'instytucja: SIG20 (z tolerancją 0.17.1)', 1e-12);
+        assertNear(getClientExcess(CLIENT_TYPES.brave, ctx), -0.05 + CLIENT_EXCESS_TOLERANCE, 'odważny: GIG (z tolerancją 0.17.1)', 1e-12);
         const loss = { excess: 0.05, excessSig: 0.05, recentReturn: -0.02 };
         assert(getClientExcess(CLIENT_TYPES.senior, loss) < 0, 'emeryt ze stratą jest niezadowolony mimo lepszego wyniku niż GIG');
-        assertNear(getClientExcess(CLIENT_TYPES.institution, { excess: 0.02 }), 0.02, 'bez SIG20 spada do GIG', 1e-12);
+        assertNear(getClientExcess(CLIENT_TYPES.institution, { excess: 0.02 }), 0.02 + CLIENT_EXCESS_TOLERANCE, 'bez SIG20 spada do GIG', 1e-12);
         assert(Object.keys(CLIENT_BENCHMARK).every(k => CLIENT_TYPES[k]), 'wszystkie typy w mapie istnieją');
     });
 
