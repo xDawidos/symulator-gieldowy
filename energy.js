@@ -129,9 +129,11 @@ function initEnergyState() {
     const total = producers.reduce((sum, stock) => sum + output(stock), 0);
     e.scale = total > 0 ? ENERGY_RULES.startCapacity / total : 0;
     for (const type of ENERGY_TYPE_IDS) {
-        const target = ENERGY_RULES.startCapacity * ENERGY_RULES.startMix[type], list = producers.filter(stock => getPowerTypeForStock(stock) === type);
+        // moc startowa tylko dla spółek z podsektorem energetyki; Energia bez podsektora (np. Meferox) zaczyna od 0 i może budować
+        const target = ENERGY_RULES.startCapacity * ENERGY_RULES.startMix[type], list = producers.filter(stock => getPowerTypeForStock(stock) === type && ENERGY_SUBSECTOR_TYPE[getPowerSegment(stock).subsector]);
         const sum = list.reduce((acc, stock) => acc + output(stock), 0);
         for (const stock of list) stock.power = { type, capacity: sum > 0 ? Math.round(target * output(stock) / sum) : 0 };
+        for (const stock of producers) if (!stock.power && getPowerTypeForStock(stock) === type) stock.power = { type, capacity: 0 };
         if (!(sum > 0) && target > 0) e.pool[type] = target;
     }
     e.demand0 = ENERGY_RULES.startCapacity / ENERGY_RULES.startReserve;
@@ -417,7 +419,7 @@ function maybeBlackout(e) {
 // ---------------------------------------------------------------------------------
 const SECTOR_EMISSIONS = { 'Chemia': 0.7, 'Przemysł': 0.6, 'Motoryzacja': 0.3, 'Budowlany': 0.2, 'Energia': 0.5 };
 const POLLUTION_RULES = {
-    start: 40, keep: 0.9, healthyLevel: 40, populationLoss: 0.0002, productionFrom: 80, productionCut: 0.02
+    start: 40, keep: 0.9, powerShare: 0.4, healthyLevel: 40, populationLoss: 0.0002, productionFrom: 80, productionCut: 0.02
 };
 const CLIMATE_FEES = [0, 0.003, 0.007, 0.012, 0.018];   // opłata: część przychodu przy emisyjności 1 (decyzja użytkownika, pkt 8)
 const ENERGY_OFFICE_RULES = {
@@ -457,10 +459,23 @@ function getStockEmissionFactor(stock) {
     return factor;
 }
 /** Emisje kwartału: produkcja (przychód w cenach startowych) × emisyjność. */
+/** Emisje kwartału. Elektrownie: produkcja prądu (moc × wykorzystanie) × emisja typu × skala kraju, reszta spółki: przychód w cenach startowych × emisyjność sektora. */
 function getStockEmissions(stock) {
-    const generation = stock?.power && society.energy?.demand0 > 0 ? society.energy.demand / society.energy.demand0 : 1; // elektrownie emitują według produkcji prądu
-    return getStockRevenue(stock) / (Number(society.priceLevel) || 1) * getStockEmissionFactor(stock) * generation;
+    const e = society.energy, cut = 1 - getStockEcoCut(stock);
+    if (!stock || stock.assetType || stock.isBankStock) return 0;
+    const powerShare = stock.power ? getPowerSegment(stock)?.share || 0 : 0;
+    const rest = getStockSegments(stock).reduce((sum, seg) => sum + (seg.sector === 'Energia' && powerShare > 0 && !ENERGY_NO_POWER_SUBSECTORS.includes(seg.subsector) ? 0 : (SECTOR_EMISSIONS[seg.sector] || 0) * seg.share), 0);
+    const other = getStockRevenue(stock) / (Number(society.priceLevel) || 1) * rest * cut;
+    return other + (powerShare > 0 && e ? getPowerGenerationEmissions(stock, e) * cut : 0);
 }
+/** Produkcja prądu spółki ważona emisją typu (bez skali kraju). */
+function getRawPowerEmissions(stock, e) {
+    const util = e.capacity > 0 ? Math.min(1, e.demand / e.capacity) : 1;
+    let sum = (Number(stock.power.capacity) || 0) * ENERGY_TYPES[stock.power.type].emission;
+    for (const type in stock.power.other || {}) sum += stock.power.other[type] * ENERGY_TYPES[type].emission;
+    return sum * util;
+}
+function getPowerGenerationEmissions(stock, e) { return getRawPowerEmissions(stock, e) * (Number(e.powerScale) || 0); }
 /** Emisje spółki w widokach: od poziomu 2 (debug zawsze), wyższy poziom mierzy dokładniej. */
 function getMeasuredEmissionFactor(stock) {
     const debug = typeof isDebugMode === 'function' && isDebugMode(), level = getEnergyOfficeLevel();
@@ -478,6 +493,12 @@ function getPollutionProductionCut(e = society.energy) {
 
 /** Wskaźnik P = 0,9 × P + emisje / norma. Norma z pierwszego kwartału, tak by przy stałych emisjach P wynosiło 40. */
 function processPollution(e) {
+    if (!(e.powerScale > 0)) { // energetyka daje na starcie POLLUTION_RULES.powerShare emisji kraju
+        e.powerScale = 1;
+        const power = stocks.reduce((sum, stock) => sum + (!stock.isBankrupt && stock.power ? getRawPowerEmissions(stock, e) : 0), 0);
+        const other = stocks.reduce((sum, stock) => sum + (stock.isBankrupt ? 0 : getStockEmissions(stock)), 0) - power;
+        e.powerScale = power > 0 && other > 0 ? other * POLLUTION_RULES.powerShare / (1 - POLLUTION_RULES.powerShare) / power : 0;
+    }
     const emissions = stocks.reduce((sum, stock) => sum + (stock.isBankrupt ? 0 : getStockEmissions(stock)), 0);
     if (!(e.norm > 0)) {
         e.norm = emissions > 0 ? emissions * (1 - POLLUTION_RULES.keep) * 100 / POLLUTION_RULES.start / 10 : 1;

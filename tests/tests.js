@@ -5957,7 +5957,7 @@ group('0.17.2 E4-E5: urząd i zanieczyszczenia', () => {
         const e = fresh();
         processPollution(e);
         assert(Math.abs(e.pollution - 40) < 0.01, 'stan ustalony 40');
-        by('COAL').fundamentals.revenue *= 3;
+        by('CHEM').fundamentals.revenue *= 3;
         const before = e.pollution;
         processPollution(e);
         assert(e.pollution > before, 'rośnie');
