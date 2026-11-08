@@ -755,6 +755,9 @@ function updateMarketKPIs() {
     const tsSubEl = document.getElementById('mkpi-top-sector-sub');
     if (tsEl) tsEl.textContent = best ? best[0] : '—';
     if (tsSubEl) tsSubEl.textContent = best ? formatPct(best[1] / 100) : '';
+    // przegląd 2026-11-08 pkt 11: przed pierwszą zmianą kursów („Chemia 0,00%”) bez najsilniejszego sektora
+    const card = document.getElementById('popular-sector-card');
+    if (card) card.style.display = !best || !active.some(s => s.previousPrice && s.previousPrice !== s.price) ? 'none' : ''; // display: klasa .market-kpi-card nadpisuje atrybut hidden
 }
 
 // Topbar KPI: gotówka funduszu, NAV/JU, prywatne pieniądze gracza

@@ -5715,3 +5715,6 @@ body.dark-mode #stock-table tr.sector-subheader td, #stock-table tr.sector-subhe
   .topbar.is-compact .btn-pause { padding-inline: var(--space-3); }
   .topbar.is-compact .topbar-kpi-group { gap: var(--space-3); }
 }
+
+/* Przegląd 2026-11-08 pkt 6: wartości paska ukryte do końca inicjalizacji (bez mignięcia 100,00 PLN i „—”) */
+.topbar-kpi-group.is-loading .topbar-kpi-val { visibility: hidden; }

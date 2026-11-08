@@ -1739,6 +1739,8 @@ function initializeGame() {
     if (typeof displayXP === 'function') displayXP();
     if (typeof displayMarketIndexes === 'function') displayMarketIndexes();
     if (typeof updateDividendTrackerButtonVisibility === 'function') updateDividendTrackerButtonVisibility();
+    if (typeof updateTopbarKPIs === 'function') updateTopbarKPIs();
+    document.querySelector('.topbar-kpi-group')?.classList.remove('is-loading'); // przegląd 2026-11-08 pkt 6
 
     const pauseButton = document.getElementById('pause-game-btn');
     if (isGamePaused && pauseButton) {
@@ -1873,10 +1875,12 @@ function placeInitialAiDeposits() {
     aiCompetitors.forEach(ai => {
         if (ai.initialDeposit && ai.initialDeposit > 0) {
             // Znajdź odpowiedni, aktywny bank dla depozytu (np. uniwersalny lub internetowy)
-            const eligibleBanks = commercialBanks.filter(b =>
+            const retail = commercialBanks.filter(b =>
                 b.isActive &&
                 (b.type === BANK_TYPES.UNIVERSAL || b.type === BANK_TYPES.INTERNET || b.type === BANK_TYPES.COOPERATIVE) // Banki detaliczne
             );
+            // przegląd 2026-11-08 pkt 5: bez banku detalicznego (np. start z innego kraju) depozyt trafia do dowolnego aktywnego banku
+            const eligibleBanks = retail.length ? retail : commercialBanks.filter(b => b.isActive && b.depositPortfolio);
             if (eligibleBanks.length > 0) {
                 const chosenBank = getRandomElement(eligibleBanks);
                 const depositAmount = ai.initialDeposit;
