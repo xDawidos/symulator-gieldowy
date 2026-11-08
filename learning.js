@@ -524,11 +524,11 @@ Object.assign(ACADEMY_ENTRIES, {
     },
     dlugiHoryzont: {
         title: 'Długi horyzont inwestycji (atom)', icon: '☢️',
-        text: 'Blok jądrowy buduje się latami: przez cały ten czas spółka wydaje gotówkę, a przychodu z inwestycji nie ma. Na końcu decyduje regulator — może opóźnić start. Potem blok daje stabilny przychód przez dekady. Taka inwestycja obniża dziś zyski i wolne przepływy, a jej wartość zależy od cierpliwości kapitału i od polityki (kontrakty z państwem).',
+        text: 'Blok jądrowy buduje się latami: przez cały ten czas spółka wydaje gotówkę, a przychodu z inwestycji nie ma. Na końcu decyduje Urząd Energii i Ekologii — może opóźnić start. Potem blok daje stabilny przychód przez dekady. Taka inwestycja obniża dziś zyski i wolne przepływy, a jej wartość zależy od cierpliwości kapitału i od polityki (kontrakty z państwem).',
         example: () => { const s = stocks.find(x => x.nuclearBlock && !x.isBankrupt); return s ? `${s.name}: blok jądrowy — etap ${s.nuclearBlock.stage === 'operating' ? 'działa' : s.nuclearBlock.stage === 'approval' ? 'czeka na regulatora' : 'budowa'}, wydano ${formatZl(s.nuclearBlock.spent, 0)} z ${formatZl(s.nuclearBlock.cost, 0)}.` : 'Budowa bloku trwa 8–16 kwartałów, a regulator może dołożyć 2–4 kwartały opóźnienia.'; },
         quiz: [
             { q: 'Co dzieje się z wolnymi przepływami pieniężnymi w trakcie budowy bloku?', a: ['są niższe — gotówka idzie w budowę', 'rosną od pierwszego kwartału', 'nie zmieniają się'], c: 0 },
-            { q: 'Kto może opóźnić uruchomienie bloku?', a: ['regulator', 'akcjonariusze mniejszościowi', 'bank centralny'], c: 0 },
+            { q: 'Kto może opóźnić uruchomienie bloku?', a: ['Urząd Energii i Ekologii', 'akcjonariusze mniejszościowi', 'bank centralny'], c: 0 },
             { q: 'Od czego zależą kontrakty z państwem dla elektrowni?', a: ['od partii rządzącej', 'od kursu akcji', 'od liczby akcjonariuszy'], c: 0 }
         ]
     },

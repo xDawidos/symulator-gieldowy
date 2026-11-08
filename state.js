@@ -1570,6 +1570,7 @@ function createOversight() {
         pendingCorruption: 0,
         police: { level: 0, budget: 0 },
         knf: { level: 0, budget: 0 },
+        energy: { level: 0, budget: 0 }, // 0.17.2 E4: Urząd Energii i Ekologii, poziomy jak KNF, budżet z opłaty za emisje
         records: {},          // id → { strikes, suspicion, immuneUntil, blockedUntil, illegalGains }
         history: [],          // ostatnie wykrycia (do panelu)
         hidden: { balance: 0 }, // 0.16.6 S1: rachunek w Waschmabanku (countries.js)
@@ -1617,6 +1618,7 @@ function fundInstitution(institution, amount) {
     return false;
 }
 
+const OVERSIGHT_OFFICE_NAMES = { police: 'Policja', knf: 'KNF', energy: 'UEiE' };
 /** Dotacja gracza z konta prywatnego (nie zmniejsza podejrzeń — to nie jest „odpust”). */
 function donateToInstitution(kind, amount) {
     const institution = oversight[kind];
@@ -1625,9 +1627,9 @@ function donateToInstitution(kind, amount) {
     if (playerWallet.cash < amount) { showToast('Za mało pieniędzy w portfelu prywatnym.', 'error'); return false; }
     playerWallet.cash -= amount;
     oversight.decentScore = (Number(oversight.decentScore) || 0) + amount;
-    recordPayment('player-wallet', 'external:skarb-panstwa', amount, `Dotacja: ${kind === 'police' ? 'Policja' : 'KNF'}`);
+    recordPayment('player-wallet', 'external:skarb-panstwa', amount, `Dotacja: ${OVERSIGHT_OFFICE_NAMES[kind]}`);
     const upgraded = fundInstitution(institution, amount);
-    showToast(upgraded ? `${kind === 'police' ? 'Policja' : 'KNF'} awansuje na poziom ${institution.level}!` : 'Dziękujemy za wsparcie.', 'success');
+    showToast(upgraded ? `${OVERSIGHT_OFFICE_NAMES[kind]} awansuje na poziom ${institution.level}!` : 'Dziękujemy za wsparcie.', 'success');
     return true;
 }
 
@@ -1916,8 +1918,10 @@ function renderOversightPanel() {
         <div class="bank-grid mt-3">
             ${card('police', 'Policja', '🚓', 'Ściga korupcję i mafię: co kwartał zbija wpływy mafii, zatrzymuje jej ludzi w zarządach spółek, rekwiruje akcje zdobyte z pomocą „przyjaciół” i ściga fundusze, które z nimi współpracują. Przy wysokiej korupcji sama staje się skorumpowana i działa gorzej.' + (oversight.police.level >= 5 ? ' 🌟 <strong>Program dla policjantów (poz. 5)</strong>: funkcjonariusze kupują JU funduszy defensywnych z dopłatą 20%, zwiększają obrót mniejszościowy, a na rynku inwestuje Komendant Jakub.' : ''))}
             ${card('knf', 'Komisja Nadzoru Finansowego', '🏦', 'Kontroluje fundusze — im większy fundusz, tym częściej. Czysta kontrola podnosi zaufanie klientów.')}
+            ${card('energy', 'Urząd Energii i Ekologii', uiIcon('lisc', 20), 'Mierzy emisje, ustala limity i wydaje zgody na bloki jądrowe.')}
             ${renderMafiaStateCard()}
         </div>
+        ${typeof renderEnergyOfficeLevels === 'function' ? renderEnergyOfficeLevels() : ''}
         ${oversight.corruption >= BRIBE_CORRUPTION_THRESHOLD ? `<p class="text-sm mt-3">💼 Przy tej korupcji komendant „bywa wyrozumiały”: <button class="btn-danger" onclick="bribePolice(); updateStateModalContent();">Łapówka (${formatZl(Math.max(2000, getFundAssets() * 0.01), 0)} z funduszu)</button> — spokój na ${BRIBE_IMMUNITY_QUARTERS} kw.</p>` : ''}
         <h4>Wojny PR</h4>
         ${typeof renderPrWars === 'function' ? renderPrWars() : ''}

@@ -523,7 +523,7 @@ const SUBSECTOR_ACTIVITY = {
     'Pożyczki konsumenckie': 'udziela drobnych pożyczek', 'Rynki kapitałowe': 'obsługuje inwestorów i transakcje giełdowe', 'Fintech': 'obsługuje klientów przez internet',
     'Rolnictwo': 'uprawia i skupuje płody rolne', 'Słodycze': 'produkuje słodycze', 'Herbata': 'sprzedaje herbatę', 'Piwowarstwo i napoje': 'warzy piwo i rozlewa napoje',
     'Robotyka': 'buduje roboty dla fabryk', 'Przemysł ciężki': 'wytwarza stal, beton, statki i ciężkie maszyny', 'Wydobycie': 'wydobywa surowce spod ziemi', 'Handel surowcami': 'handluje surowcami',
-    'Energetyka jądrowa': 'rozwija energetykę jądrową', 'OZE': 'wytwarza prąd ze źródeł odnawialnych', 'Rafinerie': 'przerabia ropę na paliwa', 'Gaz': 'dostarcza gaz firmom i domom',
+    'Energetyka jądrowa': 'rozwija energetykę jądrową', 'Energetyka węglowa': 'wytwarza prąd z węgla', 'Energetyka gazowa': 'wytwarza prąd z gazu', 'OZE': 'wytwarza prąd ze źródeł odnawialnych', 'Rafinerie': 'przerabia ropę na paliwa', 'Gaz': 'dostarcza gaz firmom i domom',
     'Logistyka': 'organizuje przewozy i magazyny', 'Lotnictwo': 'przewozi ludzi i ładunki samolotami', 'Morski': 'przewozi ładunki morzem', 'Lądowy': 'przewozi ładunki koleją i drogami',
     'Biotechnologia': 'rozwija nowe terapie w laboratoriach', 'Sprzęt medyczny': 'produkuje sprzęt dla lekarzy i pacjentów', 'Półprzewodniki': 'projektuje i produkuje układy scalone',
     'Sztuczna inteligencja': 'rozwija sztuczną inteligencję', 'Magazyny': 'buduje i wynajmuje magazyny', 'Drony': 'buduje drony', 'Telekomunikacja': 'prowadzi sieci telefoniczne i internetowe'
@@ -2138,6 +2138,16 @@ const initialStocks = [
     cash: 0
     },
     {
+    name: 'PING', price: 110.00, volatilityFactor: 1.0, symbol: 'PING', exchange: 'SILVER', totalShares: 60000, maxShares: 60000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
+        assets: 0, liabilities: 0, shareCapital: 0, retainedEarnings: 0
+    },
+    quarterlyEarnings: 0,
+  lineHistory: [], playerTransactions: [], sector: ['Energia'], financialHealth: 1, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'Balanced',
+        dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
+        lastQuarterValue: 0, estimatedDividend: 0, bankAccountId: null,
+    cash: 0
+    },
+    {
     name: 'NatGaz', price: 55.00, volatilityFactor: 1.0, symbol: 'NAG', exchange: 'BRONZE', totalShares: 60000, maxShares: 60000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
         assets: 0, liabilities: 0, shareCapital: 0, retainedEarnings: 0
     },
@@ -3697,6 +3707,7 @@ function updateVolatilityAfterReport(stock) {
     } else if (stock.financialHealth < 0) {
         stock.volatilityFactor = Math.min(baseVolatility * 2.5, stock.volatilityFactor * 1.05);
     }
+    if (typeof getEnergyPolicyStability === 'function') stock.volatilityFactor = Math.max(baseVolatility * 0.7, stock.volatilityFactor * getEnergyPolicyStability(stock)); // 0.17.2 E3
     if (stock.volatilityFactor < 0.1) stock.volatilityFactor = 0.1;
 }
 
@@ -7019,7 +7030,8 @@ function runMunicipalCompanyLogic() {
         totalShares: totalShares,
         maxShares: totalShares * 2,
         sharesHeld: 0, insiderShares: 0, // pakiet miasta (stateOwnershipPct) jest poza wolnym obrotem — nie liczy się do sharesHeld
-        sector: ['Usługi', 'Nieruchomości'], // Uogólniony sektor
+        sector: targetCompany.power ? ['Energia'] : ['Usługi', 'Nieruchomości'], // Uogólniony sektor, 0.17.2: miejska spółka energetyczna
+        ...(targetCompany.power ? { power: targetCompany.power } : {}),
         financialHealth: 5, // Bardzo zdrowe
         lastReport: 'good',
         cash: targetCompany.budget,
@@ -8224,6 +8236,7 @@ function finishInvestment(stock, project) {
         applyPriceEffect(stock.symbol, data.incomeBonus * 0.2, 'positive', 'company');
     }
 
+    if (typeof noteEnergyBuilding === 'function' && quality !== 'defects') noteEnergyBuilding(stock, project.id); // 0.17.2 E2: moc z budynku energetycznego
     logEvent(`✅ ${stock.name} zakończył projekt: „${project.name}” (aktywowano ${formatZl(capitalized, 0)}, koszt okresu ${formatZl(expensed, 0)}).`, 'success');
 }
 
@@ -10906,7 +10919,7 @@ function startStrike(stock, strength = 1, raise = 0) {
     applyPriceEffect(stock.symbol, -getRandomInRange(0.03, 0.08) * strength, 'negative', 'company');
     // Kontrahenci budowlanki naliczają kary.
     if (stock.sector?.includes('Budowlany') && typeof getActiveProjectsForBuilder === 'function' && getActiveProjectsForBuilder(stock).length) {
-        const penalty = Math.round(Math.min(Math.max(0, Number(stock.cash) || 0), (Number(stock.fundamentals?.revenue) || 0) * 0.01));
+        const penalty = Math.floor(Math.min(Math.max(0, Number(stock.cash) || 0), (Number(stock.fundamentals?.revenue) || 0) * 0.01)); // floor: zaokrąglenie w górę dawało gotówkę −0,4 PLN
         if (penalty > 0) {
             adjustCompanyCash(stock, -penalty);
             adjustBalanceSheet(stock, { assets: -penalty, retainedEarnings: -penalty });
@@ -11243,7 +11256,7 @@ function processClinicalTrials(quarter = getSubsectorQuarter()) {
     }
 }
 
-// Energetyka jądrowa: budowa bloku 8–16 kw. → zgoda regulatora (ryzyko opóźnienia) → stabilny przychód.
+// Energetyka jądrowa: budowa bloku 8–16 kw. → zgoda Urzędu Energii i Ekologii (ryzyko opóźnienia) → stabilny przychód. 0.17.2: kilka bloków, każdy z mocą w miksie.
 // Kontrakty z państwem zależą od partii rządzącej (0.13): Blok Państwowy i Ludowcy płacą więcej, Koalicja Rynkowa mniej.
 const NUCLEAR_START_CHANCE = 0.04;          // na kwartał, gdy spółka jądrowa nie buduje i ma gotówkę
 const NUCLEAR_BUILD_QUARTERS = [8, 16];
@@ -11272,7 +11285,7 @@ function startNuclearBlock(stock, quarter = getSubsectorQuarter()) {
     const quarters = getRandomIntInRange(...NUCLEAR_BUILD_QUARTERS);
     stock.nuclearBlock = { stage: 'construction', startedQuarter: quarter, dueQuarter: quarter + quarters, cost: Math.round(revenue * NUCLEAR_COST_REVENUE_QUARTERS), spent: 0, quarters, delays: 0, stateFunded: Boolean(stock.isStateOwned) };
     noteSubsectorStat('nuclearBlocks');
-    logEvent(`☢️ ${stock.name} rozpoczyna budowę bloku jądrowego (ok. ${quarters} kw., koszt ${formatZl(stock.nuclearBlock.cost, 0)}). Przychód dopiero po zgodzie regulatora.`, 'company');
+    logEvent(`☢️ ${stock.name} rozpoczyna budowę bloku jądrowego (ok. ${quarters} kw., koszt ${formatZl(stock.nuclearBlock.cost, 0)}). Przychód dopiero po zgodzie urzędu.`, 'company');
     if (typeof addChartEvent === 'function') addChartEvent(stock, '☢️', 'Start budowy bloku jądrowego');
     return stock.nuclearBlock;
 }
@@ -11300,7 +11313,7 @@ function payNuclearInstallment(stock) {
     return installment;
 }
 
-/** Zgoda regulatora po budowie: delayRoll < 35% → opóźnienie 2–4 kw. (najwyżej 2 razy), inaczej blok rusza. */
+/** Zgoda urzędu po budowie: delayRoll < 35% → opóźnienie 2–4 kw. (najwyżej 2 razy), inaczej blok rusza. */
 function reviewNuclearBlock(stock, delayRoll = Math.random(), quarter = getSubsectorQuarter()) {
     const block = stock.nuclearBlock;
     if (block.delays < NUCLEAR_MAX_DELAYS && delayRoll < NUCLEAR_REGULATOR_DELAY_CHANCE) {
@@ -11309,19 +11322,22 @@ function reviewNuclearBlock(stock, delayRoll = Math.random(), quarter = getSubse
         block.delays++;
         block.dueQuarter = quarter + delay;
         applyPriceEffect(stock.symbol, -0.05, 'negative', 'company');
-        logEvent(`⏳ Regulator wstrzymuje uruchomienie bloku jądrowego ${stock.name} — opóźnienie o ${delay} kw.`, 'company');
-        if (typeof addChartEvent === 'function') addChartEvent(stock, '⏳', `Regulator: opóźnienie bloku o ${delay} kw.`);
+        logEvent(`⏳ Urząd Energii i Ekologii wstrzymuje uruchomienie bloku jądrowego ${stock.name} — opóźnienie o ${delay} kw.`, 'company');
+        if (typeof addChartEvent === 'function') addChartEvent(stock, '⏳', `Urząd: opóźnienie bloku o ${delay} kw.`);
         return 'delayed';
     }
     block.stage = 'operating';
     block.operatingSince = quarter;
-    if (stock.fundamentals) stock.fundamentals.revenue *= 1 + NUCLEAR_REVENUE_BOOST;
+    stock.nuclearUnits = (Number(stock.nuclearUnits) || 0) + 1; // 0.17.2: kolejne bloki dają mniej przychodu, ale tyle samo mocy
+    const boost = typeof NUCLEAR_BLOCK_BOOSTS !== 'undefined' ? NUCLEAR_BLOCK_BOOSTS[Math.min(stock.nuclearUnits, NUCLEAR_BLOCK_BOOSTS.length) - 1] : NUCLEAR_REVENUE_BOOST;
+    if (stock.fundamentals) stock.fundamentals.revenue *= 1 + boost;
+    if (typeof addNuclearPower === 'function' && typeof society === 'object' && society) addNuclearPower(stock);
     if (!Number.isFinite(stock.baseVolatilityFactor)) stock.baseVolatilityFactor = stock.volatilityFactor;
     stock.baseVolatilityFactor *= 0.9; // stabilny przychód
     stock.volatilityFactor = Math.min(stock.volatilityFactor, stock.baseVolatilityFactor * 2);
     noteSubsectorStat('nuclearBlocksDone');
     applyPriceEffect(stock.symbol, 0.08, 'positive', 'company');
-    logEvent(`⚡ Blok jądrowy ${stock.name} rusza po ${quarter - block.startedQuarter} kw. — stabilny przychód (+15%) i kontrakty z państwem.`, 'company');
+    logEvent(`⚡ Blok jądrowy ${stock.name} rusza po ${quarter - block.startedQuarter} kw. — stabilny przychód (+${Math.round(boost * 100)}%) i kontrakty z państwem.`, 'company');
     if (typeof addChartEvent === 'function') addChartEvent(stock, '⚡', 'Blok jądrowy uruchomiony');
     if (isPlayerHolding(stock) && typeof unlockAcademyEntry === 'function') unlockAcademyEntry('dlugiHoryzont', `${stock.name}: blok jądrowy`);
     return 'operating';
@@ -11330,7 +11346,8 @@ function reviewNuclearBlock(stock, delayRoll = Math.random(), quarter = getSubse
 /** Kontrakt z państwem dla działającego bloku: zależy od dotacji partii rządzącej (Skarb Państwa płaci). */
 function payNuclearStateContract(stock) {
     const party = typeof getRulingParty === 'function' ? getRulingParty() : null;
-    const factor = Math.max(0, ((Number(party?.subsidies) || 1) - 1) / 0.5);
+    const partyFactor = Math.max(0, ((Number(party?.subsidies) || 1) - 1) / 0.5);
+    const factor = typeof getNuclearContractFactor === 'function' ? getNuclearContractFactor(partyFactor) : partyFactor; // 0.17.2: także ustawy
     const amount = Math.round((Number(stock.fundamentals?.revenue) || 0) * NUCLEAR_STATE_CONTRACT * factor);
     if (!(amount > 0) || typeof governmentTreasury === 'undefined' || governmentTreasury < amount) return 0;
     governmentTreasury -= amount;
@@ -11355,7 +11372,11 @@ function processNuclearBlocks(quarter = getSubsectorQuarter()) {
             if (block.dueQuarter <= quarter) reviewNuclearBlock(stock, Math.random(), quarter);
         } else if (block.stage === 'operating') {
             payNuclearStateContract(stock);
+            // 0.17.2: kolejny blok wymaga działającego poprzedniego
+            if ((Number(stock.nuclearUnits) || 1) < ENERGY_STATE_RULES.nuclearMaxBlocks && Math.random() < getNuclearStartChance(stock) * ENERGY_STATE_RULES.nuclearNextChance) startNuclearBlock(stock, quarter);
+            continue;
         }
+        if ((Number(stock.nuclearUnits) || 0) > 0) payNuclearStateContract(stock); // działające bloki przy budowie kolejnego
     }
 }
 

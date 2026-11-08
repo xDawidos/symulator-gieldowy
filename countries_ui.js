@@ -103,6 +103,7 @@ function renderCountryCard(id) {
         <dl class="country-facts">
             <div><dt>Kryzys</dt><dd>${uiIcon(crisis === 'bez kryzysu' ? 'ok' : 'alert', 14)} ${crisis}</dd></div>
             <div><dt>Bezpieczeństwo państwa</dt><dd${lowSecurity ? ' class="tone-warn"' : ''}>${uiIcon(lowSecurity ? 'alert' : 'tarcza', 14)} ${getSecurityLabel(security)}${renderLimitMeter(security, null, `Bezpieczeństwo państwa ${Math.round(security)} na 100`, lowSecurity)}</dd></div>
+            ${id === getStartCountry() && typeof renderEnergyCountryFacts === 'function' ? renderEnergyCountryFacts() : ''}
             <div><dt>Sesja</dt><dd>${typeof getMarketStatus === 'function' ? getMarketStatus(id).text : '—'}</dd></div>
             <div><dt>Prowizja operatora</dt><dd>${formatNumberPl(getCountryCommission(id) * 100, 1)}% (z biletem)</dd></div>
             <div><dt>Spółek na giełdzie</dt><dd>${getCountryIssuers(id).length} z limitu ${getCountryLimit(id)} (wielkość rynku ×${formatNumberPl(getCountryLimitMult(id), 2)} liczby startowej)</dd></div>
