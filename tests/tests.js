@@ -6336,6 +6336,22 @@ group('Przegląd 2026-11-08', () => {
             assertEq(gig.value, 1600, 'stary zapis');
         } finally { gig.value = keep; }
     });
+    test('0.17.1 S1: okres zaczęty przy GIG = 0 bierze start z pierwszego poziomu GIG i NAV z tej chwili', () => {
+        resetWorld([makeCompany('AAA'), makeCompany('BBB')]); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        const gig = marketIndexes.find(i => i.id === 'GIG'), keep = gig.value;
+        try {
+            gig.value = 0; beginFundPeriod();
+            assert(!fillMissingPeriodStart(playerFund.current, 12), 'GIG nadal 0: bez zmian');
+            gig.value = 2500;
+            assert(fillMissingPeriodStart(playerFund.current, 12), 'uzupełnione');
+            assertEq(playerFund.current.startBenchmark, 2500, 'start GIG');
+            assertEq(playerFund.current.startNav, 12, 'start NAV');
+            assert(!fillMissingPeriodStart(playerFund.current, 15), 'drugi raz bez zmian');
+            assertEq(playerFund.current.startNav, 12, 'NAV zostaje');
+            const bot = { startNav: 1, startBenchmark: 0, peakNav: 1, maxDrawdown: 0, weeklyNavs: [1] };
+            assert(fillMissingPeriodStart(bot, 1.1) && bot.startBenchmark === 2500 && !('peakBenchmark' in bot), 'fundusz zarządcy');
+        } finally { gig.value = keep; }
+    });
     test('0.17.1 S4/S5: elastyczność zanieczyszczenia gaśnie 3,3 → 2,6; chemia według profilu', () => {
         assertEq(getPollutionElasticity(0), 3.3, 'start');
         assertEq(getPollutionElasticity(26), 3.3, '6,5 roku');

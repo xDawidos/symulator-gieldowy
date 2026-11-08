@@ -1886,6 +1886,19 @@ function updateFund(deltaMs) {
     if (current.elapsedMs >= FUND_PERIOD_MS) closeFundPeriod();
 }
 
+/** 0.17.1 S1: GIG ma wartość dopiero po pierwszym przeliczeniu indeksów. Okres zaczęty przy GIG = 0 bierze start z pierwszego poziomu, a NAV z tej samej chwili
+ * (wcześniej cały pierwszy okres porównywał wynik funduszu z zerem: nadwyżka ±20% i ucieczka klientów przez bramkę). */
+function fillMissingPeriodStart(period, nav) {
+    if (!period || period.startBenchmark > 0) return false;
+    const gig = getBenchmarkValue();
+    if (!(gig > 0)) return false;
+    period.startBenchmark = gig;
+    if ('peakBenchmark' in period) period.peakBenchmark = gig;
+    if ('startSig20' in period && !(period.startSig20 > 0)) period.startSig20 = getSig20Value();
+    period.startNav = period.peakNav = nav;
+    return true;
+}
+
 function getPeriodReturn(startValue, endValue) {
     return startValue > 0 ? endValue / startValue - 1 : 0;
 }
@@ -2059,6 +2072,7 @@ function processFundWeekly() {
     if (typeof stepForeignIssuers === 'function') stepForeignIssuers(); // 0.16.1 G3: ceny obcych gigantów (GDR)
     if (typeof stepCountries === 'function') stepCountries(); // 0.16.2 G5: rynki zagraniczne (countries.js)
 
+    fillMissingPeriodStart(playerFund.current, getFundNav());
     // Zaufanie zmienia się stopniowo (25% drogi do celu na tydzień).
     const target = computeTrustTarget();
     playerFund.trust += (target - playerFund.trust) * 0.25;
@@ -2829,6 +2843,7 @@ function processCorporationWeekly() {
 
         // Zaufanie i przepływy klientów (uproszczony model klientów botów).
         const nav = getBotFundNav(fund);
+        fillMissingPeriodStart(fund.current, nav);
         const excess = getPeriodReturn(fund.current.startNav, nav) - getPeriodReturn(fund.current.startBenchmark, getBenchmarkValue());
         fund.trust = Math.max(0, Math.min(100, fund.trust + (50 + excess * 400 - fund.trust) * 0.25));
         const flow = getBotFundAssets(fund) * (fund.trust - 50) / 50 * 0.01;
