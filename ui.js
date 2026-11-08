@@ -6992,10 +6992,8 @@ function displayFundPanel() {
     renderFundSummary();
     renderFundPeriodsChart();
     renderFundRivalsTable();
-    renderFundClients();
     renderPrivatePanel();
     renderCareerPanel();
-    renderPawnPanel();
 }
 
 function renderFundSummary() {
@@ -7132,26 +7130,6 @@ function renderFundRivalsTable() {
         </table>`;
 }
 
-function renderFundClients() {
-    const container = document.getElementById('fund-clients-list');
-    if (!container) return;
-    const nav = getFundNav();
-
-    const clients = [...playerFund.clients].sort((a, b) => b.units - a.units);
-    container.innerHTML = `
-        <table class="asset-mini-table">
-            <thead><tr><th>Klient</th><th>Wartość</th><th>Zadowolenie</th></tr></thead>
-            <tbody>${clients.map(client => {
-                const def = CLIENT_TYPES[client.type] || CLIENT_TYPES.careful;
-                const sat = Math.round(client.satisfaction * 100);
-                return `<tr>
-                    <td title="${def.label}">${escapeHtml(client.name)}</td>
-                    <td>${formatZl(client.units * nav, 0)}</td>
-                    <td class="${sat >= 55 ? 'profit' : sat < 35 ? 'loss' : ''}">${sat}%</td>
-                </tr>`;
-            }).join('')}</tbody>
-        </table>`;
-}
 
 function renderPrivatePanel() {
     const container = document.getElementById('fund-private-panel');
@@ -8063,7 +8041,7 @@ function renderCityElection() {
 // LOMBARD FUNDUSZU (etap E2)
 // =================================================================================
 
-function renderPawnPanel(containerId = 'fund-pawn-panel') {
+function renderPawnPanel(containerId = 'net-lombard-pawn') {
     const container = document.getElementById(containerId);
     if (!container || !playerFund || container.contains(document.activeElement)) return; // nie przerywaj wpisywania
     const account = getFundAccount();
@@ -8116,7 +8094,6 @@ function renderPawnShopInfo() {
 /** Dawne okno Lombardex: obsługa jest na stronie Lombard w Internecie (jedno miejsce). */
 function openPawnShopPanel() { return openInternetPage('lombard'); }
 
-/** Okno windykatora: zasady i akcje zajęte dłużnikom (fundusze, boty). */
 /** 0.15.4 P7: portfel pożyczek konsumenckich Wrony (liczby i słowami, bez koloru). */
 function renderConsumerLoansSummary(collector) {
     const loans = collector?.retailLoans || [];
@@ -8127,26 +8104,8 @@ function renderConsumerLoansSummary(collector) {
         <p class="fund-muted">Oprocentowanie ${(CONSUMER_LOAN_APR * 100).toFixed(0)}% w skali roku gry, termin ${CONSUMER_LOAN_WEEKS} tygodni; z niespłaconej pożyczki Wrona odzyskuje ${(CONSUMER_LOAN_RECOVERY * 100).toFixed(0)}% kapitału. Klientów przybywa z udziałem biedniejszych klas i w recesji.</p>`;
 }
 
-function openDebtCollectorPanel() {
-    const modal = document.getElementById('debtcollector-modal');
-    const body = document.getElementById('debtcollector-body');
-    if (!modal || !body) return;
-    const collector = getDebtCollector();
-    const seized = Object.entries(collector?.holdingPortfolio || {})
-        .map(([symbol, item]) => `<li>${item.quantity} × ${escapeHtml(symbol)}</li>`).join('');
-    const botDebts = aiCompetitors.reduce((sum, ai) => sum + (ai.loans || []).filter(loan => (loan.missedPayments || 0) > 0).length, 0);
-
-    body.innerHTML = collector ? `
-        <p><strong>${escapeHtml(collector.name)}</strong> (${escapeHtml(collector.symbol)}) · gotówka ${formatZl(collector.cash, 0)}</p>
-        <p class="fund-muted">Windykator przejmuje zaległe długi (kredyty botów z zaległościami, niespłacone zastawy funduszy po ${COLLECTOR_AFTER_MISSED} nieopłaconych odsetkach) i zajmuje akcje dłużników z dyskontem ${(100 - COLLECTOR_DISCOUNT * 100).toFixed(0)}%.</p>
-        <p>Kredyty botów z zaległościami: <strong>${botDebts}</strong></p>
-        <h4>Pożyczki konsumenckie Wrony</h4>
-        ${renderConsumerLoansSummary(collector)}
-        <h4>Zajęte akcje</h4>
-        <ul>${seized || '<li class="fund-muted">Brak.</li>'}</ul>`
-        : '<p class="loss">Windykator nie jest dostępny.</p>';
-    modal.style.display = 'block';
-}
+/** Dawne okno Windykatora: strona Windykacja w Internecie (jedno miejsce). */
+function openDebtCollectorPanel() { return openInternetPage('windykacja'); }
 
 // =================================================================================
 // CENTRUM BANKOWE (okno banku): wskaźniki, zakładki, banki komercyjne, lokaty funduszu

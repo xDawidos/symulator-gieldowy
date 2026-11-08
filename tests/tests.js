@@ -6272,6 +6272,41 @@ group('Przegląd 2026-11-08', () => {
         markGlobePin(pin, 'DE');
         assert(pin.classList.contains('is-selected'), 'wybrany z nazwą');
     });
+    test('Internet: otwarcie pauzuje, przejścia stron nie ruszają pauzy, zamknięcie przywraca stan sprzed otwarcia', () => {
+        const paused = isGamePaused, state = { ...internetState }, intro = isIntroActive;
+        isIntroActive = () => false;
+        try {
+            isGamePaused = false; internetState.open = false;
+            openInternetPage(null);
+            assert(isGamePaused, 'otwarcie zatrzymuje czas');
+            openInternetPage('lombard'); openInternetPage(null);
+            assert(isGamePaused && internetState.open, 'przejścia bez zmian');
+            closeInternet();
+            assert(!isGamePaused, 'zamknięcie wznawia');
+            assert(!closeInternet(), 'drugie zamknięcie nic nie robi');
+            isGamePaused = true;
+            openInternetPage('tied');
+            closeInternet();
+            assert(isGamePaused, 'pauza sprzed otwarcia zostaje');
+        } finally { isIntroActive = intro; isGamePaused = paused; Object.assign(internetState, state); const m = document.getElementById('internet-modal'); if (m) m.style.display = 'none'; }
+    });
+    test('Windykacja: strona w ulubionych Internetu, dawny panel otwiera tę stronę, bez starego okna', () => {
+        const intro = isIntroActive, paused = isGamePaused, state = { ...internetState };
+        isIntroActive = () => false;
+        try {
+            assert(getInternetFavorite('windykacja') && canOpenInternetPage('windykacja').ok, 'w ulubionych');
+            openDebtCollectorPanel();
+            assertEq(internetState.page, 'windykacja', 'otwiera stronę');
+            const root = document.createElement('div'); root.id = 'net-windykacja-body'; document.body.appendChild(root);
+            try { renderDebtCollectorPage(); assert(root.textContent.length > 0, 'treść strony'); } finally { root.remove(); }
+            const xhr = new XMLHttpRequest(); xhr.open('GET', '../index.html', false); xhr.send();
+            const page = xhr.responseText;
+            assert(page.includes('id="net-page-windykacja"'), 'sekcja strony w oknie Internetu');
+            assert(!page.includes('debtcollector-modal'), 'bez starego okna');
+            assert(!page.includes('fund-pawn-section') && !page.includes('fund-clients-list'), 'prawa kolumna bez lombardu i klientów');
+            assert(!page.includes('onclick="openDebtCollectorPanel()"') && !page.includes('onclick="openPawnShopPanel()" class="btn-secondary btn-sm"'), 'bez przycisków pod zobowiązaniami');
+        } finally { closeInternet(); isIntroActive = intro; isGamePaused = paused; Object.assign(internetState, state); }
+    });
     test('Bank Bank i biernik giełd', () => {
         assertEq(getBankLabel({ name: 'Bank Powszechny' }), 'Bank Powszechny', 'bez podwójnego słowa');
         assertEq(getBankLabel({ name: 'Galeria Bankowa' }), 'Bank Galeria Bankowa', 'z przedrostkiem');

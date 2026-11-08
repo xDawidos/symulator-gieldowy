@@ -524,20 +524,9 @@
     <div id="fund-periods-chart" class="fund-chart"></div>
     <div id="fund-rivals-table"></div>
 
-    <details class="fund-details">
-      <summary>Klienci funduszu</summary>
-      <button class="btn-secondary text-sm mb-2" onclick="openJuMarket()">Otwórz klientów i rynek udziałów</button>
-      <div id="fund-clients-list"></div>
-    </details>
-
     <details class="fund-details" id="fund-private-section">
       <summary>Konto prywatne</summary>
       <div id="fund-private-panel"></div>
-    </details>
-
-    <details class="fund-details" id="fund-pawn-section">
-      <summary>Lombard (zastaw akcji)</summary>
-      <div id="fund-pawn-panel"></div>
     </details>
 
     <details class="fund-details" id="fund-career-section" open>
@@ -592,10 +581,6 @@
     <div class="liabilities-section">
       <div class="portfolio-section-header">Zobowiązania</div>
       <ul class="list-plain p-0 m-0" id="my-liabilities-list"></ul>
-      <div class="d-flex gap-1 mt-2">
-        <button onclick="openPawnShopPanel()" class="btn-secondary btn-sm">Lombard</button>
-        <button onclick="openDebtCollectorPanel()" class="btn-secondary btn-sm">Windykator</button>
-      </div>
     </div>
 </div>
         </aside>
@@ -1303,12 +1288,6 @@
 
 
 
-<!-- Modal Windykatora -->
-<div id="debtcollector-modal" class="modal" style="display: none;">
-    <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
-    <h3 class="mt-0 text-warn">Windykator — Wrona</h3>
-    <div class="modal-body" id="debtcollector-body"></div>
-</div>
 
     <div id="chart-tooltip" style="display: none; position: absolute;"></div>
     <div id="toast-notification"></div>
@@ -1493,7 +1472,7 @@
 
 <!-- 0.16.5: Internet (dawny Kantor). Strony tylko z ulubionych; adres tylko do odczytu -->
 <div id="internet-modal" class="modal modal-xl bank-window internet-window" style="display: none;" role="dialog" aria-labelledby="internet-title">
-    <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
+    <button class="close-btn" onclick="closeInternet()" aria-label="Zamknij">&times;</button>
     <h2 class="sr-only" id="internet-title">Internet</h2>
     <div class="net-tabs" role="presentation">
         <span class="net-tab"><span class="net-tab-dot" aria-hidden="true"></span><span id="net-tab-title">Ulubione</span></span>
@@ -1582,6 +1561,7 @@
         </section>
         <section id="net-page-ferie" hidden aria-label="Ferie i wakacje"><div id="net-ferie-body"></div></section>
         <section id="net-page-lombard" hidden aria-label="Lombard"><div id="net-lombard-body"></div></section>
+        <section id="net-page-windykacja" hidden aria-label="Windykacja"><div id="net-windykacja-body"></div></section>
     </div>
     </div>
 </div>
