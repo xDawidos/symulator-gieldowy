@@ -16,7 +16,7 @@ Zmiany symboli banków wg użytkownika: BKINV1 → SPR (Bank Spryciarski), BKINV
 | BLP | Błyskawiczna Proteza | Medycyna | JUNK | PL | UNI |
 | SUM | Super Makarony | Żywność | JUNK | PL | PL |
 | ALI | Alicante Housing | Nieruchomości | BRONZE | UNI | UNI |
-| KWM | Kopalnie Węgla Mine | Przemysł | BRONZE | PL | UNI |
+| KWM | Kopalnie Węgla | Przemysł | BRONZE | PL | UNI |
 | WiS | Wolf & Stein Tech. | Technologia | BRONZE | UNI | DE |
 | WIP | WinPost | Finanse/Technologia | BRONZE | UNI | PL |
 | FIX | Knor-FIX | Żywność | BRONZE | UNI | PL |
@@ -29,7 +29,7 @@ Zmiany symboli banków wg użytkownika: BKINV1 → SPR (Bank Spryciarski), BKINV
 | BER | Beretxol | Przemysł | BRONZE | UNI | UNI |
 | DPB | DVD Project Black | Gaming | SILVER | PL | PL |
 | WPY | WayPlay | Gaming | SILVER | PL | PL |
-| KRO | Krajoznawsto Obce | Turystyka | SILVER | PL | PL |
+| KRO | Krajoznawstwo Obce | Turystyka | SILVER | PL | PL |
 | PLX | Plandex | Turystyka | SILVER | UNI | PL |
 | LIN | Linapol | Nieruchomości | SILVER | PL | UNI |
 | BTX | Betonex | Przemysł/Nieruchomości | SILVER | PL | PL |
@@ -111,14 +111,14 @@ Zmiany symboli banków wg użytkownika: BKINV1 → SPR (Bank Spryciarski), BKINV
 | Symbol | Nazwa | Sektor | Giełda | Kod | Decyzja |
 |---|---|---|---|---|---|
 | MIN | Mieszkalnictwo Inwestycyjne | Finanse | GOLD | UNI | UNI* |
-| WRN | WRONA | Finanse | GOLD | UNI | UNI* |
-| LOM | LOMBARDEX S.A. | Finanse | SILVER | UNI | UNI* |
+| WRN | Wrona | Finanse | GOLD | UNI | UNI* |
+| LOM | Lombardex S.A. | Finanse | SILVER | UNI | UNI* |
 | TAX | Retax Biuro Obrachunkowe | Finanse | BRONZE | UNI | UNI* |
 | PULS | Puls Rynku S.A. | Media | SILVER | UNI | UNI* |
 | FLESZ | Flesz Giełdowy | Media | SILVER | UNI | UNI* |
 | OBSER | Obserwator Finansowy | Media | SILVER | UNI | UNI* |
 | HMH | Heavy Metal Holding | Finanse | SILVER | UNI | UNI* |
-| QBF | Quick Buissness Finance | Finanse | GOLD | UNI | UNI* |
+| QBF | Quick Business Finance | Finanse | GOLD | UNI | UNI* |
 | VSF | Holding Rekreacyjny | Finanse | SILVER | UNI | UNI* |
 | GPW | Giełda Papierów Wartościowych | Finanse | SILVER | UNI | UNI* |
 
@@ -128,7 +128,7 @@ Zmiany symboli banków wg użytkownika: BKINV1 → SPR (Bank Spryciarski), BKINV
 |---|---|---|---|---|---|
 | GRET | Global Real Estate Trust | Nieruchomości | GOLD | UNI | UNI* |
 | UOR | Urban Office REIT | Nieruchomości | GOLD | UNI | UNI* |
-| HOR | Hospital rental | Nieruchomości | PLATINUM | UNI | UNI* |
+| HOR | Wynajem Szpitali | Nieruchomości | PLATINUM | UNI | UNI* |
 | REJS | Morskie REITy | Nieruchomości | GOLD | UNI | UNI* |
 
 ## Startupy (inkubator) (5)

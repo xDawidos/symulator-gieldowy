@@ -5953,7 +5953,7 @@ group('0.17.2 E4-E5: urząd i zanieczyszczenia', () => {
         assertEq(getStockEmissionFactor(by('CHEM')), 0.7, 'Chemia');
         assertEq(getStockEmissionFactor(by('TECH')), 0, 'technologia');
     });
-    test('zanieczyszczenie: start 40, wzór 0,9 P + emisje / norma, zakres 0-100, wyższe emisje podnoszą', () => {
+    test('zanieczyszczenie: start 40, wzór 0,9 P + 0,1 × cel, zakres 0-100, wyższe emisje podnoszą', () => {
         const e = fresh();
         processPollution(e);
         assert(Math.abs(e.pollution - 40) < 0.01, 'stan ustalony 40');
@@ -5961,9 +5961,9 @@ group('0.17.2 E4-E5: urząd i zanieczyszczenia', () => {
         const before = e.pollution;
         processPollution(e);
         assert(e.pollution > before, 'rośnie');
-        e.pollution = 99.9; e.norm = 1;
+        e.pollution = 99.9; e.norm = 1e-9;
         processPollution(e);
-        assertEq(e.pollution, 100, 'górna granica');
+        assert(e.pollution > 99.9 && e.pollution <= 100, 'górna granica');
     });
     test('urząd: poziom 0 bez limitów i bez pomiaru, wyższy poziom kontroluje; debug widzi zawsze', () => {
         const e = fresh(), cash = by('COAL').cash;
@@ -6053,6 +6053,8 @@ group('0.17.2 E6-E9: poziom życia, OZE, atom, opinia, technologie', () => {
         assert(getLifeAttractiveness() > 0, 'wyższy poziom życia przyciąga');
         e.lifeHist = [50, 40];
         assert(getLifeVoteAdj() < 0, 'spadek szkodzi rządzącym');
+        e.lifeHist = [40, 50];
+        assertEq(getLifeVoteAdj(), 0, 'wzrost nie nagradza rządzących');
     });
     test('OZE: dopłata z funduszu opłat, według mocy, liczy kwartały subsydiów', () => {
         const e = fresh(), cash = by('ZIEL').cash, coal = by('COAL').cash;
@@ -6236,6 +6238,83 @@ group('0.17.2 E10: widoki', () => {
     });
 });
 
+group('Przegląd 2026-11-08', () => {
+    test('nazwy i tickery: stary zapis dostaje nowe nazwy i symbole, odwołania po symbolu zostają', () => {
+        const old = { version: 22, stocks: [{ symbol: 'BKINV2', name: 'Galeria Bankowa' }, { symbol: 'QBF', name: 'Quick Buissness Finance' }, { symbol: 'WRN', name: 'WRONA' }],
+            playerPortfolio: { BKINV2: { shares: 10 }, BKCORP2: { shares: 3 }, QBF: { shares: 5 } }, history: [{ symbol: 'BKCORP2', text: 'kupno' }],
+            playerProfile: { tied: { promises: [{ goal: { symbol: 'BKINV2' } }] } }, mailbox: { tied: [{ symbol: 'BKCORP2', text: 'post' }] } };
+        const s = migrateLegacyBankSymbols(old);
+        assertEq(s.stocks[0].symbol, 'GBK', 'ticker banku');
+        assertEq(s.stocks[1].name, 'Quick Business Finance', 'nazwa');
+        assertEq(s.stocks[2].name, 'Wrona', 'bez wersalików');
+        assert(s.playerPortfolio.GBK.shares === 10 && s.playerPortfolio.KRUP.shares === 3 && s.playerPortfolio.QBF.shares === 5, 'portfel');
+        assertEq(s.history[0].symbol, 'KRUP', 'historia');
+        assertEq(s.playerProfile.tied.promises[0].goal.symbol, 'GBK', 'obietnica');
+        assertEq(s.mailbox.tied[0].symbol, 'KRUP', 'Tied');
+        assertEq(migrateLegacyBankSymbols({ stocks: [{ symbol: 'QBF', name: 'Quick Business Finance' }] }).stocks[0].name, 'Quick Business Finance', 'nowy zapis bez zmian');
+        for (const name of Object.keys(LEGACY_COMPANY_NAMES)) assert(!initialStocks.some(s => s.name === name) && !(typeof commercialBanks !== 'undefined' && commercialBanks.some(b => b.name === name)), `bez starej nazwy: ${name}`);
+    });
+    test('Pomiń pisanie: kończy pisanie szefa bez trybu debug, zatrzymuje się na pytaniu o fundusz', () => {
+        const flow = introFlow;
+        let calls = 0;
+        const step = { cancel() {}, cb() { calls++; introFlow.pending = calls < 3 ? step : null; if (calls === 2) introFlow.awaitingFund = true; } };
+        try {
+            introFlow = { pending: step, awaitingFund: false };
+            assertEq(introSkipTyping(), 2, 'dwa kroki pisania');
+            assert(introFlow.awaitingFund && introFlow.pending, 'czeka na nazwę funduszu');
+        } finally { introFlow = flow; }
+    });
+    test('globus: nazwa tylko przy wybranym kraju', () => {
+        const pin = document.createElement('div');
+        pin.dataset.country = 'DE';
+        markGlobePin(pin, 'PL');
+        assert(!pin.classList.contains('is-selected'), 'inny kraj bez nazwy');
+        markGlobePin(pin, 'DE');
+        assert(pin.classList.contains('is-selected'), 'wybrany z nazwą');
+    });
+    test('Internet: otwarcie pauzuje, przejścia stron nie ruszają pauzy, zamknięcie przywraca stan sprzed otwarcia', () => {
+        const paused = isGamePaused, state = { ...internetState }, intro = isIntroActive;
+        isIntroActive = () => false;
+        try {
+            isGamePaused = false; internetState.open = false;
+            openInternetPage(null);
+            assert(isGamePaused, 'otwarcie zatrzymuje czas');
+            openInternetPage('lombard'); openInternetPage(null);
+            assert(isGamePaused && internetState.open, 'przejścia bez zmian');
+            closeInternet();
+            assert(!isGamePaused, 'zamknięcie wznawia');
+            assert(!closeInternet(), 'drugie zamknięcie nic nie robi');
+            isGamePaused = true;
+            openInternetPage('tied');
+            closeInternet();
+            assert(isGamePaused, 'pauza sprzed otwarcia zostaje');
+        } finally { isIntroActive = intro; isGamePaused = paused; Object.assign(internetState, state); const m = document.getElementById('internet-modal'); if (m) m.style.display = 'none'; }
+    });
+    test('Windykacja: strona w ulubionych Internetu, dawny panel otwiera tę stronę, bez starego okna', () => {
+        const intro = isIntroActive, paused = isGamePaused, state = { ...internetState };
+        isIntroActive = () => false;
+        try {
+            assert(getInternetFavorite('windykacja') && canOpenInternetPage('windykacja').ok, 'w ulubionych');
+            openDebtCollectorPanel();
+            assertEq(internetState.page, 'windykacja', 'otwiera stronę');
+            const root = document.createElement('div'); root.id = 'net-windykacja-body'; document.body.appendChild(root);
+            try { renderDebtCollectorPage(); assert(root.textContent.length > 0, 'treść strony'); } finally { root.remove(); }
+            const xhr = new XMLHttpRequest(); xhr.open('GET', '../index.html', false); xhr.send();
+            const page = xhr.responseText;
+            assert(page.includes('id="net-page-windykacja"'), 'sekcja strony w oknie Internetu');
+            assert(!page.includes('debtcollector-modal'), 'bez starego okna');
+            assert(!page.includes('fund-pawn-section') && !page.includes('fund-clients-list'), 'prawa kolumna bez lombardu i klientów');
+            assert(!page.includes('onclick="openDebtCollectorPanel()"') && !page.includes('onclick="openPawnShopPanel()" class="btn-secondary btn-sm"'), 'bez przycisków pod zobowiązaniami');
+        } finally { closeInternet(); isIntroActive = intro; isGamePaused = paused; Object.assign(internetState, state); }
+    });
+    test('Bank Bank i biernik giełd', () => {
+        assertEq(getBankLabel({ name: 'Bank Powszechny' }), 'Bank Powszechny', 'bez podwójnego słowa');
+        assertEq(getBankLabel({ name: 'Galeria Bankowa' }), 'Bank Galeria Bankowa', 'z przedrostkiem');
+        assertEq(getExchangeAcc('EMERALD'), 'Giełdę Szmaragdową', 'biernik');
+        for (const key of Object.keys(exchanges)) assert(exchanges[key].nameAcc || !exchanges[key].name.startsWith('Giełda'), `biernik ${key}`);
+    });
+});
+
 group('0.14 T3: rozszerzenie o nowy segment', () => {
     function firm(symbol, sectors = ['Technologia'], opts = {}) {
         const s = makeCompany(symbol, { sector: sectors, cash: opts.cash ?? 2_000_000 });

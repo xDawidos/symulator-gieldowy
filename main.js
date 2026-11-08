@@ -563,7 +563,7 @@ function applySaveSnapshot(snapshot) {
         return report;
     }
 
-    snapshot = migrateLegacyBankSymbols(snapshot); // 0.16.11 K0: BKINV1/BKINV3/BKCORP3 → SPR/RPK/BPIG
+    snapshot = migrateLegacyBankSymbols(snapshot); // 0.16.11 K0 i przegląd 2026-11-08: stare symbole banków i nazwy spółek
     if (!Array.isArray(snapshot.stocks) || snapshot.stocks.length === 0) {
         report.errors.push('Zapis nie zawiera spółek.');
         return report;
@@ -1240,6 +1240,8 @@ function runStockTick(skipUi, speedMultiplier, tickSteps) {
         if (speedMultiplier >= 10 && uiRefreshTick % Math.max(1, Math.round(speedMultiplier / (5 * tickSteps))) !== 0) return;
 
         // --- ODŚWIEŻANIE INTERFEJSU ---
+        // karta w tle: logika liczy się dalej, ale bez przebudowy tabel (mniej śmieci w pamięci i CPU); po powrocie odświeży następny tik
+        if (typeof document !== 'undefined' && document.hidden) return;
         displayStocks(currentMarketInputs);
         displayStartups(currentStartupInputs);
         displayEtfs();
@@ -1739,6 +1741,8 @@ function initializeGame() {
     if (typeof displayXP === 'function') displayXP();
     if (typeof displayMarketIndexes === 'function') displayMarketIndexes();
     if (typeof updateDividendTrackerButtonVisibility === 'function') updateDividendTrackerButtonVisibility();
+    if (typeof updateTopbarKPIs === 'function') updateTopbarKPIs();
+    document.querySelector('.topbar-kpi-group')?.classList.remove('is-loading'); // przegląd 2026-11-08 pkt 6
 
     const pauseButton = document.getElementById('pause-game-btn');
     if (isGamePaused && pauseButton) {
@@ -1873,10 +1877,12 @@ function placeInitialAiDeposits() {
     aiCompetitors.forEach(ai => {
         if (ai.initialDeposit && ai.initialDeposit > 0) {
             // Znajdź odpowiedni, aktywny bank dla depozytu (np. uniwersalny lub internetowy)
-            const eligibleBanks = commercialBanks.filter(b =>
+            const retail = commercialBanks.filter(b =>
                 b.isActive &&
                 (b.type === BANK_TYPES.UNIVERSAL || b.type === BANK_TYPES.INTERNET || b.type === BANK_TYPES.COOPERATIVE) // Banki detaliczne
             );
+            // przegląd 2026-11-08 pkt 5: bez banku detalicznego (np. start z innego kraju) depozyt trafia do dowolnego aktywnego banku
+            const eligibleBanks = retail.length ? retail : commercialBanks.filter(b => b.isActive && b.depositPortfolio);
             if (eligibleBanks.length > 0) {
                 const chosenBank = getRandomElement(eligibleBanks);
                 const depositAmount = ai.initialDeposit;

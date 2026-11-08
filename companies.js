@@ -193,7 +193,7 @@ const bankInvestments = {
             bankData.cash -= 10000; // Koszt zakupu bankomatów z kasy banku
             stock.financialHealth += 0.1; // Mały, stały bonus do kondycji
             // Można dodać mechanizm małego pasywnego dochodu dla banku
-            logEvent(`🏦 Bank ${stock.name} inwestuje ${formatZl(bankInvestments.BANK_ATM_EXPANSION.initialCashCost, 0)} w rozbudowę sieci bankomatów.`);
+            logEvent(`🏦 ${getBankLabel(stock)} inwestuje ${formatZl(bankInvestments.BANK_ATM_EXPANSION.initialCashCost, 0)} w rozbudowę sieci bankomatów.`);
         }
     },
     'BANK_FINTECH_PLATFORM': {
@@ -209,7 +209,7 @@ const bankInvestments = {
             stock.financialHealth += 0.3;
             stock.volatilityFactor *= 0.98; // Bardziej stabilne operacje
             applyPriceEffect(stock.symbol, 0.02, 'positive'); // Mały boost ceny akcji
-            logEvent(`💻 Bank ${stock.name} wdraża nowoczesną platformę FinTech kosztem ${formatZl(bankInvestments.BANK_FINTECH_PLATFORM.initialCashCost, 0)}.`);
+            logEvent(`💻 ${getBankLabel(stock)} wdraża nowoczesną platformę FinTech kosztem ${formatZl(bankInvestments.BANK_FINTECH_PLATFORM.initialCashCost, 0)}.`);
         }
     },
     'BANK_NEW_BRANCHES': {
@@ -224,7 +224,7 @@ const bankInvestments = {
             bankData.cash -= 80000;
             stock.financialHealth += 0.2; // Potencjał wzrostu
             // W przyszłości można dodać mechanizm zwiększający koszty operacyjne banku
-            logEvent(`🏢 Bank ${stock.name} otwiera nowe oddziały, inwestując ${formatZl(bankInvestments.BANK_NEW_BRANCHES.initialCashCost, 0)}.`);
+            logEvent(`🏢 ${getBankLabel(stock)} otwiera nowe oddziały, inwestując ${formatZl(bankInvestments.BANK_NEW_BRANCHES.initialCashCost, 0)}.`);
         }
     },
     'BANK_MARKETING_CAMPAIGN': {
@@ -239,7 +239,7 @@ const bankInvestments = {
             bankData.cash -= 25000;
             applyPriceEffect(stock.symbol, 0.03, 'positive'); // Tymczasowy boost ceny akcji
             // W przyszłości można dodać tymczasowy bonus do przyciągania depozytów
-            logEvent(`📣 Bank ${stock.name} rozpoczyna kampanię marketingową za ${formatZl(bankInvestments.BANK_MARKETING_CAMPAIGN.initialCashCost, 0)}.`);
+            logEvent(`📣 ${getBankLabel(stock)} rozpoczyna kampanię marketingową za ${formatZl(bankInvestments.BANK_MARKETING_CAMPAIGN.initialCashCost, 0)}.`);
         }
     },
      'BANK_AI_RISK_ASSESSMENT': {
@@ -255,7 +255,7 @@ const bankInvestments = {
             stock.financialHealth += 0.4; // Lepsze zarządzanie ryzykiem
             stock.volatilityFactor *= 0.96; // Bardziej stabilne wyniki
             // Można dodać mechanizm zmniejszający szansę na default kredytów udzielonych przez ten bank
-            logEvent(`🤖 Bank ${stock.name} inwestuje ${formatZl(bankInvestments.BANK_AI_RISK_ASSESSMENT.initialCashCost, 0)} w AI do oceny ryzyka kredytowego.`);
+            logEvent(`🤖 ${getBankLabel(stock)} inwestuje ${formatZl(bankInvestments.BANK_AI_RISK_ASSESSMENT.initialCashCost, 0)} w AI do oceny ryzyka kredytowego.`);
         }
     },
     'BANK_INVESTMENT_FUND': {
@@ -271,7 +271,7 @@ const bankInvestments = {
             stock.financialHealth += 0.25;
             applyPriceEffect(stock.symbol, 0.015, 'positive');
             // Można dodać mechanizm generowania pasywnego dochodu dla banku
-            logEvent(`📈 Bank ${stock.name} uruchamia nowy fundusz inwestycyjny, inwestując ${formatZl(bankInvestments.BANK_INVESTMENT_FUND.initialCashCost, 0)}.`);
+            logEvent(`📈 ${getBankLabel(stock)} uruchamia nowy fundusz inwestycyjny, inwestując ${formatZl(bankInvestments.BANK_INVESTMENT_FUND.initialCashCost, 0)}.`);
         }
     }
 };
@@ -1269,7 +1269,7 @@ const ALL_COMMERCIAL_BANKS_DEFINITIONS = [
 
     // Korporacyjne (3)
     { id: 'corp1', name: 'Syriusz Corp.', type: BANK_TYPES.CORPORATE, initialCapital: 7000000, reserveRatio: 0.15, baseInterestRateMargin: 0.015 },
-    { id: 'corp2', name: 'Krupiewicz Group S.A', type: BANK_TYPES.CORPORATE, initialCapital: 6500000, reserveRatio: 0.16, baseInterestRateMargin: 0.016 },
+    { id: 'corp2', name: 'Krupiewicz Group S.A.', type: BANK_TYPES.CORPORATE, initialCapital: 6500000, reserveRatio: 0.16, baseInterestRateMargin: 0.016 },
     { id: 'corp3', name: 'Biuro Pokrytego Investment Group', type: BANK_TYPES.CORPORATE, initialCapital: 6000000, reserveRatio: 0.14, baseInterestRateMargin: 0.014 },
 
     // Uniwersalny (2)
@@ -1293,15 +1293,15 @@ const ALL_COMMERCIAL_BANKS_DEFINITIONS = [
 let commercialBanks = []; // Zainicjowane banki
 
 const exchanges = {
-    'JUNK': { name: 'Giełda Śmieciowa', level: 0, color: '#6c757d', minPrice: 0, maxPrice: 20, licenseCost: 0 },
-    'BRONZE': { name: 'Giełda Brązowa', level: 1, color: '#cd7f32', minPrice: 20, maxPrice: 75, licenseCost: 20000 },
-    'SILVER': { name: 'Giełda Srebrna', level: 2, color: '#c0c0c0', minPrice: 75, maxPrice: 400, licenseCost: 125000 },
-    'GOLD': { name: 'Giełda Złota', level: 3, color: '#ffd700', minPrice: 400, maxPrice: 1500, licenseCost: 250000 },
-    'PLATINUM': { name: 'Giełda Platynowa', level: 4, color: '#e5e4e2', minPrice: 1500, maxPrice: Infinity, licenseCost: 500000 },
+    'JUNK': { name: 'Giełda Śmieciowa', nameAcc: 'Giełdę Śmieciową', level: 0, color: '#6c757d', minPrice: 0, maxPrice: 20, licenseCost: 0 },
+    'BRONZE': { name: 'Giełda Brązowa', nameAcc: 'Giełdę Brązową', level: 1, color: '#cd7f32', minPrice: 20, maxPrice: 75, licenseCost: 20000 },
+    'SILVER': { name: 'Giełda Srebrna', nameAcc: 'Giełdę Srebrną', level: 2, color: '#c0c0c0', minPrice: 75, maxPrice: 400, licenseCost: 125000 },
+    'GOLD': { name: 'Giełda Złota', nameAcc: 'Giełdę Złotą', level: 3, color: '#ffd700', minPrice: 400, maxPrice: 1500, licenseCost: 250000 },
+    'PLATINUM': { name: 'Giełda Platynowa', nameAcc: 'Giełdę Platynową', level: 4, color: '#e5e4e2', minPrice: 1500, maxPrice: Infinity, licenseCost: 500000 },
     // Giełdy elitarne (etap E2): przydział wg rankingu kapitalizacji, nie ceny — finance.js
-    'RUBY': { name: 'Giełda Rubinowa', level: 5, color: '#c3112f', minPrice: Infinity, maxPrice: Infinity, licenseCost: 0, rankBased: true },
-    'EMERALD': { name: 'Giełda Szmaragdowa', level: 6, color: '#1f9d55', minPrice: Infinity, maxPrice: Infinity, licenseCost: 0, rankBased: true },
-    'DIAMOND': { name: 'Giełda Diamentowa', level: 7, color: '#6ec6ff', minPrice: Infinity, maxPrice: Infinity, licenseCost: 0, rankBased: true }
+    'RUBY': { name: 'Giełda Rubinowa', nameAcc: 'Giełdę Rubinową', level: 5, color: '#c3112f', minPrice: Infinity, maxPrice: Infinity, licenseCost: 0, rankBased: true },
+    'EMERALD': { name: 'Giełda Szmaragdowa', nameAcc: 'Giełdę Szmaragdową', level: 6, color: '#1f9d55', minPrice: Infinity, maxPrice: Infinity, licenseCost: 0, rankBased: true },
+    'DIAMOND': { name: 'Giełda Diamentowa', nameAcc: 'Giełdę Diamentową', level: 7, color: '#6ec6ff', minPrice: Infinity, maxPrice: Infinity, licenseCost: 0, rankBased: true }
 };
 
 const CORPORATE_PHASES = {
@@ -1405,7 +1405,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-    name: 'Kopalnie Węgla Mine', price: 35.00, volatilityFactor: 1.6, symbol: 'KWM', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
+    name: 'Kopalnie Węgla', price: 35.00, volatilityFactor: 1.6, symbol: 'KWM', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Przemysł'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -1524,7 +1524,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'Krajoznawsto Obce', price: 78.00, volatilityFactor: 2.5, symbol: 'KRO', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
+        name: 'Krajoznawstwo Obce', price: 78.00, volatilityFactor: 2.5, symbol: 'KRO', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Turystyka'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -1802,7 +1802,7 @@ const initialStocks = [
     },
     // --- NOWE SPÓŁKI: FINANSE KONSUMENCKIE ---
     {
-        name: 'WRONA',
+        name: 'Wrona',
         price: 650.00, volatilityFactor: 1.8, symbol: 'WRN', exchange: 'GOLD',
         totalShares: 90000, maxShares: 100000, sharesHeld: 0,
         sector: ['Finanse'], segments: [{ sector: 'Finanse', subsector: 'Pożyczki konsumenckie', share: 1 }], // T1a: dawne Finanse Konsumenckie
@@ -1814,7 +1814,7 @@ const initialStocks = [
         bankAccountId: null, isBankStock: false
     },
     {
-        name: 'LOMBARDEX S.A.',
+        name: 'Lombardex S.A.',
         price: 65.00, volatilityFactor: 1.5, symbol: 'LOM', exchange: 'SILVER',
         totalShares: 35000, maxShares: 45000, sharesHeld: 0,
         sector: ['Finanse'], segments: [{ sector: 'Finanse', subsector: 'Pożyczki konsumenckie', share: 1 }], // T1a: dawne Finanse Konsumenckie
@@ -2050,7 +2050,7 @@ const initialStocks = [
     },
 
     {
-        name: 'Hospital rental',
+        name: 'Wynajem Szpitali',
         price: 1350.00, volatilityFactor: 0.18, symbol: 'HOR', exchange: 'PLATINUM',
     totalShares: 800000, maxShares: 1500000, sharesHeld: 0, priceHistory: [], balanceSheet: {
         assets: 0,          // Aktywa (majątek firmy)
@@ -2095,7 +2095,7 @@ const initialStocks = [
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) candlestickHistory: [], lineHistory: [], playerTransactions: [], priceAlerts: { buy: null, sell: null }
     },
     {
-        name: 'Quick Buissness Finance',
+        name: 'Quick Business Finance',
         price: 150.00, volatilityFactor: 0.8, symbol: 'QBF', exchange: 'GOLD',
         totalShares: 90000, maxShares: 90000, sharesHeld: 0,
         sector: ['Finanse'], financialHealth: 2, lastReport: 'brak', cash: 13500000,
@@ -2789,6 +2789,10 @@ function initializeBalanceSheetForStock(stock) {
 
 }
 
+/** Przegląd 2026-11-08: „Bank X”, ale bez podwójnego słowa, gdy nazwa zaczyna się od „Bank”. */
+function getBankLabel(bank) { const name = String(bank?.name || ''); return /^bank\b/i.test(name) ? name : `Bank ${name}`; }
+/** Nazwa giełdy w bierniku („wchodzi na Giełdę Złotą”). */
+function getExchangeAcc(key) { return exchanges[key]?.nameAcc || exchanges[key]?.name || key; }
 let stocks = JSON.parse(JSON.stringify(initialStocks)); // Inicjalizacja głównej tablicy
 
 try {
@@ -4564,7 +4568,7 @@ function initializeResearchForStock(stock, options = {}) {
             stock.research.isResearching = true;
 
             logEvent(
-                `Bank ${stock.name} rozpoczyna inwestycję ` +
+                `${getBankLabel(stock)} rozpoczyna inwestycję ` +
                 `„${investment.name}” za ${formatZl(cost, 2)}.`,
                 'company'
             );
@@ -4572,7 +4576,7 @@ function initializeResearchForStock(stock, options = {}) {
             stock.research.investmentPaused = true;
 
             logEvent(
-                `Bank ${stock.name} oczekuje na środki na inwestycję ` +
+                `${getBankLabel(stock)} oczekuje na środki na inwestycję ` +
                 `„${investment.name}”.`,
                 'company'
             );
@@ -5948,7 +5952,7 @@ function sellSharesToInvestmentBank(bankId, symbol, quantity) {
     const totalCostForBank = purchasePrice * quantity;
 
     if (bank.cash < totalCostForBank) {
-        showToast(`Bank ${bank.name} nie ma wystarczająco gotówki, aby odkupić te akcje.`);
+        showToast(`${getBankLabel(bank)} nie ma wystarczająco gotówki, aby odkupić te akcje.`);
         return;
     }
 
@@ -6243,12 +6247,12 @@ function startNextBankInvestment(stock, nextInvestmentId, bankData) {
     if (bankData.cash >= initialCashCost) {
         bankData.cash -= initialCashCost;
         stock.research.isResearching = true;
-        if(initialCashCost > 0) logEvent(`💸 Bank ${stock.name} rozpoczyna kolejną inwestycję: "${nextInvestment.name}" (Poziom ${completedCount + 1}) kosztem ${formatZl(initialCashCost, 0)}. Czas: ${Math.round(requiredProgress / BANK_INVESTMENT_POINT_EQUIVALENT_MINUTE)} min.`);
-        else logEvent(`▶️ Bank ${stock.name} rozpoczyna kolejną inwestycję: "${nextInvestment.name}" (Poziom ${completedCount + 1}). Czas: ${Math.round(requiredProgress / BANK_INVESTMENT_POINT_EQUIVALENT_MINUTE)} min.`);
+        if(initialCashCost > 0) logEvent(`💸 ${getBankLabel(stock)} rozpoczyna kolejną inwestycję: "${nextInvestment.name}" (Poziom ${completedCount + 1}) kosztem ${formatZl(initialCashCost, 0)}. Czas: ${Math.round(requiredProgress / BANK_INVESTMENT_POINT_EQUIVALENT_MINUTE)} min.`);
+        else logEvent(`▶️ ${getBankLabel(stock)} rozpoczyna kolejną inwestycję: "${nextInvestment.name}" (Poziom ${completedCount + 1}). Czas: ${Math.round(requiredProgress / BANK_INVESTMENT_POINT_EQUIVALENT_MINUTE)} min.`);
     } else {
         stock.research.isResearching = false;
         stock.research.investmentPaused = true; // Zapauzuj
-        logEvent(`⏸️ Bank ${stock.name} chciał rozpocząć inwestycję "${nextInvestment.name}", ale brakuje środków (${formatZl(initialCashCost, 0)}). Inwestycje wstrzymane.`);
+        logEvent(`⏸️ ${getBankLabel(stock)} chciał rozpocząć inwestycję "${nextInvestment.name}", ale brakuje środków (${formatZl(initialCashCost, 0)}). Inwestycje wstrzymane.`);
     }
 }
 
@@ -6268,11 +6272,11 @@ function applyBankInvestmentEffect(stock, completedInvestmentId) {
     // 2. Zaktualizuj licznik ukończonych
     stock.research.completedInvestments[completedInvestmentId]++;
     const currentLevel = stock.research.completedInvestments[completedInvestmentId];
-    logEvent(`✅ Bank ${stock.name} zakończył inwestycję "${investment.name}" (Poziom ${currentLevel}).`);
+    logEvent(`✅ ${getBankLabel(stock)} zakończył inwestycję "${investment.name}" (Poziom ${currentLevel}).`);
 
     // 3. Sprawdź, czy osiągnięto maksymalny poziom
     if (investment.maxLevel && currentLevel >= investment.maxLevel) {
-        logEvent(`ℹ️ Bank ${stock.name} osiągnął maksymalny poziom inwestycji "${investment.name}".`);
+        logEvent(`ℹ️ ${getBankLabel(stock)} osiągnął maksymalny poziom inwestycji "${investment.name}".`);
         // Wybierz inną inwestycję (która nie jest na max poziomie)
         const availableInvestmentIds = Object.keys(bankInvestments).filter(id => {
             const inv = bankInvestments[id];
@@ -6280,7 +6284,7 @@ function applyBankInvestmentEffect(stock, completedInvestmentId) {
             return !inv.maxLevel || completedCount < inv.maxLevel;
         });
         if (availableInvestmentIds.length === 0) {
-            logEvent(`🎉 Bank ${stock.name} zrealizował wszystkie dostępne inwestycje!`);
+            logEvent(`🎉 ${getBankLabel(stock)} zrealizował wszystkie dostępne inwestycje!`);
             stock.research.isResearching = false;
             stock.research.currentInvestmentId = null;
             return;
@@ -6296,7 +6300,7 @@ function applyBankInvestmentEffect(stock, completedInvestmentId) {
             return !inv.maxLevel || completedCount < inv.maxLevel; // Tylko te, które nie są na max poziomie
         });
          if (availableInvestmentIds.length === 0) { // Na wszelki wypadek
-            logEvent(`🎉 Bank ${stock.name} zrealizował wszystkie dostępne inwestycje!`);
+            logEvent(`🎉 ${getBankLabel(stock)} zrealizował wszystkie dostępne inwestycje!`);
             stock.research.isResearching = false;
             stock.research.currentInvestmentId = null;
             return;
@@ -7415,7 +7419,7 @@ function reviewCompanyPlacements() {
 
         if (newExchange.level > currentLevel) { // Logika dla AWANSU
             const magnitude = (Math.random() * 0.05) + 0.03;
-            message = `📈 AWANS: ${stock.name} przechodzi na giełdę "${newExchange.name}"!`;
+            message = `📈 AWANS: ${stock.name} przechodzi na ${getExchangeAcc(correctExchangeKey)}!`;
             applyPriceEffect(stock.symbol, magnitude, 'positive', 'review');
             
             const newLimitRange = SHARE_LIMIT_RANGES[correctExchangeKey];
@@ -7433,7 +7437,7 @@ function reviewCompanyPlacements() {
             }
         } else { // Logika dla SPADKU
             const magnitude = ((Math.random() * 0.05) + 0.03) * -1;
-            message = `📉 SPADEK: ${stock.name} spada na giełdę "${newExchange.name}"...`;
+            message = `📉 SPADEK: ${stock.name} spada na ${getExchangeAcc(correctExchangeKey)}.`;
             applyPriceEffect(stock.symbol, magnitude, 'negative', 'review');
 
             const newLimitRange = SHARE_LIMIT_RANGES[correctExchangeKey];
@@ -7622,7 +7626,7 @@ function processBankStartupSponsorship() {
                 if (!targetStartup.acquisitionTargetChance) targetStartup.acquisitionTargetChance = 0;
                 targetStartup.acquisitionTargetChance += 0.05; // +5% szansy
 
-                logEvent(`🏦 Bank ${bank.name} sponsoruje startup ${targetStartup.name} kwotą ${formatZl(investmentAmount, 0)}!`, 'market');
+                logEvent(`🏦 ${getBankLabel(bank)} sponsoruje startup ${targetStartup.name} kwotą ${formatZl(investmentAmount, 0)}!`, 'market');
                 
                 // Odśwież widok startupów, jeśli otwarty
                 if (document.getElementById('startup-incubator-panel').style.display === 'block') {
@@ -8824,8 +8828,8 @@ function processBankInvestmentResume(stock) {
     research.isResearching = true;
     research.investmentPaused = false;
 
-    if (cost > 0) logEvent(`💸 Bank ${stock.name} wznawia inwestycję "${investment.name}" kosztem ${formatZl(cost, 0)}.`);
-    else logEvent(`▶️ Bank ${stock.name} wznawia inwestycję "${investment.name}".`);
+    if (cost > 0) logEvent(`💸 ${getBankLabel(stock)} wznawia inwestycję "${investment.name}" kosztem ${formatZl(cost, 0)}.`);
+    else logEvent(`▶️ ${getBankLabel(stock)} wznawia inwestycję "${investment.name}".`);
 
     return true;
 }
@@ -12229,8 +12233,8 @@ function executeSpinoff(parent, options = {}) {
     spinoffLog.length = Math.min(spinoffLog.length, SPINOFF_LOG_LIMIT);
     noteStrategyStat(carve ? 'carveOuts' : 'spinoffs');
     logEvent(carve
-        ? `✂️ CARVE-OUT: ${parent.name} wydziela ${child.name} (${symbol}) na ${exchanges[child.exchange]?.name || child.exchange} — matka zachowuje ${(keep * 100).toFixed(0)}%, akcjonariusze dostają ${(factor * 100).toFixed(0)}% akcji córki.`
-        : `✂️ SPIN-OFF: ${parent.name} wydziela ${child.name} (${symbol}) na ${exchanges[child.exchange]?.name || child.exchange}. Każdy akcjonariusz dostaje 1 akcję ${symbol} za 1 akcję ${parent.symbol}.`, 'market');
+        ? `✂️ CARVE-OUT: ${parent.name} wydziela ${child.name} (${symbol}) na ${getExchangeAcc(child.exchange)} — matka zachowuje ${(keep * 100).toFixed(0)}%, akcjonariusze dostają ${(factor * 100).toFixed(0)}% akcji córki.`
+        : `✂️ SPIN-OFF: ${parent.name} wydziela ${child.name} (${symbol}) na ${getExchangeAcc(child.exchange)}. Każdy akcjonariusz dostaje 1 akcję ${symbol} za 1 akcję ${parent.symbol}.`, 'market');
     const held = (playerPortfolio[symbol]?.shares || 0) + (playerWallet?.portfolio?.[symbol]?.shares || 0);
     if (held > 0) {
         if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('spinoff', `${parent.name}: dostajesz ${held.toLocaleString('pl-PL')} akcji ${child.name}`);
@@ -13359,12 +13363,18 @@ function getCompanyOrigin(stock) {
     return stock.origin || COMPANY_ORIGIN_OVERRIDES[stock.symbol] || (PL_ORIGIN_SYMBOLS.includes(stock.symbol) ? 'PL' : 'UNI');
 }
 // 0.16.11 K0: symbole giełdowe banków startowych (stare BKINV1/BKINV3/BKCORP3 → SPR/RPK/BPIG); pozostałe BK + id.
-const BANK_SYMBOL_OVERRIDES = { inv1: 'SPR', inv3: 'RPK', corp3: 'BPIG' };
-const LEGACY_BANK_SYMBOLS = { BKINV1: 'SPR', BKINV3: 'RPK', BKCORP3: 'BPIG' };
+const BANK_SYMBOL_OVERRIDES = { inv1: 'SPR', inv2: 'GBK', inv3: 'RPK', corp2: 'KRUP', corp3: 'BPIG' };
+const LEGACY_BANK_SYMBOLS = { BKINV1: 'SPR', BKINV2: 'GBK', BKINV3: 'RPK', BKCORP2: 'KRUP', BKCORP3: 'BPIG' }; // przegląd 2026-11-08: GBK, KRUP
+// Przegląd 2026-11-08 pkt 4: poprawione nazwy spółek startowych (stary zapis dostaje nowe nazwy przy wczytaniu).
+const LEGACY_COMPANY_NAMES = { 'Quick Buissness Finance': 'Quick Business Finance', 'Krajoznawsto Obce': 'Krajoznawstwo Obce', 'Hospital rental': 'Wynajem Szpitali',
+    'Kopalnie Węgla Mine': 'Kopalnie Węgla', 'Krupiewicz Group S.A': 'Krupiewicz Group S.A.', 'WRONA': 'Wrona', 'LOMBARDEX S.A.': 'Lombardex S.A.' };
 function getBankSymbol(bank) { return bank.symbol || BANK_SYMBOL_OVERRIDES[bank.id] || `BK${bank.id.toUpperCase()}`; }
 /** Migracja zapisu: stare symbole banków w całym snapshocie (klucze portfeli i wartości symbol). */
 function migrateLegacyBankSymbols(snapshot) {
     const json = JSON.stringify(snapshot);
-    if (!/"BK(INV1|INV3|CORP3)"/.test(json)) return snapshot;
-    return JSON.parse(json.replace(/"(BKINV1|BKINV3|BKCORP3)"/g, (m, k) => `"${LEGACY_BANK_SYMBOLS[k]}"`));
+    const symbols = new RegExp(`"(${Object.keys(LEGACY_BANK_SYMBOLS).join('|')})"`, 'g');
+    const names = new RegExp(`"(${Object.keys(LEGACY_COMPANY_NAMES).map(name => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})"`, 'g');
+    if (!symbols.test(json) && !names.test(json)) return snapshot;
+    // pełne wartości w cudzysłowie: klucze portfeli, pola symbol i name, odwołania w obietnicach i postach Tied
+    return JSON.parse(json.replace(symbols, (m, key) => `"${LEGACY_BANK_SYMBOLS[key]}"`).replace(names, (m, key) => `"${LEGACY_COMPANY_NAMES[key]}"`));
 }

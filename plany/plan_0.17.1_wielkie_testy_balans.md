@@ -69,6 +69,12 @@ Kolejność: T0 → T1 → … → T7. **Commit po każdej części.** Zmiany w 
 | Spółki krajowe | ≤ 115; > 125 nigdy dłużej niż 2 kw. |
 | Gra ręczna | 0 błędów blokujących w 7 scenariuszach |
 
+## Z kontroli 0.17.2 (do zbadania w dużej serii)
+
+- **Zanieczyszczenie stoi przy 40**, więc spadek produkcji (od 80) i smog prawie się nie włączają. Emisje liczyły się z przychodu podzielonego przez pełną inflację, a przychody niosą tylko 15% inflacji. Na gałęzi kodu 0.17.2 jest już poprawka (8102915: deflator z udziałem inflacji, elastyczność 3,3, cel ok. 55 przez grę, decyzja użytkownika z 2026-11-08). Do potwierdzenia w serii: czy P dochodzi do ok. 55 i jak często są smog, protesty i poziom krytyczny.
+- **KrzeUraFos4 (Chemia) ma 46% emisji kraju na starcie**, więcej niż Tauron (35%). Emisje przemysłu idą za przychodem, a to największa spółka emitująca. Do decyzji: emisyjność według podsektora albo limit udziału jednej spółki.
+- **Przewaga Koalicji Rynkowej:** 61% wygranych wyborów już w bazie, przez wagi klas (`CLASS_VOTE`). W 0.17.2 nagroda za rosnący poziom życia znosiła karę za kadencje (reelekcja po 1. kadencji 20% → 35%). Poprawka 26282c6: poziom życia tylko karze za spadek. Do sprawdzenia w serii reelekcja i rozkład rządzących.
+
 ## Ryzyka
 
 - **Odkrycie zbyt dużej liczby problemów** → T4 priorytetyzuje; mniejsze trafiają do 0.17.2 lub osobnej poprawki.

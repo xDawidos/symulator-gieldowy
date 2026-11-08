@@ -755,6 +755,9 @@ function updateMarketKPIs() {
     const tsSubEl = document.getElementById('mkpi-top-sector-sub');
     if (tsEl) tsEl.textContent = best ? best[0] : '—';
     if (tsSubEl) tsSubEl.textContent = best ? formatPct(best[1] / 100) : '';
+    // przegląd 2026-11-08 pkt 11: przed pierwszą zmianą kursów („Chemia 0,00%”) bez najsilniejszego sektora
+    const card = document.getElementById('popular-sector-card');
+    if (card) card.style.display = !best || !active.some(s => s.previousPrice && s.previousPrice !== s.price) ? 'none' : ''; // display: klasa .market-kpi-card nadpisuje atrybut hidden
 }
 
 // Topbar KPI: gotówka funduszu, NAV/JU, prywatne pieniądze gracza
@@ -2278,13 +2281,20 @@ function displayStocks(previousInputValues = {}) {
     // 0.14.5: możliwość wyłączenia grupowania według kategorii — płaska lista i sortowanie po cenie w całej giełdzie.
     const isGroupedBySector = sectorFilterState.grouped !== false;
     const sectorOf = new Map(stocksOnThisExchange.map(stock => [stock, isForeignRow(stock) ? stock.sectors[0][0] : getMainSector(stock)]));
+    // przegląd 2026-11-08 pkt 10: grupa od 2 spółek; sektor z 1 spółką trafia do wspólnej grupy „Pozostałe” na końcu giełdy
+    if (isGroupedBySector) {
+      const perSector = new Map();
+      for (const s of stocksOnThisExchange) perSector.set(sectorOf.get(s), (perSector.get(sectorOf.get(s)) || 0) + 1);
+      for (const s of stocksOnThisExchange) if (perSector.get(sectorOf.get(s)) < 2) sectorOf.set(s, null);
+    }
     const countryDir = countrySortState === 'asc' ? 1 : countrySortState === 'desc' ? -1 : 0;
     const byCountry = (a, b) => countryDir ? rowCountry(a).localeCompare(rowCountry(b)) * countryDir : 0;
     const priceDir = currentSortState === 'price_asc' ? 1 : currentSortState === 'price_desc' ? -1 : 0;
 
     if (isGroupedBySector) {
+      const orderOf = stock => sectorOf.get(stock) ? getSectorDisplayOrder(sectorOf.get(stock)) : Infinity; // „Pozostałe” na końcu
       stocksOnThisExchange.sort((a, b) =>
-        (getSectorDisplayOrder(sectorOf.get(a)) - getSectorDisplayOrder(sectorOf.get(b))) || byCountry(a, b) || (priceDir ? (rowPrice(a) - rowPrice(b)) * priceDir : 0));
+        ((orderOf(a) - orderOf(b)) || 0) || byCountry(a, b) || (priceDir ? (rowPrice(a) - rowPrice(b)) * priceDir : 0));
     } else if (priceDir || countryDir) {
       stocksOnThisExchange.sort((a, b) => byCountry(a, b) || (priceDir ? (rowPrice(a) - rowPrice(b)) * priceDir : 0));
     }
@@ -2332,6 +2342,7 @@ function displayStocks(previousInputValues = {}) {
     });
   });
 
+  if (typeof updateMarketFiltersButton === 'function') updateMarketFiltersButton();
   const countryBtn = document.getElementById('table-country-sort');
   if (countryBtn) { countryBtn.textContent = countrySortState === 'asc' ? 'Kraj ▲' : countrySortState === 'desc' ? 'Kraj ▼' : 'Kraj'; countryBtn.setAttribute('aria-pressed', String(countrySortState !== 'none')); }
   if (favoritesOnlyFilter && !playerProfile?.favorites?.length) {
@@ -6981,10 +6992,8 @@ function displayFundPanel() {
     renderFundSummary();
     renderFundPeriodsChart();
     renderFundRivalsTable();
-    renderFundClients();
     renderPrivatePanel();
     renderCareerPanel();
-    renderPawnPanel();
 }
 
 function renderFundSummary() {
@@ -7121,26 +7130,6 @@ function renderFundRivalsTable() {
         </table>`;
 }
 
-function renderFundClients() {
-    const container = document.getElementById('fund-clients-list');
-    if (!container) return;
-    const nav = getFundNav();
-
-    const clients = [...playerFund.clients].sort((a, b) => b.units - a.units);
-    container.innerHTML = `
-        <table class="asset-mini-table">
-            <thead><tr><th>Klient</th><th>Wartość</th><th>Zadowolenie</th></tr></thead>
-            <tbody>${clients.map(client => {
-                const def = CLIENT_TYPES[client.type] || CLIENT_TYPES.careful;
-                const sat = Math.round(client.satisfaction * 100);
-                return `<tr>
-                    <td title="${def.label}">${escapeHtml(client.name)}</td>
-                    <td>${formatZl(client.units * nav, 0)}</td>
-                    <td class="${sat >= 55 ? 'profit' : sat < 35 ? 'loss' : ''}">${sat}%</td>
-                </tr>`;
-            }).join('')}</tbody>
-        </table>`;
-}
 
 function renderPrivatePanel() {
     const container = document.getElementById('fund-private-panel');
@@ -8052,7 +8041,7 @@ function renderCityElection() {
 // LOMBARD FUNDUSZU (etap E2)
 // =================================================================================
 
-function renderPawnPanel(containerId = 'fund-pawn-panel') {
+function renderPawnPanel(containerId = 'net-lombard-pawn') {
     const container = document.getElementById(containerId);
     if (!container || !playerFund || container.contains(document.activeElement)) return; // nie przerywaj wpisywania
     const account = getFundAccount();
@@ -8105,7 +8094,6 @@ function renderPawnShopInfo() {
 /** Dawne okno Lombardex: obsługa jest na stronie Lombard w Internecie (jedno miejsce). */
 function openPawnShopPanel() { return openInternetPage('lombard'); }
 
-/** Okno windykatora: zasady i akcje zajęte dłużnikom (fundusze, boty). */
 /** 0.15.4 P7: portfel pożyczek konsumenckich Wrony (liczby i słowami, bez koloru). */
 function renderConsumerLoansSummary(collector) {
     const loans = collector?.retailLoans || [];
@@ -8116,26 +8104,8 @@ function renderConsumerLoansSummary(collector) {
         <p class="fund-muted">Oprocentowanie ${(CONSUMER_LOAN_APR * 100).toFixed(0)}% w skali roku gry, termin ${CONSUMER_LOAN_WEEKS} tygodni; z niespłaconej pożyczki Wrona odzyskuje ${(CONSUMER_LOAN_RECOVERY * 100).toFixed(0)}% kapitału. Klientów przybywa z udziałem biedniejszych klas i w recesji.</p>`;
 }
 
-function openDebtCollectorPanel() {
-    const modal = document.getElementById('debtcollector-modal');
-    const body = document.getElementById('debtcollector-body');
-    if (!modal || !body) return;
-    const collector = getDebtCollector();
-    const seized = Object.entries(collector?.holdingPortfolio || {})
-        .map(([symbol, item]) => `<li>${item.quantity} × ${escapeHtml(symbol)}</li>`).join('');
-    const botDebts = aiCompetitors.reduce((sum, ai) => sum + (ai.loans || []).filter(loan => (loan.missedPayments || 0) > 0).length, 0);
-
-    body.innerHTML = collector ? `
-        <p><strong>${escapeHtml(collector.name)}</strong> (${escapeHtml(collector.symbol)}) · gotówka ${formatZl(collector.cash, 0)}</p>
-        <p class="fund-muted">Windykator przejmuje zaległe długi (kredyty botów z zaległościami, niespłacone zastawy funduszy po ${COLLECTOR_AFTER_MISSED} nieopłaconych odsetkach) i zajmuje akcje dłużników z dyskontem ${(100 - COLLECTOR_DISCOUNT * 100).toFixed(0)}%.</p>
-        <p>Kredyty botów z zaległościami: <strong>${botDebts}</strong></p>
-        <h4>Pożyczki konsumenckie Wrony</h4>
-        ${renderConsumerLoansSummary(collector)}
-        <h4>Zajęte akcje</h4>
-        <ul>${seized || '<li class="fund-muted">Brak.</li>'}</ul>`
-        : '<p class="loss">Windykator nie jest dostępny.</p>';
-    modal.style.display = 'block';
-}
+/** Dawne okno Windykatora: strona Windykacja w Internecie (jedno miejsce). */
+function openDebtCollectorPanel() { return openInternetPage('windykacja'); }
 
 // =================================================================================
 // CENTRUM BANKOWE (okno banku): wskaźniki, zakładki, banki komercyjne, lokaty funduszu
@@ -8588,6 +8558,9 @@ function toggleTopbarMenu(force) {
 }
 function closeTopbarMenu() { toggleTopbarMenu(false); }
 if (typeof document !== 'undefined') {
+    // przegląd 2026-11-08 pkt 1: obsługa po załadowaniu ui.js zamiast inline onclick (klik przed skryptem dawał błąd)
+    const bindTopbarMenu = () => document.getElementById('topbar-menu-btn')?.addEventListener('click', () => toggleTopbarMenu());
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bindTopbarMenu); else bindTopbarMenu();
     document.addEventListener('click', event => {
         const wrap = document.querySelector('.topbar-menu-wrap');
         if (wrap && !wrap.contains(event.target)) closeTopbarMenu();
@@ -9454,4 +9427,48 @@ function setSelectedMarket(marketId) {
     if (typeof displayStocks === 'function') {
         displayStocks(typeof getCurrentInputValues === 'function' ? getCurrentInputValues() : {});
     }
+}
+
+// Przegląd 2026-11-08 pkt 8–9: na telefonie filtry rynku zwinięte w przycisk „Filtry (n)”, przycisk „Mój fundusz” przewija do panelu.
+function getActiveMarketFilterCount() {
+    let n = 0;
+    if (typeof sectorFilterState === 'object' && sectorFilterState) {
+        if (sectorFilterState.sector && sectorFilterState.sector !== 'all') n++;
+        if (sectorFilterState.subsector) n++;
+        if (sectorFilterState.type && sectorFilterState.type !== 'all') n++;
+        if (sectorFilterState.secondary) n++;
+        if (sectorFilterState.grouped === false) n++;
+    }
+    if (typeof ownedOnlyFilter !== 'undefined' && ownedOnlyFilter) n++;
+    if (typeof favoritesOnlyFilter !== 'undefined' && favoritesOnlyFilter) n++;
+    const level = document.querySelector('.market-level-tab.active')?.dataset.level;
+    if (level && level !== 'ALL') n++;
+    return n;
+}
+function updateMarketFiltersButton() {
+    const btn = document.getElementById('market-filters-btn');
+    if (btn) btn.textContent = `Filtry (${getActiveMarketFilterCount()})`;
+}
+function toggleMarketFilters(force) {
+    const box = document.getElementById('market-filters'), btn = document.getElementById('market-filters-btn');
+    if (!box || !btn) return;
+    const open = typeof force === 'boolean' ? force : !box.classList.contains('is-open');
+    box.classList.toggle('is-open', open);
+    btn.setAttribute('aria-expanded', String(open));
+    updateMarketFiltersButton();
+}
+function scrollToMyFund() {
+    toggleMarketFilters(false);
+    document.getElementById('portfolio')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// Przegląd 2026-11-08 pkt 7: zwijany nagłówek na telefonie (≤ 640 px) po przewinięciu o 40 px; zostaje sama gotówka (CSS .topbar.is-compact)
+if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+    const updateCompactTopbar = () => {
+        const bar = document.getElementById('topbar');
+        if (!bar) return;
+        bar.classList.toggle('is-compact', window.matchMedia('(max-width: 640px)').matches && window.scrollY > 40);
+    };
+    window.addEventListener('scroll', updateCompactTopbar, { passive: true });
+    window.addEventListener('resize', updateCompactTopbar, { passive: true });
 }

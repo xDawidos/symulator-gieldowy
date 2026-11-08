@@ -12,7 +12,8 @@ const INTERNET_FAVORITES = [
     { id: 'tied', tag: 'Sieć zawodowa', tone: 'blue', title: 'Tied', host: 'tied.net', icon: 'grupa', desc: 'Posty prezesów i wiadomości od inwestorów.' },
     { id: 'startupy', tag: 'Venture capital', tone: 'violet', title: 'Startupy', host: 'startupy.gielda.pl', icon: 'rakieta', desc: 'Inkubator, pula start-upów i rundy finansowania.' },
     { id: 'ferie', tag: 'Mobilność', tone: 'teal', title: 'Ferie i wakacje', host: 'ferie-i-wakacje.pl', icon: 'samolot', desc: 'Bilety do rynków zagranicznych, lotnisko miasta.' },
-    { id: 'lombard', tag: 'Płynność', tone: 'orange', title: 'Lombard', host: 'lombardex.pl', icon: 'lombard', desc: 'Pożyczki pod zastaw akcji.' }
+    { id: 'lombard', tag: 'Płynność', tone: 'orange', title: 'Lombard', host: 'lombardex.pl', icon: 'lombard', desc: 'Pożyczki pod zastaw akcji.' },
+    { id: 'windykacja', tag: 'Długi', tone: 'amber', title: 'Windykacja', host: 'wrona-windykacja.pl', icon: 'umowa', desc: 'Zaległe długi, zajęte akcje i pożyczki konsumenckie Wrony.' }
 ];
 
 /** Barwy kraju (ciemne tło okna i akcent) — kolor nigdy jedynym nośnikiem: nazwa stoi w pasku okna. */
@@ -23,7 +24,7 @@ const COUNTRY_THEMES = {
     TW: { bg: '#101c33', accent: '#ff7a8f' }
 };
 
-let internetState = { page: null, country: null }; // page: null = ekran ulubionych; stan interfejsu, poza zapisem gry
+let internetState = { page: null, country: null, open: false, pausedBefore: false }; // page: null = ekran ulubionych; stan interfejsu, poza zapisem gry
 
 function getInternetFavorite(id) { return INTERNET_FAVORITES.find(f => f.id === id) || null; }
 
@@ -71,12 +72,38 @@ function openInternetPage(id = null) {
         if (!check.ok) { if (typeof showToast === 'function') showToast(check.reason, 'warning'); return false; }
     }
     internetState.page = id;
+    // 2026-11-08: Internet zatrzymuje czas gry; przejścia między stronami w otwartym oknie nie ruszają pauzy
+    if (!internetState.open) {
+        internetState.open = true;
+        internetState.pausedBefore = Boolean(isGamePaused);
+        if (!isGamePaused && typeof togglePauseGame === 'function') togglePauseGame();
+    }
     const modal = document.getElementById('internet-modal');
     if (!modal) return true;
     modal.hidden = false;
     modal.style.display = 'block';
     renderInternet();
     return true;
+}
+
+/** Zamknięcie (krzyżyk, tło, Escape): czas gry wraca do stanu sprzed otwarcia. Wywołanie drugi raz nic nie robi. */
+function closeInternet() {
+    const modal = document.getElementById('internet-modal');
+    if (modal && modal.style.display !== 'none') modal.style.display = 'none';
+    if (!internetState.open) return false;
+    internetState.open = false;
+    if (!internetState.pausedBefore && isGamePaused && typeof togglePauseGame === 'function') togglePauseGame();
+    return true;
+}
+if (typeof document !== 'undefined') {
+    // tło pod oknem zamyka Internet jak krzyżyk; inne drogi zamknięcia (Escape) wychwytuje obserwator stylu
+    document.addEventListener('click', event => { if (event.target?.id === 'modal-backdrop' && internetState.open) closeInternet(); });
+    const watchInternet = () => {
+        const modal = document.getElementById('internet-modal');
+        if (!modal || typeof MutationObserver === 'undefined') return;
+        new MutationObserver(() => { if (internetState.open && modal.style.display === 'none') closeInternet(); }).observe(modal, { attributes: true, attributeFilter: ['style'] });
+    };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', watchInternet); else watchInternet();
 }
 
 function applyInternetTheme() {
@@ -106,6 +133,7 @@ function renderInternet() {
     else if (fav.id === 'ferie') renderFeriePage();
     else if (fav.id === 'tied') renderTiedPage();
     else if (fav.id === 'lombard') renderLombardPage();
+    else if (fav.id === 'windykacja') renderDebtCollectorPage();
     applyInternetTheme();
 }
 
@@ -161,6 +189,21 @@ function renderFeriePage() {
 function feriePickCountry(id) { selectInternetCountry(id); renderFeriePage(); }
 
 // --- Lombard (jedno źródło prawdy: renderPawnPanel z panelu funduszu + renderPawnShopInfo z ui.js) ---
+/** Windykacja (dawne okno Windykatora): zasady, długi botów, pożyczki Wrony i zajęte akcje. */
+function renderDebtCollectorPage() {
+    const root = document.getElementById('net-windykacja-body');
+    if (!root) return;
+    const collector = typeof getDebtCollector === 'function' ? getDebtCollector() : null;
+    const seized = Object.entries(collector?.holdingPortfolio || {}).map(([symbol, item]) => `<li>${item.quantity} × ${escapeHtml(symbol)}</li>`).join('');
+    const botDebts = aiCompetitors.reduce((sum, ai) => sum + (ai.loans || []).filter(loan => (loan.missedPayments || 0) > 0).length, 0);
+    root.innerHTML = collector ? `<div class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('umowa', 20)}</span><div><h4>${escapeHtml(collector.name)}</h4><span class="bank-card-type">${escapeHtml(collector.symbol)} · gotówka ${formatZl(collector.cash, 0)}</span></div></header>
+        <p class="fund-muted">Windykator przejmuje zaległe długi (kredyty botów z zaległościami, niespłacone zastawy funduszy po ${COLLECTOR_AFTER_MISSED} nieopłaconych odsetkach) i zajmuje akcje dłużników.</p>
+        <p>Kredyty botów z zaległościami: <strong>${botDebts}</strong></p>
+        <h4>Pożyczki konsumenckie Wrony</h4>${renderConsumerLoansSummary(collector)}
+        <h4>Zajęte akcje</h4><ul>${seized || '<li class="fund-muted">Brak.</li>'}</ul></div>`
+        : '<p class="loss">Windykator nie jest dostępny.</p>';
+}
+
 function renderLombardPage() {
     const root = document.getElementById('net-lombard-body');
     if (!root) return;

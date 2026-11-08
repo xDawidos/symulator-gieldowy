@@ -23,7 +23,7 @@ const ENERGY_RULES = {
     startMix: { coal: 0.55, gas: 0.15, nuclear: 0, oze: 0.30 }, // udział typu w mocy startowej; w typie moc dzieli przychód segmentu
     rateCost: 8,                 // +1 pp stopy to +8% kosztu kapitałowej części ceny
     shortagePremium: 1.5, pass: 0.6, producerPrice: 0.5, producerUtil: 0.5,
-    blockRevenue: 0.35,          // przychód rośnie o 35% przyrostu mocy: reszta zysku z nowej mocy wraca przez wykorzystanie mocy (seria: ×1,71 przychodów Energii przy 100%)
+    blockRevenue: 0.20,          // przychód rośnie o 20% przyrostu mocy: reszta zysku z nowej mocy wraca przez wykorzystanie (serie: 100% → GIG +1,31 pp, 35% → +1,64 pp, 20% → +0,37 pp)
     targetReserve: 1.08, buildChance: 0.25, blockShare: 0.03, blockOwnMax: 0.30, blockCostQuarters: 6, minCashShare: 0.3,
     buildQuarters: { coal: [6, 10], gas: [4, 8], oze: [3, 6] },
     catalogPower: { energy_plant: 0.010, wind_farm: 0.006, solar_park: 0.004 }, // udział mocy kraju z budynku z katalogu
@@ -419,7 +419,7 @@ function maybeBlackout(e) {
 // ---------------------------------------------------------------------------------
 const SECTOR_EMISSIONS = { 'Chemia': 0.7, 'Przemysł': 0.6, 'Motoryzacja': 0.3, 'Budowlany': 0.2, 'Energia': 0.5 };
 const POLLUTION_RULES = {
-    start: 40, keep: 0.9, powerShare: 0.4, healthyLevel: 40, populationLoss: 0.0002, productionFrom: 80, productionCut: 0.02
+    start: 40, keep: 0.9, elasticity: 3.3, powerShare: 0.4, healthyLevel: 40, populationLoss: 0.0002, productionFrom: 80, productionCut: 0.02
 };
 const CLIMATE_FEES = [0, 0.003, 0.007, 0.012, 0.018];   // opłata: część przychodu przy emisyjności 1 (decyzja użytkownika, pkt 8)
 const ENERGY_OFFICE_RULES = {
@@ -458,14 +458,15 @@ function getStockEmissionFactor(stock) {
     emissionCache.map.set(stock, factor);
     return factor;
 }
-/** Emisje kwartału: produkcja (przychód w cenach startowych) × emisyjność. */
+/** Emisje kwartału: produkcja (przychód bez części inflacyjnej) × emisyjność. */
 /** Emisje kwartału. Elektrownie: produkcja prądu (moc × wykorzystanie) × emisja typu × skala kraju, reszta spółki: przychód w cenach startowych × emisyjność sektora. */
 function getStockEmissions(stock) {
     const e = society.energy, cut = 1 - getStockEcoCut(stock);
     if (!stock || stock.assetType || stock.isBankStock) return 0;
     const powerShare = stock.power ? getPowerSegment(stock)?.share || 0 : 0;
     const rest = getStockSegments(stock).reduce((sum, seg) => sum + (seg.sector === 'Energia' && powerShare > 0 && !ENERGY_NO_POWER_SUBSECTORS.includes(seg.subsector) ? 0 : (SECTOR_EMISSIONS[seg.sector] || 0) * seg.share), 0);
-    const other = getStockRevenue(stock) / (Number(society.priceLevel) || 1) * rest * cut;
+    // przychody niosą tylko INFLATION_PASS_THROUGH inflacji (0.15 H1a), więc produkcję liczymy deflatorem z tym samym udziałem
+    const other = getStockRevenue(stock) / Math.pow(Number(society.priceLevel) || 1, typeof INFLATION_PASS_THROUGH === 'number' ? INFLATION_PASS_THROUGH : 1) * rest * cut;
     return other + (powerShare > 0 && e ? getPowerGenerationEmissions(stock, e) * cut : 0);
 }
 /** Produkcja prądu spółki ważona emisją typu (bez skali kraju). */
@@ -491,7 +492,7 @@ function getPollutionProductionCut(e = society.energy) {
     return Math.max(0, (Number(e?.pollution) || 0) - POLLUTION_RULES.productionFrom) / (100 - POLLUTION_RULES.productionFrom) * POLLUTION_RULES.productionCut;
 }
 
-/** Wskaźnik P = 0,9 × P + emisje / norma. Norma z pierwszego kwartału, tak by przy stałych emisjach P wynosiło 40. */
+/** Wskaźnik P = 0,9 × P + 0,1 × cel, cel = 40 × (emisje / emisje pierwszego kwartału)^elastyczność. */
 function processPollution(e) {
     if (!(e.powerScale > 0)) { // energetyka daje na starcie POLLUTION_RULES.powerShare emisji kraju
         e.powerScale = 1;
@@ -500,13 +501,15 @@ function processPollution(e) {
         e.powerScale = power > 0 && other > 0 ? other * POLLUTION_RULES.powerShare / (1 - POLLUTION_RULES.powerShare) / power : 0;
     }
     const emissions = stocks.reduce((sum, stock) => sum + (stock.isBankrupt ? 0 : getStockEmissions(stock)), 0);
-    if (!(e.norm > 0)) {
-        e.norm = emissions > 0 ? emissions * (1 - POLLUTION_RULES.keep) * 100 / POLLUTION_RULES.start / 10 : 1;
+    if (!(e.norm > 0)) { // norma: emisje pierwszego kwartału
+        e.norm = emissions > 0 ? emissions : 1;
         e.pollution = POLLUTION_RULES.start;
     }
     e.emissions = Math.round(emissions);
     e.pollutionLast = e.pollution;
-    e.pollution = +clampValue(POLLUTION_RULES.keep * e.pollution + emissions / e.norm / 10, 0, 100).toFixed(2);
+    // cel: start × (emisje / norma)^elastyczność; +10% emisji to ok. +15 pkt (decyzja użytkownika: przez grę do ok. 55)
+    const target = Math.min(100, POLLUTION_RULES.start * Math.pow(Math.max(0, emissions / e.norm), POLLUTION_RULES.elasticity));
+    e.pollution = +clampValue(POLLUTION_RULES.keep * e.pollution + (1 - POLLUTION_RULES.keep) * target, 0, 100).toFixed(2);
     if (e.pollution > POLLUTION_RULES.healthyLevel) society.population = Math.round(society.population * (1 - (e.pollution - POLLUTION_RULES.healthyLevel) / 60 * POLLUTION_RULES.populationLoss));
     return e.pollution;
 }
@@ -648,10 +651,11 @@ function processLifeQuality(e) {
 }
 /** Wkład w atrakcyjność kraju: odchylenie od poziomu startowego, więc na starcie migracja bez zmian. */
 function getLifeAttractiveness() { return hasEnergyState() && society.energy.life0 > 0 ? (society.energy.life - society.energy.life0) * LIFE_RULES.attractiveness : 0; }
-/** Nastroje wyborcze: rząd zyskuje albo traci na zmianie poziomu życia w ostatnim roku. */
+/** Nastroje wyborcze: rząd traci, gdy poziom życia spadł w ostatnim roku. */
 function getLifeVoteAdj() {
     const hist = society.energy?.lifeHist;
-    return hist?.length > 1 ? clampValue((hist[hist.length - 1] - hist[0]) * LIFE_RULES.vote, -LIFE_RULES.voteMax, LIFE_RULES.voteMax) : 0;
+    // tylko kara: poziom życia rośnie w prawie każdej grze, więc nagroda znosiła karę za kadencje (reelekcja 20% → 35%)
+    return hist?.length > 1 ? clampValue((hist[hist.length - 1] - hist[0]) * LIFE_RULES.vote, -LIFE_RULES.voteMax, 0) : 0;
 }
 
 const ENERGY_STATE_RULES = { ozeShare: 0.5, nuclearPower: 0.06, nuclearMaxBlocks: 4, nuclearNextChance: 0.5, atomAfterQuarters: 20, atomChance: 0.03, atomStatePct: 0.8, atomPrice: 1700, atomShares: 1000000 };

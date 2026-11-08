@@ -339,7 +339,7 @@
           aria-controls="app-sidebar" onclick="document.body.classList.toggle('sidebar-open')"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
 
   <!-- KPI: gotówka funduszu, NAV / udział, konto prywatne, zaufanie -->
-  <div class="topbar-kpi-group">
+  <div class="topbar-kpi-group is-loading">
     <div class="topbar-kpi">
       <span class="topbar-kpi-label">Gotówka funduszu</span>
       <span class="topbar-kpi-val" id="cash">10 000,00 PLN</span>
@@ -372,7 +372,7 @@
     </div>
     <button id="pause-game-btn" class="btn-pause" onclick="togglePauseGame()">Wznów</button>
     <div class="topbar-menu-wrap">
-      <button class="icon-btn" id="topbar-menu-btn" type="button" aria-label="Menu: zapis, ustawienia, nowa gra" aria-haspopup="menu" aria-expanded="false" onclick="toggleTopbarMenu()"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zM13.5 12a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zM21 12a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/></svg></button>
+      <button class="icon-btn" id="topbar-menu-btn" type="button" aria-label="Menu: zapis, ustawienia, nowa gra" aria-haspopup="menu" aria-expanded="false"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zM13.5 12a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zM21 12a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/></svg></button>
       <div class="topbar-menu" id="topbar-menu" role="menu" hidden>
         <button role="menuitem" onclick="closeTopbarMenu(); saveGame()">Zapisz grę</button>
         <button role="menuitem" onclick="closeTopbarMenu(); exportSaveFile()" title="Plik .json: kopia zapasowa albo przeniesienie na inny komputer">Eksportuj zapis (.json)</button>
@@ -412,6 +412,12 @@
     </h2>
     <div id="market-content"><!-- 0.14.2 P8: zwijany rynek akcji -->
 
+    <!-- Przegląd 2026-11-08 pkt 8–9: na telefonie filtry w przycisku, skrót do funduszu -->
+    <div class="market-mobile-bar btn-row">
+      <button type="button" class="btn-secondary btn-sm" id="market-filters-btn" aria-controls="market-filters" aria-expanded="false" onclick="toggleMarketFilters()">Filtry (0)</button>
+      <button type="button" class="btn-secondary btn-sm" onclick="scrollToMyFund()">Mój fundusz</button>
+    </div>
+    <div class="market-filters" id="market-filters">
     <!-- Chipy sektorów -->
     <div class="sector-chips" id="sector-chips" role="group" aria-label="Filtr sektorów">
       <button type="button" class="sector-chip owned-chip" aria-pressed="false" onclick="toggleOwnedFilter(this)" title="Pokaż tylko spółki, które masz w funduszu lub na koncie prywatnym"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8h18v12H3zM8 8V5h8v3M3 13h18M11 13v2h2v-2"/></svg> Posiadane</button>
@@ -443,6 +449,7 @@
       <button class="market-level-tab" id="open-dividend-tracker-btn"
               onclick="openDividendTrackerModal()" title="Panel analityka dywidend">Dywidendowe</button>
     </div>
+    </div><!-- /market-filters -->
 
     <!-- Ukryty select — zachowany dla kompatybilności z JS -->
     <select id="sector-filter" style="display: none;"
@@ -517,20 +524,9 @@
     <div id="fund-periods-chart" class="fund-chart"></div>
     <div id="fund-rivals-table"></div>
 
-    <details class="fund-details">
-      <summary>Klienci funduszu</summary>
-      <button class="btn-secondary text-sm mb-2" onclick="openJuMarket()">Otwórz klientów i rynek udziałów</button>
-      <div id="fund-clients-list"></div>
-    </details>
-
     <details class="fund-details" id="fund-private-section">
       <summary>Konto prywatne</summary>
       <div id="fund-private-panel"></div>
-    </details>
-
-    <details class="fund-details" id="fund-pawn-section">
-      <summary>Lombard (zastaw akcji)</summary>
-      <div id="fund-pawn-panel"></div>
     </details>
 
     <details class="fund-details" id="fund-career-section" open>
@@ -585,10 +581,6 @@
     <div class="liabilities-section">
       <div class="portfolio-section-header">Zobowiązania</div>
       <ul class="list-plain p-0 m-0" id="my-liabilities-list"></ul>
-      <div class="d-flex gap-1 mt-2">
-        <button onclick="openPawnShopPanel()" class="btn-secondary btn-sm">Lombard</button>
-        <button onclick="openDebtCollectorPanel()" class="btn-secondary btn-sm">Windykator</button>
-      </div>
     </div>
 </div>
         </aside>
@@ -1296,12 +1288,6 @@
 
 
 
-<!-- Modal Windykatora -->
-<div id="debtcollector-modal" class="modal" style="display: none;">
-    <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
-    <h3 class="mt-0 text-warn">Windykator — Wrona</h3>
-    <div class="modal-body" id="debtcollector-body"></div>
-</div>
 
     <div id="chart-tooltip" style="display: none; position: absolute;"></div>
     <div id="toast-notification"></div>
@@ -1486,7 +1472,7 @@
 
 <!-- 0.16.5: Internet (dawny Kantor). Strony tylko z ulubionych; adres tylko do odczytu -->
 <div id="internet-modal" class="modal modal-xl bank-window internet-window" style="display: none;" role="dialog" aria-labelledby="internet-title">
-    <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
+    <button class="close-btn" onclick="closeInternet()" aria-label="Zamknij">&times;</button>
     <h2 class="sr-only" id="internet-title">Internet</h2>
     <div class="net-tabs" role="presentation">
         <span class="net-tab"><span class="net-tab-dot" aria-hidden="true"></span><span id="net-tab-title">Ulubione</span></span>
@@ -1575,6 +1561,7 @@
         </section>
         <section id="net-page-ferie" hidden aria-label="Ferie i wakacje"><div id="net-ferie-body"></div></section>
         <section id="net-page-lombard" hidden aria-label="Lombard"><div id="net-lombard-body"></div></section>
+        <section id="net-page-windykacja" hidden aria-label="Windykacja"><div id="net-windykacja-body"></div></section>
     </div>
     </div>
 </div>

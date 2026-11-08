@@ -3,7 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 
-// Usage: node run_przebiegi.mjs --preset=none --runs=20 --quarters=27 --speed=200 --label=sim_base
+// Usage: node run_przebiegi.mjs --preset=none --runs=20 --quarters=27 --speed=200 --label=sim_base [--noui]
+// --noui: bez odświeżania interfejsu (mniej RAM i CPU); do pomiaru czasu kroku nie używać. Na raz najwyżej 4–5 przebiegów (ok. 0,6 GB RAM i 1,4 rdzenia każdy).
 const args = {};
 for (const arg of process.argv.slice(2)) {
   if (arg.startsWith('--')) {
@@ -46,7 +47,7 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, async () => {
   const edgePath = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
-  const url = `http://localhost:${PORT}/tests/przebiegi.html?runs=${runs}&quarters=${quarters}&speed=${speed}&label=${label}${preset ? `&preset=${preset}` : ''}${args.patch ? '&patch=' + encodeURIComponent(fs.readFileSync(args.patch, 'utf8')) : ''}${args.target ? '&target=' + encodeURIComponent(args.target) : ''}`; // --target=../_baza/index.html: inny kod gry z tą samą sondą // --patch=plik.js: kod wykonywany w ramce po starcie gry
+  const url = `http://localhost:${PORT}/tests/przebiegi.html?runs=${runs}&quarters=${quarters}&speed=${speed}&label=${label}${preset ? `&preset=${preset}` : ''}${args.noui ? '&noui=1' : ''}${args.patch ? '&patch=' + encodeURIComponent(fs.readFileSync(args.patch, 'utf8')) : ''}${args.target ? '&target=' + encodeURIComponent(args.target) : ''}`; // --target=../_baza/index.html: inny kod gry z tą samą sondą // --patch=plik.js: kod wykonywany w ramce po starcie gry
   console.log(`Starting headless runner: ${url}`);
   
   const edge = spawn(edgePath, [
