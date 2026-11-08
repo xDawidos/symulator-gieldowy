@@ -13,6 +13,13 @@
       "runtimeArgs": ["-m", "http.server", "8777", "--bind", "127.0.0.1"],
       "port": 8777,
       "autoPort": false
+    },
+    {
+      "name": "gra-design2",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8791", "--bind", "127.0.0.1"],
+      "port": 8791,
+      "autoPort": false
     }
   ]
 }
