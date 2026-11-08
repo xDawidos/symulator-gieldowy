@@ -254,3 +254,7 @@ Starsze pomysły z notatek (`roadmap.txt`, dawny „plany poprawione przez ai.tx
 - **Podwykonawcy:** rozbudowa i uporządkowanie rynku. Powstawanie nowych, specjalności, geolodzy i energetyczni z 0.17.2.
 - **Poziom życia:** wskaźnik z 0.17.2 (konsumpcja i zadowolenie, zdrowie, bezpieczeństwo, edukacja i nauka, informacja) pogłębia 0.19.1, a 0.19.2 przenosi go na miasta.
 - **Blok jądrowy:** 3 etapy zastępują mechanikę z 0.17.2.
+
+## 14. Dopiski z 0.17.1 (2026-11-08)
+
+- **Punkt kontrolny GIG 20 lat (S2 z 0.17.1):** w 0.17.1 13,5% rocznie (cel 8–11%), odziedziczone od 0.15.1, nie strojone. Zmierzyć ponownie seriami 20-letnimi po wejściu miast i łańcuchów surowcowych. Jeśli wynik jest gorszy niż 13,5%, stroić w tej wersji.

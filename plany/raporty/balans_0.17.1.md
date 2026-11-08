@@ -43,3 +43,11 @@
 3. S3 i S4 razem w jednej serii (partie i środowisko się łączą przez Zielonych).
 4. S5, S6.
 5. S2 zostawić na 0.18.0 albo osobną diagnozę, bo jest odziedziczone i kosztowne.
+
+## Sprawdzenie U5, U7, U9 (T5)
+
+| # | Wynik | Co dalej |
+|---|---|---|
+| U5 | nie błąd: dźwignia zależy od towaru (`COMMODITY_MARKET.leverage`: złoto 1:10, gaz 1:3); tabela pokazuje dźwignię towaru, formularz też | bez zmian |
+| U7 | nie błąd: pasek i karta czytają tę samą `centralBank.baseInterestRate` w jednym odświeżeniu; na zrzucie były dwa różne odświeżenia (stopa zmieniła się w kryzysie) | bez zmian |
+| U9 | strojenie, nie błąd: premia za granicą dąży do `rho × cel kraju źródłowego + (1 − rho) × własna`, a w kraju źródłowym premia dopiero idzie do celu (wygładzenie). Za granicą skok przychodzi od razu, więc chwilowo jest głębszy niż u źródła | propozycja: za granicą brać bieżącą premię kraju źródłowego (`home.premium`) zamiast jego celu (`countries.js:177, 195`); do decyzji, bez serii w 0.17.1 |
