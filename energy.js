@@ -23,7 +23,7 @@ const ENERGY_RULES = {
     startMix: { coal: 0.55, gas: 0.15, nuclear: 0, oze: 0.30 }, // udział typu w mocy startowej; w typie moc dzieli przychód segmentu
     rateCost: 8,                 // +1 pp stopy to +8% kosztu kapitałowej części ceny
     shortagePremium: 1.5, pass: 0.6, producerPrice: 0.5, producerUtil: 0.5,
-    blockRevenue: 0.35,          // przychód rośnie o 35% przyrostu mocy: reszta zysku z nowej mocy wraca przez wykorzystanie mocy (seria: ×1,71 przychodów Energii przy 100%)
+    blockRevenue: 0.20,          // przychód rośnie o 20% przyrostu mocy: reszta zysku z nowej mocy wraca przez wykorzystanie (serie: 100% → GIG +1,31 pp, 35% → +1,64 pp, 20% → +0,37 pp)
     targetReserve: 1.08, buildChance: 0.25, blockShare: 0.03, blockOwnMax: 0.30, blockCostQuarters: 6, minCashShare: 0.3,
     buildQuarters: { coal: [6, 10], gas: [4, 8], oze: [3, 6] },
     catalogPower: { energy_plant: 0.010, wind_farm: 0.006, solar_park: 0.004 }, // udział mocy kraju z budynku z katalogu

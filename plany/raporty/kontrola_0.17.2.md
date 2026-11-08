@@ -71,3 +71,16 @@ Surowe serie: folder notatek, `serie_0172`.
 - **Ujemna gotówka:** we wszystkich 6 przypadkach (5 w nowej, 1 w bazie) to spółka budowlana przy strajku. Kara umowna liczona `Math.round(min(gotówka, 1% przychodu))` zaokrąglała w górę, więc gotówka schodziła do ok. −0,4 PLN. Błąd z 0.13, poprawiony na `Math.floor`. Różnica 5 wobec 1 to szum przy tak rzadkim zdarzeniu.
 - **Koalicja Rynkowa:** wygrywa już w bazie: 61% wyborów (137 z 226), na koniec rządzi w 62 grach na 120. W trzech seriach nowej wersji 60%, 63% i 69% wyborów. Serie n3 i n4 różnią się tylko liczeniem emisji, a dają na koniec 57 i 80 gier, więc rozrzut między seriami jest większy niż wpływ 0.17.2. Przewaga Koalicji wynika z istniejących wag klas (`CLASS_VOTE`: klasa średnia i wyższe głosują na nią w 42–78%). Do sprawdzenia dalej jest `getLifeVoteAdj`: poziom życia rośnie przez grę, więc rządzący dostają do +3 pp, a to wzmacnia każdą partię u władzy.
 - **Zanieczyszczenie przy 40:** wskaźnik z wzoru `P = 0,9 P + emisje / norma` dąży do 10 × emisje / norma, a norma jest ustawiona tak, by start dawał 40. P rośnie tylko, gdy rosną emisje. W seriach realne przychody spółek spadają (wszystkie ×0,95, odbiorcy prądu ×0,88), a zużycie prądu rośnie ×1,17. Przy udziale energetyki 40% daje to emisje ok. ×1,00, więc P stoi. Średnie maksimum w grze to 41, najwyższe 46. ESG prawie nie występuje (0,008 na grę), więc to nie obniżki trzymają P.
+
+## Kontrola po poprawkach zanieczyszczenia i wyborów (2026-11-08)
+
+Baza: 180 gier (pierwsza seria 120, druga 60 przerwana na polecenie użytkownika). Obie bazy zgodne: GIG 10,28% i 10,22%.
+
+| Seria | GIG wobec bazy | Indeks zysków | Średnia marż | Uwagi |
+|---|---|---|---|---|
+| 26282c6, przychód z bloku 35% (120 gier) | +1,64 pp (SE 0,46), **POZA** | +0,78 pp, **POZA** | 0,16 pp | zapis +0,8%, czas 1360 ms (+2,0%), 0 błędów |
+| przychód z bloku 20% (100 gier, jeden wątek przerwany) | +0,37 pp (SE 0,51), OK | +0,43 pp, OK | 0,23 pp, OK | przyjęte w kodzie |
+
+- **Zanieczyszczenie:** 40 → 49–50 na koniec gry (cel ok. 55 rośnie dalej po 27 kw.). Smog ok. 1 raz na grę, protesty 0,9, kwaśne deszcze 0,2.
+- **Wybory:** reelekcja po 1. kadencji 26% (baza 20%, przed poprawką 35%). Koalicja Rynkowa rządzi na koniec w 72 grach na 120 (baza 62). GIG nie zależy od tego, kto rządzi, ani od Zielonych.
+- **Niesprawdzone:** czasu kroku dla przychodu z bloku 20% nie mierzyłem (pomiary zakończone na polecenie użytkownika); zmiana to jedna stała, więc kosztu czasu nie dokłada.
