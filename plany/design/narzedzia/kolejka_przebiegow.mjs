@@ -18,6 +18,7 @@ function start() {
         if (fs.existsSync(out)) { console.log(`pominięte (jest wynik): ${job.label}`); done++; continue; }
         const args = [runner, `--preset=${job.preset || 'none'}`, `--runs=${job.runs}`, `--quarters=${job.quarters}`, '--speed=200', `--label=${job.label}`];
         if (job.noui) args.push('--noui');
+        if (job.patch) args.push(`--patch=${job.patch}`);
         const env = { ...process.env, SIM_PORT: String(9400 + n), SIM_CDP: String(9900 + n) };
         const child = spawn(process.execPath, args, { env, stdio: ['ignore', 'pipe', 'pipe'] });
         running++;
