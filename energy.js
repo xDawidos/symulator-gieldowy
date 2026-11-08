@@ -651,10 +651,11 @@ function processLifeQuality(e) {
 }
 /** Wkład w atrakcyjność kraju: odchylenie od poziomu startowego, więc na starcie migracja bez zmian. */
 function getLifeAttractiveness() { return hasEnergyState() && society.energy.life0 > 0 ? (society.energy.life - society.energy.life0) * LIFE_RULES.attractiveness : 0; }
-/** Nastroje wyborcze: rząd zyskuje albo traci na zmianie poziomu życia w ostatnim roku. */
+/** Nastroje wyborcze: rząd traci, gdy poziom życia spadł w ostatnim roku. */
 function getLifeVoteAdj() {
     const hist = society.energy?.lifeHist;
-    return hist?.length > 1 ? clampValue((hist[hist.length - 1] - hist[0]) * LIFE_RULES.vote, -LIFE_RULES.voteMax, LIFE_RULES.voteMax) : 0;
+    // tylko kara: poziom życia rośnie w prawie każdej grze, więc nagroda znosiła karę za kadencje (reelekcja 20% → 35%)
+    return hist?.length > 1 ? clampValue((hist[hist.length - 1] - hist[0]) * LIFE_RULES.vote, -LIFE_RULES.voteMax, 0) : 0;
 }
 
 const ENERGY_STATE_RULES = { ozeShare: 0.5, nuclearPower: 0.06, nuclearMaxBlocks: 4, nuclearNextChance: 0.5, atomAfterQuarters: 20, atomChance: 0.03, atomStatePct: 0.8, atomPrice: 1700, atomShares: 1000000 };

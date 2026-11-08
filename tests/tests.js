@@ -6053,6 +6053,8 @@ group('0.17.2 E6-E9: poziom życia, OZE, atom, opinia, technologie', () => {
         assert(getLifeAttractiveness() > 0, 'wyższy poziom życia przyciąga');
         e.lifeHist = [50, 40];
         assert(getLifeVoteAdj() < 0, 'spadek szkodzi rządzącym');
+        e.lifeHist = [40, 50];
+        assertEq(getLifeVoteAdj(), 0, 'wzrost nie nagradza rządzących');
     });
     test('OZE: dopłata z funduszu opłat, według mocy, liczy kwartały subsydiów', () => {
         const e = fresh(), cash = by('ZIEL').cash, coal = by('COAL').cash;
