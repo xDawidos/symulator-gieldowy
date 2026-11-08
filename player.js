@@ -2152,7 +2152,7 @@ function redeemClientUnits(client, units) {
     const gain = Math.max(0, (nav - client.avgCost) * paidUnits);
     const tax = gain * CLIENT_GAINS_TAX;
 
-    if (client.units < 0.5) {
+    if (client.units < 1e-6) { // 0.17.1: przy częściowej wypłacie (brak gotówki) klient zostaje z resztką; wcześniej znikał razem z nią i JU klientów ≠ JU funduszu
         playerFund.clients = playerFund.clients.filter(item => item.id !== client.id);
         logEvent(`👋 ${client.name} (${(CLIENT_TYPES[client.type] || CLIENT_TYPES.careful).label}) wycofuje wszystkie środki: ${formatZl(paid, 2)} (podatek klienta ${formatZl(tax, 2)}).`, 'review');
     } else {

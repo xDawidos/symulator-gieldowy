@@ -6307,6 +6307,18 @@ group('Przegląd 2026-11-08', () => {
             assert(!page.includes('onclick="openDebtCollectorPanel()"') && !page.includes('onclick="openPawnShopPanel()" class="btn-secondary btn-sm"'), 'bez przycisków pod zobowiązaniami');
         } finally { closeInternet(); isIntroActive = intro; isGamePaused = paused; Object.assign(internetState, state); }
     });
+    test('0.17.1: umorzenie bez gotówki zostawia klienta z resztką, JU klientów = JU funduszu', () => {
+        resetWorld([makeCompany('AAA')]); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        const client = playerFund.clients[0], liq = forceLiquidation;
+        forceLiquidation = () => 0;
+        try {
+            playerCash = getFundNav() * (client.units - 0.3);
+            redeemClientUnits(client, client.units);
+            const sum = playerFund.clients.reduce((a, c) => a + c.units, 0);
+            assert(Math.abs(sum - playerFund.units) < 1e-6, `JU klientów ${sum} = JU funduszu ${playerFund.units}`);
+            assert(playerFund.clients.includes(client) || client.units < 1e-6, 'klient znika tylko bez udziałów');
+        } finally { forceLiquidation = liq; }
+    });
     test('Bank Bank i biernik giełd', () => {
         assertEq(getBankLabel({ name: 'Bank Powszechny' }), 'Bank Powszechny', 'bez podwójnego słowa');
         assertEq(getBankLabel({ name: 'Galeria Bankowa' }), 'Bank Galeria Bankowa', 'z przedrostkiem');
