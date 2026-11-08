@@ -5718,3 +5718,9 @@ body.dark-mode #stock-table tr.sector-subheader td, #stock-table tr.sector-subhe
 
 /* Przegląd 2026-11-08 pkt 6: wartości paska ukryte do końca inicjalizacji (bez mignięcia 100,00 PLN i „—”) */
 .topbar-kpi-group.is-loading .topbar-kpi-val { visibility: hidden; }
+/* Przegląd 2026-11-08 pkt 8–9: pasek filtrów tylko na telefonie, filtry zwinięte do kliknięcia */
+.market-mobile-bar { display: none; }
+@media (max-width: 640px) {
+  .market-mobile-bar { display: flex; margin-block: var(--space-2); }
+  .market-filters:not(.is-open) { display: none; }
+}

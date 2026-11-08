@@ -2281,13 +2281,20 @@ function displayStocks(previousInputValues = {}) {
     // 0.14.5: możliwość wyłączenia grupowania według kategorii — płaska lista i sortowanie po cenie w całej giełdzie.
     const isGroupedBySector = sectorFilterState.grouped !== false;
     const sectorOf = new Map(stocksOnThisExchange.map(stock => [stock, isForeignRow(stock) ? stock.sectors[0][0] : getMainSector(stock)]));
+    // przegląd 2026-11-08 pkt 10: grupa od 2 spółek; sektor z 1 spółką trafia do wspólnej grupy „Pozostałe” na końcu giełdy
+    if (isGroupedBySector) {
+      const perSector = new Map();
+      for (const s of stocksOnThisExchange) perSector.set(sectorOf.get(s), (perSector.get(sectorOf.get(s)) || 0) + 1);
+      for (const s of stocksOnThisExchange) if (perSector.get(sectorOf.get(s)) < 2) sectorOf.set(s, null);
+    }
     const countryDir = countrySortState === 'asc' ? 1 : countrySortState === 'desc' ? -1 : 0;
     const byCountry = (a, b) => countryDir ? rowCountry(a).localeCompare(rowCountry(b)) * countryDir : 0;
     const priceDir = currentSortState === 'price_asc' ? 1 : currentSortState === 'price_desc' ? -1 : 0;
 
     if (isGroupedBySector) {
+      const orderOf = stock => sectorOf.get(stock) ? getSectorDisplayOrder(sectorOf.get(stock)) : Infinity; // „Pozostałe” na końcu
       stocksOnThisExchange.sort((a, b) =>
-        (getSectorDisplayOrder(sectorOf.get(a)) - getSectorDisplayOrder(sectorOf.get(b))) || byCountry(a, b) || (priceDir ? (rowPrice(a) - rowPrice(b)) * priceDir : 0));
+        ((orderOf(a) - orderOf(b)) || 0) || byCountry(a, b) || (priceDir ? (rowPrice(a) - rowPrice(b)) * priceDir : 0));
     } else if (priceDir || countryDir) {
       stocksOnThisExchange.sort((a, b) => byCountry(a, b) || (priceDir ? (rowPrice(a) - rowPrice(b)) * priceDir : 0));
     }
@@ -2335,6 +2342,7 @@ function displayStocks(previousInputValues = {}) {
     });
   });
 
+  if (typeof updateMarketFiltersButton === 'function') updateMarketFiltersButton();
   const countryBtn = document.getElementById('table-country-sort');
   if (countryBtn) { countryBtn.textContent = countrySortState === 'asc' ? 'Kraj ▲' : countrySortState === 'desc' ? 'Kraj ▼' : 'Kraj'; countryBtn.setAttribute('aria-pressed', String(countrySortState !== 'none')); }
   if (favoritesOnlyFilter && !playerProfile?.favorites?.length) {
@@ -9460,4 +9468,48 @@ function setSelectedMarket(marketId) {
     if (typeof displayStocks === 'function') {
         displayStocks(typeof getCurrentInputValues === 'function' ? getCurrentInputValues() : {});
     }
+}
+
+// Przegląd 2026-11-08 pkt 8–9: na telefonie filtry rynku zwinięte w przycisk „Filtry (n)”, przycisk „Mój fundusz” przewija do panelu.
+function getActiveMarketFilterCount() {
+    let n = 0;
+    if (typeof sectorFilterState === 'object' && sectorFilterState) {
+        if (sectorFilterState.sector && sectorFilterState.sector !== 'all') n++;
+        if (sectorFilterState.subsector) n++;
+        if (sectorFilterState.type && sectorFilterState.type !== 'all') n++;
+        if (sectorFilterState.secondary) n++;
+        if (sectorFilterState.grouped === false) n++;
+    }
+    if (typeof ownedOnlyFilter !== 'undefined' && ownedOnlyFilter) n++;
+    if (typeof favoritesOnlyFilter !== 'undefined' && favoritesOnlyFilter) n++;
+    const level = document.querySelector('.market-level-tab.active')?.dataset.level;
+    if (level && level !== 'ALL') n++;
+    return n;
+}
+function updateMarketFiltersButton() {
+    const btn = document.getElementById('market-filters-btn');
+    if (btn) btn.textContent = `Filtry (${getActiveMarketFilterCount()})`;
+}
+function toggleMarketFilters(force) {
+    const box = document.getElementById('market-filters'), btn = document.getElementById('market-filters-btn');
+    if (!box || !btn) return;
+    const open = typeof force === 'boolean' ? force : !box.classList.contains('is-open');
+    box.classList.toggle('is-open', open);
+    btn.setAttribute('aria-expanded', String(open));
+    updateMarketFiltersButton();
+}
+function scrollToMyFund() {
+    toggleMarketFilters(false);
+    document.getElementById('portfolio')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// Przegląd 2026-11-08 pkt 7: zwijany nagłówek na telefonie (≤ 640 px) po przewinięciu o 40 px; zostaje sama gotówka (CSS .topbar.is-compact)
+if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+    const updateCompactTopbar = () => {
+        const bar = document.getElementById('topbar');
+        if (!bar) return;
+        bar.classList.toggle('is-compact', window.matchMedia('(max-width: 640px)').matches && window.scrollY > 40);
+    };
+    window.addEventListener('scroll', updateCompactTopbar, { passive: true });
+    window.addEventListener('resize', updateCompactTopbar, { passive: true });
 }
