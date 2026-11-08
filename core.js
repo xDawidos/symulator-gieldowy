@@ -2051,7 +2051,7 @@ const SUBSECTOR_START_ASSIGNMENTS = {
     CFL: ['Transport i logistyka', 'Lotnictwo'],   // CargoFLY
     PKC: ['Transport i logistyka', 'Lądowy'],      // PKP Cargo
     TIR: ['Transport i logistyka', 'Lądowy'],      // Tir-Pol Spedycja
-    KWM: ['Przemysł', 'Wydobycie'],                // 0.17.3: Kopalnie Węgla Mine
+    KWM: ['Przemysł', 'Wydobycie'],                // 0.17.3: Kopalnie Węgla
     STM: ['Przemysł', 'Przemysł ciężki'],          // Stocznia Morska
     BTX: ['Przemysł', 'Przemysł ciężki'],          // Betonex
     ORT: ['Technologia', 'Telekomunikacja']        // Orzeł Telekom

@@ -6238,6 +6238,30 @@ group('0.17.2 E10: widoki', () => {
     });
 });
 
+group('Przegląd 2026-11-08', () => {
+    test('nazwy i tickery: stary zapis dostaje nowe nazwy i symbole, odwołania po symbolu zostają', () => {
+        const old = { version: 22, stocks: [{ symbol: 'BKINV2', name: 'Galeria Bankowa' }, { symbol: 'QBF', name: 'Quick Buissness Finance' }, { symbol: 'WRN', name: 'WRONA' }],
+            playerPortfolio: { BKINV2: { shares: 10 }, BKCORP2: { shares: 3 }, QBF: { shares: 5 } }, history: [{ symbol: 'BKCORP2', text: 'kupno' }],
+            playerProfile: { tied: { promises: [{ goal: { symbol: 'BKINV2' } }] } }, mailbox: { tied: [{ symbol: 'BKCORP2', text: 'post' }] } };
+        const s = migrateLegacyBankSymbols(old);
+        assertEq(s.stocks[0].symbol, 'GBK', 'ticker banku');
+        assertEq(s.stocks[1].name, 'Quick Business Finance', 'nazwa');
+        assertEq(s.stocks[2].name, 'Wrona', 'bez wersalików');
+        assert(s.playerPortfolio.GBK.shares === 10 && s.playerPortfolio.KRUP.shares === 3 && s.playerPortfolio.QBF.shares === 5, 'portfel');
+        assertEq(s.history[0].symbol, 'KRUP', 'historia');
+        assertEq(s.playerProfile.tied.promises[0].goal.symbol, 'GBK', 'obietnica');
+        assertEq(s.mailbox.tied[0].symbol, 'KRUP', 'Tied');
+        assertEq(migrateLegacyBankSymbols({ stocks: [{ symbol: 'QBF', name: 'Quick Business Finance' }] }).stocks[0].name, 'Quick Business Finance', 'nowy zapis bez zmian');
+        for (const name of Object.keys(LEGACY_COMPANY_NAMES)) assert(!initialStocks.some(s => s.name === name) && !(typeof commercialBanks !== 'undefined' && commercialBanks.some(b => b.name === name)), `bez starej nazwy: ${name}`);
+    });
+    test('Bank Bank i biernik giełd', () => {
+        assertEq(getBankLabel({ name: 'Bank Powszechny' }), 'Bank Powszechny', 'bez podwójnego słowa');
+        assertEq(getBankLabel({ name: 'Galeria Bankowa' }), 'Bank Galeria Bankowa', 'z przedrostkiem');
+        assertEq(getExchangeAcc('EMERALD'), 'Giełdę Szmaragdową', 'biernik');
+        for (const key of Object.keys(exchanges)) assert(exchanges[key].nameAcc || !exchanges[key].name.startsWith('Giełda'), `biernik ${key}`);
+    });
+});
+
 group('0.14 T3: rozszerzenie o nowy segment', () => {
     function firm(symbol, sectors = ['Technologia'], opts = {}) {
         const s = makeCompany(symbol, { sector: sectors, cash: opts.cash ?? 2_000_000 });

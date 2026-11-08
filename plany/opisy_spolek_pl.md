@@ -16,7 +16,7 @@ Do `COMPANY_DESCRIPTIONS` w `companies.js` trafią dopiero po akceptacji użytko
 | LEK | Lek-Pol | Krajowy producent leków bez recepty, czyli apteczka co drugiego domu. Spółka defensywna: sprzedaje w każdej fazie cyklu, a kurs reaguje głównie na ustawy o refundacji. |
 | DPB | DVD Project Black | Studio gier, które każdą premierę zapowiada „już wkrótce”, a potem długo łata. Kurs rośnie przed premierą i potrafi gwałtownie spaść tuż po niej. |
 | WPY | WayPlay | Wydawca gier mobilnych, w których najtrudniejszy poziom to rezygnacja z subskrypcji. Przychody zależą od kilku hitów i od nastrojów młodych graczy. |
-| KRO | Krajoznawsto Obce | Biuro podróży z literówką w nazwie i zaskakująco dobrą ofertą. Sprzedaje wycieczki zagraniczne, więc cierpi przy słabym złotym i drogich biletach. |
+| KRO | Krajoznawstwo Obce | Biuro podróży z literówką w nazwie i zaskakująco dobrą ofertą. Sprzedaje wycieczki zagraniczne, więc cierpi przy słabym złotym i drogich biletach. |
 | PLX | Plandex | Wynajem campingów i plandek na złą pogodę. Zarabia, gdy Polacy zostają na urlopie w kraju, a w deszczowe lato liczy na klientów kupujących plandeki. |
 | BTX | Betonex | Producent betonu i prefabrykatów, odporny na wszystko oprócz recesji. Rośnie razem z budowami i projektami infrastruktury, a drogi gaz i węgiel obniżają marżę. |
 | ANN | Annesco | Rodzinny zakład przemysłowy, w którym prezes do dziś osobiście sprawdza śruby. Zależy od cyklu w przemyśle i od ceny metali. |

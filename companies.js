@@ -1269,7 +1269,7 @@ const ALL_COMMERCIAL_BANKS_DEFINITIONS = [
 
     // Korporacyjne (3)
     { id: 'corp1', name: 'Syriusz Corp.', type: BANK_TYPES.CORPORATE, initialCapital: 7000000, reserveRatio: 0.15, baseInterestRateMargin: 0.015 },
-    { id: 'corp2', name: 'Krupiewicz Group S.A', type: BANK_TYPES.CORPORATE, initialCapital: 6500000, reserveRatio: 0.16, baseInterestRateMargin: 0.016 },
+    { id: 'corp2', name: 'Krupiewicz Group S.A.', type: BANK_TYPES.CORPORATE, initialCapital: 6500000, reserveRatio: 0.16, baseInterestRateMargin: 0.016 },
     { id: 'corp3', name: 'Biuro Pokrytego Investment Group', type: BANK_TYPES.CORPORATE, initialCapital: 6000000, reserveRatio: 0.14, baseInterestRateMargin: 0.014 },
 
     // Uniwersalny (2)
@@ -1405,7 +1405,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-    name: 'Kopalnie Węgla Mine', price: 35.00, volatilityFactor: 1.6, symbol: 'KWM', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
+    name: 'Kopalnie Węgla', price: 35.00, volatilityFactor: 1.6, symbol: 'KWM', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Przemysł'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -1524,7 +1524,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'Krajoznawsto Obce', price: 78.00, volatilityFactor: 2.5, symbol: 'KRO', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
+        name: 'Krajoznawstwo Obce', price: 78.00, volatilityFactor: 2.5, symbol: 'KRO', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Turystyka'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -1802,7 +1802,7 @@ const initialStocks = [
     },
     // --- NOWE SPÓŁKI: FINANSE KONSUMENCKIE ---
     {
-        name: 'WRONA',
+        name: 'Wrona',
         price: 650.00, volatilityFactor: 1.8, symbol: 'WRN', exchange: 'GOLD',
         totalShares: 90000, maxShares: 100000, sharesHeld: 0,
         sector: ['Finanse'], segments: [{ sector: 'Finanse', subsector: 'Pożyczki konsumenckie', share: 1 }], // T1a: dawne Finanse Konsumenckie
@@ -1814,7 +1814,7 @@ const initialStocks = [
         bankAccountId: null, isBankStock: false
     },
     {
-        name: 'LOMBARDEX S.A.',
+        name: 'Lombardex S.A.',
         price: 65.00, volatilityFactor: 1.5, symbol: 'LOM', exchange: 'SILVER',
         totalShares: 35000, maxShares: 45000, sharesHeld: 0,
         sector: ['Finanse'], segments: [{ sector: 'Finanse', subsector: 'Pożyczki konsumenckie', share: 1 }], // T1a: dawne Finanse Konsumenckie
@@ -2050,7 +2050,7 @@ const initialStocks = [
     },
 
     {
-        name: 'Hospital rental',
+        name: 'Wynajem Szpitali',
         price: 1350.00, volatilityFactor: 0.18, symbol: 'HOR', exchange: 'PLATINUM',
     totalShares: 800000, maxShares: 1500000, sharesHeld: 0, priceHistory: [], balanceSheet: {
         assets: 0,          // Aktywa (majątek firmy)
@@ -2095,7 +2095,7 @@ const initialStocks = [
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) candlestickHistory: [], lineHistory: [], playerTransactions: [], priceAlerts: { buy: null, sell: null }
     },
     {
-        name: 'Quick Buissness Finance',
+        name: 'Quick Business Finance',
         price: 150.00, volatilityFactor: 0.8, symbol: 'QBF', exchange: 'GOLD',
         totalShares: 90000, maxShares: 90000, sharesHeld: 0,
         sector: ['Finanse'], financialHealth: 2, lastReport: 'brak', cash: 13500000,
@@ -13363,12 +13363,18 @@ function getCompanyOrigin(stock) {
     return stock.origin || COMPANY_ORIGIN_OVERRIDES[stock.symbol] || (PL_ORIGIN_SYMBOLS.includes(stock.symbol) ? 'PL' : 'UNI');
 }
 // 0.16.11 K0: symbole giełdowe banków startowych (stare BKINV1/BKINV3/BKCORP3 → SPR/RPK/BPIG); pozostałe BK + id.
-const BANK_SYMBOL_OVERRIDES = { inv1: 'SPR', inv3: 'RPK', corp3: 'BPIG' };
-const LEGACY_BANK_SYMBOLS = { BKINV1: 'SPR', BKINV3: 'RPK', BKCORP3: 'BPIG' };
+const BANK_SYMBOL_OVERRIDES = { inv1: 'SPR', inv2: 'GBK', inv3: 'RPK', corp2: 'KRUP', corp3: 'BPIG' };
+const LEGACY_BANK_SYMBOLS = { BKINV1: 'SPR', BKINV2: 'GBK', BKINV3: 'RPK', BKCORP2: 'KRUP', BKCORP3: 'BPIG' }; // przegląd 2026-11-08: GBK, KRUP
+// Przegląd 2026-11-08 pkt 4: poprawione nazwy spółek startowych (stary zapis dostaje nowe nazwy przy wczytaniu).
+const LEGACY_COMPANY_NAMES = { 'Quick Buissness Finance': 'Quick Business Finance', 'Krajoznawsto Obce': 'Krajoznawstwo Obce', 'Hospital rental': 'Wynajem Szpitali',
+    'Kopalnie Węgla Mine': 'Kopalnie Węgla', 'Krupiewicz Group S.A': 'Krupiewicz Group S.A.', 'WRONA': 'Wrona', 'LOMBARDEX S.A.': 'Lombardex S.A.' };
 function getBankSymbol(bank) { return bank.symbol || BANK_SYMBOL_OVERRIDES[bank.id] || `BK${bank.id.toUpperCase()}`; }
 /** Migracja zapisu: stare symbole banków w całym snapshocie (klucze portfeli i wartości symbol). */
 function migrateLegacyBankSymbols(snapshot) {
     const json = JSON.stringify(snapshot);
-    if (!/"BK(INV1|INV3|CORP3)"/.test(json)) return snapshot;
-    return JSON.parse(json.replace(/"(BKINV1|BKINV3|BKCORP3)"/g, (m, k) => `"${LEGACY_BANK_SYMBOLS[k]}"`));
+    const symbols = new RegExp(`"(${Object.keys(LEGACY_BANK_SYMBOLS).join('|')})"`, 'g');
+    const names = new RegExp(`"(${Object.keys(LEGACY_COMPANY_NAMES).map(name => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})"`, 'g');
+    if (!symbols.test(json) && !names.test(json)) return snapshot;
+    // pełne wartości w cudzysłowie: klucze portfeli, pola symbol i name, odwołania w obietnicach i postach Tied
+    return JSON.parse(json.replace(symbols, (m, key) => `"${LEGACY_BANK_SYMBOLS[key]}"`).replace(names, (m, key) => `"${LEGACY_COMPANY_NAMES[key]}"`));
 }
