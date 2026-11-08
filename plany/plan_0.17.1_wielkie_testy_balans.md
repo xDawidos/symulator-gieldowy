@@ -51,7 +51,7 @@ Kolejność: T0 → T1 → … → T7. **Commit po każdej części.** Zmiany w 
 | **T4** | **Lista strojeń i błędów** (raport `raporty/balans_0.17.1.md`): priorytet, przyczyna, koszt; decyzje użytkownika |
 | **T5** | Strojenie i poprawki (po commicie na pozycję; po każdej mini-pomiar ×200) |
 | **T6** | Powtórna seria po strojeniu |
-| **T7** | Raport końcowy `raporty/kontrola_0.17.1.md`, wiersz w mapie; decyzja o wejściu 0.17.2 / 0.18 |
+| **T7** | Raport końcowy `raporty/kontrola_0.17.1.md`, wiersz w mapie; decyzja o wejściu 0.18 |
 
 ## Jak sprawdzimy
 
