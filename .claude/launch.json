@@ -4,21 +4,52 @@
     {
       "name": "gra",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "8765", "--bind", "127.0.0.1"],
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8765",
+        "--bind",
+        "127.0.0.1"
+      ],
       "port": 8765
     },
     {
       "name": "gra-design",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "8777", "--bind", "127.0.0.1"],
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8777",
+        "--bind",
+        "127.0.0.1"
+      ],
       "port": 8777,
       "autoPort": false
     },
     {
       "name": "gra-design2",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "8791", "--bind", "127.0.0.1"],
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8791",
+        "--bind",
+        "127.0.0.1"
+      ],
       "port": 8791,
+      "autoPort": false
+    },
+    {
+      "name": "gra-kod",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8781",
+        "--bind",
+        "127.0.0.1"
+      ],
+      "port": 8781,
       "autoPort": false
     }
   ]
