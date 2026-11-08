@@ -197,6 +197,18 @@ function expandSavedBonds(saved) {
 }
 
 /** Buduje obiekt zapisu (bez zapisywania go) — używane przez saveGameState i testy. compact: 0 / 1 / 2 (lub true = 1). */
+/** 0.17.1: poziomy indeksów z zapisu; łańcuch GIG idzie dalej od tego poziomu. Stary zapis bez pola: GIG z ostatniego tygodnia okresu funduszu. */
+function restoreIndexLevels(saved) {
+    const byId = Object.fromEntries((Array.isArray(saved) ? saved : []).map(item => [item?.id, Number(item?.value)]));
+    if (!(byId.GIG > 0) && playerFund?.current?.weeklyBenchmarks?.length) byId.GIG = Number(playerFund.current.weeklyBenchmarks.at(-1));
+    for (const index of marketIndexes) {
+        if (!(byId[index.id] > 0)) continue;
+        index.value = byId[index.id];
+        index.change = 0;
+        if (index.id === 'GIG') index.lastPrices = Object.fromEntries(stocks.filter(stock => !stock.assetType && !stock.isBankrupt && stock.price > 0).map(stock => [stock.symbol, stock.price]));
+    }
+}
+
 function buildSaveSnapshot({ compact = 0 } = {}) {
     const now = Date.now();
     const level = compact === true ? 1 : Math.max(0, Math.min(2, Number(compact) || 0));
@@ -208,6 +220,7 @@ function buildSaveSnapshot({ compact = 0 } = {}) {
         currentSpeedMultiplier: SAVED_SPEEDS.includes(currentSpeedMultiplier) ? currentSpeedMultiplier : 1, // T0: prędkości testowe nie trafiają do zapisu
         playerCash,
         governmentTreasury,
+        indexes: marketIndexes.map(index => ({ id: index.id, value: index.value })), // 0.17.1: poziom indeksów (wcześniej po wczytaniu GIG liczył się od zera, a okres funduszu porównywał się ze starym poziomem)
         stocks: serializeStocksForSave(level),
         commercialBanks: serializeWithStockRefs(commercialBanks),
         playerPortfolio: serializeWithStockRefs(playerPortfolio),
@@ -819,6 +832,7 @@ function applySaveSnapshot(snapshot) {
     try { reconciled = reconcileSharesHeld(); } finally { ghostTrimSource = 'game'; } // audyt A1: akcje w obrocie = suma posiadaczy
     if (reconciled) report.warnings.push(`Uzgodniono akcje w obrocie w ${reconciled} spółkach (audyt A1).`);
 
+    restoreIndexLevels(snapshot.indexes); // 0.17.1: po funduszu i spółkach (stary zapis bierze poziom z tygodni okresu funduszu)
     syncGameChartClock(); // 0.15.4 P2: zegar osi wykresów nie cofa się za zapisane punkty
     report.ok = true;
     return report;

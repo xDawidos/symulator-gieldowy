@@ -6319,6 +6319,23 @@ group('Przegląd 2026-11-08', () => {
             assert(playerFund.clients.includes(client) || client.units < 1e-6, 'klient znika tylko bez udziałów');
         } finally { forceLiquidation = liq; }
     });
+    test('0.17.1: poziom GIG przechodzi przez zapis; stary zapis bierze poziom z tygodni okresu funduszu', () => {
+        resetWorld([makeCompany('AAA'), makeCompany('BBB')]); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        const gig = marketIndexes.find(i => i.id === 'GIG'), keep = gig.value;
+        try {
+            gig.value = 2874;
+            const snap = JSON.parse(JSON.stringify(buildSaveSnapshot()));
+            assertEq(snap.indexes.find(i => i.id === 'GIG').value, 2874, 'w zapisie');
+            gig.value = 0;
+            restoreIndexLevels(snap.indexes);
+            assertEq(gig.value, 2874, 'po wczytaniu');
+            updateMarketIndexes();
+            assert(Math.abs(gig.value / 2874 - 1) < 0.2, 'łańcuch idzie dalej od zapisanego poziomu');
+            gig.value = 0; playerFund.current.weeklyBenchmarks = [1500, 1600];
+            restoreIndexLevels(undefined);
+            assertEq(gig.value, 1600, 'stary zapis');
+        } finally { gig.value = keep; }
+    });
     test('Bank Bank i biernik giełd', () => {
         assertEq(getBankLabel({ name: 'Bank Powszechny' }), 'Bank Powszechny', 'bez podwójnego słowa');
         assertEq(getBankLabel({ name: 'Galeria Bankowa' }), 'Bank Galeria Bankowa', 'z przedrostkiem');
