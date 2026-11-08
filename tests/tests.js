@@ -6106,6 +6106,7 @@ group('0.17.2 E6-E9: poziom życia, OZE, atom, opinia, technologie', () => {
     test('technologie: istniejące pozycje obniżają emisje, Smart Grid zużycie', () => {
         const e = fresh(), s = by('COAL'), demand = getEnergyDemand(e);
         s.research = { completedInvestments: { CHEM_CO2_CAPTURE_1: 1 } };
+        clearEmissionCache();
         assert(Math.abs(getStockEmissionFactor(s) - 0.85) < 1e-9, 'wychwyt');
         s.research.completedInvestments.ENERGY_SMART_GRID_1 = 1;
         assert(getEnergyDemand(e) < demand, 'Smart Grid');

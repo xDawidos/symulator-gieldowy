@@ -16,4 +16,40 @@ Gałąź `claude/impl-017-s0b-891539`, baza po scaleniu zmiany-AI 965ad54. Nie s
 
 - **Podwykonawcy `energy`:** zostaje minimum 3, nie 2. `auctionMin` to 3, a przy 2 firmach zmienia się wynik aukcji budów. Geologów jest 2, bo ich zlecenia nie idą przez aukcję.
 - **E4 i E5, E6–E9:** jeden commit na grupę, bo kod jest przepleciony.
-- **Widoki:** `energy_ui.js` wg projektu 11. Karta kraju startowego nie istnieje w grze, więc wiersze Poziom życia i Opinia są w zakładce Kraj. NIE SPRAWDZONE: widok w przeglądarce (desktop, 390 px), seria ×200, strojenie liczb, baza E0.
+- **Widoki:** `energy_ui.js` wg projektu 11. Karta kraju startowego nie istnieje w grze, więc wiersze Poziom życia i Opinia są w zakładce Kraj.
+
+## Baza E0 (commit 965ad54 z sondą, 120 gier, 27 kw., preset `fundusz-gig`)
+
+Sonda w trybie cichym tylko czyta. Przez grę przychody Energii rosną ×1,11, odbiorców prądu ×1,07, poziom cen ×1,22, ludność 37,8 → 39,0 mln. Budynków energetycznych z katalogu nie ma w żadnej grze, więc moc rośnie tylko przez bloki i projekty państwa. Na starcie zużycie i moc równoważą się z założenia (rezerwa 12%).
+
+## Strojenie
+
+- **Miks startowy:** pierwsza próba dała 97% OZE, bo moc szła za przychodem, a Bałtycka Energia ma największy przychód. Miks startowy jest stały: węgiel 55%, gaz 15%, atom 0%, OZE 30%. W typie moc dzieli przychód.
+- **Zużycie:** z samego PKB rosło o 4% przez grę i rynek prądu nie pracował. Doszedł trend 2% rocznie (elektryfikacja), emisje elektrowni idą za produkcją prądu.
+- **Pierwsza kontrola:** GIG +1,31 pp (poza bramką), przychody Energii ×1,71. Przychód z nowego bloku zmniejszony do 35% przyrostu mocy, opłata za emisje 0; 0,3; 0,7; 1,2; 1,8% (było 0,6–2,5%), Narodowy Atom po 20 kw. dopłat i 3% na kwartał.
+- **Runner:** Edge w nowym profilu otwierał kartę Adblock Plus i przebiegi stały. `run_przebiegi.mjs` ma teraz `--disable-extensions`. Sonda E0 miała `${…}` w szablonie presetu, co psuło skrypt.
+
+## Kontrola ×200 (0ef0495 względem bazy, po 120 gier)
+
+| Miara | Baza | Nowa | Cel | Wynik |
+|---|---|---|---|---|
+| GIG | 10,28% | 10,91% (Δ +0,62, SE 0,49) | ±1 pp | OK |
+| Średnia odchyłek marż (19 sektorów) | | 0,16 pp (SE 0,12) | 0 ± 0,3 pp | OK |
+| Indeks zysków | 7,10% | 7,24% | w widełkach | OK |
+| Marża końcowa | 22,75% | 22,47% | w widełkach | OK |
+| Zapis, średnia | 2 421 327 | 2 423 318 (+0,1%) | do 2% | OK |
+| Błędy JS, niezmienniki | 0 | 0 | 0 | OK |
+| Czas kroku, sekwencyjnie | patrz niżej | | do 2% | |
+| Blackouty | | 0,13 na grę, 16 gier z 120 | rzadkie | OK |
+| Nowe spółki energetyczne | | miejskie 0,02 na grę, Narodowy Atom 23 z 120 | | |
+| Bloki na grę | | 3,9 (w tym projekty państwa 0,02) | | |
+| Poziom życia na koniec | | p10 59,9, mediana 61,6, p90 63,6 (start ok. 50) | | |
+| Zanieczyszczenie | | 40 → 37 | | |
+| Zieloni | | 32 z 120 gier (start 25% i zamiany) | | |
+| Rządzący na koniec | | Koalicja Rynkowa 57, Blok Państwowy 53, Ludowcy 8, Socjaldemokraci 2 | | |
+| Miks na koniec | | węgiel 54%, gaz 15%, atom 1,5%, OZE 30% | | |
+
+- **Chemia −1,48 pp (SE 0,48):** jedyny sektor wyraźnie niżej. Składają się na to opłata za emisje (0,7 × 0,3%) i mniejszy wsad gazu na rzecz prądu. Średnia sektorów jest w bramce, więc nie stroiłem tego osobno.
+- **Medycyna +1,33 pp (SE 0,49):** bez związku z energetyką, prawdopodobnie szum.
+- **Zanieczyszczenie spada:** ESG, kary i technologie obniżają emisje szybciej, niż rośnie produkcja. Założenie „produkcja = dodatkowy skutek zanieczyszczeń” działa w kodzie, ale w seriach wskaźnik nie dochodzi do 80, więc skutek się nie pojawia.
+- **Pierwsza seria nowej wersji** (przed strojeniem) miała 4 naruszenia „ujemna gotówka funduszu” botów w jednej grze. Po strojeniu 0, w bazie 1 ujemna gotówka. Nie badałem przyczyny.

@@ -269,6 +269,7 @@ function finishPowerBlock(stock) {
 }
 function processPowerBuilds(e) {
     const quarter = getEnergyQuarter(), deviation = e.price / getEnergyTrend(e) - 1;
+    let building = null; // moc w budowie liczona raz, od nowa po starcie bloku
     for (const stock of stocks) {
         if (stock.isBankrupt || !stock.power || stock.power.type === 'nuclear') continue;
         if (stock.power.build) {
@@ -277,11 +278,12 @@ function processPowerBuilds(e) {
             continue;
         }
         if (typeof canFundControlAgm === 'function' && canFundControlAgm(stock)) continue; // właściciel decyduje sam
-        const reserve = (e.capacity + getEnergyBuilding(e)) / Math.max(1, e.demand);
+        if (building === null) building = getEnergyBuilding(e);
+        const reserve = (e.capacity + building) / Math.max(1, e.demand);
         const need = clampValue((ENERGY_RULES.targetReserve - reserve) / 0.05, 0, 1);
         const chance = ENERGY_RULES.buildChance * need * (1 + Math.max(0, deviation) * 2);
         const cashOk = (Number(stock.cash) || 0) >= getPowerBlockCost(stock, undefined, e) * ENERGY_RULES.minCashShare;
-        if (chance > 0 && cashOk && Math.random() < chance) startPowerBlock(stock);
+        if (chance > 0 && cashOk && Math.random() < chance && startPowerBlock(stock)) building = null;
     }
 }
 /** Budynek energetyczny z katalogu daje moc spółce (typ spółki, wiatr i słońce zawsze OZE). */
@@ -438,13 +440,21 @@ const getEnergyOfficeLevel = () => Number(oversight?.energy?.level) || 0;
 function getClimateFee() { return CLIMATE_FEES[Number(society?.laws?.climatePolicy ?? SOCIAL_LAWS.climatePolicy.start)] || 0; }
 function getStockEcoCut(stock) { return Math.min(ENERGY_OFFICE_RULES.ecoMax, (Number(stock?.ecoCut) || 0) + getStockTechCut(stock)); }
 /** Emisyjność spółki: średnia sektorów, prąd według typu elektrowni, po obniżkach (technologie, ESG). */
+// shortcut: emisyjność liczona raz na kwartał; zmiana segmentu w trakcie kwartału działa od następnego, ESG czyści pamięć od razu
+let emissionCache = { quarter: null, map: new WeakMap() };
+function clearEmissionCache() { emissionCache = { quarter: null, map: new WeakMap() }; }
 function getStockEmissionFactor(stock) {
     if (!stock || stock.assetType || stock.isBankStock) return 0;
+    const quarter = getEnergyQuarter();
+    if (emissionCache.quarter !== quarter) emissionCache = { quarter, map: new WeakMap() };
+    const cached = emissionCache.map.get(stock);
+    if (cached !== undefined) return cached;
     const factor = getStockSegments(stock).reduce((sum, seg) => {
         const power = seg.sector === 'Energia' && stock.power && !ENERGY_NO_POWER_SUBSECTORS.includes(seg.subsector);
         return sum + (power ? ENERGY_TYPES[stock.power.type].emission : SECTOR_EMISSIONS[seg.sector] || 0) * seg.share;
-    }, 0);
-    return factor * (1 - getStockEcoCut(stock));
+    }, 0) * (1 - getStockEcoCut(stock));
+    emissionCache.map.set(stock, factor);
+    return factor;
 }
 /** Emisje kwartału: produkcja (przychód w cenach startowych) × emisyjność. */
 function getStockEmissions(stock) {
@@ -526,6 +536,7 @@ function orderEsg(stock) {
     if (typeof coverNegativeCash === 'function') coverNegativeCash(stock);
     stock.ecoCut = (Number(stock.ecoCut) || 0) + ENERGY_OFFICE_RULES.esgCut;
     stock.esg = true;
+    clearEmissionCache();
     society.energy.stats.esg = (society.energy.stats.esg || 0) + 1;
     if (typeof unlockAcademyEntry === 'function' && isPlayerHolding(stock)) unlockAcademyEntry('esg', stock.name);
     logEvent(`🌿 ${stock.name} wchodzi na ścieżkę ESG: wyższe koszty dziś, niższe emisje na stałe.`, 'company');
@@ -540,8 +551,8 @@ function processAiEsg(e) {
 
 function fillEnergyText(text, stock) { return text.replace('{name}', stock?.name || 'spółki'); }
 function pickPolluter() {
-    const top = stocks.filter(stock => !stock.isBankrupt && !stock.assetType && getStockEmissionFactor(stock) > 0.3).sort((a, b) => getStockEmissions(b) - getStockEmissions(a)).slice(0, 6);
-    return top.length ? getRandomElement(top) : null;
+    const top = stocks.filter(stock => !stock.isBankrupt && !stock.assetType && getStockEmissionFactor(stock) > 0.3).map(stock => [stock, getStockEmissions(stock)]).sort((a, b) => b[1] - a[1]).slice(0, 6);
+    return top.length ? getRandomElement(top)[0] : null;
 }
 /** Zdarzenia: najwyżej jedno na kwartał. */
 function runEnergyEvent(id, e = society.energy) {
@@ -583,7 +594,11 @@ function processEnergyEvents(e) {
 // ---------------------------------------------------------------------------------
 const LIFE_RULES = { factors: ['consumption', 'health', 'safety', 'education', 'information'], attractiveness: 0.1, population: 0.00001, vote: 0.3, voteMax: 3 };
 const LIFE_NAMES = { consumption: 'Konsumpcja i zadowolenie', health: 'Zdrowie', safety: 'Bezpieczeństwo', education: 'Edukacja i nauka', information: 'Informacja' };
-const countSectorStocks = sector => stocks.filter(stock => !stock.isBankrupt && !stock.assetType && getStockSegments(stock).some(seg => seg.sector === sector)).length;
+function countSectorStocks(sector) {
+    let n = 0;
+    for (const stock of stocks) if (!stock.isBankrupt && !stock.assetType && getStockSegments(stock).some(seg => seg.sector === sector)) n++;
+    return n;
+}
 /** 5 czynników 0–100 z istniejących wskaźników kraju. */
 function getLifeFactors(e = society.energy) {
     const satisfaction = typeof getAverageSatisfaction === 'function' ? getAverageSatisfaction() : 60;
@@ -703,6 +718,7 @@ const getBatteryMargin = () => Math.min(ENERGY_TECH_RULES.batteryMax, countTechO
 function processEnergyQuarterly() {
     if (typeof society !== 'object' || !society || !stocks?.length) return null;
     const e = ensureEnergy();
+    clearEmissionCache();
     syncPowerProducers(e);
     e.activity *= 1 + ENERGY_RULES.demandTrend + (Number(economyCycle?.gdpGrowth) || 0);
     e.demand = getEnergyDemand(e);
