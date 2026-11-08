@@ -12,7 +12,7 @@ const UEIE_LEVELS = [['Bez limitów', 'brak pomiaru'], ['Pomiar kraju', 'bez lim
 const LIFE_ICONS = { consumption: 'koszyk', health: 'serce', safety: 'tarcza', education: 'akademia', information: 'news' };
 const LIFE_WEAK = { consumption: 'niskie płace albo słabe zadowolenie', health: 'obniża zanieczyszczenie', safety: 'słabe służby albo obronność', education: 'mało nauki', information: 'korupcja i skandale' };
 
-const formatGw = mw => `${formatNumberPl((Number(mw) || 0) / 1000, 1)} GW`;
+const formatGw = mw => (Number(mw) || 0) < 1000 ? `${formatNumberPl(Number(mw) || 0, 0)} MW` : `${formatNumberPl((Number(mw) || 0) / 1000, 1)} GW`; // 0.17.1 U4: mały blok w MW, nie „0,0 GW”
 const scoreWord = (value, words) => words[Math.min(words.length - 1, Math.floor(clampValue(value, 0, 99.99) / 20))];
 const capitalize = text => text.charAt(0).toUpperCase() + text.slice(1);
 const signed = (value, digits = 0) => `${value >= 0 ? '▲ +' : '▼ −'}${formatNumberPl(Math.abs(value), digits)}`;
@@ -203,7 +203,7 @@ function renderPowerBlocks(stock) {
         if (next <= ENERGY_STATE_RULES.nuclearMaxBlocks) list.push(`<div class="en-block is-locked"><div class="en-block-top">${uiIcon('klodka', 16)}<strong>Blok ${next}</strong><span class="badge badge--neutral">Zablokowany</span></div><small>${next > 1 ? `Wymaga działającego bloku ${next - 1}.` : 'Zależy od decyzji spółki i państwa.'} Przychód +${Math.round(NUCLEAR_BLOCK_BOOSTS[Math.min(next, 3) - 1] * 100)}%.</small></div>`);
         return list.join('');
     }
-    const list = [`<div class="en-block is-run"><div class="en-block-top">${uiIcon('blok', 16)}<strong>Elektrownie ${escapeHtml(stock.name)}</strong><span class="badge badge--${power.outage ? 'down' : 'up'}">${power.outage ? 'Awaria' : `${uiIcon('ok', 12)} Działa`}</span></div><small>${formatGw(power.capacity)}${power.outage ? ` · moc −${formatGw(power.outage.lost)} do kw. ${power.outage.until}` : ''}</small></div>`];
+    const list = [`<div class="en-block is-run"><div class="en-block-top">${uiIcon('blok', 16)}<strong>Działające elektrownie</strong><span class="badge badge--${power.outage ? 'down' : 'up'}">${power.outage ? 'Awaria' : `${uiIcon('ok', 12)} Działa`}</span></div><small>${formatGw(power.capacity)}${power.outage ? ` · moc −${formatGw(power.outage.lost)} do kw. ${power.outage.until}` : ''}</small></div>`];
     if (power.build) {
         const build = power.build, done = build.quarters - Math.max(0, build.dueQ - quarter);
         list.push(`<div class="en-block is-build"><div class="en-block-top">${uiIcon('blok', 16)}<strong>${ENERGY_BLOCK_NAMES[build.type || power.type]}</strong><span class="badge badge--accent">${uiIcon('zegar', 12)} Budowa</span></div>${renderLimitMeter(done / build.quarters * 100, null, `Postęp budowy ${Math.round(done / build.quarters * 100)}%`)}<small>kw. ${done} z ${build.quarters} · +${formatGw(build.add)} · zapłacono ${formatZl(build.spent, 0)} z ${formatZl(build.cost, 0)}</small></div>`);
@@ -254,7 +254,7 @@ function renderEnergyManage(stock) {
     const fuel = power && ENERGY_TYPES[type].fuel;
     const kpi = power ? `<div class="en-gauges"><div class="cc-kpi"><span>Moc</span><strong>${formatGw(power.capacity)}</strong></div>
         <div class="cc-kpi"><span>Udział w kraju</span><strong>${formatNumberPl(power.capacity / Math.max(1, e.capacity) * 100, 1)}%</strong></div>
-        ${fuel ? `<div class="cc-kpi"><span>Wsad: ${escapeHtml(COMMODITY_DEFS[fuel].name.toLowerCase())}</span><strong>${formatNumberPl(getEnergyFuelPrice(fuel), 0)} ${escapeHtml(COMMODITY_DEFS[fuel].unit || '')}</strong></div>` : ''}
+        ${fuel ? `<div class="cc-kpi"><span>Wsad: ${escapeHtml(COMMODITY_DEFS[fuel].name.toLowerCase())}</span><strong>${formatNumberPl(getEnergyFuelPrice(fuel), 0)} USD za ${escapeHtml(COMMODITY_DEFS[fuel].unit || 'jednostkę')}</strong></div>` : ''}
         <div class="cc-kpi"><span>Koszt prądu</span><strong>${formatNumberPl(getTypePricePln(type, e), 0)} PLN/MWh</strong></div></div>` : '';
     const measured = getMeasuredEmissionFactor(stock), limit = getEmissionLimit(e);
     const over = measured !== null && Number.isFinite(limit) && measured > limit ? `<p class="alert alert--warn">${uiIcon('alert', 18)}<span><strong>Ponad limit UEiE.</strong> Grozi kara do ${formatZl(Math.round(getStockRevenue(stock) * ENERGY_OFFICE_RULES.fines[getEnergyOfficeLevel()]), 0)}. Niżej zejdziesz przez technologie albo ESG.</span></p>` : '';

@@ -304,7 +304,7 @@ function buyStock(symbol, quantity) {
     }
     if (typeof isTradingBlocked === 'function' && isTradingBlocked('player')) { showToast('Blokada handlu nałożona przez organy ścigania.', 'error'); return; }
     if (!canAccessExchange(stockToBuy.exchange, stockToBuy)) {
-        showToast(`Twoje stanowisko nie daje dostępu do ${typeof isEntryMarketStock === 'function' && isEntryMarketStock(stockToBuy) ? `rynku ${getMarketLabel(getStockMarket(stockToBuy))}` : `giełdy ${exchanges[stockToBuy.exchange]?.name || stockToBuy.exchange}`}. Awans otworzy kolejne giełdy.`, 'warning');
+        showToast(`Twoje stanowisko nie daje dostępu do ${typeof isEntryMarketStock === 'function' && isEntryMarketStock(stockToBuy) ? `rynku ${getMarketDef(getStockMarket(stockToBuy))?.name || getMarketLabel(getStockMarket(stockToBuy))}` : `giełdy ${exchanges[stockToBuy.exchange]?.name || stockToBuy.exchange}`}. Awans otworzy kolejne giełdy.`, 'warning');
         return;
     }
     if (stockToBuy.isTradeLocked) {

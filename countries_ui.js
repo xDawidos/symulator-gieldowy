@@ -117,7 +117,7 @@ function renderMarketsTab() {
     const joined = getJoinedCountries();
     if (!joined.length) return `<p class="text-muted">Żaden rynek zagraniczny nie jest jeszcze otwarty. Pierwszy bilet w Internecie (Ferie i wakacje) otwiera giełdę kraju; boty mogą być szybsze.</p>
         <div class="btn-row"><button class="btn-ghost" onclick="openInternetPage('ferie')">Idź do Ferie i wakacje</button></div>`;
-    if (!marketsSelected || !joined.includes(marketsSelected)) marketsSelected = joined[0];
+    if (!marketsSelected || !joined.includes(marketsSelected)) marketsSelected = joined.find(c => canTradeCountry('player', c)) || joined[0]; // 0.17.1 U2: najpierw kraj z biletem
     const id = marketsSelected, def = COUNTRY_DEFS[id], access = canTradeCountry('player', id);
     const tabs = joined.map(c => `<button class="tab-btn ${c === id ? 'active' : ''}" onclick="selectMarketCountry('${c}')" aria-pressed="${c === id}">${escapeHtml(COUNTRY_DEFS[c].name)} · ${COUNTRY_DEFS[c].currency}</button>`).join('');
     const rows = [...getCountryIssuers(id)].sort((a, b) => getForeignTier(b).level - getForeignTier(a).level || toPln(b.price, b.currency) - toPln(a.price, a.currency)).map(i => {
@@ -208,7 +208,7 @@ function renderLinksCard() {
     const hint = chance >= 0.16 ? 'wysoka' : chance >= 0.04 ? 'rośnie' : 'niska';
     const rows = linked.map(id => `<li><strong>${escapeHtml(COUNTRY_DEFS[id].name)}</strong> — ${LINK_KIND_LABELS[countryState[id].link]}; bez biletu, prowizja ${formatNumberPl(LINK_RULES.domesticCommission * 100, 2)}%</li>`).join('');
     const intl = exchangeLinks.intl ? `<p class="text-sm">Giełda międzynarodowa: ${['PL', ...exchangeLinks.intl.members.filter(m => m !== 'PL')].map(m => escapeHtml(m === 'PL' ? 'Polska' : COUNTRY_DEFS[m]?.name || m)).join(', ')}.</p>` : '';
-    const taken = exchangeLinks.takenBy ? `<p class="alert alert--warn">${uiIcon('alert', 16)}<span>Wariant B: nasza giełda należy do ${escapeHtml(COUNTRY_DEFS[exchangeLinks.takenBy].name)} — opłaty za notowanie na ${getMarketLabel('GPW')} ×${LINK_RULES.listingFeeMult}.</span></p>` : '';
+    const taken = exchangeLinks.takenBy ? `<p class="alert alert--warn">${uiIcon('alert', 16)}<span>Wariant B: nasza giełda należy do ${escapeHtml(COUNTRY_DEFS[exchangeLinks.takenBy].name)} — opłaty za notowanie na ${getMarketLabel('GPW')} ×${formatNumberPl(LINK_RULES.listingFeeMult, 1)}.</span></p>` : '';
     const community = isEuropeanCommunity() ? '<p class="text-sm">Wspólnota europejska giełd działa — na rynku gra europejski hazardzista.</p>' : `<p class="text-sm text-muted">Wspólnota europejska powstanie, gdy na giełdzie będą ${LINK_RULES.communityMin} kraje europejskie (teraz ${countEuropeanJoined()}).</p>`;
     return `<div class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('rynek', 20)}</span><div><h4>Połączone giełdy</h4><span class="bank-card-type">szansa na kolejne połączenie: ${hint}</span></div></header>
         ${linked.length ? `<ul class="list-plain link-list text-sm">${rows}</ul>` : '<p class="text-sm text-muted">Żadna giełda nie jest jeszcze połączona z naszą. Połączenie (przejęcie, giełda międzynarodowa albo przejęcie nas) zdarza się samo, od drugiego roku gry.</p>'}
@@ -232,7 +232,7 @@ function onLinkEvent(entry) {
     if (typeof isGamePaused !== 'undefined' && !isGamePaused && typeof togglePauseGame === 'function') togglePauseGame();
     document.getElementById('link-event-title').textContent = titles[entry.kind];
     const effects = entry.kind === 'taken'
-        ? `<li>Opłaty za notowanie na ${getMarketLabel('GPW')} rosną ×${LINK_RULES.listingFeeMult}.</li><li>Kurs ${getMarketLabel('GPW')} spada o ok. ${Math.round(entry.drop * 100)}% w ${LINK_RULES.dropQuarters} kwartały.</li>`
+        ? `<li>Opłaty za notowanie na ${getMarketLabel('GPW')} rosną ×${formatNumberPl(LINK_RULES.listingFeeMult, 1)}.</li><li>Kurs ${getMarketLabel('GPW')} spada o ok. ${Math.round(entry.drop * 100)}% w ${LINK_RULES.dropQuarters} kwartały.</li>`
         : '<li>Spółki kraju kupisz bez biletu, z prowizją krajową.</li>';
     document.getElementById('link-event-body').innerHTML = `<p>${escapeHtml(entry.text)}</p><ul class="text-sm">${effects}</ul><div class="btn-row"><button class="btn-primary" onclick="closeModalFrom(this)">Rozumiem — wznów grę</button></div>`;
     modal.style.display = 'block';

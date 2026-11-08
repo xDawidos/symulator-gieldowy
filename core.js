@@ -5054,7 +5054,7 @@ function applyRateSurprise(surprise) {
 }
 
 function publishRateDecision(change, expected, note = '') {
-    const rate = (centralBank.baseInterestRate * 100).toFixed(2);
+    const rate = formatNumberPl(centralBank.baseInterestRate * 100, 2); // 0.17.1 U6: przecinek dziesiętny
     const verb = change > 0 ? 'podnosi' : change < 0 ? 'obniża' : 'utrzymuje';
     const surprise = Math.abs(change - expected) >= 0.001 ? ' To niespodzianka dla rynku!' : ' Decyzja zgodna z oczekiwaniami.';
     const body = `Bank Centralny ${verb} stopę referencyjną ${change ? 'do' : 'na poziomie'} ${rate}% (${describeRateChange(change)}; oczekiwano: ${describeRateChange(expected)}).${surprise}${note} `
