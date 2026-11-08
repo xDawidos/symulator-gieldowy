@@ -381,6 +381,90 @@ PRESETS['gracz-akcje'] = PRESETS['fundusz-gig'] + `(function () {
         ir: playerFund.ir || null, vip: playerFund.vip ? { won: playerFund.vip.won, lost: playerFund.vip.lost } : null, units: Math.round(playerFund.units), trust: Math.round(playerFund.trust) });
 })();`;
 PRESETS['ceo'] = PRESETS['gracz-aktywny'] + 'playerProfile.positionId = "ceo";';
+// =================================================================================
+// 0.17.1 T0: presety wielkich testów. Każdy zapisuje wynik w window.__t171 (pole s017.t171).
+// =================================================================================
+PRESETS['bierny'] = ''; // gracz nic nie robi: baza GIG, liczby spółek i limitów
+PRESETS['wejscia'] = ''; // to samo co bierny; miary debiutów, limitu spółek i koncentracji są w sondzie P0156
+// Dźwignia: forex 1:10 do limitu 3 × aktywa i zastaw wszystkich akcji w lombardzie. Mierzy margin call, zamknięcia automatyczne,
+// najniższą gotówkę i upadek funduszu (aktywa ≤ 0).
+PRESETS['dzwignia'] = PRESETS['fundusz-gig'] + `(function () {
+    const err = e => (window.__presetErrors = window.__presetErrors || []).push('dzwignia: ' + e);
+    const T = window.__t171 = { opened: 0, refused: 0, reasons: {}, closedBy: {}, minCash: Infinity, minAssets: Infinity, pawned: 0, pawnFail: 0, bankrupt: false };
+    const pairs = ['EUR/PLN', 'USD/PLN', 'EUR/USD', 'CZK/PLN'], seen = new Set();
+    try { if (!isCountryJoined('DE')) joinCountry('DE', 'preset'); if (!isCountryJoined('US')) joinCountry('US', 'preset'); } catch (e) { err(e); }
+    const g = () => Number(marketIndexes.find(i => i.id === 'GIG')?.value) || 0;
+    const orig = advanceMacroQuarter;
+    advanceMacroQuarter = function () {
+        try {
+            for (const l of marginClosedLog) if (!seen.has(l.id)) { seen.add(l.id); T.closedBy[l.reason] = (T.closedBy[l.reason] || 0) + 1; }
+            const assets = getFundAssets();
+            T.minCash = Math.min(T.minCash, playerCash); T.minAssets = Math.min(T.minAssets, assets);
+            if (assets <= 0) T.bankrupt = true;
+            // akcje do zastawu: 30% aktywów w 5 największych spółkach, potem zastaw wszystkich wolnych
+            if (macro.quarter === 2 && window.__idx) {
+                const need = assets * 0.3, gg = g();
+                if (gg > 0) { window.__idx.units = Math.max(0, window.__idx.units - need / gg); playerCash += need; }
+                for (const s of stocks.filter(x => !x.assetType && !x.isBankrupt && x.price > 0 && getAvailableShares(x) > 10).sort((a, b) => getMarketCap(b) - getMarketCap(a)).slice(0, 5)) {
+                    const qty = Math.floor(need / 5 / s.price); if (qty > 0) buyStock(s.symbol, qty);
+                }
+            }
+            if (macro.quarter >= 3 && macro.quarter % 2 === 1) for (const sym of Object.keys(playerPortfolio)) {
+                const h = playerPortfolio[sym], free = (h?.shares || 0) - (h?.lockedShares || 0);
+                if (free > 0) { const r = pawnShares(getFundAccount(), sym, free); if (r) T.pawned++; else T.pawnFail++; }
+            }
+            const live = getMarginPositions('forex'), used = live.reduce((a, p) => a + p.notional, 0), room = getFundAssets() * MARGIN_RULES.fundLeverageCap - used;
+            if (room > MARGIN_RULES.minNotional) {
+                const gg = g(), deposit = room / 10, need = deposit * 1.05 - playerCash;
+                if (need > 0 && gg > 0 && window.__idx) { const take = Math.min(need, window.__idx.units * gg); window.__idx.units -= take / gg; playerCash += take; }
+                const r = openForexPosition(pairs[macro.quarter % pairs.length], macro.quarter % 2 ? 1 : -1, room, 10);
+                if (r.ok) T.opened++; else { T.refused++; T.reasons[r.reason] = (T.reasons[r.reason] || 0) + 1; }
+            }
+        } catch (e) { err(e); }
+        return orig.apply(this, arguments);
+    };
+})();`;
+// Forex i towary: strategie mechaniczne 1:3 (momentum pary z 4 tygodni, powrót towaru do średniej, krótkie na gazie).
+// Wynik: zysk strategii na zaangażowany kapitał rocznie, porównany z lokatą (pewny zysk ≤ lokata + 4–6 pp).
+PRESETS['forex-towary'] = PRESETS['kontrakty'] + `(function () {
+    const err = e => (window.__presetErrors = window.__presetErrors || []).push('forex-towary: ' + e);
+    try { if (!isCountryJoined('DE')) joinCountry('DE', 'preset'); } catch (e) { err(e); }
+    const T = window.__t171 = { fx: { pnl: 0, cap: 0, n: 0, win: 0, closed: 0, forced: 0 }, q: 0, rate: 0 }, tag = new Set(), seen = new Set();
+    const hist = {}, pairs = ['EUR/PLN', 'EUR/USD', 'USD/PLN'];
+    const orig = advanceMacroQuarter;
+    advanceMacroQuarter = function () {
+        try {
+            T.q++; T.rate += DEPOSIT_INTEREST_RATE;
+            for (const l of marginClosedLog) if (tag.has(l.id) && !seen.has(l.id)) { seen.add(l.id); T.fx.pnl += l.pnl; T.fx.closed++; if (l.pnl > 0) T.fx.win++; if (l.reason !== 'manual') T.fx.forced++; }
+            for (const p of getMarginPositions('forex')) if (tag.has(p.id)) { T.fx.cap += p.deposit; closeMarginPosition(p.id, 'manual'); }
+            for (const pair of pairs) { const [a, b] = pair.split('/'); (hist[pair] = hist[pair] || []).push(getFxRate(a) / getFxRate(b)); }
+            const best = pairs.map(p => [p, hist[p].length > 1 ? hist[p].at(-1) / hist[p].at(-2) - 1 : 0]).sort((x, y) => Math.abs(y[1]) - Math.abs(x[1]))[0];
+            if (best && Math.abs(best[1]) > 0.002) {
+                const deposit = getFundAssets() * 0.05, gg = Number(marketIndexes.find(i => i.id === 'GIG')?.value) || 0, need = deposit * 1.02 - playerCash;
+                if (need > 0 && gg > 0 && window.__idx) { window.__idx.units = Math.max(0, window.__idx.units - need / gg); playerCash += need; }
+                const r = openForexPosition(best[0], best[1] > 0 ? 1 : -1, deposit * 3, 3);
+                if (r.ok) { tag.add(r.position.id); T.fx.n++; } else T.why = r.reason;
+            }
+        } catch (e) { err(e); }
+        return orig.apply(this, arguments);
+    };
+})();`;
+// Kryzys: kolejna linia kryzysu na grę (5 linii po kolei), 2 kraje do zarażania, szok podażowy (embargo) w 3. roku.
+PRESETS['kryzys'] = PRESETS['fundusz-gig'] + `(function () {
+    const err = e => (window.__presetErrors = window.__presetErrors || []).push('kryzys: ' + e);
+    const lines = ['banking', 'dotcom', 'oil', 'black', 'pandemic'], line = lines[(parent.__kryzysRun = (parent.__kryzysRun || 0) + 1) % lines.length];
+    const T = window.__t171 = { line, embargo: false, gig: [] };
+    try { setCrisisScenario(line); for (const c of ['DE', 'CZ']) if (!isCountryJoined(c)) joinCountry(c, 'preset'); } catch (e) { err(e); }
+    const orig = advanceMacroQuarter;
+    advanceMacroQuarter = function () {
+        try {
+            if (macro.quarter === 10 && typeof startCommodityEvent === 'function') T.embargo = Boolean(startCommodityEvent('embargo'));
+            T.gig.push(Math.round(Number(marketIndexes.find(i => i.id === 'GIG')?.value) || 0));
+        } catch (e) { err(e); }
+        return orig.apply(this, arguments);
+    };
+})();`;
+
 // 0.14 T4 (diagnoza decyzji 13): wymuszone dodatkowe zapowiedzi wydzieleń i stan matki/córki na każdym etapie.
 PRESETS['wydzielenia'] = `(function () {
     const D = window.__spinDiag = { entries: [], errors: [] };
@@ -1269,6 +1353,14 @@ const PROBE_0156 = `(function () {
 // 0.17 S0b: łączna kapitalizacja rynku (PLN; GPW i spółki krajów dołączonych) i udział spółek krajowych w przejęciach D3. Wynik: pole s017.
 const PROBE_017 = `(function () {
     const s = window.__sim, T = s.s017 = { d3: { n: 0, domAcq: 0, domTgt: 0 } };
+    // 0.17.1 T0: Tied i obietnice (liczniki), rozkład relacji na koniec
+    { const P = T.prom = { offers: 0, accepted: 0, fulfilled: 0, paid: 0, assetsSum: 0, knf: 0 };
+      if (typeof createPromiseOffer === 'function') { const o = createPromiseOffer; createPromiseOffer = function () { const r = o.apply(this, arguments); if (r) P.offers++; return r; }; }
+      if (typeof acceptPromiseOffer === 'function') { const o = acceptPromiseOffer; acceptPromiseOffer = function () { const r = o.apply(this, arguments); if (r) P.accepted++; return r; }; }
+      if (typeof fulfillPromise === 'function') { const o = fulfillPromise; fulfillPromise = function () { const r = o.apply(this, arguments); if (r > 0) { P.fulfilled++; P.paid += r; } return r; }; }
+      if (typeof recordPayment === 'function') { const o = recordPayment; recordPayment = function (from, to) { if (to === 'external:knf') P.knf++; return o.apply(this, arguments); }; }
+      T.tied171Finish = () => { const v = (typeof getRelationPeople === 'function' ? getRelationPeople().map(p => getRelation(p.id)) : []).filter(Number.isFinite).sort((a, b) => a - b); const q = p => v.length ? v[Math.min(v.length - 1, Math.floor(p * v.length))] : null;
+          return { rel: { n: v.length, p10: q(0.1), med: q(0.5), p90: q(0.9), friends: typeof ensureTiedState === 'function' && playerProfile ? ensureTiedState().friends.length : null }, prom: P, posts: typeof getTiedPosts === 'function' ? getTiedPosts().length : null }; }; }
     T.frEv = {}; if (typeof startFreightEvent === 'function') { const o = startFreightEvent; startFreightEvent = function (k) { T.frEv[k] = (T.frEv[k] || 0) + 1; return o.apply(this, arguments); }; } // 0.17 S4: zakłócenia frachtu
     // 0.17.3 R6: częstość zdarzeń spółek (ten sam licznik w bazie i w nowej wersji)
     T.ev = { dividend: 0, buyback: 0, strategy: 0, takeover: 0 };
@@ -1314,7 +1406,7 @@ const PROBE_017 = `(function () {
             a[0] += h.reduce((t, y) => t + (Number(y.ebitda) || 0), 0); a[1] += h.reduce((t, y) => t + (Number(y.revenue) || 0), 0); a[2]++;
         }
         const tiedStats = typeof getDeputies === 'function' ? { posts: getTiedPosts().length, plans: stocks.filter(x => x.plannedMove).length, deputies: stocks.reduce((a, x) => a + getDeputies(x).length, 0), withDeputies: stocks.filter(x => getDeputies(x).length).length } : null;
-        r.s017 = { ...T, kontrakty: window.__kontrakty, tiedReader: window.__tiedReader, zachety: window.__zachety, tiedStats, capPl: Math.round(capPl), capForeign: Math.round(capForeign), secMargin: Object.fromEntries(Object.entries(sec).filter(([, a]) => a[1] > 0).map(([k, a]) => [k, [+(a[0] / a[1]).toFixed(4), a[2]]])),
+        r.s017 = { ...T, t171: window.__t171, tied171: T.tied171Finish ? T.tied171Finish() : null, kontrakty: window.__kontrakty, tiedReader: window.__tiedReader, zachety: window.__zachety, tiedStats, capPl: Math.round(capPl), capForeign: Math.round(capForeign), secMargin: Object.fromEntries(Object.entries(sec).filter(([, a]) => a[1] > 0).map(([k, a]) => [k, [+(a[0] / a[1]).toFixed(4), a[2]]])),
             // 0.17 S3: surowce na koniec (cena / średnia), wynik botów na kontraktach, otwarte pozycje gracza na towarach
             com: typeof commodityState === 'object' && commodityState ? { px: Object.fromEntries(COMMODITY_IDS.map(id => [id, +(commodityState.prices[id] / COMMODITY_DEFS[id].mean).toFixed(3)])), bots: commodityState.bots?.stats || null, botOpen: commodityState.bots?.pos?.length || 0, ev: commodityState.events.map(e => e.id), playerPos: typeof getMarginPositions === 'function' ? getMarginPositions('commodities').length : null,
                 fr: commodityState.freight ? Object.fromEntries(Object.keys(commodityState.freight.idx).map(id => [id, +commodityState.freight.idx[id].toFixed(1)])) : null } : null }; // 0.17 S4: indeks frachtu na koniec
