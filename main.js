@@ -1240,6 +1240,8 @@ function runStockTick(skipUi, speedMultiplier, tickSteps) {
         if (speedMultiplier >= 10 && uiRefreshTick % Math.max(1, Math.round(speedMultiplier / (5 * tickSteps))) !== 0) return;
 
         // --- ODŚWIEŻANIE INTERFEJSU ---
+        // karta w tle: logika liczy się dalej, ale bez przebudowy tabel (mniej śmieci w pamięci i CPU); po powrocie odświeży następny tik
+        if (typeof document !== 'undefined' && document.hidden) return;
         displayStocks(currentMarketInputs);
         displayStartups(currentStartupInputs);
         displayEtfs();

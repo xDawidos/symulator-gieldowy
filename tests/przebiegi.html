@@ -454,7 +454,9 @@ PRESETS['wiekszosciowiec'] = `(function () {
         };
     }
 })();`;
-const PATCH = (PRESETS[params.get('preset')] || '') + (params.get('patch') || ''); // kod wykonywany w ramce po starcie gry
+// ?noui=1: bez odświeżania interfejsu (renderer ok. 110 MB mniej, gra o 1/3 szybciej). Logika i wyniki bez zmian; pomiar czasu kroku rób bez tej opcji.
+const NOUI = `(function () { for (const name of ['displayStocks', 'displayStartups', 'displayEtfs', 'displayPortfolio', 'displayFundPanel', 'displayMarketIndexes', 'displayInvestmentPool', 'updateCityModalContent', 'updateConstructionSectorUI', 'updateMarketKPIs', 'updateTopbarKPIs', 'displayCash']) if (typeof window[name] === 'function') window[name] = function () {}; })();`;
+const PATCH = (params.get('noui') === '1' ? NOUI : '') + (PRESETS[params.get('preset')] || '') + (params.get('patch') || ''); // kod wykonywany w ramce po starcie gry
 const SAVE_KEY = 'gra_inwestycyjna_dawid_save_v4';
 const RESULT_KEY = `__sim_${LABEL}`;
 const statusEl = document.getElementById('status');
