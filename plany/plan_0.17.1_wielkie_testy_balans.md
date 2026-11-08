@@ -1,6 +1,6 @@
-# Plan 0.17.1 „Wielkie testy rozgrywki i balans” (po 0.17 „Surowce i transport”, przed 0.17.2 i 0.18)
+# Plan 0.17.1 „Wielkie testy rozgrywki i balans” (po 0.17.3 „Rozmowy” i 0.17.2 „Energia”, przed 0.18)
 
-Cel: po zamknięciu serii 0.15.4–0.17 (nowe rynki, waluty, surowce, transport, forex, kontrakty) **sprawdzamy całą grę naraz**, zanim dojdą łańcuchy produkcyjne i energia. Wersja nie dodaje mechanik — tylko mierzy, stroi i naprawia.
+Cel: po zamknięciu serii 0.15.4–0.17 (nowe rynki, waluty, surowce, transport, forex, kontrakty) **sprawdzamy całą grę naraz**, zanim dojdą łańcuchy produkcyjne. Kolejność zmieniona 2026-11-07: 0.17.3 i 0.17.2 weszły wcześniej, więc pomiar obejmuje też Tied, rozmowy, obietnice, prąd, emisje i poziom życia. Wersja nie dodaje mechanik — tylko mierzy, stroi i naprawia.
 
 Czego uczy projekt: że kolejne warstwy (waluty, kraje, towary, dźwignia) razem nie psują gry, którą każda osobno zmierzono.
 
@@ -67,7 +67,18 @@ Kolejność: T0 → T1 → … → T7. **Commit po każdej części.** Zmiany w 
 | Czas kroku | w limitach planów 0.16.x i 0.17 |
 | Linie kryzysu | 1–2 na 20 lat; kierunki stóp i zarażanie zgodnie z planami |
 | Spółki krajowe | ≤ 115; > 125 nigdy dłużej niż 2 kw. |
-| Gra ręczna | 0 błędów blokujących w 7 scenariuszach |
+| Gra ręczna | 0 błędów blokujących w 10 scenariuszach |
+
+## Nowe systemy w pomiarze (dopisek 2026-11-08)
+
+| System | Miary w dużej serii i presetach |
+|---|---|
+| Tied i rozmowy (0.17.3) | rozkład relacji, liczba rozmów i próśb, udział udanych, kary KNF, obietnice: oferty, przyjęte, spełnione, wpłaty jako % aktywów (górny limit 3,35%/rok z presetu `zachety`) |
+| Prąd (0.17.2) | rezerwa mocy, cena prądu, blackouty na grę, bloki na grę, Narodowy Atom, nowe spółki miejskie, miks na koniec |
+| Środowisko i państwo (0.17.2) | zanieczyszczenie (cel ok. 55), smog, protesty, poziom krytyczny, poziom UEiE, ESG, poziom życia (p10, mediana, p90), Zieloni, rządzący i reelekcja |
+
+- **Preset `zachety`** (z 0.17.3) dochodzi do T2.
+- **Scenariusze ręczne 8–10:** 8. rozmowa z prezesem i prośba do inwestora o zakup udziałów; 9. własna spółka energetyczna: blok, zlecenie geologa, ESG; 10. Internet: pauza przy otwarciu, lombard i windykacja.
 
 ## Z kontroli 0.17.2 (do zbadania w dużej serii)
 
@@ -77,16 +88,16 @@ Kolejność: T0 → T1 → … → T7. **Commit po każdej części.** Zmiany w 
 
 ## Ryzyka
 
-- **Odkrycie zbyt dużej liczby problemów** → T4 priorytetyzuje; mniejsze trafiają do 0.17.2 lub osobnej poprawki.
+- **Odkrycie zbyt dużej liczby problemów** → T4 priorytetyzuje; mniejsze trafiają do 0.18.0 lub osobnej poprawki.
 - **Strojenie jednego elementu psuje inny** → mini-pomiar po każdej zmianie, wspólna baza.
 - **Czas na serie** (50 × 6,5 roku, 20 × 20 lat) → uruchamianie w tle, wyniki do pliku.
 
 ## Decyzje (podjęte 2026-10-25)
 
-1. **Wersja zamyka się po liście strojeń zaakceptowanej przez użytkownika;** mniejsze odchylenia mogą przejść do 0.17.2.
-2. **Gra ręczna jest obowiązkowa** przed 0.17.2 (0 błędów blokujących w 7 scenariuszach).
+1. **Wersja zamyka się po liście strojeń zaakceptowanej przez użytkownika;** mniejsze odchylenia mogą przejść do 0.18.0.
+2. **Gra ręczna jest obowiązkowa** przed 0.18 (0 błędów blokujących w 10 scenariuszach).
 3. Do T7 należy sprawdzenie, że kontrakty towarowe są zamknięte za umiejętnością „Mistrz Opcji” (decyzja 0.17).
 
 ## Zlecenie dla czatu designu
 
-Brak nowych ekranów. Jeśli gra ręczna ujawni problemy czytelności — zgłoszenia do osobnej tury 0.17.2.
+Brak nowych ekranów. Jeśli gra ręczna ujawni problemy czytelności — zgłoszenia do czatu designu jako osobna tura przeglądu.
