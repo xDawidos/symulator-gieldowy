@@ -5953,7 +5953,7 @@ group('0.17.2 E4-E5: urząd i zanieczyszczenia', () => {
         assertEq(getStockEmissionFactor(by('CHEM')), 0.7, 'Chemia');
         assertEq(getStockEmissionFactor(by('TECH')), 0, 'technologia');
     });
-    test('zanieczyszczenie: start 40, wzór 0,9 P + emisje / norma, zakres 0-100, wyższe emisje podnoszą', () => {
+    test('zanieczyszczenie: start 40, wzór 0,9 P + 0,1 × cel, zakres 0-100, wyższe emisje podnoszą', () => {
         const e = fresh();
         processPollution(e);
         assert(Math.abs(e.pollution - 40) < 0.01, 'stan ustalony 40');
@@ -5961,9 +5961,9 @@ group('0.17.2 E4-E5: urząd i zanieczyszczenia', () => {
         const before = e.pollution;
         processPollution(e);
         assert(e.pollution > before, 'rośnie');
-        e.pollution = 99.9; e.norm = 1;
+        e.pollution = 99.9; e.norm = 1e-9;
         processPollution(e);
-        assertEq(e.pollution, 100, 'górna granica');
+        assert(e.pollution > 99.9 && e.pollution <= 100, 'górna granica');
     });
     test('urząd: poziom 0 bez limitów i bez pomiaru, wyższy poziom kontroluje; debug widzi zawsze', () => {
         const e = fresh(), cash = by('COAL').cash;

@@ -419,7 +419,7 @@ function maybeBlackout(e) {
 // ---------------------------------------------------------------------------------
 const SECTOR_EMISSIONS = { 'Chemia': 0.7, 'Przemysł': 0.6, 'Motoryzacja': 0.3, 'Budowlany': 0.2, 'Energia': 0.5 };
 const POLLUTION_RULES = {
-    start: 40, keep: 0.9, powerShare: 0.4, healthyLevel: 40, populationLoss: 0.0002, productionFrom: 80, productionCut: 0.02
+    start: 40, keep: 0.9, elasticity: 3.3, powerShare: 0.4, healthyLevel: 40, populationLoss: 0.0002, productionFrom: 80, productionCut: 0.02
 };
 const CLIMATE_FEES = [0, 0.003, 0.007, 0.012, 0.018];   // opłata: część przychodu przy emisyjności 1 (decyzja użytkownika, pkt 8)
 const ENERGY_OFFICE_RULES = {
@@ -458,14 +458,15 @@ function getStockEmissionFactor(stock) {
     emissionCache.map.set(stock, factor);
     return factor;
 }
-/** Emisje kwartału: produkcja (przychód w cenach startowych) × emisyjność. */
+/** Emisje kwartału: produkcja (przychód bez części inflacyjnej) × emisyjność. */
 /** Emisje kwartału. Elektrownie: produkcja prądu (moc × wykorzystanie) × emisja typu × skala kraju, reszta spółki: przychód w cenach startowych × emisyjność sektora. */
 function getStockEmissions(stock) {
     const e = society.energy, cut = 1 - getStockEcoCut(stock);
     if (!stock || stock.assetType || stock.isBankStock) return 0;
     const powerShare = stock.power ? getPowerSegment(stock)?.share || 0 : 0;
     const rest = getStockSegments(stock).reduce((sum, seg) => sum + (seg.sector === 'Energia' && powerShare > 0 && !ENERGY_NO_POWER_SUBSECTORS.includes(seg.subsector) ? 0 : (SECTOR_EMISSIONS[seg.sector] || 0) * seg.share), 0);
-    const other = getStockRevenue(stock) / (Number(society.priceLevel) || 1) * rest * cut;
+    // przychody niosą tylko INFLATION_PASS_THROUGH inflacji (0.15 H1a), więc produkcję liczymy deflatorem z tym samym udziałem
+    const other = getStockRevenue(stock) / Math.pow(Number(society.priceLevel) || 1, typeof INFLATION_PASS_THROUGH === 'number' ? INFLATION_PASS_THROUGH : 1) * rest * cut;
     return other + (powerShare > 0 && e ? getPowerGenerationEmissions(stock, e) * cut : 0);
 }
 /** Produkcja prądu spółki ważona emisją typu (bez skali kraju). */
@@ -491,7 +492,7 @@ function getPollutionProductionCut(e = society.energy) {
     return Math.max(0, (Number(e?.pollution) || 0) - POLLUTION_RULES.productionFrom) / (100 - POLLUTION_RULES.productionFrom) * POLLUTION_RULES.productionCut;
 }
 
-/** Wskaźnik P = 0,9 × P + emisje / norma. Norma z pierwszego kwartału, tak by przy stałych emisjach P wynosiło 40. */
+/** Wskaźnik P = 0,9 × P + 0,1 × cel, cel = 40 × (emisje / emisje pierwszego kwartału)^elastyczność. */
 function processPollution(e) {
     if (!(e.powerScale > 0)) { // energetyka daje na starcie POLLUTION_RULES.powerShare emisji kraju
         e.powerScale = 1;
@@ -500,13 +501,15 @@ function processPollution(e) {
         e.powerScale = power > 0 && other > 0 ? other * POLLUTION_RULES.powerShare / (1 - POLLUTION_RULES.powerShare) / power : 0;
     }
     const emissions = stocks.reduce((sum, stock) => sum + (stock.isBankrupt ? 0 : getStockEmissions(stock)), 0);
-    if (!(e.norm > 0)) {
-        e.norm = emissions > 0 ? emissions * (1 - POLLUTION_RULES.keep) * 100 / POLLUTION_RULES.start / 10 : 1;
+    if (!(e.norm > 0)) { // norma: emisje pierwszego kwartału
+        e.norm = emissions > 0 ? emissions : 1;
         e.pollution = POLLUTION_RULES.start;
     }
     e.emissions = Math.round(emissions);
     e.pollutionLast = e.pollution;
-    e.pollution = +clampValue(POLLUTION_RULES.keep * e.pollution + emissions / e.norm / 10, 0, 100).toFixed(2);
+    // cel: start × (emisje / norma)^elastyczność; +10% emisji to ok. +15 pkt (decyzja użytkownika: przez grę do ok. 55)
+    const target = Math.min(100, POLLUTION_RULES.start * Math.pow(Math.max(0, emissions / e.norm), POLLUTION_RULES.elasticity));
+    e.pollution = +clampValue(POLLUTION_RULES.keep * e.pollution + (1 - POLLUTION_RULES.keep) * target, 0, 100).toFixed(2);
     if (e.pollution > POLLUTION_RULES.healthyLevel) society.population = Math.round(society.population * (1 - (e.pollution - POLLUTION_RULES.healthyLevel) / 60 * POLLUTION_RULES.populationLoss));
     return e.pollution;
 }
