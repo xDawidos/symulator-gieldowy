@@ -6214,6 +6214,11 @@ group('0.17.2 E10: widoki', () => {
         assert(renderPollutionCard(e).includes('Najwięksi emitenci') && renderCompanyEnergyKpi(by('COAL')).includes('kraju'), 'spółki');
         assert(renderEnergyEsg(by('COAL'), true).includes('Dostępna od poziomu 3'), 'ESG zablokowane');
     }));
+    test('Kraj: nowe linie budżetu, oś polityki klimatycznej, poziom życia i opinia', () => {
+        fresh();
+        const html = renderCountryPanel();
+        for (const text of ['Opłaty za emisje', 'OZE z opłat za emisje', 'Polityka klimatyczna', 'Poziom życia', 'Opinia publiczna']) assert(html.includes(text), text);
+    });
     test('spółka spoza energetyki bez sekcji Energia i kafelka Moc', () => {
         fresh();
         assertEq(renderEnergyManage(by('TECH')), '', 'sekcja');
