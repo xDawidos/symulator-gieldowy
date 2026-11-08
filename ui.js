@@ -1917,6 +1917,7 @@ function renderStockTableRow(stock, isSubsidiary, parentSymbol, stockTableBody, 
     const spinNote = (stock.spinoff ? ` · zapowiedziane wydzielenie: ${stock.spinoff.sector}` : '') + (stock.spunOffFrom && !stock.isSubsidiaryOf ? ` · wydzielona z ${stock.spunOffFrom}` : '') // 0.14 T4
       + (typeof getStockCooperations === 'function' && getStockCooperations(stock).length ? ` · kooperacje: ${getStockCooperations(stock).length}` : ''); // 0.14 T5
     metaLine.textContent = `${primarySector} · ${stock.symbol}${parentNote}${spinNote}${marketId !== 'GPW' ? ` · ${getMarketBadgeText(stock)}` : ''}${typeof getCompanyCountryNote === 'function' ? ` · ${getCompanyCountryNote(stock)}` : ''}${stock.isDividendAristocrat ? ' · dywidendowy arystokrata' : ''}`;
+    metaLine.title = metaLine.textContent; // pełny opis, gdy wiersz jest ucięty
 
 
     identityWrap.appendChild(topLine);

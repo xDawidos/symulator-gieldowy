@@ -112,7 +112,7 @@ async function showCountryGlobe(onPick) {
         <div class="cg-head"><h2 id="cg-title">Wybierz kraj startowy</h2></div>
         <div class="cg-body"><div id="cg-stage" class="cg-stage"><p class="cg-loading" id="cg-status" role="status">Wczytywanie globusa (ok. 3 MB)…</p></div>
         <div class="cg-side"><div id="cg-card" class="cg-card" aria-live="polite"></div>
-        <div class="cg-list" role="group" aria-label="Kraje">${ids.map(id => `<button type="button" class="cg-item" data-country="${id}" aria-pressed="false">${escapeHtml(COUNTRY_NAMES[id])}${START_PLAYABLE.includes(id) ? '' : ' (wkrótce)'}</button>`).join('')}</div>
+        <div class="cg-list" role="group" aria-label="Kraje">${ids.map(id => `<button type="button" class="cg-item" data-country="${id}" aria-pressed="false"${START_PLAYABLE.includes(id) ? '' : ' disabled'}>${escapeHtml(COUNTRY_NAMES[id])}${START_PLAYABLE.includes(id) ? '' : ' (wkrótce)'}</button>`).join('')}</div>
         <div class="cg-actions"><button type="button" class="btn-ghost" id="cg-rotate" aria-pressed="true"></button><button type="button" class="btn-ghost" id="cg-reset">Reset widoku</button><button type="button" class="btn-primary" id="cg-confirm">Wybieram ten kraj</button></div></div></div></div>`;
     document.body.appendChild(globeOverlay);
     globeOverlay.querySelector('#cg-confirm').onclick = () => { const id = globeCurrent, cb = globeOnPick; if (!START_PLAYABLE.includes(id)) return; closeCountryGlobe(); if (cb) cb(id); };

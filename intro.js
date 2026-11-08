@@ -20,7 +20,7 @@ const introSmsScript = d => [
 ];
 
 /** Kroki 5–6: rozmowa z szefem w TeamedUP! (skrypt). */
-const introBossHello = d => `Cześć ${d.name}, od dzisiaj jestem twoim szefem! Zanim zaczniesz, podaj nazwę swojego funduszu. Pogadam ze stałymi klientami, żebyś miał dobry start, a ty lepiej pomyśl, jak nazwiesz swój fundusz.`;
+const introBossHello = d => `Cześć, ${d.name}! Od dzisiaj jestem twoim szefem! Zanim zaczniesz, podaj nazwę swojego funduszu. Pogadam ze stałymi klientami, żebyś miał dobry start, a ty lepiej pomyśl, jak nazwiesz swój fundusz.`;
 const introFundMessage = name => `Miło mi cię poznać, mój fundusz będzie się nazywał: ${name}.`;
 const INTRO_BOSS_BYE = 'Powodzenia, nie zawiedź mnie.';
 
@@ -106,7 +106,7 @@ function introRunSms() {
 /** Krok 4: umowa o pracę (data z gry); najpierw leży do podpisu, potem „Podpisano”, na końcu zanika. */
 function getIntroContract(d = introFlow.data) {
     const date = typeof formatGameDate === 'function' ? formatGameDate() : '';
-    return { title: 'Umowa o pracę', date, text: `${d.name} od dzisiaj jest zatrudniony w ${d.corporation}.`, signer: d.name };
+    return { title: 'Umowa o pracę', date, text: `${d.name} dołącza od dzisiaj do firmy: ${d.corporation}.`, signer: d.name };
 }
 
 function introOpenContract() {
