@@ -65,3 +65,9 @@ Poprzednia kontrola (0ef0495) też przeszła bramki (GIG +0,62 pp, marże 0,16 p
 Desktop (1024 px) i 390 px sprawdzone przez DOM w grze: zakładka Energia, Kraj, Nadzór, sekcje Energia Tauronu i Państwowego Urana. Wszystkie elementy z projektu są na miejscu, poziomego przewijania strony nie ma. Pasek zakładek Państwa przewija się sam (9 zakładek), tak jak dotąd. Zrzutów ekranu nie ma, bo panel aplikacji był ukryty i nie rysował strony.
 
 Surowe serie: folder notatek, `serie_0172`.
+
+## Przyczyny trzech odchyleń (2026-11-08)
+
+- **Ujemna gotówka:** we wszystkich 6 przypadkach (5 w nowej, 1 w bazie) to spółka budowlana przy strajku. Kara umowna liczona `Math.round(min(gotówka, 1% przychodu))` zaokrąglała w górę, więc gotówka schodziła do ok. −0,4 PLN. Błąd z 0.13, poprawiony na `Math.floor`. Różnica 5 wobec 1 to szum przy tak rzadkim zdarzeniu.
+- **Koalicja Rynkowa:** wygrywa już w bazie: 61% wyborów (137 z 226), na koniec rządzi w 62 grach na 120. W trzech seriach nowej wersji 60%, 63% i 69% wyborów. Serie n3 i n4 różnią się tylko liczeniem emisji, a dają na koniec 57 i 80 gier, więc rozrzut między seriami jest większy niż wpływ 0.17.2. Przewaga Koalicji wynika z istniejących wag klas (`CLASS_VOTE`: klasa średnia i wyższe głosują na nią w 42–78%). Do sprawdzenia dalej jest `getLifeVoteAdj`: poziom życia rośnie przez grę, więc rządzący dostają do +3 pp, a to wzmacnia każdą partię u władzy.
+- **Zanieczyszczenie przy 40:** wskaźnik z wzoru `P = 0,9 P + emisje / norma` dąży do 10 × emisje / norma, a norma jest ustawiona tak, by start dawał 40. P rośnie tylko, gdy rosną emisje. W seriach realne przychody spółek spadają (wszystkie ×0,95, odbiorcy prądu ×0,88), a zużycie prądu rośnie ×1,17. Przy udziale energetyki 40% daje to emisje ok. ×1,00, więc P stoi. Średnie maksimum w grze to 41, najwyższe 46. ESG prawie nie występuje (0,008 na grę), więc to nie obniżki trzymają P.

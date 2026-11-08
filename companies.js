@@ -10919,7 +10919,7 @@ function startStrike(stock, strength = 1, raise = 0) {
     applyPriceEffect(stock.symbol, -getRandomInRange(0.03, 0.08) * strength, 'negative', 'company');
     // Kontrahenci budowlanki naliczają kary.
     if (stock.sector?.includes('Budowlany') && typeof getActiveProjectsForBuilder === 'function' && getActiveProjectsForBuilder(stock).length) {
-        const penalty = Math.round(Math.min(Math.max(0, Number(stock.cash) || 0), (Number(stock.fundamentals?.revenue) || 0) * 0.01));
+        const penalty = Math.floor(Math.min(Math.max(0, Number(stock.cash) || 0), (Number(stock.fundamentals?.revenue) || 0) * 0.01)); // floor: zaokrąglenie w górę dawało gotówkę −0,4 PLN
         if (penalty > 0) {
             adjustCompanyCash(stock, -penalty);
             adjustBalanceSheet(stock, { assets: -penalty, retainedEarnings: -penalty });
