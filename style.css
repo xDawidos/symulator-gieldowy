@@ -5689,3 +5689,29 @@ body.dark-mode .ceo-link { background: none; border: 0; color: var(--color-text-
   .en-levels { grid-template-columns: minmax(0, 1fr); }
   .en-mix > span { font-size: 0; }
 }
+
+/* Przegląd 2026-11-08: lista spółek, panel funduszu, panel handlu, TeamedUP!, wybór kraju (plany/design/12_przeglad_2026-11-08.md) */
+body.dark-mode #stock-table tr.sector-subheader td, #stock-table tr.sector-subheader td { height: calc(var(--table-row-sector) + var(--space-3)); padding-top: var(--space-3); background: linear-gradient(to bottom, var(--color-bg-base) var(--space-3), var(--color-bg-raised) var(--space-3)) !important; border-bottom: 1px solid var(--color-border-default); }
+.change-pill > span[aria-hidden] { font-size: 11px; }
+#stock-table .change-pill { font-size: var(--text-num-md-size); }
+.row-state { width: 36px; justify-content: center; }
+.drawer-tool { font-size: var(--text-body-sm-size); min-height: 32px; }
+.stock-drawer-impact, body.dark-mode .stock-drawer-impact { font-size: var(--text-caption-size); }
+.qty-input-wrapper input { width: 110px; }
+.sector-donut-placeholder { min-height: 0; padding: var(--space-2) var(--space-3); border: 0; background: none; justify-content: flex-start; text-align: left; font-size: var(--text-body-sm-size); }
+#fund-emission-btn { white-space: normal; }
+.cg-item:disabled { opacity: .5; cursor: not-allowed; border-style: dashed; }
+.te-intro:has(#te-intro-form:not([hidden])) > .intro-hint, .te-intro:has(#te-intro-done:not([hidden])) > .intro-hint { display: none; }
+#teamedup-overlay .mail-window { margin: var(--space-4) auto; width: min(1100px, calc(100% - var(--space-6))); }
+@media (max-width: 1024px) {
+  .portfolio-kpi-card:has(#cash-portfolio), .portfolio-kpi-card:has(#player-xp) { display: none; } /* te same liczby są w górnym pasku */
+}
+@media (max-width: 640px) {
+  /* .is-compact dodaje kod po przewinięciu o 40 px: jeden wiersz (menu, gotówka, pauza, menu ⋯); NAV nie mieści się przy 375 px */
+  .topbar.is-compact { padding-block: var(--space-1); gap: var(--space-2); }
+  .topbar.is-compact .topbar-kpi:nth-child(n+2), .topbar.is-compact .speed-segmented, .topbar.is-compact .topbar-date { display: none; }
+  .topbar.is-compact { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .topbar.is-compact .topbar-controls { width: auto; }
+  .topbar.is-compact .btn-pause { padding-inline: var(--space-3); }
+  .topbar.is-compact .topbar-kpi-group { gap: var(--space-3); }
+}

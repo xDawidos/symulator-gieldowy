@@ -58,14 +58,14 @@ Spółka spoza energetyki nie ma sekcji Energia ani kafelka Moc. Kafelki Emisje 
 2. **Widoczność emisji:** UEiE 0 nic, poziom 1 kraj, poziom 2 spółki. Debug pokazuje wszystko.
 3. **Poziom życia przy UEiE 0:** wskaźnik zostaje, ale czynnik „Zdrowie” ma napis „brak pomiaru”.
 4. **Poziomy UEiE:** 0 bez limitów, 1 pomiar kraju, 2 pomiar spółek i limit z karą, 3 częstsze kontrole i ścieżka ESG, 4 dokładny pomiar i wyższe kary, 5 pełny nadzór.
-5. **ESG:** od poziomu 3 przycisk „Wejdź na ścieżkę ESG”: jednorazowy koszt, potem niższe emisje. Liczby stroi czat kodu, rozwinięcie w 0.18.
+5. **ESG:** od poziomu 3 przycisk „Wejdź na ścieżkę ESG”. Wchodzi gracz jako właściciel: koszt 1 kwartału przychodów, potem emisje −25% na stałe, także po spadku poziomu UEiE. Liczby startowe z planu (d8de71c).
 6. **Progi słowne:** 5 słów co 20 pkt. Zanieczyszczenie: bardzo niskie, niskie, umiarkowane, wysokie, krytyczne. Poziom życia: bardzo niski, niski, przeciętny, wysoki, bardzo wysoki. Opinia: bardzo nieprzychylna, nieprzychylna, neutralna, przychylna, bardzo przychylna.
 7. **Emisje spółki:** udział w emisjach kraju, np. „6% kraju”.
 8. **Polityka klimatyczna:** nazwy brak opłat, niska, średnia, wysoka, bardzo wysoka. Stawki 0%, 0,6%, 1,2%, 1,8%, 2,5% to punkt startu do strojenia.
-9. **„Najnowsze technologie”:** osobne zlecenie z kosztem, czasem i wynikiem, jak u geologa. To nowy mechanizm obok R&D. Wykonawcę i powiązanie z R&D ustala czat kodu z planem.
+9. **„Najnowsze technologie”:** osobne zlecenie, wykonawca: podwykonawca `energy`. Koszt 0,25 kwartału przychodów, czas 4 kw., wynik −5% kosztu następnego bloku albo +3% mocy, najwyżej 3 razy na spółkę (plan d8de71c). Na karcie licznik „Użyte: X z 3”.
 10. **Dotacja UEiE:** tak, z konta prywatnego, jak KNF.
 11. **Bloki poza atomem:** dowolna liczba, po kolei. Ogranicza je gotówka i niedobór mocy.
-12. **Produkcja:** wysokie zanieczyszczenie daje mały spadek produkcji. Makieta pokazuje to przy poziomie „krytyczne”, próg i wartość do strojenia.
+12. **Produkcja:** od 80 pkt („krytyczne”) spadek liniowo do −2% przy 100, tylko spółki z emisjami. Alert podaje bieżący spadek liczbą.
 
 ## Prompt dla czatu kodu (E2, E10)
 > Wdróż wygląd 0.17.2 wg `plany/design/11_energia_0.17.2.md` i makiety `plany/design/makiety/11_energia_0172.html`. Klasy `.en-*` i ikony są gotowe, nie dopisuj tokenów. Zakładka Energia: `renderEnergyPanel` i przycisk w `index.html`, gałąź w `updateStateModalContent`. Spółka: `renderEnergyManage(stock)` w `renderCompanyCardManage`, kafelki w `renderCompanyCardOverview`. Reszta: karta `ueie` w `renderOversightPanel`, `renderCountryPanel`, `renderCountryCard`, `renderMarketModal`, `renderConstructionSubcontractorsList`. Paski przez `renderLimitMeter`. Skale: bilans 0–110% mocy, relacje liczbowe w tekście obok paska. W komunikatach o blokach zamień „regulator” na UEiE, ikony przez `uiIcon` zamiast emoji w nowych tekstach UI. Trzymaj się sekcji „Decyzje użytkownika”, punkty 5, 9 i 12 wymagają mechaniki poza dotychczasowym planem. Testy: 1 na miks (wszystkie typy słowem), 1 na stany bilansu, 1 na blokadę kolejnego bloku, 1 na UEiE poziom 0 bez wartości emisji, 1 na spółkę spoza energetyki. Sprawdź w przeglądarce na desktopie i 390 px, commit po polsku.
