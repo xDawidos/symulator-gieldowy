@@ -15,12 +15,12 @@ const at = (key, q) => mean(series.map(list => list[Math.min(q, list.length - 1)
 const last = (key) => series.map(list => list.at(-1)?.[key]).filter(value => value !== undefined);
 
 console.log(`gier: ${series.length}, kwartałów: ${mean(series.map(list => list.length))}`);
-console.log('kw   pop(mln) ceny  Energia  odbiorcy  budynki' + (series[0]?.[0]?.cap ? '  moc   zużycie rezerwa cena  P    życie opinia bloki' : ''));
+console.log('kw   pop(mln) ceny  Energia  odbiorcy  budynki' + (series[0]?.at(-1)?.cap ? '  moc   zużycie rezerwa cena  P    życie opinia bloki' : ''));
 for (const q of [0, 4, 8, 12, 16, 20, 24, 26]) {
     const base = `${String(q).padEnd(4)} ${f(at('pop', q) / 1e6, 1).padEnd(8)} ${f(at('pl', q)).padEnd(5)} ${f(at('en', q) / at('en', 0)).padEnd(8)} ${f(at('use', q) / at('use', 0)).padEnd(9)} ${f(at('bld', q), 1).padEnd(7)}`;
-    console.log(base + (series[0]?.[0]?.cap ? ` ${f(at('cap', q), 0).padEnd(6)} ${f(at('dem', q), 0).padEnd(7)} ${f(at('cap', q) / at('dem', q)).padEnd(7)} ${f(at('pr', q)).padEnd(5)} ${f(at('P', q), 1).padEnd(4)} ${f(at('L', q), 1).padEnd(5)} ${f(at('Op', q), 1).padEnd(6)} ${f(at('blk', q), 1)}` : ''));
+    console.log(base + (series[0]?.at(-1)?.cap ? ` ${f(at('cap', q), 0).padEnd(6)} ${f(at('dem', q), 0).padEnd(7)} ${f(at('cap', q) / at('dem', q)).padEnd(7)} ${f(at('pr', q)).padEnd(5)} ${f(at('P', q), 1).padEnd(4)} ${f(at('L', q), 1).padEnd(5)} ${f(at('Op', q), 1).padEnd(6)} ${f(at('blk', q), 1)}` : ''));
 }
-if (series[0]?.[0]?.cap) {
+if (series[0]?.at(-1)?.cap) {
     const reserveLow = series.map(list => Math.min(...list.map(x => x.cap / x.dem)));
     console.log('najniższa rezerwa: średnia', f(mean(reserveLow)), 'min', f(Math.min(...reserveLow)));
     console.log('blackouty na grę', f(mean(last('b'))), 'gry z blackoutem', last('b').filter(Boolean).length, '/', series.length);

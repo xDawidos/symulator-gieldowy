@@ -19,7 +19,7 @@ const ENERGY_NO_POWER_SUBSECTORS = ['Rafinerie', 'Gaz'];
 const POWER_INPUTS = { 'Przemysł': 0.06, 'Chemia': 0.06, 'Motoryzacja': 0.04, 'Budowlany': 0.03 };
 const POWER_INPUT_SYMBOLS = { PKC: 0.05 };
 const ENERGY_RULES = {
-    startCapacity: 30000, startReserve: 1.12, householdShare: 0.25, histQuarters: 8,
+    startCapacity: 30000, startReserve: 1.12, householdShare: 0.25, histQuarters: 8, demandTrend: 0.005, // elektryfikacja: +2% rocznie ponad PKB
     startMix: { coal: 0.55, gas: 0.15, nuclear: 0, oze: 0.30 }, // udział typu w mocy startowej; w typie moc dzieli przychód segmentu
     rateCost: 8,                 // +1 pp stopy to +8% kosztu kapitałowej części ceny
     shortagePremium: 1.5, pass: 0.6, producerPrice: 0.5, producerUtil: 0.5,
@@ -425,11 +425,11 @@ const ENERGY_OFFICE_RULES = {
     measureStep: [1, 1, 0.1, 0.05, 0.01, 0.01], esgLevel: 3, esgCost: 1, esgCut: 0.25, aiEsgChance: 0.003, ecoMax: 0.7
 };
 const ENERGY_EVENTS = {
-    smog: { minPollution: 50, chance: 0.12, texts: ['🌫️ Smog nad miastami: szkoły odwołują lekcje, a przychodnie są pełne.', '🌫️ Alarm smogowy trzeci dzień z rzędu. Mieszkańcy pytają, kto za to odpowiada.', '🌫️ Gęsty smog zatrzymał lotnisko i zamknął przedszkola.'] },
-    protest: { minPollution: 45, chance: 0.07, texts: ['📢 Protest pod bramą {name}: mieszkańcy żądają ograniczenia emisji.', '📢 Blokada dojazdu do zakładu {name}. Ekolodzy i sąsiedzi idą razem.', '📢 Marsz przeciw {name} przeszedł przez centrum miasta.'] },
+    smog: { minPollution: 45, chance: 0.12, texts: ['🌫️ Smog nad miastami: szkoły odwołują lekcje, a przychodnie są pełne.', '🌫️ Alarm smogowy trzeci dzień z rzędu. Mieszkańcy pytają, kto za to odpowiada.', '🌫️ Gęsty smog zatrzymał lotnisko i zamknął przedszkola.'] },
+    protest: { minPollution: 42, chance: 0.07, texts: ['📢 Protest pod bramą {name}: mieszkańcy żądają ograniczenia emisji.', '📢 Blokada dojazdu do zakładu {name}. Ekolodzy i sąsiedzi idą razem.', '📢 Marsz przeciw {name} przeszedł przez centrum miasta.'] },
     failure: { minPollution: 0, chance: 0.05, texts: ['⚠️ Awaria w elektrowni {name}: część mocy wypadła z sieci.', '⚠️ {name}: pożar transformatora, blok stoi.', '⚠️ {name}: awaryjne wyłączenie bloku po usterce turbiny.'] },
-    acidRain: { minPollution: 60, chance: 0.06, texts: ['🌧️ Kwaśne deszcze niszczą uprawy, a rolnicy liczą straty.', '🌧️ Rolnicy alarmują: kwaśne deszcze obniżają plony.'] },
-    scandal: { minPollution: 35, chance: 0.04, texts: ['🕵️ Skandal ekologiczny: {name} miała ukrywać prawdziwe emisje.', '🕵️ Dziennikarze ujawniają nielegalny zrzut ścieków spółki {name}.', '🕵️ {name} pod lupą po ujawnieniu sfałszowanych pomiarów emisji.'] }
+    acidRain: { minPollution: 50, chance: 0.06, texts: ['🌧️ Kwaśne deszcze niszczą uprawy, a rolnicy liczą straty.', '🌧️ Rolnicy alarmują: kwaśne deszcze obniżają plony.'] },
+    scandal: { minPollution: 30, chance: 0.04, texts: ['🕵️ Skandal ekologiczny: {name} miała ukrywać prawdziwe emisje.', '🕵️ Dziennikarze ujawniają nielegalny zrzut ścieków spółki {name}.', '🕵️ {name} pod lupą po ujawnieniu sfałszowanych pomiarów emisji.'] }
 };
 const ENERGY_EVENT_RULES = { smogMood: 1, protestPrice: -0.02, failureQuarters: 2, failureShare: 0.5, failurePrice: -0.03, acidCut: 0.05, acidQuarters: 2, scandalPrice: -0.04 };
 
@@ -446,7 +446,10 @@ function getStockEmissionFactor(stock) {
     return factor * (1 - getStockEcoCut(stock));
 }
 /** Emisje kwartału: produkcja (przychód w cenach startowych) × emisyjność. */
-function getStockEmissions(stock) { return getStockRevenue(stock) / (Number(society.priceLevel) || 1) * getStockEmissionFactor(stock); }
+function getStockEmissions(stock) {
+    const generation = stock?.power && society.energy?.demand0 > 0 ? society.energy.demand / society.energy.demand0 : 1; // elektrownie emitują według produkcji prądu
+    return getStockRevenue(stock) / (Number(society.priceLevel) || 1) * getStockEmissionFactor(stock) * generation;
+}
 /** Emisje spółki w widokach: od poziomu 2 (debug zawsze), wyższy poziom mierzy dokładniej. */
 function getMeasuredEmissionFactor(stock) {
     const debug = typeof isDebugMode === 'function' && isDebugMode(), level = getEnergyOfficeLevel();
@@ -700,7 +703,7 @@ function processEnergyQuarterly() {
     if (typeof society !== 'object' || !society || !stocks?.length) return null;
     const e = ensureEnergy();
     syncPowerProducers(e);
-    e.activity *= 1 + (Number(economyCycle?.gdpGrowth) || 0);
+    e.activity *= 1 + ENERGY_RULES.demandTrend + (Number(economyCycle?.gdpGrowth) || 0);
     e.demand = getEnergyDemand(e);
     e.capacity = getEnergyCapacity(e);
     const raw = getRawEnergyPrice(e) / e.price0 * (1 + ENERGY_RULES.shortagePremium * getEnergyShortage(e));
