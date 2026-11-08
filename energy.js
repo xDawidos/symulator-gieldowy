@@ -23,6 +23,7 @@ const ENERGY_RULES = {
     startMix: { coal: 0.55, gas: 0.15, nuclear: 0, oze: 0.30 }, // udział typu w mocy startowej; w typie moc dzieli przychód segmentu
     rateCost: 8,                 // +1 pp stopy to +8% kosztu kapitałowej części ceny
     shortagePremium: 1.5, pass: 0.6, producerPrice: 0.5, producerUtil: 0.5,
+    blockRevenue: 0.35,          // przychód rośnie o 35% przyrostu mocy: reszta zysku z nowej mocy wraca przez wykorzystanie mocy (seria: ×1,71 przychodów Energii przy 100%)
     targetReserve: 1.08, buildChance: 0.25, blockShare: 0.03, blockOwnMax: 0.30, blockCostQuarters: 6, minCashShare: 0.3,
     buildQuarters: { coal: [6, 10], gas: [4, 8], oze: [3, 6] },
     catalogPower: { energy_plant: 0.010, wind_farm: 0.006, solar_park: 0.004 }, // udział mocy kraju z budynku z katalogu
@@ -254,7 +255,7 @@ function addStockPower(stock, add, type = stock.power.type) {
     const share = getPowerSegment(stock)?.share || 1, own = Number(stock.power.capacity) || 0;
     if (type === stock.power.type) stock.power.capacity = own + add;
     else (stock.power.other = stock.power.other || {})[type] = (Number(stock.power.other?.[type]) || 0) + add;
-    if (own > 0 && stock.fundamentals) stock.fundamentals.revenue *= 1 + share * add / own;
+    if (own > 0 && stock.fundamentals) stock.fundamentals.revenue *= 1 + share * add / own * ENERGY_RULES.blockRevenue;
     society.energy.stats.blocks++;
 }
 function finishPowerBlock(stock) {
@@ -416,7 +417,7 @@ const SECTOR_EMISSIONS = { 'Chemia': 0.7, 'Przemysł': 0.6, 'Motoryzacja': 0.3, 
 const POLLUTION_RULES = {
     start: 40, keep: 0.9, healthyLevel: 40, populationLoss: 0.0002, productionFrom: 80, productionCut: 0.02
 };
-const CLIMATE_FEES = [0, 0.006, 0.012, 0.018, 0.025];   // opłata: część przychodu przy emisyjności 1 (decyzja użytkownika, pkt 8)
+const CLIMATE_FEES = [0, 0.003, 0.007, 0.012, 0.018];   // opłata: część przychodu przy emisyjności 1 (decyzja użytkownika, pkt 8)
 const ENERGY_OFFICE_RULES = {
     // poziomy: 0 bez limitów, 1 pomiar kraju, 2 pomiar spółek i limit z karą, 3 częstsze kontrole i ESG, 4 dokładny pomiar i wyższe kary, 5 pełny nadzór
     limits: [Infinity, Infinity, 1.1, 0.9, 0.75, 0.6],
@@ -617,7 +618,7 @@ function getLifeVoteAdj() {
     return hist?.length > 1 ? clampValue((hist[hist.length - 1] - hist[0]) * LIFE_RULES.vote, -LIFE_RULES.voteMax, LIFE_RULES.voteMax) : 0;
 }
 
-const ENERGY_STATE_RULES = { ozeShare: 0.5, nuclearPower: 0.06, nuclearMaxBlocks: 4, nuclearNextChance: 0.5, atomAfterQuarters: 16, atomChance: 0.05, atomStatePct: 0.8, atomPrice: 1700, atomShares: 1000000 };
+const ENERGY_STATE_RULES = { ozeShare: 0.5, nuclearPower: 0.06, nuclearMaxBlocks: 4, nuclearNextChance: 0.5, atomAfterQuarters: 20, atomChance: 0.03, atomStatePct: 0.8, atomPrice: 1700, atomShares: 1000000 };
 const NUCLEAR_BLOCK_BOOSTS = [0.15, 0.10, 0.05];
 /** Fundusz energii płaci spółkom OZE według mocy. Wpływy i wydatek to opłaty za emisje, więc saldo budżetu się nie zmienia. */
 function payOzeSubsidies(e) {
