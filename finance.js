@@ -993,7 +993,7 @@ function assignEliteExchanges() {
         stock.exchange = next;
         applyEliteBonuses(stock);
         applyPriceEffect(stock.symbol, up ? 0.03 : -0.03, up ? 'positive' : 'negative', 'review');
-        logEvent(`${up ? '📈 AWANS' : '📉 SPADEK'}: ${stock.name} ${up ? 'wchodzi na' : 'spada na'} ${exchanges[next].name} (kapitalizacja ${formatPLNShort(getMarketCap(stock))}).`, 'market');
+        logEvent(`${up ? '📈 AWANS' : '📉 SPADEK'}: ${stock.name} ${up ? 'wchodzi na' : 'spada na'} ${getExchangeAcc(next)} (kapitalizacja ${formatPLNShort(getMarketCap(stock))}).`, 'market');
         changes.push([stock.symbol, next]);
     }
     return changes;
@@ -1104,7 +1104,7 @@ function foundSubsidiary(parent, options = {}) {
     if (typeof initializeFundamentals === 'function') initializeFundamentals(child, true);
     if (typeof initializeDescriptionParts === 'function') initializeDescriptionParts(child);
 
-    logEvent(`🆕 IPO: ${parent.name} zakłada spółkę zależną ${child.name} (${symbol}) na ${exchanges[exchangeKey].name} — ${Math.round((1 - parentStake) * 100)}% akcji w ofercie publicznej.`, 'market');
+    logEvent(`🆕 IPO: ${parent.name} zakłada spółkę zależną ${child.name} (${symbol}) na ${getExchangeAcc(exchangeKey)} — ${Math.round((1 - parentStake) * 100)}% akcji w ofercie publicznej.`, 'market');
     return child;
 }
 

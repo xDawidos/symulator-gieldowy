@@ -8588,6 +8588,9 @@ function toggleTopbarMenu(force) {
 }
 function closeTopbarMenu() { toggleTopbarMenu(false); }
 if (typeof document !== 'undefined') {
+    // przegląd 2026-11-08 pkt 1: obsługa po załadowaniu ui.js zamiast inline onclick (klik przed skryptem dawał błąd)
+    const bindTopbarMenu = () => document.getElementById('topbar-menu-btn')?.addEventListener('click', () => toggleTopbarMenu());
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bindTopbarMenu); else bindTopbarMenu();
     document.addEventListener('click', event => {
         const wrap = document.querySelector('.topbar-menu-wrap');
         if (wrap && !wrap.contains(event.target)) closeTopbarMenu();
