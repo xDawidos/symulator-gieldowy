@@ -29,27 +29,39 @@ Sonda w trybie cichym tylko czyta. Przez grę przychody Energii rosną ×1,11, o
 - **Pierwsza kontrola:** GIG +1,31 pp (poza bramką), przychody Energii ×1,71. Przychód z nowego bloku zmniejszony do 35% przyrostu mocy, opłata za emisje 0; 0,3; 0,7; 1,2; 1,8% (było 0,6–2,5%), Narodowy Atom po 20 kw. dopłat i 3% na kwartał.
 - **Runner:** Edge w nowym profilu otwierał kartę Adblock Plus i przebiegi stały. `run_przebiegi.mjs` ma teraz `--disable-extensions`. Sonda E0 miała `${…}` w szablonie presetu, co psuło skrypt.
 
-## Kontrola ×200 (0ef0495 względem bazy, po 120 gier)
+## Kontrola ×200 (48aa9da względem bazy, po 120 gier, 27 kw., preset `fundusz-gig`)
+
+Poprzednia kontrola (0ef0495) też przeszła bramki (GIG +0,62 pp, marże 0,16 pp), ale potem emisje elektrowni przeszły z przychodu na produkcję prądu (Tauron z 3,6 GW miał 0,1% emisji kraju, teraz 35%), a moc startowa trafia tylko do spółek z podsektorem energetyki. Dlatego kontrola powtórzona.
 
 | Miara | Baza | Nowa | Cel | Wynik |
 |---|---|---|---|---|
-| GIG | 10,28% | 10,91% (Δ +0,62, SE 0,49) | ±1 pp | OK |
-| Średnia odchyłek marż (19 sektorów) | | 0,16 pp (SE 0,12) | 0 ± 0,3 pp | OK |
-| Indeks zysków | 7,10% | 7,24% | w widełkach | OK |
-| Marża końcowa | 22,75% | 22,47% | w widełkach | OK |
-| Zapis, średnia | 2 421 327 | 2 423 318 (+0,1%) | do 2% | OK |
+| GIG | 10,28% | 11,03% (Δ +0,74, SE 0,53) | ±1 pp | OK |
+| Średnia odchyłek marż (19 sektorów) | | 0,09 pp (SE 0,12) | 0 ± 0,3 pp | OK |
+| Indeks zysków | 7,10% | 7,34% | w widełkach | OK |
+| Marża końcowa | 22,75% | 22,63% | w widełkach | OK |
+| Zapis, średnia | 2 421 327 | 2 441 009 (+0,8%) | do 2% | OK |
+| Czas kroku, 8 gier po kolei | 1341 i 1326 ms (dwa pomiary) | 1335 ms (+0,1%) | do 2% | OK |
 | Błędy JS, niezmienniki | 0 | 0 | 0 | OK |
-| Czas kroku, sekwencyjnie | patrz niżej | | do 2% | |
-| Blackouty | | 0,13 na grę, 16 gier z 120 | rzadkie | OK |
-| Nowe spółki energetyczne | | miejskie 0,02 na grę, Narodowy Atom 23 z 120 | | |
-| Bloki na grę | | 3,9 (w tym projekty państwa 0,02) | | |
-| Poziom życia na koniec | | p10 59,9, mediana 61,6, p90 63,6 (start ok. 50) | | |
-| Zanieczyszczenie | | 40 → 37 | | |
-| Zieloni | | 32 z 120 gier (start 25% i zamiany) | | |
-| Rządzący na koniec | | Koalicja Rynkowa 57, Blok Państwowy 53, Ludowcy 8, Socjaldemokraci 2 | | |
-| Miks na koniec | | węgiel 54%, gaz 15%, atom 1,5%, OZE 30% | | |
+| Blackouty | | 0,23 na grę, 26 gier z 120 | rzadkie | OK |
+| Nowe spółki energetyczne | | miejskie 0,05 na grę, Narodowy Atom 29 z 120 | | |
+| Bloki na grę | | 4,0, projekty państwa 0,06 | | |
+| Rezerwa mocy | 12% na starcie | 5–8% przez grę | | |
+| Poziom życia na koniec | | p10 59,7, mediana 61,9, p90 63,3 (start ok. 50) | | |
+| Zanieczyszczenie | | 40 → 39 | | |
+| Poziom UEiE na koniec | | 2,3 średnio | | |
+| Zieloni | | 41 z 120 gier | | |
+| Rządzący na koniec | | Koalicja Rynkowa 80, Blok Państwowy 33, Ludowcy 5, Socjaldemokraci 2 | | |
+| Miks na koniec | | węgiel 53%, gaz 15%, atom 2%, OZE 31% | | |
+| Zdarzenia na grę | | awarie 1,33, skandale 1,02, protesty 0,14, smog 0,02 | | |
 
-- **Chemia −1,48 pp (SE 0,48):** jedyny sektor wyraźnie niżej. Składają się na to opłata za emisje (0,7 × 0,3%) i mniejszy wsad gazu na rzecz prądu. Średnia sektorów jest w bramce, więc nie stroiłem tego osobno.
-- **Medycyna +1,33 pp (SE 0,49):** bez związku z energetyką, prawdopodobnie szum.
-- **Zanieczyszczenie spada:** ESG, kary i technologie obniżają emisje szybciej, niż rośnie produkcja. Założenie „produkcja = dodatkowy skutek zanieczyszczeń” działa w kodzie, ale w seriach wskaźnik nie dochodzi do 80, więc skutek się nie pojawia.
-- **Pierwsza seria nowej wersji** (przed strojeniem) miała 4 naruszenia „ujemna gotówka funduszu” botów w jednej grze. Po strojeniu 0, w bazie 1 ujemna gotówka. Nie badałem przyczyny.
+- **Czas:** wcześniejszy pomiar dał +2,8%, po liczeniu emisyjności raz na kwartał +2,0%, teraz +0,1%. Profil w pełnej grze: kod energetyki to ok. 1,4 ms na kwartał przy kroku 1335 ms.
+- **Sektory:** Chemia −0,85 pp (SE 0,47), Transport i logistyka +1,29 pp (SE 0,58). Chemię obniża opłata za emisje. Średnia jest w bramce, więc nie stroiłem osobno.
+- **Ujemna gotówka:** 5 gier w nowej, 1 w bazie. To osobny licznik (nie niezmiennik, ten ma 0). Przyczyny nie badałem.
+- **Rządzący:** Koalicja Rynkowa wygrywa częściej niż w poprzedniej serii nowej wersji (80 wobec 57). Baza nie zapisuje rządzących, więc nie wiem, czy to zmiana 0.17.2, czy szum.
+- **Zanieczyszczenie** stoi przy 40 i nie dochodzi do 80, więc spadek produkcji (decyzja 12) w seriach się nie pojawia. Działa w testach.
+
+## Widoki
+
+Desktop (1024 px) i 390 px sprawdzone przez DOM w grze: zakładka Energia, Kraj, Nadzór, sekcje Energia Tauronu i Państwowego Urana. Wszystkie elementy z projektu są na miejscu, poziomego przewijania strony nie ma. Pasek zakładek Państwa przewija się sam (9 zakładek), tak jak dotąd. Zrzutów ekranu nie ma, bo panel aplikacji był ukryty i nie rysował strony.
+
+Surowe serie: folder notatek, `serie_0172`.
