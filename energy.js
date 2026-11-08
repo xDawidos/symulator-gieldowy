@@ -20,6 +20,7 @@ const POWER_INPUTS = { 'Przemysł': 0.06, 'Chemia': 0.06, 'Motoryzacja': 0.04, '
 const POWER_INPUT_SYMBOLS = { PKC: 0.05 };
 const ENERGY_RULES = {
     startCapacity: 30000, startReserve: 1.12, householdShare: 0.25, histQuarters: 8,
+    startMix: { coal: 0.55, gas: 0.15, nuclear: 0, oze: 0.30 }, // udział typu w mocy startowej; w typie moc dzieli przychód segmentu
     rateCost: 8,                 // +1 pp stopy to +8% kosztu kapitałowej części ceny
     shortagePremium: 1.5, pass: 0.6, producerPrice: 0.5, producerUtil: 0.5,
     targetReserve: 1.08, buildChance: 0.25, blockShare: 0.03, blockOwnMax: 0.30, blockCostQuarters: 6, minCashShare: 0.3,
@@ -119,14 +120,19 @@ function getRawEnergyPrice(e) {
     return total > 0 ? ENERGY_TYPE_IDS.reduce((sum, type) => sum + mix[type] / total * getEnergyTypeCost(type, e), 0) : 1;
 }
 
-/** Stan startowy: moc spółek z przychodu segmentu Energia, skala tak, by kraj miał startCapacity MW. */
+/** Stan startowy: miks kraju z startMix (startCapacity MW), w typie moc według przychodu segmentu Energia. Typ bez spółek trafia do puli. */
 function initEnergyState() {
     const e = createEnergyState();
     const producers = stocks.filter(stock => !stock.isBankrupt && !stock.assetType && getPowerSegment(stock));
-    const output = stock => getPowerTypeForStock(stock) === 'nuclear' ? 0 : getStockRevenue(stock) * getPowerSegment(stock).share;
+    const output = stock => getStockRevenue(stock) * getPowerSegment(stock).share;
     const total = producers.reduce((sum, stock) => sum + output(stock), 0);
     e.scale = total > 0 ? ENERGY_RULES.startCapacity / total : 0;
-    for (const stock of producers) stock.power = { type: getPowerTypeForStock(stock), capacity: Math.round(output(stock) * e.scale) };
+    for (const type of ENERGY_TYPE_IDS) {
+        const target = ENERGY_RULES.startCapacity * ENERGY_RULES.startMix[type], list = producers.filter(stock => getPowerTypeForStock(stock) === type);
+        const sum = list.reduce((acc, stock) => acc + output(stock), 0);
+        for (const stock of list) stock.power = { type, capacity: sum > 0 ? Math.round(target * output(stock) / sum) : 0 };
+        if (!(sum > 0) && target > 0) e.pool[type] = target;
+    }
     e.demand0 = ENERGY_RULES.startCapacity / ENERGY_RULES.startReserve;
     e.demand = e.demand0;
     e.pop0 = Number(society.population) || 1;
@@ -211,7 +217,7 @@ function getPowerResultAdj(stock) {
 // ---------------------------------------------------------------------------------
 function getPowerBlockSize(stock, e = society.energy) {
     const own = Number(stock.power?.capacity) || 0, national = e.capacity * ENERGY_RULES.blockShare;
-    return Math.max(1, Math.round(own > 0 ? Math.min(national, Math.max(own * ENERGY_RULES.blockOwnMax, national * 0.25)) : national));
+    return Math.max(1, Math.round(own > 0 ? Math.min(national, own * ENERGY_RULES.blockOwnMax) : national * 0.25)); // mała spółka buduje mały blok, przychód rośnie najwyżej o 30%
 }
 function getRevenuePerMw(stock, e = society.energy) {
     const own = Number(stock.power?.capacity) || 0, share = getPowerSegment(stock)?.share || 1;
