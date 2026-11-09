@@ -5426,7 +5426,9 @@ const COALITION_THRESHOLD = 0.40;
 // Socjaldemokraci (decyzja użytkownika): sami nie wygrywają — są koalicjantem lewicy i rosną w kryzysie.
 const SOCIAL_COALITION_MIN = 10;     // % poparcia, od którego Ludowcy / Blok Państwowy wolą ich jako koalicjanta
 const SOCIAL_CRISIS_BONUS = 6;       // pp przy złej koniunkturze
-const ELECTION_FATIGUE = 6;          // pp na każdą kadencję u władzy (0.17.1 S3: 5 → 6)
+const ELECTION_FATIGUE_FIRST = 4;    // pp po pierwszej kadencji (0.17.1 S3)
+const ELECTION_FATIGUE = 6;          // pp za każdą kolejną kadencję u władzy (0.17.1 S3: łatwiejsza pierwsza reelekcja, droższe długie rządy; wcześniej 5 × kadencje)
+const getElectionFatigue = terms => ELECTION_FATIGUE_FIRST + ELECTION_FATIGUE * (Math.max(1, Number(terms) || 1) - 1);
 const ELECTION_BAD_TIMES = 10;       // pp przy złej koniunkturze
 const PROTEST_TO_PEOPLE = 0.75;      // część odpływu od rządzących, która trafia do Ludowców
 const DEFICIT_BOND_QUARTERS = 4;
@@ -6069,7 +6071,7 @@ function computePartySupport(withNoise = true) {
     // Zmęczenie władzą rośnie z każdą kadencją; zła koniunktura (recesja, inflacja, bezrobocie) szkodzi rządzącym,
     // a głosy protestu zbierają głównie Ludowcy.
     const badTimes = economyCycle.phase === 'recession' || macro.inflation > 0.05 || macro.unemployment > 0.09;
-    const penalty = ELECTION_FATIGUE * Math.max(1, Number(election.terms) || 1) + (badTimes ? ELECTION_BAD_TIMES : 0);
+    const penalty = getElectionFatigue(election.terms) + (badTimes ? ELECTION_BAD_TIMES : 0);
     if (support[ruling] !== undefined) {
         support[ruling] -= penalty;
         const others = PARTY_IDS.filter(id => id !== ruling);

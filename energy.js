@@ -428,7 +428,7 @@ function getSegmentEmission(stock, seg) {
     return profile ? CHEM_EMISSIONS[profile] : SECTOR_EMISSIONS.Chemia;
 }
 const POLLUTION_RULES = {
-    start: 40, keep: 0.9, elasticity: 3.3, elasticityLate: 2.6, fadeFrom: 26, fadeTo: 80, powerShare: 0.4, healthyLevel: 40, populationLoss: 0.0002, productionFrom: 80, productionCut: 0.02
+    start: 40, keep: 0.9, elasticity: 3.3, elasticityLate: 1.75, fadeFrom: 26, fadeTo: 80, powerShare: 0.4, healthyLevel: 40, populationLoss: 0.0002, productionFrom: 80, productionCut: 0.02
 };
 const CLIMATE_FEES = [0, 0.003, 0.007, 0.012, 0.018];   // opłata: część przychodu przy emisyjności 1 (decyzja użytkownika, pkt 8)
 const ENERGY_OFFICE_RULES = {
@@ -501,7 +501,7 @@ function getPollutionProductionCut(e = society.energy) {
     return Math.max(0, (Number(e?.pollution) || 0) - POLLUTION_RULES.productionFrom) / (100 - POLLUTION_RULES.productionFrom) * POLLUTION_RULES.productionCut;
 }
 
-/** 0.17.1 S4: elastyczność gaśnie od 6,5 roku do 20 lat (3,3 → 2,6), bo emisje rosną przez całą grę, a norma jest z pierwszego kwartału. */
+/** 0.17.1 S4: elastyczność gaśnie od 6,5 roku do 20 lat (3,3 → 1,75), bo emisje rosną przez całą grę, a norma jest z pierwszego kwartału. */
 function getPollutionElasticity(quarter = getEnergyQuarter()) {
     const r = POLLUTION_RULES, t = clampValue((quarter - r.fadeFrom) / (r.fadeTo - r.fadeFrom), 0, 1);
     return r.elasticity + (r.elasticityLate - r.elasticity) * t;
