@@ -417,9 +417,9 @@ PRESETS['dzwignia'] = PRESETS['fundusz-gig'] + `(function () {
             }
             const live = getMarginPositions('forex'), used = live.reduce((a, p) => a + p.notional, 0), room = getFundAssets() * MARGIN_RULES.fundLeverageCap - used;
             if (room > MARGIN_RULES.minNotional) {
-                const gg = g(), lev = window.__lev || 10, deposit = room / lev, need = deposit * 1.05 - playerCash; // 0.17.1 S6: patch window.__lev=3
+                const gg = g(), lev = window.__lev || 10, deposit = Math.min(room / lev, getFundAssets() * 0.25), need = deposit * 1.05 - playerCash; // 0.17.1 S6: patch window.__lev=3; depozyt najwyżej 25% aktywów (przy 1:3 pełny limit wymagał depozytu = aktywa)
                 if (need > 0 && gg > 0 && window.__idx) { const take = Math.min(need, window.__idx.units * gg); window.__idx.units -= take / gg; playerCash += take; }
-                const r = openForexPosition(pairs[macro.quarter % pairs.length], macro.quarter % 2 ? 1 : -1, room, lev);
+                const r = openForexPosition(pairs[macro.quarter % pairs.length], macro.quarter % 2 ? 1 : -1, deposit * lev, lev);
                 if (r.ok) T.opened++; else { T.refused++; T.reasons[r.reason] = (T.reasons[r.reason] || 0) + 1; }
             }
         } catch (e) { err(e); }
