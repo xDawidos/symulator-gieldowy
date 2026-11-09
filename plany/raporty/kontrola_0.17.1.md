@@ -73,3 +73,59 @@ Czas kroku w tej tabeli liczony przy 5 przebiegach naraz i bez rysowania interfe
 ### Błąd naprawiony od razu
 
 - **JU klientów ≠ JU funduszu** (`dzwignia`, 1 gra z 20, różnica 0,36 udziału w kw. 27). Przy umorzeniu bez gotówki klient dostawał tylko część pieniędzy, a resztka udziałów poniżej 0,5 znikała razem z nim z listy (`redeemClientUnits`, `player.js`). Teraz klient znika dopiero bez udziałów. Test dodany, 1058/1058.
+
+## T5. Strojenia i poprawki (decyzje z T4)
+
+| # | Zmiana | Commit |
+|---|---|---|
+| U1–U8 | teksty i spójność widoków (ścieżka do kwitów, kraj z biletem na start, nazwa rynku, MW w sekcji Energia, przecinek dziesiętny, bez paska wiadomości w scence startowej) | 8ea6fb3 |
+| U5, U7, U9 | U5 i U7 to nie błędy; U9 to strojenie z propozycją (premia za granicą od bieżącej premii kraju źródłowego zamiast jego celu), do decyzji | 91646cd |
+| S1 | **błąd:** pierwszy okres funduszu zaczynał się przy GIG = 0, więc przez cały okres klienci porównywali wynik z zerem (nadwyżka −18…+26%, ucieczka przez bramkę na 2 lata); dotyczyło gracza i zarządców | b92bac0 |
+| S1 | tolerancja 1,5 pp nadwyżki dla klientów porównujących się z GIG i SIG20: fundusz jak indeks zostaje za nim o opłatę i gotówkę płynności (ok. 1,4 pp na okres), a przy pogoni za wynikiem 1,5 był stale pod progiem zadowolenia | a4df887 |
+| S1 | **błąd:** Program Emerytalny przy długu państwa dawał ujemne granty i zabierał gotówkę funduszom zarządców (ujemna gotówka w długich grach; złapane sondą w T6, 11 z 11 trafień) | a9ebbaa |
+| S2 | bez strojenia; punkt kontrolny w planie 0.18 (sekcja 14) | 91646cd |
+| S3 | klasa średnia i wyższa średnia mniej za Koalicją Rynkową (36% i 51% zamiast 42% i 57%); kara za kadencje 2 pp po pierwszej i +6 pp za każdą kolejną (było 5 × kadencje) | b2a28d8, kolejne rundy |
+| S4 | od 6,5 roku norma emisji rośnie o 1,5% rocznie (technologia), a elastyczność gaśnie do 20 lat z 3,3 do 2,2 | b2a28d8, kolejne rundy |
+| S5 | emisyjność chemii według profilu spółki (rafineria 1,0, nawozy 0,9, tworzywa 0,6, farmacja 0,2); KUP na starcie 10–20% emisji kraju, Tauron 35% | b2a28d8 |
+| S6 | preset `dzwignia` z parametrem dźwigni i depozytem najwyżej 25% aktywów | b2a28d8, e248452 |
+
+Narzędzia: preset `kampanie` bierze koszt kampanii z pozycji indeksowej (przedtem wszystkie kampanie blokowała „Brak gotówki”), kolejka przebiegów przekazuje `patch`.
+
+## T6. Serie po strojeniu (`--noui`, kolejka po 5)
+
+Pełna seria na a4df887 (18 zadań, 395 gier), potem dwie rundy S3/S4 i seria kontrolna na stanie końcowym (10 gier × 20 lat, 5 × 20 lat `fundusz-gig`, 24 × 6,5 roku, `dzwignia` 1:3 × 20).
+
+| Miara | Cel | T1 | Po strojeniu | Ocena |
+|---|---|---|---|---|
+| Niezmienniki, ujemna gotówka, JS, pieniądze znikąd | 0 | 0 (T2: 1, naprawione) | 0 w serii kontrolnej; w pełnej serii 4 niezmienniki i 1 ujemna gotówka z Programu Emerytalnego, naprawione | OK |
+| GIG 6,5 roku | | 11,07% | 11,01% (50 gier) | bez zmian |
+| GIG 20 lat | 8–11% | 13,33% | 12,44% (20 gier) | bliżej celu, nadal POZA (S2 w 0.18) |
+| Marże sektorów | 0 ± 0,3 pp | | −0,15 pp (6,5 roku) | OK |
+| Fundusz z kampaniami: udziały | ±3%/rok | (kampanie zablokowane) | +3,4…+4,6%/rok (6,5 roku), +3,6%/rok (20 lat) | na granicy, przyjęte (decyzja: cel dotyczy funduszu z kampaniami) |
+| Fundusz z kampaniami: zaufanie | 45–55 | | mediana 47–52 | OK |
+| Fundusz bez kampanii (`fundusz-gig`) | | −5,8%/rok | −5,4%/rok (6,5 roku), −0,9…−1,8%/rok (20 lat) | kurczy się zgodnie z 0.16.1 |
+| Koalicja Rynkowa: wygrane | ok. 45–55% | 64–70% | 59–71% | **POZA** (patrz niżej) |
+| Reelekcja | nie niżej niż baza 20% | 13–39% | 19–38% | OK |
+| Zanieczyszczenie 6,5 roku | ok. 55 | 48–52 | 50,1 | OK |
+| Zanieczyszczenie 20 lat | 55–65, 80+ tylko przy zaniedbaniu | 61–72 | 65,6 i 65,8 (średnie), ale 3/10 gier 93–99 | średnia na granicy, rozrzut duży |
+| KrzeUraFos4 | żadna spółka spoza energetyki ponad Tauron na starcie | 46% wobec 35% | 10–22% wobec 35% | OK |
+| Dźwignia 1:3 | | (nie mierzone) | 0 upadłości, 0 margin call, ale tylko 4 pozycje w 20 grach | mało danych |
+| Zapis | | 2,42 mln (6,5 roku) | 2,43 mln | bez zmian |
+| Czas kroku po kolei, bez `--noui`, 6 gier na wersję | bez pogorszenia | 2889 ms/kw. (baza T1) | 2339 ms/kw. | bez pogorszenia (duży rozrzut 1323–3957 ms) |
+
+**Kolejne rundy S3/S4 w T6:**
+1. Kara 6 × kadencje i elastyczność do 2,6: reelekcja spadła do 8–15%, zanieczyszczenie po 20 latach 73–98.
+2. Kara 4 + 6 i elastyczność do 1,75: reelekcja 10–18%, zanieczyszczenie bez zmian (72,6). Wniosek: przy stałej normie elastyczność nie pomaga, bo emisje przemysłu rosną z realnym przychodem o 40–70% przez 20 lat.
+3. Kara 2 + 6, norma +1,5% rocznie od 6,5 roku, elastyczność do 2,2: stan końcowy z tabeli.
+
+**Koalicja Rynkowa:** reelekcja i dominacja się wykluczają. Kara wysoka od pierwszej kadencji obniżyła wygrane Koalicji do 51–57%, ale reelekcja spadła do 8–15%. Kara łagodna dla pierwszej kadencji przywróciła reelekcję i podniosła Koalicję do 59–71%. Do decyzji: dalsze przesunięcie wag klasy średniej (np. 32% zamiast 36%) albo przyjęcie obecnego stanu.
+
+**Zanieczyszczenie:** gry dzielą się na czyste (30–45) i brudne (93–99), środek jest rzadki. Brudne to te, w których rośnie węgiel i przemysł ciężki bez reakcji UEiE. Do sprawdzenia w 0.18 razem z łańcuchami (przemysł zużywa prąd).
+
+## T7. Podsumowanie i decyzja o 0.18
+
+- Testy jednostkowe 1062/1062.
+- Spełnione: błędy 0, GIG 6,5 roku, marże, zaufanie, reelekcja, zanieczyszczenie po 6,5 roku i średnio po 20 latach, S5, zapis, czas kroku.
+- Na granicy lub poza: GIG 20 lat 12,4% (S2, punkt kontrolny w 0.18), Koalicja Rynkowa 59–71%, rozrzut zanieczyszczenia po 20 latach, udziały funduszu z kampaniami +3,4…+4,6%/rok, dźwignia 1:3 mało danych.
+- **Propozycja:** wejść w 0.18. Otwarte punkty (Koalicja Rynkowa, U9, rozrzut zanieczyszczenia) nie blokują łańcuchów i będą mierzone w seriach 0.18.
+- Surowe serie: folder notatek `serie_0171` (T1, T2) i kopie w schowku sesji (T6).
