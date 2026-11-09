@@ -6336,6 +6336,17 @@ group('Przegląd 2026-11-08', () => {
             assertEq(gig.value, 1600, 'stary zapis');
         } finally { gig.value = keep; }
     });
+    test('0.17.1: Program Emerytalny przy długu państwa nie zabiera gotówki funduszom', () => {
+        resetWorld([makeCompany('AAA'), makeCompany('BBB')]); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        const keep = governmentTreasury;
+        try {
+            governmentTreasury = -5e7;
+            const cash = corporation.managers.map(m => m.fund.cash);
+            assertEq(runStatePensionProgram().length, 0, 'bez grantów');
+            corporation.managers.forEach((m, i) => assertEq(m.fund.cash, cash[i], `gotówka ${m.name}`));
+            assertEq(governmentTreasury, -5e7, 'budżet bez zmian');
+        } finally { governmentTreasury = keep; }
+    });
     test('0.17.1 S1: okres zaczęty przy GIG = 0 bierze start z pierwszego poziomu GIG i NAV z tej chwili', () => {
         resetWorld([makeCompany('AAA'), makeCompany('BBB')]); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
         const gig = marketIndexes.find(i => i.id === 'GIG'), keep = gig.value;
