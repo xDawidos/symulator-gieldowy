@@ -428,7 +428,7 @@ function getSegmentEmission(stock, seg) {
     return profile ? CHEM_EMISSIONS[profile] : SECTOR_EMISSIONS.Chemia;
 }
 const POLLUTION_RULES = {
-    start: 40, keep: 0.9, elasticity: 3.3, elasticityLate: 1.75, fadeFrom: 26, fadeTo: 80, powerShare: 0.4, healthyLevel: 40, populationLoss: 0.0002, productionFrom: 80, productionCut: 0.02
+    start: 40, keep: 0.9, elasticity: 3.3, elasticityLate: 2.2, fadeFrom: 26, fadeTo: 80, normGrowth: 0.015, powerShare: 0.4, healthyLevel: 40, populationLoss: 0.0002, productionFrom: 80, productionCut: 0.02
 };
 const CLIMATE_FEES = [0, 0.003, 0.007, 0.012, 0.018];   // opłata: część przychodu przy emisyjności 1 (decyzja użytkownika, pkt 8)
 const ENERGY_OFFICE_RULES = {
@@ -501,7 +501,12 @@ function getPollutionProductionCut(e = society.energy) {
     return Math.max(0, (Number(e?.pollution) || 0) - POLLUTION_RULES.productionFrom) / (100 - POLLUTION_RULES.productionFrom) * POLLUTION_RULES.productionCut;
 }
 
-/** 0.17.1 S4: elastyczność gaśnie od 6,5 roku do 20 lat (3,3 → 1,75), bo emisje rosną przez całą grę, a norma jest z pierwszego kwartału. */
+/** 0.17.1 S4: od 6,5 roku norma rośnie o 1,5% rocznie (technologia), a elastyczność gaśnie do 20 lat (3,3 → 2,2).
+ * Emisje przemysłu rosną z realnym przychodem (+40–70% przez 20 lat), więc przy stałej normie z 1. kwartału zanieczyszczenie dochodziło do 100. */
+function getPollutionNormFactor(quarter = getEnergyQuarter()) {
+    const r = POLLUTION_RULES;
+    return Math.pow(1 + r.normGrowth, Math.max(0, quarter - r.fadeFrom) / 4);
+}
 function getPollutionElasticity(quarter = getEnergyQuarter()) {
     const r = POLLUTION_RULES, t = clampValue((quarter - r.fadeFrom) / (r.fadeTo - r.fadeFrom), 0, 1);
     return r.elasticity + (r.elasticityLate - r.elasticity) * t;
@@ -522,7 +527,7 @@ function processPollution(e) {
     e.emissions = Math.round(emissions);
     e.pollutionLast = e.pollution;
     // cel: start × (emisje / norma)^elastyczność; +10% emisji to ok. +15 pkt (decyzja użytkownika: przez grę do ok. 55)
-    const target = Math.min(100, POLLUTION_RULES.start * Math.pow(Math.max(0, emissions / e.norm), getPollutionElasticity()));
+    const target = Math.min(100, POLLUTION_RULES.start * Math.pow(Math.max(0, emissions / (e.norm * getPollutionNormFactor())), getPollutionElasticity()));
     e.pollution = +clampValue(POLLUTION_RULES.keep * e.pollution + (1 - POLLUTION_RULES.keep) * target, 0, 100).toFixed(2);
     if (e.pollution > POLLUTION_RULES.healthyLevel) society.population = Math.round(society.population * (1 - (e.pollution - POLLUTION_RULES.healthyLevel) / 60 * POLLUTION_RULES.populationLoss));
     return e.pollution;

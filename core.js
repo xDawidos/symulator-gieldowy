@@ -5426,7 +5426,7 @@ const COALITION_THRESHOLD = 0.40;
 // Socjaldemokraci (decyzja użytkownika): sami nie wygrywają — są koalicjantem lewicy i rosną w kryzysie.
 const SOCIAL_COALITION_MIN = 10;     // % poparcia, od którego Ludowcy / Blok Państwowy wolą ich jako koalicjanta
 const SOCIAL_CRISIS_BONUS = 6;       // pp przy złej koniunkturze
-const ELECTION_FATIGUE_FIRST = 4;    // pp po pierwszej kadencji (0.17.1 S3)
+const ELECTION_FATIGUE_FIRST = 2;    // pp po pierwszej kadencji (0.17.1 S3)
 const ELECTION_FATIGUE = 6;          // pp za każdą kolejną kadencję u władzy (0.17.1 S3: łatwiejsza pierwsza reelekcja, droższe długie rządy; wcześniej 5 × kadencje)
 const getElectionFatigue = terms => ELECTION_FATIGUE_FIRST + ELECTION_FATIGUE * (Math.max(1, Number(terms) || 1) - 1);
 const ELECTION_BAD_TIMES = 10;       // pp przy złej koniunkturze

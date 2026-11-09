@@ -6363,13 +6363,15 @@ group('Przegląd 2026-11-08', () => {
             assert(fillMissingPeriodStart(bot, 1.1) && bot.startBenchmark === 2500 && !('peakBenchmark' in bot), 'fundusz zarządcy');
         } finally { gig.value = keep; }
     });
-    test('0.17.1 S3/S4/S5: kara za kadencje 4 + 6 za każdą kolejną; elastyczność zanieczyszczenia gaśnie 3,3 → 1,75; chemia według profilu', () => {
+    test('0.17.1 S3/S4/S5: kara za kadencje 2 + 6 za każdą kolejną; norma emisji rośnie od 6,5 roku, elastyczność gaśnie 3,3 → 2,2; chemia według profilu', () => {
         assertEq(getPollutionElasticity(0), 3.3, 'start');
         assertEq(getPollutionElasticity(26), 3.3, '6,5 roku');
-        assert(Math.abs(getPollutionElasticity(53) - 2.525) < 1e-9, 'w połowie');
-        assertEq(getPollutionElasticity(200), 1.75, 'po 20 latach');
-        assertEq(getElectionFatigue(1), 4, 'kara po 1 kadencji');
-        assertEq(getElectionFatigue(3), 16, 'kara po 3 kadencjach');
+        assert(Math.abs(getPollutionElasticity(53) - 2.75) < 1e-9, 'w połowie');
+        assertEq(getPollutionElasticity(200), 2.2, 'po 20 latach');
+        assertEq(getPollutionNormFactor(26), 1, 'norma bez zmian do 6,5 roku');
+        assert(Math.abs(getPollutionNormFactor(30) - 1.015) < 1e-9, 'rok później +1,5%');
+        assertEq(getElectionFatigue(1), 2, 'kara po 1 kadencji');
+        assertEq(getElectionFatigue(3), 14, 'kara po 3 kadencjach');
         const seg = { sector: 'Chemia', share: 1 };
         assertEq(getSegmentEmission({ symbol: 'ECL', name: 'EcoLube' }, seg), 1, 'rafineria');
         assertEq(getSegmentEmission({ symbol: 'KUP', name: 'KrzeUraFos4' }, seg), 0.2, 'KUP: farmacja');
