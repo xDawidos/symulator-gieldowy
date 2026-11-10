@@ -1,0 +1,258 @@
+<!doctype html><html lang="pl"><head><meta charset="utf-8"><title>Makieta UI — Rama okna (R9)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../../tokens.css">
+<style>
+/* ===== Rama makiety (do gry nie idzie) ===== */
+html, body { margin: 0; background: #05070a; color: var(--color-text-primary); font-family: var(--font-family-sans); }
+.frame-title { max-width: 1366px; margin: 24px auto 8px; padding: 0 16px; font-size: 18px; font-weight: 600; }
+.frame-sub { max-width: 1366px; margin: 0 auto 12px; padding: 0 16px; font-size: 13px; color: var(--color-text-muted); }
+.frame { position: relative; max-width: 1366px; height: 860px; margin: 0 auto 40px; border: 1px solid var(--ink-700); border-radius: 6px; overflow: hidden; background: var(--color-bg-base); }
+.frame.is-phone { width: 390px; max-width: 100%; height: 780px; margin: 0; }
+.phones { display: flex; flex-wrap: wrap; gap: 24px; justify-content: center; max-width: 1366px; margin: 0 auto 40px; }
+.frame::before { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(0deg, transparent 0 37px, var(--ink-800) 37px 38px); } /* tło: ekran główny pod spodem */
+
+/* ===== Blok do gry: wspólna rama okna (projekt plany/design/19_okna.md) ===== */
+.cq { container-type: inline-size; position: absolute; inset: 0; font-size: 13px; line-height: 1.45; }
+.cq svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.cq :focus-visible { outline: 2px solid var(--color-text-primary); outline-offset: 2px; }
+.num { font-family: var(--font-family-mono); font-variant-numeric: tabular-nums; }
+
+/* Tło pod oknem: w grze position: fixed na całe okno przeglądarki */
+.wn-backdrop { position: absolute; inset: 0; background: rgba(5, 7, 10, .72); }
+
+/* O1 + O2: jedna skorupa. Przypięta do góry, STAŁA wysokość, przewija się tylko treść */
+.wn { --wn-accent: var(--color-border-strong); position: absolute; top: 6%; left: 50%; transform: translateX(-50%);
+  width: min(1120px, calc(100% - 48px)); height: min(86%, 820px);
+  display: grid; grid-template-rows: auto auto minmax(0, 1fr);
+  background: var(--color-bg-surface); border: 1px solid var(--ink-700); border-top: 3px solid var(--wn-accent); border-radius: 6px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, .55); overflow: hidden; }
+.wn--state { --wn-accent: var(--color-section-state); }
+.wn--firm { --wn-accent: var(--color-section-market); }
+.wn--net { --wn-accent: var(--ink-600); }
+
+/* Nagłówek: emblemat, tytuł, JEDNO zdanie stanu (zamiast kickera z kropkami, O3), zamknij */
+.wn-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 14px 16px 12px 20px; }
+.wn-emblem { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 6px; background: var(--color-bg-raised); color: var(--wn-accent); }
+.wn-head h2 { margin: 0; font-family: 'IBM Plex Sans Condensed', var(--font-family-sans); font-size: 22px; font-weight: 600; line-height: 1.15; }
+.wn-head p { margin: 2px 0 0; color: var(--color-text-secondary); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wn-close { width: 40px; height: 40px; display: grid; place-items: center; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--color-text-secondary); cursor: pointer; }
+.wn-close:hover { background: var(--color-bg-raised); border-color: var(--ink-700); color: var(--color-text-primary); }
+.wn-close kbd { display: none; }
+
+/* Pasek liczb (obecny .bank-ticker): stałe miejsce pod nagłówkiem, ten sam układ w każdym oknie */
+.wn-strip { display: flex; gap: 28px; padding: 8px 20px 10px; border-bottom: 1px solid var(--ink-700); overflow-x: auto; scrollbar-width: none; }
+.wn-strip div { display: grid; gap: 1px; min-width: max-content; }
+.wn-strip span { font-size: 12px; color: var(--color-text-muted); }
+.wn-strip b { font-family: var(--font-family-mono); font-variant-numeric: tabular-nums; font-size: 15px; font-weight: 600; }
+.wn-strip .up { color: var(--color-text-up); } .wn-strip .down { color: var(--color-text-down); }
+
+/* Ciało: [szyna | treść] albo [zakładki / treść] */
+.wn-body { display: grid; grid-template-columns: 208px minmax(0, 1fr); min-height: 0; }
+.wn-body.is-tabs { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+.wn-main { min-height: 0; overflow-y: auto; padding: 20px 24px 32px; scrollbar-gutter: stable; }
+
+/* O4: boczna szyna z grupami (okna z >6 zakładkami: Państwo, Miasto) */
+.wn-rail { min-height: 0; overflow-y: auto; padding: 10px 8px 16px; border-right: 1px solid var(--ink-700); background: var(--color-bg-sunken); }
+.wn-pick { display: none; }
+.wn-group { margin: 0 0 10px; padding: 0; list-style: none; }
+.wn-group > h3 { display: flex; align-items: center; gap: 8px; margin: 6px 8px 4px; font-family: 'IBM Plex Sans Condensed', var(--font-family-sans); font-size: 13px; font-weight: 600; color: var(--color-text-muted); }
+.wn-tab { position: relative; display: flex; align-items: center; gap: 8px; width: 100%; min-height: 34px; padding: 0 10px 0 30px; border: 0; border-radius: 4px; background: none; color: var(--color-text-secondary); font: 400 13px var(--font-family-sans); text-align: left; cursor: pointer; }
+.wn-tab.is-solo { padding-left: 10px; font-family: 'IBM Plex Sans Condensed', var(--font-family-sans); font-weight: 600; color: var(--color-text-muted); } /* grupa z jedną zakładką = sama zakładka */
+.wn-tab.is-solo svg { color: var(--color-text-muted); }
+.wn-tab:hover { background: var(--color-bg-raised); color: var(--color-text-primary); }
+.wn-tab[aria-selected="true"] { background: var(--color-bg-raised); color: var(--color-text-primary); font-weight: 600; }
+.wn-tab[aria-selected="true"]::before { content: ""; position: absolute; left: 0; top: 7px; bottom: 7px; width: 3px; border-radius: 2px; background: var(--wn-accent); }
+.wn-count { margin-left: auto; min-width: 20px; padding: 0 6px; border-radius: 999px; background: var(--color-bg-warn-soft, rgba(245,165,36,.14)); color: var(--color-text-warn); font: 600 11px/18px var(--font-family-mono); text-align: center; }
+
+/* Zakładki poziome (okna do 6 zakładek: Firma, Bank, Klienci). Ten sam znacznik wyboru co szyna */
+.wn-tabs { display: flex; gap: 2px; padding: 0 16px; border-bottom: 1px solid var(--ink-700); overflow-x: auto; scrollbar-width: none; }
+.wn-tabs .wn-tab { width: auto; min-height: 40px; padding: 0 12px; border-radius: 0; white-space: nowrap; }
+.wn-tabs .wn-tab[aria-selected="true"] { background: none; }
+.wn-tabs .wn-tab[aria-selected="true"]::before { left: 10px; right: 10px; top: auto; bottom: -1px; width: auto; height: 3px; }
+
+/* Skórka Internetu: pasek przeglądarki zamiast nagłówka, reszta ramy ta sama */
+.wn-browser { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--ink-700); background: var(--color-bg-sunken); }
+.wn-nav { display: flex; gap: 2px; }
+.wn-nav button { width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 6px; background: none; color: var(--color-text-secondary); cursor: pointer; }
+.wn-nav button:disabled { color: var(--color-text-disabled); cursor: default; }
+.wn-nav button:not(:disabled):hover { background: var(--color-bg-raised); }
+.wn-url { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px; border: 1px solid var(--ink-700); border-radius: 999px; background: var(--color-bg-base); color: var(--color-text-secondary); font: 400 13px var(--font-family-mono); min-width: 0; }
+.wn-url span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wn-url b { color: var(--color-text-primary); font-weight: 400; }
+.wn-favs { display: flex; gap: 4px; padding: 6px 12px; border-bottom: 1px solid var(--ink-700); overflow-x: auto; scrollbar-width: none; }
+.wn-favs .wn-tab { width: auto; min-height: 30px; padding: 0 10px; white-space: nowrap; font-size: 12px; }
+.wn-favs .wn-tab[aria-selected="true"]::before { content: none; }
+
+/* Telefon: okno na cały ekran, szyna zwija się do przycisku „Grupa › Zakładka” z listą */
+@container (max-width: 640px) {
+  .wn { inset: 0; top: 0; left: 0; transform: none; width: 100%; height: 100%; border-radius: 0; border-left: 0; border-right: 0; }
+  .wn-head { padding: 10px 8px 8px 12px; gap: 10px; }
+  .wn-emblem { width: 32px; height: 32px; }
+  .wn-head h2 { font-size: 19px; }
+  .wn-head p { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-size: 12px; }
+  .wn-close { width: 44px; height: 44px; }
+  .wn-strip { gap: 20px; padding: 6px 12px 8px; mask-image: linear-gradient(90deg, #000 85%, transparent); } /* sygnał, że pasek się przewija */
+  .wn-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); position: relative; }
+  .wn-rail { padding: 0; border-right: 0; border-bottom: 1px solid var(--ink-700); overflow: visible; }
+  .wn-pick { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 48px; padding: 0 12px; border: 0; background: none; color: var(--color-text-primary); font: 600 14px var(--font-family-sans); text-align: left; cursor: pointer; }
+  .wn-pick small { color: var(--color-text-muted); font-weight: 400; font-size: 13px; }
+  .wn-pick svg:last-child { margin-left: auto; color: var(--color-text-muted); transition: transform .15s; }
+  .wn-pick[aria-expanded="true"] svg:last-child { transform: rotate(180deg); }
+  .wn-list { display: none; position: absolute; left: 0; right: 0; top: 49px; z-index: 3; max-height: calc(100% - 49px); overflow-y: auto; padding: 6px 8px 12px; background: var(--color-bg-sunken); border-bottom: 1px solid var(--ink-600); box-shadow: 0 16px 32px rgba(0, 0, 0, .5); }
+  .wn-pick[aria-expanded="true"] + .wn-list { display: block; }
+  .wn-tab { min-height: 44px; }
+  .wn-tabs .wn-tab { min-height: 44px; }
+  .wn-main { padding: 16px 12px 24px; }
+  .wn-browser { grid-template-columns: auto minmax(0, 1fr) auto; padding: 8px; gap: 6px; }
+  .wn-nav button:nth-child(2) { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .wn-pick svg:last-child { transition: none; } }
+
+/* ===== Treść przykładowa (do gry nie idzie: w grze zostają obecne zakładki) ===== */
+.dm h3 { margin: 0 0 4px; font-family: 'IBM Plex Sans Condensed', var(--font-family-sans); font-size: 18px; font-weight: 600; }
+.dm > p { margin: 0 0 16px; color: var(--color-text-secondary); max-width: 68ch; }
+.dm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(230px, 100%), 1fr)); gap: 12px; }
+.dm-card { padding: 12px 14px; border: 1px solid var(--ink-700); border-radius: 6px; background: var(--color-bg-raised); }
+.dm-card b { display: block; font-weight: 600; }
+.dm-card small { color: var(--color-text-muted); font-size: 12px; }
+.dm-st { display: inline-block; margin-top: 6px; padding: 0 8px; border-radius: 999px; font-size: 12px; line-height: 20px; border: 1px solid currentColor; }
+.dm-st.ok { color: var(--color-text-secondary); } .dm-st.tight { color: var(--color-text-warn); } .dm-st.short { color: var(--color-text-down); }
+.dm-lines { display: grid; gap: 8px; margin-top: 16px; }
+.dm-lines i { display: block; height: 12px; border-radius: 2px; background: var(--ink-750); }
+.dm-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr)); gap: 12px; }
+.dm-tile { display: grid; gap: 4px; padding: 14px; color: var(--color-text-primary); text-decoration: none; border: 1px solid var(--ink-700); border-radius: 6px; background: var(--color-bg-raised); }
+.dm-tile:hover { border-color: var(--ink-600); }
+.dm-tile svg { color: var(--color-text-secondary); }
+.dm-tile small { color: var(--color-text-muted); font-size: 12px; }
+</style></head><body>
+
+<h1 class="frame-title">1. Państwo: boczna szyna z grupami</h1>
+<p class="frame-sub">Kliknij zakładki: okno nie zmienia wysokości (Energia jest krótka, Przegląd długi), przewija się tylko treść. Esc i przycisk zamykają każde okno tak samo.</p>
+<div class="frame"><div class="cq" id="f-state"></div></div>
+
+<h1 class="frame-title">2. Firma: ta sama rama, zakładki poziome (do 6 zakładek)</h1>
+<p class="frame-sub">Firma przestaje być osobnym nakładaniem (#corporation-overlay). Nagłówek mówi stan firmy zamiast „Zarząd · menedżerowie · analitycy · cele”.</p>
+<div class="frame"><div class="cq" id="f-firm"></div></div>
+
+<h1 class="frame-title">3. Internet: skórka tej samej ramy</h1>
+<p class="frame-sub">Pasek przeglądarki zastępuje nagłówek, Ulubione zastępują zakładki. Rozmiar, przypięcie, zamknij i Esc jak w każdym oknie. TeamedUP! idzie tak samo: własny nagłówek strony, ta sama rama.</p>
+<div class="frame"><div class="cq" id="f-net"></div></div>
+
+<h1 class="frame-title">4. Telefon 390 px: okno na cały ekran, szyna jako lista</h1>
+<p class="frame-sub">Po lewej zamknięta lista (widać grupę i zakładkę), po prawej otwarta. Cele dotyku 44 px.</p>
+<div class="phones">
+  <div class="frame is-phone"><div class="cq" id="f-ph1"></div></div>
+  <div class="frame is-phone"><div class="cq" id="f-ph2"></div></div>
+</div>
+
+<script>
+const ic = (n, s = 18) => `<svg width="${s}" height="${s}" aria-hidden="true"><use href="../../../img/ikony/sprite.svg#ic-${n}"/></svg>`;
+const lines = n => `<div class="dm-lines">${Array.from({ length: n }, (_, i) => `<i style="width:${60 + (i * 37) % 40}%"></i>`).join('')}</div>`;
+
+/* Państwo: grupy z O4 */
+const STATE = [
+  { g: 'Gospodarka', ic: 'wykres', tabs: [['overview', 'Przegląd'], ['macro', 'Makro'], ['energy', 'Energia'], ['chains', 'Łańcuchy', 2]] },
+  { g: 'Prawo', ic: 'waga', tabs: [['country', 'Kraj'], ['taxes', 'Podatki'], ['oversight', 'Nadzór', 1]] },
+  { g: 'Programy', ic: 'pula', tabs: [['pension', 'Program emerytalny'], ['interventions', 'Działania państwa']] },
+  { g: 'Rynki', ic: 'rynek', tabs: [['markets', 'Rynki']] },
+];
+const STATE_BODY = {
+  overview: `<h3>Przegląd</h3><p>Gospodarka rośnie, inflacja powyżej celu. Bank centralny trzyma stopę bez zmian drugi kwartał.</p>${lines(22)}`,
+  macro: `<h3>Makro</h3><p>PKB, inflacja, bezrobocie i stopy w ostatnich 40 kwartałach.</p>${lines(9)}`,
+  energy: `<h3>Energia</h3><p>Ceny i miks energii (makieta 11).</p>`,
+  chains: `<h3>Łańcuchy</h3><p>Ruda żelaza ze Szwecji stoi przez strajk w kopalniach. Huty w Polsce mają zapas na 0,3 kwartału (makieta 13).</p>
+    <div class="dm-grid">
+      <div class="dm-card"><b>Ruda żelaza</b><small>import 100%, Szwecja i Chiny</small><br><span class="dm-st short">Niedobór</span></div>
+      <div class="dm-card"><b>Stal</b><small>Hutpol, zapas 0,3 kw.</small><br><span class="dm-st tight">Napięte</span></div>
+      <div class="dm-card"><b>Samochody</b><small>Motopol, zdolność 96%</small><br><span class="dm-st tight">Napięte</span></div>
+      <div class="dm-card"><b>Węgiel</b><small>4 kopalnie, eksport 12%</small><br><span class="dm-st ok">Równowaga</span></div>
+    </div>${lines(6)}`,
+  country: `<h3>Kraj</h3><p>Ustrój, rating kraju, ryzyko polityczne.</p>${lines(7)}`,
+  taxes: `<h3>Podatki</h3><p>CIT 19%, podatek od zysków 19%, VAT 23%.</p>${lines(5)}`,
+  oversight: `<h3>Nadzór</h3><p>Komisja prowadzi 1 kontrolę Twojego funduszu.</p>${lines(8)}`,
+  pension: `<h3>Program emerytalny</h3><p>Stan programu i Twoja pula.</p>${lines(6)}`,
+  interventions: `<h3>Działania państwa</h3><p>Pakiety, dopłaty, interwencje kryzysowe.</p>${lines(4)}`,
+  markets: `<h3>Rynki</h3><p>Giełdy kraju i ich wymogi wejścia.</p>${lines(10)}`,
+};
+const findTab = id => { for (const g of STATE) for (const t of g.tabs) if (t[0] === id) return [g, t]; };
+
+function rail(cur) {
+  return STATE.map(g => g.tabs.length === 1
+    ? `<div class="wn-group"><button class="wn-tab is-solo" role="tab" data-t="${g.tabs[0][0]}" aria-selected="${g.tabs[0][0] === cur}">${ic(g.ic, 16)}${g.g}</button></div>`
+    : `<div class="wn-group" role="group" aria-label="${g.g}"><h3 aria-hidden="true">${ic(g.ic, 16)}${g.g}</h3>${g.tabs.map(([id, n, c]) =>
+      `<button class="wn-tab" role="tab" data-t="${id}" aria-selected="${id === cur}">${n}${c ? `<span class="wn-count" title="${c} do sprawdzenia">${c}</span>` : ''}</button>`).join('')}</div>`).join('');
+}
+function pickLabel(cur) { const [g, t] = findTab(cur); return g.tabs.length === 1 ? g.g : `${g.g} <small>›</small> ${t[1]}`; }
+
+function stateWin(cur, open = false) {
+  return `<div class="wn-backdrop"></div>
+  <section class="wn wn--state" role="dialog" aria-modal="true" aria-labelledby="t-state">
+    <header class="wn-head"><span class="wn-emblem">${ic('panstwo', 22)}</span>
+      <div><h2 id="t-state">Państwo</h2><p>Stopa bez zmian, inflacja powyżej celu. Nadzór prowadzi 1 kontrolę Twojego funduszu.</p></div>
+      <button class="wn-close" aria-label="Zamknij (Esc)" title="Zamknij (Esc)">${ic('zamknij', 20)}</button></header>
+    <div class="wn-strip"><div><span>PKB r/r</span><b class="up">+2,8%</b></div><div><span>Inflacja</span><b>4,1%</b></div><div><span>Stopa bazowa</span><b>5,25%</b></div><div><span>Dług publiczny</span><b>49% PKB</b></div><div><span>Saldo budżetu</span><b class="down">−3,1% PKB</b></div></div>
+    <div class="wn-body">
+      <nav class="wn-rail" aria-label="Zakładki Państwa">
+        <button class="wn-pick" aria-expanded="${open}" aria-controls="lst">${pickLabel(cur)}${ic('chevron-down', 18)}</button>
+        <div class="wn-list" id="lst" role="tablist" aria-orientation="vertical">${rail(cur)}</div>
+      </nav>
+      <div class="wn-main dm" role="tabpanel">${STATE_BODY[cur]}</div>
+    </div>
+  </section>`;
+}
+
+function firmWin() {
+  const tabs = ['Firma', 'Zarząd', 'Analitycy', 'Współpraca', 'Przejęcia'];
+  return `<div class="wn-backdrop"></div>
+  <section class="wn wn--firm" role="dialog" aria-modal="true" aria-labelledby="t-firm">
+    <header class="wn-head"><span class="wn-emblem">${ic('firma', 22)}</span>
+      <div><h2 id="t-firm">Twoja firma</h2><p>2 menedżerów i 1 analityk. Cel kwartału wykonany w 78%, zostały 4 tygodnie.</p></div>
+      <button class="wn-close" aria-label="Zamknij (Esc)" title="Zamknij (Esc)">${ic('zamknij', 20)}</button></header>
+    <div class="wn-strip"><div><span>Pracownicy</span><b>3</b></div><div><span>Koszt tygodnia</span><b>1 850 PLN</b></div><div><span>Cel kwartału</span><b>78%</b></div><div><span>Relacje z klientami</span><b>0, neutralne</b></div></div>
+    <div class="wn-body is-tabs">
+      <nav class="wn-tabs" role="tablist" aria-label="Zakładki firmy">${tabs.map((t, i) => `<button class="wn-tab" role="tab" aria-selected="${i === 1}">${t}</button>`).join('')}</nav>
+      <div class="wn-main dm" role="tabpanel"><h3>Zarząd</h3><p>Menedżerowie, ich umiejętności i koszt. Relacja to słowo i pasek, bez emoji (O6).</p>
+        <div class="dm-grid"><div class="dm-card"><b>Anna K.</b><small>menedżer ryzyka, poziom 3</small></div><div class="dm-card"><b>Piotr W.</b><small>menedżer sprzedaży, poziom 2</small></div><div class="dm-card"><b>Ewa M.</b><small>analityk, poziom 1</small></div></div>${lines(8)}</div>
+    </div>
+  </section>`;
+}
+
+function netWin() {
+  const favs = ['Ulubione', 'Kantor', 'Startupy', 'TeamedUP!', 'Wiadomości'];
+  const tiles = [['moneta', 'Kantor', 'waluty, forex, giełda towarowa'], ['rakieta', 'Startupy', 'rundy, debiuty IPO'], ['grupa', 'TeamedUP!', 'sieć zawodowa'], ['news', 'Wiadomości', 'rynki i kraj'], ['szukaj', 'Szukaj', 'firmy i osoby'], ['poczta', 'Poczta', '3 nieprzeczytane']];
+  return `<div class="wn-backdrop"></div>
+  <section class="wn wn--net" role="dialog" aria-modal="true" aria-label="Internet">
+    <header class="wn-browser"><div class="wn-nav"><button aria-label="Wstecz" disabled>${ic('cofnij', 18)}</button><button aria-label="Odśwież">${ic('odswiez', 18)}</button></div>
+      <div class="wn-url">${ic('klodka', 14)}<span><b>ulubione</b>.cq</span></div>
+      <button class="wn-close" aria-label="Zamknij (Esc)" title="Zamknij (Esc)">${ic('zamknij', 20)}</button></header>
+    <nav class="wn-favs" role="tablist" aria-label="Ulubione strony">${favs.map((f, i) => `<button class="wn-tab" role="tab" aria-selected="${i === 0}">${f}</button>`).join('')}</nav>
+    <div class="wn-main dm"><h3>Ulubione</h3><p>Strony, które odwiedzasz w grze.</p>
+      <div class="dm-tiles">${tiles.map(([i, n, s]) => `<a class="dm-tile" href="#">${ic(i, 22)}<b>${n}</b><small>${s}</small></a>`).join('')}</div></div>
+  </section>`;
+}
+
+function wireState(el, open) {
+  const draw = (cur, o) => { el.innerHTML = stateWin(cur, o); };
+  let cur = el.dataset.cur || 'chains';
+  draw(cur, open);
+  el.addEventListener('click', e => {
+    const t = e.target.closest('.wn-tab'); const p = e.target.closest('.wn-pick');
+    if (t) { cur = t.dataset.t; draw(cur, false); el.querySelector(`[data-t="${cur}"]`)?.focus(); }
+    else if (p) { draw(cur, p.getAttribute('aria-expanded') !== 'true'); el.querySelector('.wn-pick').focus(); }
+  });
+  /* strzałki góra/dół w szynie (wzorzec tablist) */
+  el.addEventListener('keydown', e => {
+    if (!e.target.classList.contains('wn-tab') || !['ArrowDown', 'ArrowUp'].includes(e.key)) return;
+    const all = [...el.querySelectorAll('.wn-list .wn-tab')]; const i = all.indexOf(e.target);
+    all[(i + (e.key === 'ArrowDown' ? 1 : all.length - 1)) % all.length].focus(); e.preventDefault();
+  });
+}
+wireState(document.getElementById('f-state'), false);
+document.getElementById('f-firm').innerHTML = firmWin();
+document.getElementById('f-net').innerHTML = netWin();
+wireState(document.getElementById('f-ph1'), false);
+wireState(document.getElementById('f-ph2'), true);
+</script>
+</body></html>
