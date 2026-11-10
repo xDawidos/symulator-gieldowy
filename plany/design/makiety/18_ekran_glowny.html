@@ -1,0 +1,342 @@
+<!doctype html><html lang="pl"><head><meta charset="utf-8"><title>Makieta UI — Ekran główny (R1–R8)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../../tokens.css">
+<style>
+/* ===== Rama makiety (do gry nie idzie) ===== */
+html, body { margin: 0; background: #05070a; color: var(--color-text-primary); font-family: var(--font-family-sans); }
+.frame-title { max-width: 1366px; margin: 24px auto 8px; padding: 0 16px; font-size: 18px; font-weight: 600; }
+.frame-sub { max-width: 1366px; margin: 0 auto 12px; padding: 0 16px; font-size: 13px; color: var(--color-text-muted); }
+.frame { max-width: 1366px; margin: 0 auto 40px; border: 1px solid var(--ink-700); border-radius: 6px; overflow: hidden; }
+.frame.is-phone { width: 390px; max-width: 100%; height: 780px; position: relative; overflow: auto; }
+.phones { display: flex; flex-wrap: wrap; gap: 24px; justify-content: center; max-width: 1366px; margin: 0 auto 40px; }
+.phones .frame { margin: 0; }
+
+/* ===== Blok do gry: ekran główny (projekt plany/design/18_ekran_glowny.md) ===== */
+.cq { container-type: inline-size; background: var(--color-bg-base); font-size: 13px; line-height: 1.45; }
+.ff-cond { font-family: 'IBM Plex Sans Condensed', var(--font-family-sans); }
+.num { font-family: var(--font-family-mono); font-variant-numeric: tabular-nums; }
+
+/* Pasek newsów: bez zmian w grze, tu tylko tło */
+.ms-news { height: 28px; display: flex; align-items: center; gap: 24px; padding: 0 16px; background: var(--color-bg-sunken); border-bottom: 1px solid var(--ink-700); color: var(--color-text-secondary); font-size: 12px; white-space: nowrap; overflow: hidden; }
+
+/* R5 + R6: górny pasek = pasek sesji + 3 liczby */
+.ms-top { display: grid; grid-template-columns: 200px minmax(0, 1fr) auto; align-items: center; gap: 24px; padding: 10px 16px; background: var(--ink-850); border-bottom: 1px solid var(--ink-700); position: sticky; top: 0; z-index: 5; }
+.ms-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.ms-brand b { font-family: 'IBM Plex Sans Condensed', var(--font-family-sans); font-size: 16px; font-weight: 600; letter-spacing: .01em; }
+.ms-brand small { display: block; color: var(--color-text-muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ms-logo { width: 28px; height: 28px; border-radius: 6px; background: var(--amber-400); color: var(--ink-900); display: grid; place-items: center; font-weight: 700; font-size: 13px; flex: none; }
+.ms-kpis { display: flex; gap: 28px; min-width: 0; }
+.ms-kpi { display: grid; gap: 1px; min-width: 112px; }
+.ms-kpi span { font-size: 12px; color: var(--color-text-muted); }
+.ms-kpi b { font-family: var(--font-family-mono); font-variant-numeric: tabular-nums; font-size: 16px; font-weight: 600; white-space: nowrap; }
+.ms-kpi.is-mine b { color: var(--amber-400); } /* R4: bursztyn = Twoje pieniądze */
+.ms-session { display: flex; align-items: center; gap: 12px; }
+.ms-state { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--color-text-secondary); white-space: nowrap; }
+.ms-state i { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-500); }
+.ms-state.is-on i { background: var(--green-400); }
+.ms-date { font-family: var(--font-family-mono); font-size: 12px; color: var(--color-text-secondary); white-space: nowrap; }
+.ms-speed { display: inline-flex; padding: 2px; gap: 2px; background: var(--ink-750); border: 1px solid var(--ink-700); border-radius: 999px; }
+.ms-speed button { min-width: 36px; height: 28px; border: 0; border-radius: 999px; background: transparent; color: var(--color-text-secondary); font: 400 12px var(--font-family-mono); cursor: pointer; }
+.ms-speed button[aria-checked="true"] { background: var(--ink-700); color: var(--color-text-primary); }
+.ms-play { height: 34px; padding: 0 16px; border: 0; border-radius: 6px; background: var(--amber-400); color: var(--ink-900); font: 600 13px var(--font-family-sans); cursor: pointer; white-space: nowrap; }
+.ms-icon-btn { width: 34px; height: 34px; border: 1px solid var(--ink-700); border-radius: 6px; background: transparent; color: var(--color-text-secondary); cursor: pointer; }
+.cq svg:not(.ms-spark) { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; } /* sprite: atrybuty z korzenia nie przechodzą do <use> */
+.cq :focus-visible { outline: 2px solid var(--amber-400); outline-offset: 2px; }
+
+/* Układ: menu | rynek | fundusz */
+.ms-body { display: grid; grid-template-columns: 200px minmax(0, 1fr) 320px; min-height: 640px; }
+.ms-nav { padding: 12px 8px; border-right: 1px solid var(--ink-700); }
+.ms-nav h3 { margin: 14px 8px 4px; font-size: 12px; font-weight: 600; color: var(--color-text-muted); }
+.ms-nav a { display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 8px; border-radius: 6px; color: var(--color-text-secondary); text-decoration: none; }
+.ms-nav a:hover { background: var(--white-a04, rgba(255,255,255,.04)); color: var(--color-text-primary); }
+.ms-nav svg { width: 18px; height: 18px; flex: none; }
+.ms-nav .badge { margin-left: auto; min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--amber-400); color: var(--ink-900); font-size: 11px; font-weight: 700; text-align: center; }
+
+/* Rynek */
+.ms-market { min-width: 0; padding: 12px 16px 24px; }
+.ms-market-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.ms-market-head h2 { margin: 0; font-family: 'IBM Plex Sans Condensed', var(--font-family-sans); font-size: 20px; font-weight: 600; }
+.ms-market-head small { color: var(--color-text-muted); }
+.ms-market-head .ms-search { margin-left: auto; height: 32px; padding: 0 12px; border: 1px solid var(--ink-700); border-radius: 6px; background: var(--ink-850); color: var(--color-text-secondary); font: inherit; }
+.ms-filters { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 6px; }
+.ms-chip { height: 28px; padding: 0 12px; border: 1px solid var(--ink-700); border-radius: 999px; background: transparent; color: var(--color-text-secondary); font: inherit; font-size: 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.ms-chip[aria-pressed="true"] { border-color: var(--ink-500); background: var(--ink-750); color: var(--color-text-primary); }
+.ms-chip i { width: 8px; height: 8px; border-radius: 2px; background: var(--tier); }
+.ms-filter-btn { display: none; }
+
+/* R2: tabela notowań. Nagłówki kolumn zwykłą wielkością liter */
+.ms-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+.ms-table thead th { position: sticky; top: 55px; z-index: 3; padding: 8px 8px; background: var(--ink-900); border-bottom: 1px solid var(--ink-700); font-size: 12px; font-weight: 600; color: var(--color-text-muted); text-align: right; white-space: nowrap; }
+.ms-table thead th:nth-child(-n+2) { text-align: left; }
+.ms-table td { padding: 0 8px; height: 44px; border-bottom: 1px solid var(--ink-800); vertical-align: middle; white-space: nowrap; }
+.ms-table .c-tick { width: 52px; }
+.ms-table .c-name { width: auto; min-width: 180px; } /* G1: nazwa nigdy węższa niż 180 px */
+.ms-table .c-spark { width: 64px; }
+.ms-table .c-price, .ms-table .c-chg { width: 96px; text-align: right; }
+.ms-table .c-avail { width: 120px; text-align: right; }
+.ms-table .c-mine { width: 64px; text-align: right; }
+.ms-table .c-act { width: 40px; text-align: right; }
+
+/* R1: giełda jako szkielet. Nagłówek z płytką w kolorze metalu, szyna wzdłuż wierszy grupy */
+.ms-ex th { position: sticky; top: 89px; z-index: 2; padding: 0; background: var(--ink-850); text-align: left; }
+.ms-ex .ex-plate { display: flex; align-items: baseline; gap: 12px; padding: 10px 12px; border-left: 3px solid var(--tier); border-bottom: 1px solid var(--ink-700); }
+.ms-ex .ex-name { font-family: 'IBM Plex Sans Condensed', var(--font-family-sans); font-size: 15px; font-weight: 600; color: var(--tier); }
+.ms-ex .ex-rule { font-size: 12px; color: var(--color-text-secondary); }
+.ms-ex .ex-count { margin-left: auto; font-size: 12px; color: var(--color-text-muted); }
+.ms-row td:first-child { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--tier) 35%, transparent); }
+.ms-row:hover td { background: rgba(255,255,255,.03); }
+.t-junk { --tier: var(--exchange-junk); } .t-bronze { --tier: var(--exchange-bronze); } .t-silver { --tier: var(--exchange-silver); }
+.t-gold { --tier: var(--exchange-gold); } .t-platinum { --tier: var(--exchange-platinum); } .t-ruby { --tier: var(--exchange-ruby); }
+.t-emerald { --tier: var(--exchange-emerald); } .t-diamond { --tier: var(--exchange-diamond); }
+
+.ms-tick { font-family: 'IBM Plex Sans Condensed', var(--font-family-sans); font-weight: 600; font-size: 13px; letter-spacing: .02em; color: var(--color-text-secondary); }
+.ms-name { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.ms-name b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.ms-tag { flex: none; padding: 0 6px; border-radius: 2px; background: var(--ink-750); color: var(--color-text-muted); font-size: 11px; line-height: 18px; }
+.ms-spark { display: block; width: 56px; height: 18px; }
+.ms-spark polyline { fill: none; stroke-width: 1.5; stroke: var(--ink-500); }
+.ms-spark.is-up polyline { stroke: var(--green-400); } .ms-spark.is-down polyline { stroke: var(--red-400); }
+.ms-price { font-family: var(--font-family-mono); font-variant-numeric: tabular-nums; font-size: 14px; font-weight: 600; border-radius: 2px; padding: 2px 4px; }
+.ms-chg { font-family: var(--font-family-mono); font-variant-numeric: tabular-nums; font-size: 13px; }
+.ms-chg.is-up { color: var(--green-400); } .ms-chg.is-down { color: var(--red-400); } .ms-chg.is-none { color: var(--color-text-muted); }
+.ms-avail { display: inline-grid; justify-items: end; gap: 3px; }
+.ms-avail small { font-family: var(--font-family-mono); font-size: 12px; color: var(--color-text-secondary); }
+.ms-avail i { display: block; width: 72px; height: 3px; border-radius: 2px; background: linear-gradient(to right, var(--ink-300) var(--v), var(--ink-750) var(--v)); }
+.ms-mine { font-family: var(--font-family-mono); font-size: 13px; color: var(--color-text-muted); }
+.ms-mine.has { color: var(--amber-400); font-weight: 600; } /* R4: Twoje akcje */
+.ms-trade { width: 30px; height: 30px; border: 1px solid var(--ink-700); border-radius: 6px; background: transparent; color: var(--color-text-secondary); cursor: pointer; }
+/* Podświetlenie po zmianie kursu, 500 ms, tylko gdy użytkownik nie ogranicza ruchu (R11) */
+@media (prefers-reduced-motion: no-preference) {
+  .ms-price.flash-up { animation: flashUp .5s ease-out; } .ms-price.flash-down { animation: flashDown .5s ease-out; }
+  @keyframes flashUp { from { background: rgba(61,220,132,.28); } to { background: transparent; } }
+  @keyframes flashDown { from { background: rgba(255,107,107,.28); } to { background: transparent; } }
+}
+
+/* R7: panel funduszu jako księga */
+.ms-fund { border-left: 1px solid var(--ink-700); padding: 16px; display: flex; flex-direction: column; gap: 16px; background: var(--ink-850); }
+.ms-fund h2 { margin: 0; font-family: 'IBM Plex Sans Condensed', var(--font-family-sans); font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.ms-fund h2 .live { margin-left: auto; font-family: var(--font-family-sans); font-size: 12px; font-weight: 400; color: var(--color-text-muted); }
+.ms-acct { display: inline-flex; padding: 2px; gap: 2px; border: 1px solid var(--ink-700); border-radius: 999px; align-self: flex-start; }
+.ms-acct button { height: 28px; padding: 0 14px; border: 0; border-radius: 999px; background: transparent; color: var(--color-text-secondary); font: inherit; font-size: 12px; cursor: pointer; }
+.ms-acct button[aria-checked="true"] { background: var(--ink-700); color: var(--color-text-primary); }
+.ms-nav-big span { font-size: 12px; color: var(--color-text-muted); }
+.ms-nav-big b { display: block; font-family: var(--font-family-mono); font-variant-numeric: tabular-nums; font-size: 30px; font-weight: 600; line-height: 1.15; }
+.ms-vs { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; font-size: 12px; color: var(--color-text-secondary); }
+.ms-vs .num { font-size: 13px; }
+.ms-vs .is-up { color: var(--green-400); } .ms-vs .is-down { color: var(--red-400); }
+.ms-ledger { margin: 0; display: grid; grid-template-columns: 1fr auto; border-top: 1px solid var(--ink-700); }
+.ms-ledger dt, .ms-ledger dd { padding: 8px 0; border-bottom: 1px solid var(--ink-800); }
+.ms-ledger dt { color: var(--color-text-secondary); }
+.ms-ledger dd { margin: 0; text-align: right; font-family: var(--font-family-mono); font-variant-numeric: tabular-nums; font-weight: 600; }
+.ms-ledger dd.is-mine { color: var(--amber-400); }
+.ms-ledger dd small { display: block; font-family: var(--font-family-sans); font-weight: 400; font-size: 11px; color: var(--color-text-muted); }
+.ms-fund h3 { margin: 0 0 6px; font-size: 13px; font-weight: 600; }
+.ms-pos { width: 100%; border-collapse: collapse; font-size: 12px; }
+.ms-pos th { padding: 4px 0; text-align: right; font-weight: 400; color: var(--color-text-muted); border-bottom: 1px solid var(--ink-700); }
+.ms-pos th:first-child, .ms-pos td:first-child { text-align: left; }
+.ms-pos td { padding: 6px 0; text-align: right; border-bottom: 1px solid var(--ink-800); font-family: var(--font-family-mono); }
+.ms-pos td:first-child { font-family: 'IBM Plex Sans Condensed', var(--font-family-sans); font-weight: 600; }
+.ms-empty { padding: 12px; border: 1px solid var(--ink-700); border-radius: 6px; color: var(--color-text-secondary); }
+.ms-empty b { color: var(--color-text-primary); }
+.ms-btn2 { height: 34px; padding: 0 14px; border: 1px solid var(--ink-500); border-radius: 6px; background: transparent; color: var(--color-text-primary); font: inherit; font-weight: 600; cursor: pointer; align-self: flex-start; }
+.ms-trust { display: grid; gap: 4px; }
+.ms-trust span { display: flex; justify-content: space-between; font-size: 12px; color: var(--color-text-secondary); }
+.ms-trust i { display: block; height: 4px; border-radius: 2px; background: linear-gradient(to right, var(--ink-300) var(--v), var(--ink-750) var(--v)); }
+
+/* R8: dolna nawigacja i szuflada funduszu: tylko telefon */
+.ms-tabbar, .ms-drawer { display: none; }
+
+/* ===== Telefon (≤ 640 px kontenera). W grze: @media (max-width: 640px) ===== */
+@container (max-width: 640px) {
+  .ms-top { grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; padding: 8px 12px; }
+  .ms-brand small, .ms-brand b { display: none; }
+  .ms-kpis { gap: 16px; }
+  .ms-kpi { min-width: 0; } .ms-kpi:nth-child(3) { display: none; } /* zaufanie: w szufladzie funduszu */
+  .ms-kpi b { font-size: 14px; }
+  .ms-date, .ms-speed, .ms-state span, .ms-icon-btn { display: none; }
+  .ms-play { height: 40px; }
+  .ms-body { grid-template-columns: minmax(0, 1fr); }
+  .ms-nav, .ms-fund { display: none; }
+  .ms-market { padding: 8px 0 72px; }
+  .ms-market-head, .ms-filters { padding: 0 12px; }
+  .ms-market-head .ms-search { display: none; }
+  .ms-filters .ms-chip { display: none; } .ms-filters .ms-filter-btn { display: inline-flex; height: 40px; }
+  .ms-table thead { display: none; }
+  .ms-ex th { top: 57px; }
+  .ms-table, .ms-table tbody { display: block; }
+  .ms-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "name price act" "meta chg act"; column-gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--ink-800); box-shadow: inset 3px 0 0 color-mix(in srgb, var(--tier) 35%, transparent); }
+  .ms-row td { display: block; height: auto; padding: 0; border: 0; box-shadow: none !important; }
+  .ms-row .c-tick { grid-area: meta; } .ms-row .c-name { grid-area: name; min-width: 0; }
+  .ms-row .c-price { grid-area: price; width: auto; } .ms-row .c-chg { grid-area: chg; width: auto; }
+  .ms-row .c-act { grid-area: act; align-self: center; width: auto; }
+  .ms-row .c-spark, .ms-row .c-avail { display: none; }
+  .ms-row .c-mine { display: none; } .ms-row.is-owned .c-name b::after { content: " (masz)"; color: var(--amber-400); font-weight: 400; font-size: 12px; }
+  .ms-name .ms-tag { display: none; }
+  .ms-row .c-tick .ms-tick { font-size: 12px; } .ms-row .c-tick .ms-tick::after { content: attr(data-sector); margin-left: 8px; font-family: var(--font-family-sans); font-weight: 400; color: var(--color-text-muted); letter-spacing: 0; }
+  .ms-trade { width: 40px; height: 40px; }
+  .ms-ex { display: block; } .ms-ex th { display: block; }
+  .ms-tabbar { display: grid; grid-template-columns: repeat(4, 1fr); position: sticky; bottom: 0; z-index: 6; height: 60px; background: var(--ink-850); border-top: 1px solid var(--ink-700); }
+  .ms-tabbar button { border: 0; background: transparent; color: var(--color-text-muted); font: inherit; font-size: 11px; display: grid; place-items: center; align-content: center; gap: 2px; cursor: pointer; }
+  .ms-tabbar button svg { width: 20px; height: 20px; }
+  .ms-tabbar button[aria-current="page"] { color: var(--color-text-primary); }
+  .ms-tabbar button[aria-current="page"] svg { color: var(--amber-400); }
+  .ms-drawer.is-open { display: flex; position: absolute; inset: auto 0 60px 0; max-height: 78%; overflow: auto; border-radius: 6px 6px 0 0; border-top: 1px solid var(--ink-500); z-index: 7; }
+  .ms-drawer .ms-grip { width: 40px; height: 4px; border-radius: 2px; background: var(--ink-500); margin: -6px auto 0; }
+}
+</style></head><body>
+
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+  <symbol id="i-bank" viewBox="0 0 24 24"><path d="M3 10h18M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18M12 3l9 5H3z"/></symbol>
+  <symbol id="i-panstwo" viewBox="0 0 24 24"><path d="M4 21h16M6 21V11M18 21V11M10 21v-6h4v6M3 11h18L12 4z"/></symbol>
+  <symbol id="i-miasto" viewBox="0 0 24 24"><path d="M3 21h18M5 21V8l5-3v16M10 21V10h9v11M13 13h3M13 16h3"/></symbol>
+  <symbol id="i-firma" viewBox="0 0 24 24"><path d="M4 21V5a1 1 0 0 1 1-1h9v17M14 9h5a1 1 0 0 1 1 1v11M8 8h2M8 12h2M8 16h2M3 21h18"/></symbol>
+  <symbol id="i-rynek" viewBox="0 0 24 24"><path d="M4 19V5M4 19h16M8 15l3-4 3 2 5-6"/></symbol>
+  <symbol id="i-fundusz" viewBox="0 0 24 24"><path d="M12 3v18M17 7H9.5a3 3 0 0 0 0 6h5a3 3 0 0 1 0 6H6"/></symbol>
+  <symbol id="i-poczta" viewBox="0 0 24 24"><path d="M3 6h18v12H3zM3 7l9 6 9-6"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  <symbol id="i-internet" viewBox="0 0 24 24"><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3c2.5 2.5 3.5 5.5 3.5 9s-1 6.5-3.5 9c-2.5-2.5-3.5-5.5-3.5-9s1-6.5 3.5-9z"/></symbol>
+  <symbol id="i-handel" viewBox="0 0 24 24"><path d="M7 4v16M3 8l4-4 4 4M17 20V4M13 16l4 4 4-4"/></symbol>
+  <symbol id="i-ustawienia" viewBox="0 0 24 24"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19 12l2-1-1-3-2 .5-1.5-1.5.5-2-3-1-1 2h-2l-1-2-3 1 .5 2L6 8.5 4 8l-1 3 2 1v0l-2 1 1 3 2-.5 1.5 1.5-.5 2 3 1 1-2h2l1 2 3-1-.5-2 1.5-1.5 2 .5 1-3z"/></symbol>
+</svg>
+
+<template id="screen">
+<div class="cq">
+  <div class="ms-news" aria-label="Wiadomości">Majsterbud rozpoczyna badanie „Budownictwo prefabrykowane”, koszt 3 000 PLN.<span>Bank Galeria Bankowa rozpoczyna kampanię marketingową.</span><span>Gierekbud rozpoczyna badanie „Technologie podziemne”.</span></div>
+  <header class="ms-top">
+    <div class="ms-brand"><span class="ms-logo" aria-hidden="true">CQ</span><div><b>Capital Quest</b><small>Fundusz Pierwszy Krok</small></div></div>
+    <div class="ms-kpis" aria-label="Twój fundusz">
+      <div class="ms-kpi"><span>NAV / udział</span><b>10,4210 PLN</b></div>
+      <div class="ms-kpi is-mine"><span>Gotówka funduszu</span><b>6 812,40 PLN</b></div>
+      <div class="ms-kpi"><span>Zaufanie klientów</span><b>58/100</b></div>
+    </div>
+    <div class="ms-session">
+      <span class="ms-state" role="status"><i></i><span>Sesja wstrzymana</span></span>
+      <span class="ms-date">Rok 1, kw. 1, tydz. 3</span>
+      <span class="ms-speed" role="radiogroup" aria-label="Prędkość gry"><button role="radio" aria-checked="true">x1</button><button role="radio" aria-checked="false">x2</button><button role="radio" aria-checked="false">x5</button></span>
+      <button class="ms-play">Wznów</button>
+      <button class="ms-icon-btn" aria-label="Więcej opcji">⋯</button>
+    </div>
+  </header>
+  <div class="ms-body">
+    <nav class="ms-nav" aria-label="Menu gry">
+      <h3>Świat</h3>
+      <a href="#"><svg><use href="#i-bank"/></svg>Bank</a><a href="#"><svg><use href="#i-panstwo"/></svg>Państwo</a><a href="#"><svg><use href="#i-miasto"/></svg>Miasto</a><a href="#"><svg><use href="#i-internet"/></svg>Internet</a>
+      <h3>Moja firma</h3>
+      <a href="#"><svg><use href="#i-firma"/></svg>Firma</a><a href="#"><svg><use href="#i-fundusz"/></svg>Klienci i udziały</a>
+      <h3>Ja</h3>
+      <a href="#"><svg><use href="#i-poczta"/></svg>Poczta<span class="badge">2</span></a><a href="#"><svg><use href="#i-ustawienia"/></svg>Ustawienia</a>
+    </nav>
+    <section class="ms-market" aria-labelledby="mk-title">
+      <div class="ms-market-head"><h2 id="mk-title">Rynek akcji</h2><small>94 spółki na 8 giełdach</small><input class="ms-search" placeholder="Szukaj spółki albo tickera" aria-label="Szukaj spółki"></div>
+      <div class="ms-filters">
+        <button class="ms-chip" aria-pressed="true">Wszystkie</button><button class="ms-chip" aria-pressed="false">Posiadane</button><button class="ms-chip" aria-pressed="false">Ulubione</button>
+        <button class="ms-chip t-junk" aria-pressed="false"><i></i>Śmieciowa</button><button class="ms-chip t-bronze" aria-pressed="false"><i></i>Brązowa</button><button class="ms-chip t-silver" aria-pressed="false"><i></i>Srebrna</button><button class="ms-chip t-gold" aria-pressed="false"><i></i>Złota</button><button class="ms-chip t-platinum" aria-pressed="false"><i></i>Platynowa</button>
+        <button class="ms-chip ms-filter-btn" aria-expanded="false">Filtry (0)</button>
+      </div>
+      <table class="ms-table" aria-label="Notowania">
+        <thead><tr><th class="c-tick">Ticker</th><th class="c-name">Spółka</th><th class="c-spark">7 sesji</th><th class="c-price">Kurs</th><th class="c-chg">Zmiana tydz.</th><th class="c-avail">Dostępne</th><th class="c-mine">Masz</th><th class="c-act"><span class="sr">Handel</span></th></tr></thead>
+        <tbody class="rows"></tbody>
+      </table>
+    </section>
+    <aside class="ms-fund" aria-labelledby="fund-title">
+      <h2 id="fund-title">Fundusz Pierwszy Krok <span class="live">na żywo</span></h2>
+      <div class="ms-acct" role="radiogroup" aria-label="Konto"><button role="radio" aria-checked="true">Fundusz</button><button role="radio" aria-checked="false">Konto prywatne</button></div>
+      <div class="ms-nav-big"><span>NAV / udział</span><b>10,4210 PLN</b>
+        <div class="ms-vs"><span>od startu <b class="num is-up">▲ +4,2%</b></span><span>GIG <b class="num is-up">▲ +2,9%</b></span><span>wobec GIG <b class="num is-up">+1,3 pp</b></span></div></div>
+      <dl class="ms-ledger">
+        <dt>Gotówka funduszu</dt><dd class="is-mine">6 812,40 PLN<small>65% aktywów</small></dd>
+        <dt>Akcje</dt><dd>3 609,60 PLN<small>3 spółki</small></dd>
+        <dt>Klienci</dt><dd>14<small>1 000 udziałów</small></dd>
+        <dt>Konto prywatne</dt><dd class="is-mine">212,50 PLN<small>na szkolenia i udziały</small></dd>
+      </dl>
+      <div class="ms-trust"><span>Zaufanie klientów <b class="num">58/100</b></span><i style="--v:58%"></i></div>
+      <div><h3>Pozycje funduszu</h3>
+        <table class="ms-pos"><thead><tr><th>Spółka</th><th>Akcje</th><th>Wartość</th><th>Wynik</th></tr></thead><tbody>
+          <tr><td>KFX</td><td>420</td><td>1 260,00</td><td style="color:var(--green-400)">▲ +8,1%</td></tr>
+          <tr><td>BLP</td><td>90</td><td>1 179,00</td><td style="color:var(--red-400)">▼ −2,4%</td></tr>
+          <tr><td>HKT</td><td>3</td><td>1 236,90</td><td style="color:var(--green-400)">▲ +1,2%</td></tr>
+        </tbody></table></div>
+      <button class="ms-btn2">Kampania emisyjna</button>
+    </aside>
+  </div>
+  <aside class="ms-fund ms-drawer" aria-label="Fundusz (szuflada)"></aside>
+  <nav class="ms-tabbar" aria-label="Nawigacja dolna">
+    <button aria-current="page"><svg><use href="#i-rynek"/></svg>Rynek</button><button><svg><use href="#i-fundusz"/></svg>Fundusz</button><button><svg><use href="#i-poczta"/></svg>Poczta</button><button><svg><use href="#i-menu"/></svg>Menu</button>
+  </nav>
+</div>
+</template>
+
+<h1 class="frame-title">1. Ekran główny, desktop 1366 px (gra w toku, 3 pozycje)</h1>
+<p class="frame-sub">Poziomy giełd tworzą szkielet listy (R1): płytka z kolorem metalu i progiem wejścia, a wzdłuż wierszy grupy biegnie szyna. Bursztyn oznacza tylko rzeczy gracza: gotówkę, konto prywatne, liczbę Twoich akcji i główny przycisk. Kurs co 2 s zmienia się w demie, żeby pokazać podświetlenie 500 ms.</p>
+<div class="frame" id="f-desk"></div>
+
+<h2 class="frame-title">2. Telefon 390 px: lista, potem otwarta szuflada funduszu</h2>
+<p class="frame-sub">Jeden wiersz na górze (NAV, gotówka, przycisk sesji). Wiersz spółki ma 2 linie: nazwa i kurs, potem ticker z branżą i zmiana. Dolna nawigacja: Rynek, Fundusz, Poczta, Menu. „Fundusz” otwiera szufladę z tą samą księgą co na desktopie.</p>
+<div class="phones"><div class="frame is-phone" id="f-ph1"></div><div class="frame is-phone" id="f-ph2"></div></div>
+
+<h2 class="frame-title">3. Start gry: przed pierwszą sesją, brak pozycji</h2>
+<p class="frame-sub">Zmiana „—” zamiast „■ 0,00%”, brak wykresu 7 sesji, przycisk „Rozpocznij grę”. W księdze pusty stan z poleceniem zamiast pustej tabeli.</p>
+<div class="frame" id="f-start"></div>
+
+<script>
+// Dane przykładowe. W grze: stocks + exchanges (companies.js), próg z minPrice albo rankBased.
+const EX = [
+  ['junk', 'Giełda Śmieciowa', 'kurs do 20 PLN', [['KFX', 'Konfiturex', 'Żywność', 2.00, 4.2, 684, 1000, 420], ['WZM', 'Miejskie Ziemniaki', 'Żywność', 1.50, -1.3, 719, 1000, 0], ['ECL', 'EcoLube', 'Chemia', 5.00, 0.6, 776, 1000, 0], ['PIX', 'Pikselowe Marzenia', 'Technologia', 7.50, -3.8, 756, 1000, 0], ['BLP', 'Błyskawiczna Proteza', 'Medycyna', 13.10, -2.4, 675, 1000, 90]]],
+  ['bronze', 'Giełda Brązowa', 'kurs 20–75 PLN', [['MDS', 'Mediasfera', 'Media', 41.20, 1.9, 512, 1200, 0], ['TRB', 'Transbałtyk', 'Transport', 63.80, 0.3, 230, 900, 0]]],
+  ['gold', 'Giełda Złota', 'kurs od 400 PLN, ocena BBB', [['HKT', 'Huta Katowice', 'Przemysł', 412.30, 1.2, 140, 500, 3], ['WSB', 'Wawelski Bank', 'Finanse', 612.00, -0.7, 88, 400, 0]]]
+];
+const pl = (n, d = 2) => n.toLocaleString('pl-PL', { minimumFractionDigits: d, maximumFractionDigits: d });
+function spark(seed, chg) {
+  let v = 10, pts = [];
+  for (let i = 0; i < 7; i++) { v += Math.sin(seed * 3 + i * 1.7) * 1.2 + chg * 0.15; pts.push(`${i * 9 + 1},${(9 - (v - 10) * 0.9).toFixed(1)}`); }
+  return `<svg class="ms-spark ${chg > 0 ? 'is-up' : chg < 0 ? 'is-down' : ''}" viewBox="0 0 56 18" aria-hidden="true"><polyline points="${pts.join(' ')}"/></svg>`;
+}
+function rows(start) {
+  return EX.map(([t, name, rule, list]) => `<tr class="ms-ex t-${t}"><th colspan="8"><div class="ex-plate"><span class="ex-name">${name}</span><span class="ex-rule">${rule}</span><span class="ex-count">${list.length} spółek</span></div></th></tr>` +
+    list.map(([tk, nm, sec, price, chg, av, tot, mine], i) => {
+      const c = start ? 0 : chg, m = start ? 0 : mine;
+      const chgTxt = start ? '<span class="ms-chg is-none" title="Zmiana pojawi się po pierwszej sesji">—</span>' : `<span class="ms-chg ${c > 0 ? 'is-up' : 'is-down'}">${c > 0 ? '▲ +' : '▼ −'}${pl(Math.abs(c), 1)}%</span>`;
+      return `<tr class="ms-row t-${t}${m ? ' is-owned' : ''}"><td class="c-tick"><span class="ms-tick" data-sector="${sec}">${tk}</span></td>
+        <td class="c-name"><span class="ms-name"><b title="${nm}">${nm}</b><span class="ms-tag">${sec}</span></span></td>
+        <td class="c-spark">${start ? '' : spark(i + tk.length, c)}</td>
+        <td class="c-price"><span class="ms-price" data-p="${price}">${pl(price)} PLN</span></td>
+        <td class="c-chg">${chgTxt}</td>
+        <td class="c-avail"><span class="ms-avail" title="Dostępne ${av} z ${tot} akcji"><small>${av.toLocaleString('pl-PL')} szt.</small><i style="--v:${Math.round(av / tot * 100)}%"></i></span></td>
+        <td class="c-mine"><span class="ms-mine${m ? ' has' : ''}">${m ? m.toLocaleString('pl-PL') : '0'}</span></td>
+        <td class="c-act"><button class="ms-trade" aria-label="Handluj: ${nm}"><svg width="16" height="16"><use href="#i-handel"/></svg></button></td></tr>`;
+    }).join('')).join('');
+}
+function mount(id, { start = false, drawer = false } = {}) {
+  const el = document.getElementById(id);
+  el.appendChild(document.getElementById('screen').content.cloneNode(true));
+  el.querySelector('.rows').innerHTML = rows(start);
+  if (start) {
+    el.querySelector('.ms-play').textContent = 'Rozpocznij grę';
+    el.querySelector('.ms-date').textContent = 'Rok 1, kw. 1, tydz. 1';
+    el.querySelectorAll('.ms-kpi b')[0].textContent = '10,0000 PLN'; el.querySelectorAll('.ms-kpi b')[1].textContent = '10 000,00 PLN'; el.querySelectorAll('.ms-kpi b')[2].textContent = '55/100';
+    const f = el.querySelector('.ms-body .ms-fund');
+    f.querySelector('.ms-nav-big').innerHTML = '<span>NAV / udział</span><b>10,0000 PLN</b><div class="ms-vs"><span>Wynik wobec GIG pokaże się po pierwszej sesji.</span></div>';
+    f.querySelector('.ms-ledger').innerHTML = '<dt>Gotówka funduszu</dt><dd class="is-mine">10 000,00 PLN<small>100% aktywów</small></dd><dt>Akcje</dt><dd>0,00 PLN</dd><dt>Klienci</dt><dd>13<small>1 000 udziałów</small></dd><dt>Konto prywatne</dt><dd class="is-mine">50,00 PLN</dd>';
+    f.querySelector('.ms-trust').innerHTML = '<span>Zaufanie klientów <b class="num">55/100</b></span><i style="--v:55%"></i>';
+    f.querySelector('.ms-pos').closest('div').innerHTML = '<div class="ms-empty"><b>Nie masz jeszcze pozycji.</b> Wybierz spółkę z listy i kliknij przycisk handlu. Zaufanie klientów spada, gdy cały fundusz leży w gotówce.</div>';
+  }
+  if (drawer) {
+    const d = el.querySelector('.ms-drawer');
+    d.innerHTML = '<div class="ms-grip" aria-hidden="true"></div>' + el.querySelector('.ms-body .ms-fund').innerHTML;
+    d.classList.add('is-open');
+    el.querySelectorAll('.ms-tabbar button').forEach((b, i) => i === 1 ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'));
+  }
+}
+mount('f-desk'); mount('f-ph1'); mount('f-ph2', { drawer: true }); mount('f-start', { start: true });
+
+// Demo podświetlenia: co 2 s jeden losowy kurs w pierwszej ramce
+setInterval(() => {
+  const p = [...document.querySelectorAll('#f-desk .ms-price')]; const el = p[Math.floor(Math.random() * p.length)];
+  const v = +el.dataset.p, nv = Math.max(0.5, v * (1 + (Math.random() - 0.5) * 0.04)); el.dataset.p = nv;
+  el.textContent = pl(nv) + ' PLN'; el.classList.remove('flash-up', 'flash-down'); void el.offsetWidth; el.classList.add(nv >= v ? 'flash-up' : 'flash-down');
+}, 2000);
+</script>
+<style>.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }</style>
+</body></html>
