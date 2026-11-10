@@ -17058,3 +17058,82 @@ group('0.17.3 R6 Akademia i zapis', () => {
         assertEq(ensureTiedState().friends.length, 0, 'pusty stan Tied');
     });
 });
+
+group('0.18.0 Porządki przed grafem', () => {
+    const start = () => {
+        const list = [makeCompany('AAA'), makeCompany('BBB')];
+        resetWorld(list); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        playerCash = 5_000_000; botRelations = createBotRelations(); mailbox = createMailbox(); macro.quarter = 10;
+        for (const stock of stocks) { stock.ceo = null; generateCEO(stock); }
+    };
+
+    test('R3 (Z1): poziom z ceny w PLN jest wspólny dla spółek krajowych i obcych; Platynowa od 800 zł, poniżej progu splitu', () => {
+        assertEq(getPriceTierKey(10), 'JUNK'); assertEq(getPriceTierKey(500), 'GOLD'); assertEq(getPriceTierKey(799.99), 'GOLD'); assertEq(getPriceTierKey(800), 'PLATINUM'); assertEq(getPriceTierKey(1e6), 'PLATINUM');
+        assert(exchanges.PLATINUM.minPrice < SPLIT_PRICE, 'Platynowa osiągalna przed splitem');
+        initFxState(); resetForeignIssuers();
+        try {
+            joinCountry('DE'); countryState.DE.link = 'intl';
+            for (const i of getCountryIssuers('DE')) { const t = getForeignTier(i); if (!isEliteExchange(t.key)) assertEq(t.key, getPriceTierKey(toPln(i.price, i.currency)), `${i.id}: ten sam próg`); }
+        } finally { resetForeignIssuers(); initFxState(); }
+    });
+
+    test('R4 (Z6): każdy kraj ma pulę cech narodowych; prezes obcej spółki ma cechę narodową i cechy z puli ogólnej, prezes polski nie ma cudzych cech narodowych', () => {
+        for (const id of Object.keys(COUNTRY_CEO_TRAITS)) assert(Object.values(ceoTraits).filter(t => t.country === id).length >= 2, `${id}: pula narodowa`);
+        initFxState(); resetForeignIssuers();
+        try {
+            joinCountry('DE'); joinCountry('US');
+            const list = [...getCountryIssuers('DE'), ...getCountryIssuers('US')].filter(i => !i.state);
+            let general = 0;
+            for (let n = 0; n < 4; n++) for (const i of list) {
+                const ceo = newForeignCeo(i), nat = ceo.traits.filter(t => ceoTraits[t.id]?.country);
+                assert(nat.length === 1 && ceoTraits[nat[0].id].country === i.country, `${i.id}: jedna cecha narodowa kraju ${i.country}`);
+                assert(ceo.traits.length <= 3, 'najwyżej 3 cechy');
+                general += ceo.traits.length - nat.length;
+            }
+            assert(general >= list.length * 4 * 0.8, `cechy z puli ogólnej (${general})`);
+        } finally { resetForeignIssuers(); initFxState(); }
+        for (let n = 0; n < 200; n++) { const ceo = { age: 58, traits: [] }; assignCeoTraits(ceo); assert(ceo.traits.every(t => !ceoTraits[t.id].country || ceoTraits[t.id].country === 'PL'), 'polski prezes bez cudzych cech'); }
+    });
+
+    test('R5 (Z8): w 50 postach o wynikach co najmniej 4 różne wstępy; współpraca ma własne wstępy', () => {
+        start(); const s = stocks[0]; s.ceo = { id: 'c1', name: 'Anna Nowak', traits: [] };
+        const leads = new Set();
+        for (let n = 0; n < 50; n++) { const p = noteTiedEvent(`${s.name} podpisuje kontrakt nr ${n}`, 'company'); if (p) leads.add(p.text.split(':')[0]); }
+        assert(leads.size >= 4, `różne wstępy: ${leads.size}`);
+        assert(TIED_POST_LEADS.result.length >= 6 && TIED_POST_LEADS.result.length <= 8 && TIED_POST_LEADS.coop.length >= 6, '6–8 wstępów na rodzaj');
+    });
+
+    test('R5 (Z7): odpowiedzi botów pod jednym postem się nie powtarzają; są 3 rodzaje, w tym z imieniem autora', () => {
+        start();
+        const author = stocks[0].ceo.name, first = author.split(' ')[0];
+        let named = 0, multi = 0;
+        for (let n = 0; n < 200; n++) {
+            const p = addTiedPost({ symbol: 'AAA', author, ceoId: stocks[0].ceo.id, text: `Wpis ${n}` });
+            const texts = getTiedBotReactions(p).comments.map(c => c.text);
+            assertEq(new Set(texts).size, texts.length, `post ${n}: bez powtórek`);
+            if (texts.length > 1) multi++;
+            if (texts.some(t => t.includes(first))) named++;
+        }
+        assert(multi > 50 && named > 30, `posty z kilkoma odpowiedziami ${multi}, z imieniem ${named}`);
+    });
+
+    test('R6 (Z9): karta Spółek Skarbu Państwa pokazuje nowo znacjonalizowaną spółkę bez ponownego otwierania okna (także przy pauzie i spoza 8 pierwszych)', () => {
+        const list = Array.from({ length: 12 }, (_, i) => Object.assign(makeCompany(`S${i}`, { sector: [i === 11 ? 'Chemia' : 'Usługi'] }), { isStateOwned: i < 10, stateOwnershipPct: 0.6 })); // limit 2 państwowych na sektor: cel z innego sektora
+        resetWorld(list); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        let modal = document.getElementById('state-modal'); const own = !modal;
+        if (own) { modal = document.createElement('div'); modal.id = 'state-modal'; modal.innerHTML = '<div id="state-ticker"></div><div id="state-body"></div>'; document.body.appendChild(modal); }
+        const saved = { display: modal.style.display, tab: stateTab };
+        modal.style.display = 'block'; stateTab = 'overview';
+        try {
+            updateStateModalContent();
+            const target = stocks[11];
+            assert(!document.getElementById('state-ssp-list').textContent.includes(target.name), 'przed nacjonalizacją bez spółki');
+            Object.assign(target, { financialHealth: -5, balanceSheet: { ...target.balanceSheet, liabilities: target.price * target.totalShares * 2 } });
+            stocks.filter(s => s !== target).forEach(s => { s.financialHealth = 2; });
+            centralBank.funds = 1e12;
+            triggerNationalizationEvent();
+            assert(target.isStateOwned, 'znacjonalizowana');
+            assert(document.getElementById('state-ssp-list').textContent.includes(target.name), 'karta odświeżona od razu');
+        } finally { modal.style.display = saved.display; stateTab = saved.tab; if (own) modal.remove(); }
+    });
+});

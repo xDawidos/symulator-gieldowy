@@ -15,6 +15,15 @@ const TIED_RULES = {
 const TIED_POSITIVE_NEWS = /wynik|kontrakt|raport|współprac|kooperac|dywidend|rekord|przełom|technolog|nowa (oferta|placówk)/i;
 const TIED_COMMENT_POOL = ['Super!', 'Gratuluję!', 'Trzymamy za was kciuki :)', 'Brawo!', 'Świetna wiadomość.', 'Tak trzymać!', 'Mocne.', 'Powodzenia w kolejnym kwartale!'];
 const TIED_POST_KINDS = { result: 'Wyniki', coop: 'Współpraca', note: 'Wpis', opinion: 'Opinia' };
+// 0.18.0 R5 (Z8): wstępy postów (prezes o wynikach, konto spółki o współpracy) — wybór stały dla treści
+const TIED_POST_LEADS = {
+    result: ['Z dumą dzielę się wiadomością:', 'Dobry kwartał za nami:', 'Krótko o tym, co się u nas wydarzyło:', 'Dziękuję zespołowi, bo to jego zasługa:', 'Mamy powód do zadowolenia:', 'Liczby mówią same za siebie:', 'Piszę, bo warto to odnotować:', 'Kolejny krok za nami:'],
+    coop: ['Cieszymy się, że możemy to ogłosić:', 'Mamy nowego partnera:', 'Rozwijamy współpracę:', 'Dobra wiadomość dla naszych klientów:', 'Łączymy siły:', 'Startujemy ze wspólnym projektem:', 'Ogłaszamy porozumienie:']
+};
+// 0.18.0 R5 (Z7): trzy rodzaje odpowiedzi botów: krótka, dłuższa i z imieniem autora posta
+const TIED_REPLY_SHORT = ['Super!', 'Gratuluję!', 'Brawo!', 'Mocne.', 'Świetna wiadomość.', 'Tak trzymać!'];
+const TIED_REPLY_LONG = ['Trzymamy za was kciuki :)', 'Powodzenia w kolejnym kwartale!', 'Ciekawe, jak zareaguje rynek.', 'Czekam na kolejne wyniki.', 'Dobrze widzieć, że idzie w dobrą stronę.', 'To może być ciekawy kwartał.'];
+const TIED_REPLY_NAMED = ['Gratulacje, {imię}!', 'Brawo, {imię}, tak trzymać!', '{imię}, świetna robota!', 'Dobra robota, {imię}.', 'Dzięki za wieści, {imię}!'];
 const TIED_AUDIENCE = { friends: 'Dla znajomych', trusted: 'Dla zaufanych' };
 const TIED_LOCKED_TEXT = { friends: 'Treść dla znajomych', trusted: 'Treść dla zaufanych' };
 
@@ -58,7 +67,7 @@ function noteTiedEvent(message, category) {
     const stock = stocks.find(s => s.ceo && typeof s.ceo === 'object' && message.includes(s.name));
     if (!stock) return null;
     const kind = /współprac|kooperac/i.test(message) ? 'coop' : 'result';
-    const lead = kind === 'coop' ? 'Cieszymy się, że możemy to ogłosić:' : 'Z dumą dzielę się wiadomością:';
+    const leads = TIED_POST_LEADS[kind === 'coop' ? 'coop' : 'result'], lead = leads[descriptionHash(`${stock.symbol}:${message}`) % leads.length];
     const text = `${lead} ${String(message).replace(/\p{Extended_Pictographic}|️/gu, '').replace(/\s+/g, ' ').trim()}`;
     if (getTiedPosts().some(p => p.symbol === stock.symbol && p.text?.startsWith(text))) return null;
     const closing = stock.ceo.id ? ` ${pickByHash(getPersonCharacterData(ceoKey(stock.ceo.id)).closing, text)}` : '';
@@ -179,10 +188,15 @@ function commentTiedPost(id, text) {
 function getTiedBotReactions(post) {
     const bots = getRelationPeople().filter(person => person.kind === 'investor');
     const count = bots.length ? descriptionHash(`${post.id}:c`) % 4 : 0;
-    const comments = Array.from({ length: count }, (_, i) => ({
-        person: bots[descriptionHash(`${post.id}:b${i}`) % bots.length],
-        text: TIED_COMMENT_POOL[descriptionHash(`${post.id}:t${i}`) % TIED_COMMENT_POOL.length]
-    }));
+    const first = String(post.author || '').trim().split(/\s+/)[0], pools = [TIED_REPLY_SHORT, TIED_REPLY_LONG, first ? TIED_REPLY_NAMED : TIED_REPLY_SHORT];
+    const used = new Set(), start = descriptionHash(`${post.id}:v`) % 3;
+    const comments = Array.from({ length: count }, (_, i) => {
+        const pool = pools[(start + i) % 3]; // kolejne odpowiedzi pod jednym postem: inne rodzaje i nigdy ten sam tekst
+        let k = descriptionHash(`${post.id}:t${i}`) % pool.length, text;
+        do { text = pool[k++ % pool.length].replace('{imię}', first); } while (used.has(text) && k < 99);
+        used.add(text);
+        return { person: bots[descriptionHash(`${post.id}:b${i}`) % bots.length], text };
+    });
     return { likes: descriptionHash(`${post.id}:l`) % 25, comments };
 }
 

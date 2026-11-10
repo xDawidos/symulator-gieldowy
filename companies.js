@@ -314,7 +314,8 @@ const researchInstituteDescriptions = ["Jesteśmy inkubatorem innowacji. Nie pro
 
 // --- 2. LOGIKA GENERATORÓW ---
 
-function assignCeoTraits(ceo) {
+/** country: kraj spółki zagranicznej (pula ogólna bez cech narodowych; cechę narodową dokłada newForeignCeo). Bez kraju: pula ogólna + cechy polskie. */
+function assignCeoTraits(ceo, country = null) {
     // Sprawdzenie, czy baza danych cech jest dostępna
     if (typeof ceoTraits === 'undefined' || Object.keys(ceoTraits).length === 0) {
         console.error("Błąd: Baza danych `ceoTraits` jest niedostępna lub pusta!");
@@ -323,7 +324,7 @@ function assignCeoTraits(ceo) {
     }
 
     const assignedTraits = [];
-    const traitsPool = Object.keys(ceoTraits).map(id => ({ id, ...ceoTraits[id] }));
+    const traitsPool = Object.keys(ceoTraits).map(id => ({ id, ...ceoTraits[id] })).filter(t => !t.country || (!country && t.country === 'PL')); // 0.18.0 R4 (Z6): cechy narodowe innych krajów tylko u ich prezesów
 
     // 1. Ustal, ile cech ma mieć CEO
     let numTraits = 1;
@@ -661,7 +662,7 @@ function generateCeoCandidate(stock) {
         traits: []
     };
 
-    assignCeoTraits(candidate); // Używamy assignCeoTraits, aby przypisać mu cechy
+    assignCeoTraits(candidate, stock?.kind === 'share' && stock.country ? stock.country : null); // spółka zagraniczna: pula ogólna (cecha narodowa w newForeignCeo)
     
     return candidate;
 }
@@ -1296,13 +1297,16 @@ const exchanges = {
     'JUNK': { name: 'Giełda Śmieciowa', nameAcc: 'Giełdę Śmieciową', level: 0, color: '#6c757d', minPrice: 0, maxPrice: 20, licenseCost: 0 },
     'BRONZE': { name: 'Giełda Brązowa', nameAcc: 'Giełdę Brązową', level: 1, color: '#cd7f32', minPrice: 20, maxPrice: 75, licenseCost: 20000 },
     'SILVER': { name: 'Giełda Srebrna', nameAcc: 'Giełdę Srebrną', level: 2, color: '#c0c0c0', minPrice: 75, maxPrice: 400, licenseCost: 125000 },
-    'GOLD': { name: 'Giełda Złota', nameAcc: 'Giełdę Złotą', level: 3, color: '#ffd700', minPrice: 400, maxPrice: 1500, licenseCost: 250000 },
-    'PLATINUM': { name: 'Giełda Platynowa', nameAcc: 'Giełdę Platynową', level: 4, color: '#e5e4e2', minPrice: 1500, maxPrice: Infinity, licenseCost: 500000 },
+    'GOLD': { name: 'Giełda Złota', nameAcc: 'Giełdę Złotą', level: 3, color: '#ffd700', minPrice: 400, maxPrice: 800, licenseCost: 250000 }, // 0.18.0 R3 (Z1): próg Platynowej 1500 → 800 (split od 1000 zł trzymał kursy poniżej 1500; cel 5–10% spółek)
+    'PLATINUM': { name: 'Giełda Platynowa', nameAcc: 'Giełdę Platynową', level: 4, color: '#e5e4e2', minPrice: 800, maxPrice: Infinity, licenseCost: 500000 },
     // Giełdy elitarne (etap E2): przydział wg rankingu kapitalizacji, nie ceny — finance.js
     'RUBY': { name: 'Giełda Rubinowa', nameAcc: 'Giełdę Rubinową', level: 5, color: '#c3112f', minPrice: Infinity, maxPrice: Infinity, licenseCost: 0, rankBased: true },
     'EMERALD': { name: 'Giełda Szmaragdowa', nameAcc: 'Giełdę Szmaragdową', level: 6, color: '#1f9d55', minPrice: Infinity, maxPrice: Infinity, licenseCost: 0, rankBased: true },
     'DIAMOND': { name: 'Giełda Diamentowa', nameAcc: 'Giełdę Diamentową', level: 7, color: '#6ec6ff', minPrice: Infinity, maxPrice: Infinity, licenseCost: 0, rankBased: true }
 };
+
+/** 0.18.0 R3: poziom giełdy z ceny akcji w złotych (Śmieciowa…Platynowa), wspólny dla spółek krajowych i obcych; elitarne przydziela ranking. */
+function getPriceTierKey(pricePln) { return Object.keys(exchanges).find(k => !exchanges[k].rankBased && pricePln >= exchanges[k].minPrice && pricePln < exchanges[k].maxPrice) || 'PLATINUM'; }
 
 const CORPORATE_PHASES = {
     GROWTH: 'Wzrost',
@@ -7385,19 +7389,7 @@ function reviewCompanyPlacements() {
 
         const currentExchangeKey = stock.exchange;
         const currentLevel = exchanges[currentExchangeKey].level;
-        let correctExchangeKey = null;
-
-        for (const key in exchanges) {
-            const exchange = exchanges[key];
-            if (stock.price >= exchange.minPrice && stock.price < exchange.maxPrice) {
-                correctExchangeKey = key;
-                break;
-            }
-        }
-        // Obsługa spółek z ceną powyżej progu PLATINUM
-        if (stock.price >= exchanges['PLATINUM'].maxPrice) {
-             correctExchangeKey = 'PLATINUM';
-        }
+        const correctExchangeKey = getPriceTierKey(stock.price);
 
 
         if (!correctExchangeKey || correctExchangeKey === currentExchangeKey) return;

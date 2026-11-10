@@ -1058,7 +1058,7 @@ function foundSubsidiary(parent, options = {}) {
 
     const totalShares = 10000;
     const price = Math.round(capital / totalShares * 1.5 * 100) / 100;
-    const exchangeKey = options.exchange && exchanges[options.exchange] ? options.exchange : Object.keys(exchanges).find(key => !isEliteExchange(key) && exchanges[key].minPrice <= price && price < exchanges[key].maxPrice) || 'SILVER';
+    const exchangeKey = options.exchange && exchanges[options.exchange] ? options.exchange : getPriceTierKey(price);
     const parentStake = options.stake || 0.6; // T6: córka koncernu 70–80% (20–30% w ofercie publicznej)
 
     const segment = pickSubsidiarySegment(parent);

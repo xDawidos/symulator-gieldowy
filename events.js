@@ -831,6 +831,7 @@ function triggerNationalizationEvent() {
     target.balanceSheet.liabilities = debt - repaid;
     target.financialHealth = 1;
     target.sharesHeld = 0; // inwestorzy wykupieni; pakiet państwa jest poza wolnym obrotem
+    if (typeof updateStateModalContent === 'function') updateStateModalContent(); // 0.18.0 R6 (Z9): okno Państwa także przy pauzie
     return;
 }
 

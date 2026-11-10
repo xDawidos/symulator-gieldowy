@@ -54,8 +54,8 @@ function ensureForeignCompany(i, full = false) {
 
 function newForeignCeo(i) {
     const ceo = generateCeoCandidate(i);
-    const trait = getIssuerCeoTrait(i);
-    ceo.traits = trait ? [{ id: trait }] : []; // cechy prezesa krajowego (countries.js, `ceoTraits[...].fx`) — jedna na spółkę, stała
+    const trait = getIssuerCeoTrait(i), def = trait ? ceoTraits[trait] : null; // 0.18.0 R4 (Z6): cecha narodowa (stała dla spółki, `fx`) + cechy z puli ogólnej, razem najwyżej 3
+    if (def) ceo.traits = [{ id: trait, name: def.name, rarity: def.rarity }, ...ceo.traits.filter(t => t.id !== trait)].slice(0, 3);
     return ceo;
 }
 
@@ -316,7 +316,7 @@ function foreignIssuerCount() { return Object.keys(foreignIssuers).length; }
 /** Poziom giełdy spółki: kraj połączony → nasze poziomy (Śmieciowa…Platynowa po cenie w PLN, Szmaragd/Rubin po kapitalizacji); inny kraj → własne poziomy giełdy kraju. */
 function getForeignTier(i) {
     const pln = toPln(i.price, i.currency), linked = isIssuerOnHomeList(i);
-    let key = Object.keys(exchanges).find(k => !isEliteExchange(k) && pln >= exchanges[k].minPrice && pln < exchanges[k].maxPrice) || 'PLATINUM';
+    let key = getPriceTierKey(pln);
     if (linked) {
         key = getForeignEliteMap()[i.id] || key;
         return { key, level: exchanges[key].level, linked: true, label: exchanges[key].name, exchange: key };

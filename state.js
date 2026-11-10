@@ -402,6 +402,7 @@ function transferStateShares(stock, quantity) {
     if (stock.isStateOwned && stock.stateOwnershipPct < 0.5) {
         stock.isStateOwned = false;
         logEvent(`🏛️ ${stock.name} przestaje być spółką kontrolowaną przez państwo.`, 'state');
+        if (typeof updateStateModalContent === 'function') updateStateModalContent(); // 0.18.0 R6 (Z9)
     }
 }
 

@@ -8383,8 +8383,8 @@ function updateStateModalContent() {
                 <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('wykres', 20)}</span><div><h4>Koniunktura</h4><span class="bank-card-type">${escapeHtml(phase.name || '')}</span></div></header>
                     <p class="text-sm">${escapeHtml(phase.description || 'Faza cyklu gospodarczego wpływa na wyniki spółek, sektory wrażliwe na cykl i stopy procentowe.')}</p>
                     <p class="text-sm text-muted">Wskaźnik koniunktury: ${Number(economyCycle.index || 0).toFixed(0)}/100 · zmiana PKB w kwartale: ${formatNumberPl(((economyCycle.gdpGrowth || 0) * 100), 2)}%.</p></article>
-                <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('fabryka', 20)}</span><div><h4>Spółki Skarbu Państwa</h4><span class="bank-card-type">nacjonalizacje i prywatyzacje</span></div></header>
-                    <ul class="list-plain text-sm">${stocks.filter(s => s.isStateOwned && !s.isBankrupt).slice(0, 8).map(s => `<li>${escapeHtml(s.name)} — ${((s.stateOwnershipPct || 0) * 100).toFixed(0)}%</li>`).join('') || '<li class="text-muted">Brak.</li>'}</ul></article>
+                <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('fabryka', 20)}</span><div><h4>Spółki Skarbu Państwa</h4><span class="bank-card-type">nacjonalizacje i prywatyzacje · ${stocks.filter(s => s.isStateOwned && !s.isBankrupt).length}</span></div></header>
+                    <ul class="list-plain text-sm" id="state-ssp-list">${stocks.filter(s => s.isStateOwned && !s.isBankrupt).sort((a, b) => (b.stateOwnershipPct || 0) - (a.stateOwnershipPct || 0) || a.name.localeCompare(b.name, 'pl')).map(s => `<li>${escapeHtml(s.name)} — ${((s.stateOwnershipPct || 0) * 100).toFixed(0)}%</li>`).join('') || '<li class="text-muted">Brak.</li>'}</ul></article>
             </div>`;
     } else if (stateTab === 'macro') {
         body.innerHTML = renderMacroPanel();
