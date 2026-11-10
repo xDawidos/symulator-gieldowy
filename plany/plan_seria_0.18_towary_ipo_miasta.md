@@ -258,3 +258,4 @@ Starsze pomysły z notatek (`roadmap.txt`, dawny „plany poprawione przez ai.tx
 ## 14. Dopiski z 0.17.1 (2026-11-08)
 
 - **Punkt kontrolny GIG 20 lat (S2 z 0.17.1):** w 0.17.1 13,5% rocznie (cel 8–11%), odziedziczone od 0.15.1, nie strojone. Zmierzyć ponownie seriami 20-letnimi po wejściu miast i łańcuchów surowcowych. Jeśli wynik jest gorszy niż 13,5%, stroić w tej wersji.
+- **Ruch klas (do 0.19.1):** w 0.17.1 udziały klas przez 8 lat zmieniają się najwyżej o 1–2 pp i raczej w dół (średnia 24 → 23%). Nikt nie awansuje. Zdiagnozować razem z pytaniem, czemu realna gospodarka nie rośnie, a po zmianie sprawdzić wybory (wagi `CLASS_VOTE` są strojone na stałej strukturze).

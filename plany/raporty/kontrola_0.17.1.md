@@ -84,7 +84,7 @@ Czas kroku w tej tabeli liczony przy 5 przebiegach naraz i bez rysowania interfe
 | S1 | tolerancja 1,5 pp nadwyżki dla klientów porównujących się z GIG i SIG20: fundusz jak indeks zostaje za nim o opłatę i gotówkę płynności (ok. 1,4 pp na okres), a przy pogoni za wynikiem 1,5 był stale pod progiem zadowolenia | a4df887 |
 | S1 | **błąd:** Program Emerytalny przy długu państwa dawał ujemne granty i zabierał gotówkę funduszom zarządców (ujemna gotówka w długich grach; złapane sondą w T6, 11 z 11 trafień) | a9ebbaa |
 | S2 | bez strojenia; punkt kontrolny w planie 0.18 (sekcja 14) | 91646cd |
-| S3 | klasa średnia i wyższa średnia mniej za Koalicją Rynkową (36% i 51% zamiast 42% i 57%); kara za kadencje 2 pp po pierwszej i +6 pp za każdą kolejną (było 5 × kadencje) | b2a28d8, kolejne rundy |
+| S3 | klasa średnia i wyższa średnia mniej za Koalicją Rynkową (32% i 46% zamiast 42% i 57%); kara za kadencje 0 po pierwszej i +6 pp za każdą kolejną (było 5 × kadencje) | b2a28d8, kolejne rundy |
 | S4 | od 6,5 roku norma emisji rośnie o 1,5% rocznie (technologia), a elastyczność gaśnie do 20 lat z 3,3 do 2,2 | b2a28d8, kolejne rundy |
 | S5 | emisyjność chemii według profilu spółki (rafineria 1,0, nawozy 0,9, tworzywa 0,6, farmacja 0,2); KUP na starcie 10–20% emisji kraju, Tauron 35% | b2a28d8 |
 | S6 | preset `dzwignia` z parametrem dźwigni i depozytem najwyżej 25% aktywów | b2a28d8, e248452 |
@@ -104,10 +104,10 @@ Pełna seria na a4df887 (18 zadań, 395 gier), potem dwie rundy S3/S4 i seria ko
 | Fundusz z kampaniami: udziały | ±3%/rok | (kampanie zablokowane) | +3,4…+4,6%/rok (6,5 roku), +3,6%/rok (20 lat) | na granicy, przyjęte (decyzja: cel dotyczy funduszu z kampaniami) |
 | Fundusz z kampaniami: zaufanie | 45–55 | | mediana 47–52 | OK |
 | Fundusz bez kampanii (`fundusz-gig`) | | −5,8%/rok | −5,4%/rok (6,5 roku), −0,9…−1,8%/rok (20 lat) | kurczy się zgodnie z 0.16.1 |
-| Koalicja Rynkowa: wygrane | ok. 45–55% | 64–70% | 59–71% | **POZA** (patrz niżej) |
-| Reelekcja | nie niżej niż baza 20% | 13–39% | 19–38% | OK |
-| Zanieczyszczenie 6,5 roku | ok. 55 | 48–52 | 50,1 | OK |
-| Zanieczyszczenie 20 lat | 55–65, 80+ tylko przy zaniedbaniu | 61–72 | 65,6 i 65,8 (średnie), ale 3/10 gier 93–99 | średnia na granicy, rozrzut duży |
+| Koalicja Rynkowa: wygrane | ok. 45–55% | 64–70% | 55% (50–58% w seriach, 117 wyborów) | OK, górna granica |
+| Reelekcja | nie niżej niż baza 20% | 13–39% | 22–28% | OK |
+| Zanieczyszczenie 6,5 roku | ok. 55 | 48–52 | 50–55 | OK |
+| Zanieczyszczenie 20 lat | 55–65, 80+ tylko przy zaniedbaniu | 61–72 | 59–66 (średnie w dwóch seriach), ale część gier 93–99 | OK średnio, rozrzut duży |
 | KrzeUraFos4 | żadna spółka spoza energetyki ponad Tauron na starcie | 46% wobec 35% | 10–22% wobec 35% | OK |
 | Dźwignia 1:3 | | (nie mierzone) | 0 upadłości, 0 margin call, ale tylko 4 pozycje w 20 grach | mało danych |
 | Zapis | | 2,42 mln (6,5 roku) | 2,43 mln | bez zmian |
@@ -116,9 +116,12 @@ Pełna seria na a4df887 (18 zadań, 395 gier), potem dwie rundy S3/S4 i seria ko
 **Kolejne rundy S3/S4 w T6:**
 1. Kara 6 × kadencje i elastyczność do 2,6: reelekcja spadła do 8–15%, zanieczyszczenie po 20 latach 73–98.
 2. Kara 4 + 6 i elastyczność do 1,75: reelekcja 10–18%, zanieczyszczenie bez zmian (72,6). Wniosek: przy stałej normie elastyczność nie pomaga, bo emisje przemysłu rosną z realnym przychodem o 40–70% przez 20 lat.
-3. Kara 2 + 6, norma +1,5% rocznie od 6,5 roku, elastyczność do 2,2: stan końcowy z tabeli.
+3. Kara 2 + 6, norma +1,5% rocznie od 6,5 roku, elastyczność do 2,2: zanieczyszczenie po 20 latach 65,6, reelekcja 19–38%, ale Koalicja Rynkowa 59–71%.
+4. Pomiar struktury klasowej (6 gier × 8 lat): udziały klas zmieniają się najwyżej o 1–2 pp, raczej w dół (średnia 24 → 23%, średnia niższa 26 → 27–28%). Poparcie z klas jest stałe przez całą grę: Koalicja ok. 34%, Blok 28,7%, Ludowcy 23,4%. Przewaga Koalicji 5–6 pp pochodzi więc z samych wag. Warianty wag: A (średnia 32%, wyższa średnia 46%) 51% wygranych, B (30%, 44%, zamożna 65%) 41%. Wybrany A z karą 0 za pierwszą kadencję i +6 pp za każdą kolejną: stan końcowy z tabeli (seria potwierdzająca: 24 × 6,5 roku, 10 × 20 lat, 10 × `kampanie`).
 
-**Koalicja Rynkowa:** reelekcja i dominacja się wykluczają. Kara wysoka od pierwszej kadencji obniżyła wygrane Koalicji do 51–57%, ale reelekcja spadła do 8–15%. Kara łagodna dla pierwszej kadencji przywróciła reelekcję i podniosła Koalicję do 59–71%. Do decyzji: dalsze przesunięcie wag klasy średniej (np. 32% zamiast 36%) albo przyjęcie obecnego stanu.
+**Koalicja Rynkowa:** sama kara za kadencje nie pomagała, bo wysoka kara od pierwszej kadencji obniżała też reelekcję (8–15%). Rozwiązały to wagi klas (decyzja użytkownika: stroić wagi) i kara tylko za długie rządy.
+
+**Struktura klasowa stoi w miejscu:** przez 8 lat nikt nie awansuje. To osobny problem (może wiązać się z pytaniem, czemu realna gospodarka nie rośnie); dopisany do planu 0.19.1.
 
 **Zanieczyszczenie:** gry dzielą się na czyste (30–45) i brudne (93–99), środek jest rzadki. Brudne to te, w których rośnie węgiel i przemysł ciężki bez reakcji UEiE. Do sprawdzenia w 0.18 razem z łańcuchami (przemysł zużywa prąd).
 
@@ -126,6 +129,6 @@ Pełna seria na a4df887 (18 zadań, 395 gier), potem dwie rundy S3/S4 i seria ko
 
 - Testy jednostkowe 1062/1062.
 - Spełnione: błędy 0, GIG 6,5 roku, marże, zaufanie, reelekcja, zanieczyszczenie po 6,5 roku i średnio po 20 latach, S5, zapis, czas kroku.
-- Na granicy lub poza: GIG 20 lat 12,4% (S2, punkt kontrolny w 0.18), Koalicja Rynkowa 59–71%, rozrzut zanieczyszczenia po 20 latach, udziały funduszu z kampaniami +3,4…+4,6%/rok, dźwignia 1:3 mało danych.
-- **Propozycja:** wejść w 0.18. Otwarte punkty (Koalicja Rynkowa, U9, rozrzut zanieczyszczenia) nie blokują łańcuchów i będą mierzone w seriach 0.18.
+- Na granicy lub poza: GIG 20 lat 12,4% (S2, punkt kontrolny w 0.18), Koalicja Rynkowa 55% (górna granica), rozrzut zanieczyszczenia po 20 latach, udziały funduszu z kampaniami +3,4…+4,6%/rok, dźwignia 1:3 mało danych, struktura klas bez ruchu (0.19.1).
+- **Propozycja:** wejść w 0.18. Otwarte punkty (U9, rozrzut zanieczyszczenia, ruch klas) nie blokują łańcuchów i będą mierzone w seriach 0.18.
 - Surowe serie: folder notatek `serie_0171` (T1, T2) i kopie w schowku sesji (T6).
