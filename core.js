@@ -5403,7 +5403,7 @@ const PARTY_PROGRAMS = {
     people: { moves: [['minWage', 1], ['benefits', 1], ['housing', 1], ['tenderThreshold', 1], ['infrastructure', 1], ['climatePolicy', -1], ['energyPolicy', 1, 'set']], education: 'medium', deficit: 'cit' }
 };
 // Preferencje wyborcze klas: [Ludowcy, Blok Państwowy, Koalicja Rynkowa].
-const CLASS_VOTE = { poor: [35, 25, 10, 30], lowerMid: [30, 30, 25, 15], mid: [22, 34, 36, 8], upperMid: [12, 32, 51, 5], // 0.17.1 S3: klasa średnia i wyższa średnia mniej za Koalicją Rynkową
+const CLASS_VOTE = { poor: [35, 25, 10, 30], lowerMid: [30, 30, 25, 15], mid: [24, 36, 32, 8], upperMid: [14, 35, 46, 5], // 0.17.1 S3: klasa średnia i wyższa średnia mniej za Koalicją Rynkową (struktura klas prawie stała, przewaga z wag 5–6 pp → ok. 3 pp)
     rich: [5, 20, 72, 3], veryRich: [5, 15, 78, 2] };
 const PARTY_IDS = ['people', 'state', 'market', 'social']; // czwarte miejsce: Socjaldemokraci albo Zieloni (syncFourthParty)
 // 0.17.2 E3: Zieloni. Wagi zamiast kolumny Socjaldemokratów, szansa na start gry, zamiana na wyborach przy wysokim zanieczyszczeniu.
@@ -5426,7 +5426,7 @@ const COALITION_THRESHOLD = 0.40;
 // Socjaldemokraci (decyzja użytkownika): sami nie wygrywają — są koalicjantem lewicy i rosną w kryzysie.
 const SOCIAL_COALITION_MIN = 10;     // % poparcia, od którego Ludowcy / Blok Państwowy wolą ich jako koalicjanta
 const SOCIAL_CRISIS_BONUS = 6;       // pp przy złej koniunkturze
-const ELECTION_FATIGUE_FIRST = 2;    // pp po pierwszej kadencji (0.17.1 S3)
+const ELECTION_FATIGUE_FIRST = 0;    // pp po pierwszej kadencji (0.17.1 S3: kara tylko za długie rządy)
 const ELECTION_FATIGUE = 6;          // pp za każdą kolejną kadencję u władzy (0.17.1 S3: łatwiejsza pierwsza reelekcja, droższe długie rządy; wcześniej 5 × kadencje)
 const getElectionFatigue = terms => ELECTION_FATIGUE_FIRST + ELECTION_FATIGUE * (Math.max(1, Number(terms) || 1) - 1);
 const ELECTION_BAD_TIMES = 10;       // pp przy złej koniunkturze
