@@ -1394,12 +1394,19 @@ const PROBE_018 = `(function () {
     if (typeof enterCrisisStage === 'function') { const o = enterCrisisStage; enterCrisisStage = function (stage) { const r = o.apply(this, arguments); if (stage === 'burst' && crisisLine) { const syms = gainSyms(crisisLine.id); T.gain = { id: crisisLine.id, gig: getGigIndexValue(), syms, p: snapGain(crisisLine.id, syms) }; } return r; }; }
     if (typeof enterCrisisStage === 'function') { const o2 = enterCrisisStage; enterCrisisStage = function (stage) { const id = crisisLine?.id, g = T.gain; if (stage === 'intervention' && g && g.id === id && !g.done) { g.done = true; T.gainRes.push({ id, at: 'intervention', gig: +(getGigIndexValue() / g.gig - 1).toFixed(4), sec: { all: g.p.all > 0 ? +(snapGain(id, g.syms).all / g.p.all - 1).toFixed(4) : null } }); } return o2.apply(this, arguments); }; }
     if (typeof finishCrisisLine === 'function') { const o = finishCrisisLine; finishCrisisLine = function () { const id = crisisLine?.id, g = T.gain; const r = o.apply(this, arguments); if (false && g && g.id === id) { const now = snapGain(id, g.syms); T.gainRes.push({ id, gig: +(getGigIndexValue() / g.gig - 1).toFixed(4), sec: Object.fromEntries(Object.entries(now).map(([k, v]) => [k, g.p[k] > 0 ? +(v / g.p[k] - 1).toFixed(4) : null])) }); } return r; }; }
+    // 0.18.5 W0: profil kwartału — czas funkcji gry zegarem okna nadrzędnego (w ramce zegar jest wirtualny); funkcje zagnieżdżone liczą się też w rodzicu
+    const realNow = () => window.parent.performance.now(); T.prof = {};
+    for (const name of ['runStockTick', 'runWeeklyTick', 'runQuarterlyTick', 'runYearlyTick', 'runAllAi', 'updateStockPrices', 'processFundWeekly', 'displayStocks', 'processFinancialReports', 'processCountriesQuarterly', 'stepCountries', 'processCommoditiesQuarterly', 'stepCommodities', 'processChainsQuarterly', 'processCrisesQuarterly', 'processEnergyQuarterly', 'processRatingsQuarterly', 'reviewCompanyPlacements', 'processListingsQuarterly', 'processWorkforceQuarter']) {
+        if (typeof window[name] !== 'function') continue;
+        const o = window[name], rec = T.prof[name] = { ms: 0, n: 0 };
+        window[name] = function () { const t0 = realNow(); try { return o.apply(this, arguments); } finally { rec.ms += realNow() - t0; rec.n++; } };
+    }
     let first = null;
     // G6 (Z11): wynik REIT-ów (kurs × dywidenda kwartalna, indeks łańcuchowy) według typu portfela
     T.reit = {}; let reitQ = -1;
     const sampleReits = () => { if (macro.quarter === reitQ) return; reitQ = macro.quarter; for (const x of stocks.filter(y => y.assetType === 'REIT' && !y.isBankrupt)) { const e = T.reit[x.symbol] || (T.reit[x.symbol] = { type: x.reit?.type || '?', idx: 1, p: x.price, n: 0 }); if (e.p > 0 && x.price > 0) { e.idx *= x.price / e.p * (1 + (typeof getTrailingDividendYield === 'function' ? getTrailingDividendYield(x) : 0) / 4); e.n++; } e.p = x.price; } };
     const origSample = s.sample; s.sample = function () { sampleReits(); const r = origSample.apply(this, arguments); if (!first && macro.quarter >= (s.startQ ?? 0) + 1) { const u = unitRows(); if (Object.keys(u).length) first = u; } return r; };
-    const origFinish = s.finish; s.finish = function () { const r = origFinish.apply(this, arguments); r.p018 = { start: first, end: unitRows(), chains: T.q, chainMs: T.ms, gain: T.gainRes, reit: Object.fromEntries(Object.entries(T.reit).map(([k, e]) => [k, { type: e.type, cagr: e.n > 3 ? +(Math.pow(e.idx, 4 / e.n) - 1).toFixed(4) : null }])) }; return r; };
+    const origFinish = s.finish; s.finish = function () { const r = origFinish.apply(this, arguments); r.p018 = { prof: Object.fromEntries(Object.entries(T.prof).map(([k, v]) => [k, [Math.round(v.ms), v.n]])), start: first, end: unitRows(), chains: T.q, chainMs: T.ms, gain: T.gainRes, reit: Object.fromEntries(Object.entries(T.reit).map(([k, e]) => [k, { type: e.type, cagr: e.n > 3 ? +(Math.pow(e.idx, 4 / e.n) - 1).toFixed(4) : null }])) }; return r; };
 })();`;
 
 // 0.17 S0b: łączna kapitalizacja rynku (PLN; GPW i spółki krajów dołączonych) i udział spółek krajowych w przejęciach D3. Wynik: pole s017.

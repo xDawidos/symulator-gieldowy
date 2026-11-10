@@ -17499,3 +17499,11 @@ group('0.18.4 Audyt, oceny, IPO, sufity', () => {
         assert(/Eksportuj CSV/.test(renderListingHistoryCard()), 'przycisk eksportu');
     });
 });
+
+group('0.18.5 Wydajność', () => {
+    test('W1: przy ×200 interfejs rysuje się najwyżej co 200 ms, przy ×1 przy każdym kroku', () => {
+        lastUiDrawAt = -Infinity;
+        assert(shouldDrawUi(1000, 200) && !shouldDrawUi(1100, 200) && shouldDrawUi(1201, 200), '×200: co 200 ms');
+        assert(shouldDrawUi(1210, 1) && shouldDrawUi(1211, 1), '×1: zawsze');
+    });
+});

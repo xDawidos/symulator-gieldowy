@@ -1156,6 +1156,13 @@ function getMeasuredGameSpeed() {
     return { quartersPerMinute: 60000 / msPerQuarter, effectiveMultiplier: BASE_DELAYS.quarterly / msPerQuarter };
 }
 
+// 0.18.5 W1: rysowanie przy dużych prędkościach — logika liczy każdy tik, interfejs odświeża się najwyżej co 200 ms (×50 i szybciej). Przy ×1–×10 bez zmian.
+const UI_DRAW_MIN_MS = 200, UI_DRAW_FROM_SPEED = 50;
+let lastUiDrawAt = -Infinity;
+function shouldDrawUi(now, speed) {
+    if (speed < UI_DRAW_FROM_SPEED || now - lastUiDrawAt >= UI_DRAW_MIN_MS) { lastUiDrawAt = now; return true; }
+    return false;
+}
 /** Jeden krok logiki giełdy (skipUi: bez odświeżania interfejsu). */
 function runStockTick(skipUi, speedMultiplier, tickSteps) {
 
@@ -1644,7 +1651,8 @@ function setGameSpeed(speedMultiplier) {
         const steps = Math.max(1, Math.min(MAX_TICK_CATCHUP, Math.floor(tickBacklog)));
         tickBacklog = Math.max(0, Math.min(tickBacklog - steps, MAX_TICK_CATCHUP));
         if (isGamePaused) { tickBacklog = 0; stockTick(); return; }
-        for (let step = 0; step < steps; step++) stockTick(step < steps - 1);
+        const draw = shouldDrawUi(now, speedMultiplier); // 0.18.5 W1: przy ×50 i szybciej interfejs najwyżej co UI_DRAW_MIN_MS
+        for (let step = 0; step < steps; step++) stockTick(step < steps - 1 || !draw);
     }, BASE_DELAYS.stockUpdate * tickSteps / speedMultiplier);
 
     // Pętla tygodniowa (z bazy main.js - bankowość komercyjna)
