@@ -17420,3 +17420,47 @@ group('0.18.3 U19 Rama okna Państwa', () => {
         } finally { stateTab = saved; host.remove(); if (old) old.id = 'state-modal'; }
     });
 });
+
+group('0.18.3 Mechaniki grafu', () => {
+    const rows = () => [{ key: 'Alkohole', country: 'PL', revenue: 100 }, { key: 'Żywność', country: 'PL', revenue: 200 }, { key: 'Usługi', country: 'PL', revenue: 500 }, { key: 'Motoryzacja', country: 'PL', revenue: 300, tech: 5 },
+        { key: 'Przemysł/Hutnictwo', country: 'PL', revenue: 200 }, { key: 'Nieruchomości/Magazyny', country: 'PL', revenue: 50 }, { key: 'Żywność/Herbata', country: 'JP', revenue: 80 }, { key: 'Usługi', country: 'JP', revenue: 300 }, { key: 'Żywność/Herbata', country: 'DE', revenue: 1 }, { key: 'Usługi', country: 'DE', revenue: 300 }];
+    test('M1: szok z pełnym magazynem daje płytszy skok ceny niż z pustym; Magazyny zarabiają na zapasie ponad cel', () => {
+        const run = cover => { resetChainState(); const r = rows(); stepChains(r, { q: 1 }); chainState.g.steel.z.fill(cover); stepChains(r, { q: 2, shocks: { 'Przemysł/Hutnictwo|*': 0.6 / 1.15 } }); return chainState.g.steel.P[chainState.cal.countries.indexOf('PL')]; };
+        const full = run(1.5), empty = run(0);
+        assert(full < empty, `pełny ${full} < pusty ${empty}`);
+        resetChainState(); const r = rows(); stepChains(r, { q: 1 }); for (const s of Object.values(chainState.g)) s.z.fill(1.2); stepChains(r, { q: 2 });
+        assert(chainState.factor['Nieruchomości/Magazyny|PL'].rev > 0, 'przychód magazynów rośnie z zapasem');
+        resetChainState();
+    });
+    test('M2: w recesji spadek popytu na luksus ≥ 2 × spadek dóbr Z; herbata w JP jako Z, w DE jako L', () => {
+        resetChainState(); const r = rows(); stepChains(r, { q: 1 }); const pl = () => chainState.cal.countries.indexOf('PL');
+        const l0 = chainState.g.luxury.D[pl()], z0 = chainState.g.food.D[pl()];
+        for (let q = 2; q < 8; q++) stepChains(r, { q });
+        r.forEach(x => { x.revenue *= 0.95; }); stepChains(r, { q: 8 });
+        const dl = 1 - chainState.g.luxury.D[pl()] / l0, dz = 1 - chainState.g.food.D[pl()] / z0;
+        assert(dl >= 2 * dz && dz > 0, `luksus −${dl}, żywność −${dz}`);
+        assertEq(getGoodClass(GOOD_BY_ID.tea, 'JP'), 'Z'); assertEq(getGoodClass(GOOD_BY_ID.tea, 'DE'), 'L');
+        resetChainState();
+    });
+    test('M3: po technologii udział stali w motoryzacji spada stopniowo (≤ 5 pp/rok) do limitu, bilans stali bez skoku', () => {
+        resetChainState(); const r = rows(); stepChains(r, { q: 1 });
+        let prev = chainState.subst['Motoryzacja|PL'].steel, maxStep = prev;
+        for (let q = 2; q < 40; q++) { stepChains(r, { q }); const v = chainState.subst['Motoryzacja|PL'].steel; maxStep = Math.max(maxStep, v - prev); prev = v; const b = chainState.g.steel.b[chainState.cal.countries.indexOf('PL')]; assert(Math.abs(b - 1) < 0.05, `bilans stali ${b}`); }
+        assert(maxStep <= 0.0125 + 1e-6 && prev <= CHAIN_SUBSTITUTION.Motoryzacja.steel.max + 1e-9 && prev > 0.2, `udział zastąpiony ${prev}`);
+        resetChainState();
+    });
+    test('M4: emisyjność podsektora z receptury (huta ciężej niż sektor), ocena ESG A dla spółki na ścieżce ESG', () => {
+        assert(getRecipeEmissionFactor('Przemysł', 'Hutnictwo') > 1 && getRecipeEmissionFactor('Przemysł', null) === 1, 'huta cięższa');
+        const s = makeCompany('ESX', { sector: ['Przemysł'] }); assert(['B', 'C'].includes(getEsgRating(s)), 'bez ESG'); s.esg = true; assertEq(getEsgRating(s), 'A');
+    });
+    test('M5: szlaki mają stan słowem; w strajku portowym szlaki morskie kraju startowego są utrudnione albo wstrzymane', () => {
+        resetWorld([makeCompany('AAA')]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' }); resetCrises(); resetChainState();
+        try {
+            stepChains(rows(), { q: 1 });
+            assert(getChainRoutes().every(r => r.status === 'ok'), 'bez szoku wszystkie aktywne');
+            startCrisisLine('supply', { forced: true, skipSpark: true, variant: 'port' }); enterCrisisStage('spread');
+            const routes = getChainRoutes(); assert(routes.length && routes.every(r => r.status !== 'ok'), JSON.stringify(routes.map(r => r.status)));
+            chainsView.view = 'routes'; const html = renderChainsPanel(); assert(/Wstrzymany|Utrudniony/.test(html) && /<table/.test(html), 'widok listy');
+        } finally { resetCrises(); resetChainState(); chainsView = { chain: 'metals', good: null, country: null, view: 'chain' }; }
+    });
+});

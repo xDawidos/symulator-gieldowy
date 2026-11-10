@@ -31,7 +31,11 @@ const CHAIN_RULES = {
     costPass: 0.3,            // odbiorca przerzuca 30% wzrostu kosztu wsadu na ceny
     shortagePass: 0.6,        // niedobór obniża aktywność odbiorcy o (1 − b) × udział wsadu × 0,6
     priorityShortage: 0.3,    // obronność i państwo: niedobór działa w 30%
-    outputSplit: { 'Mennica': { cash: 1 }, 'Energia/Rafinerie': { fuel: 0.7, chem: 0.3 }, 'Motoryzacja': { cars: 0.7, trucks: 0.3 }, 'Przemysł/Leśnictwo': { wood: 0.6, lumber: 0.4 } }
+    luxuryElasticity: 2.5,    // 0.18.3 M2: popyt na luksus reaguje na cykl 2,5 raza mocniej niż na dobra zwykłe
+    substStep: 0.0125,        // M3: zmiana udziału wsadu najwyżej 5 pp/rok
+    warehouse: [0.6, 1.6],    // M1: zaplecze magazynowe kraju mnoży cel i pojemność zapasu
+    holdingRevenue: 0.08,     // M1: Magazyny zarabiają na zapasie ponad cel
+    outputSplit: { 'Mennica': { cash: 1 }, 'Alkohole': { beer: 0.5, luxury: 0.5 }, 'Energia/Rafinerie': { fuel: 0.7, chem: 0.3 }, 'Motoryzacja': { cars: 0.7, trucks: 0.3 }, 'Przemysł/Leśnictwo': { wood: 0.6, lumber: 0.4 } }
 };
 let CHAINS_ACTIVE = true;    // 0.18.1 P3: wpływ na spółki włączony (false = tryb cichy z P2, do porównań)
 
@@ -47,7 +51,8 @@ function aggregateChainUnits(rows) {
         const id = `${r.key}|${r.country}`;
         const u = units.get(id) || { id, key: r.key, country: r.country, revenue: 0, products: {}, priority: false, linkNow: 0, linkPrev: 0 };
         u.revenue += r.revenue;
-        if (r.prev > 0) { u.linkNow += r.revenue; u.linkPrev += r.prev; } // indeks łańcuchowy: tylko spółki z przychodem w obu kwartałach
+        if (r.prev > 0) { u.linkNow += r.revenue; u.linkPrev += r.prev; }
+        if (r.tech > 0) { u.techW = (u.techW || 0) + r.revenue; u.techSum = (u.techSum || 0) + r.tech * r.revenue; u.tech = u.techSum / u.techW; } // indeks łańcuchowy: tylko spółki z przychodem w obu kwartałach
         for (const [g, v] of Object.entries(r.products || {})) u.products[g] = (u.products[g] || 0) + v;
         if (r.priority) u.priority = true;
         units.set(id, u);
@@ -82,19 +87,19 @@ function calibrateChains(st, units) {
     const totalByCountry = {}; for (const u of list) totalByCountry[u.country] = (totalByCountry[u.country] || 0) + st.base[u.id];
     const worldTotal = Object.values(totalByCountry).reduce((a, b) => a + b, 0) || 1;
     const G = goods.length, U = list.length, C = countries.length;
-    const A = new Float32Array(G * U), B = new Float32Array(G * U), Aext = new Float32Array(G * C);
+    const A = new Float32Array(G * U), B = new Float32Array(G * U), Aext = new Float32Array(G * C), Ahh = new Float32Array(G * C);
     goods.forEach((g, gi) => {
         let supply = 0;
         list.forEach((u, ui) => { const w = chainOutputWeight(g, { ...u, revenue: u.revenue }); B[gi * U + ui] = w * st.base[u.id]; supply += B[gi * U + ui]; });
         if (!(supply > 0)) return; // dobro bez producenta w grze: bez bilansu
         const groupTotal = {};
         list.forEach(u => { const k = chainGroupOf(g, u.key); if (k) groupTotal[k] = (groupTotal[k] || 0) + st.base[u.id]; });
-        let ext = (g.use['*'] || 0) + (g.use['#'] || 0); // reszta gospodarki i obywatele: według wielkości kraju
+        let ext = g.use['*'] || 0; const hh = g.use['#'] || 0; // reszta gospodarki i obywatele (M2: osobno): według wielkości kraju
         for (const [k, share] of Object.entries(g.use)) if (k !== '*' && k !== '#' && !(groupTotal[k] > 0)) ext += share; // odbiorcy, których nie ma w grze
         list.forEach((u, ui) => { const k = chainGroupOf(g, u.key); if (k && groupTotal[k] > 0) A[gi * U + ui] = g.use[k] * supply * st.base[u.id] / groupTotal[k]; });
-        countries.forEach((c, ci) => { Aext[gi * C + ci] = ext * supply * (totalByCountry[c] || 0) / worldTotal; });
+        countries.forEach((c, ci) => { Aext[gi * C + ci] = ext * supply * (totalByCountry[c] || 0) / worldTotal; Ahh[gi * C + ci] = hh * supply * (totalByCountry[c] || 0) / worldTotal; });
     });
-    st.cal = { goods: goods.map(g => g.id), units: list.map(u => u.id), countries, A, B, Aext, unitKey: list.map(u => u.key), unitCountry: list.map(u => countries.indexOf(u.country)) };
+    st.cal = { goods: goods.map(g => g.id), units: list.map(u => u.id), countries, A, B, Aext, Ahh, unitKey: list.map(u => u.key), unitCountry: list.map(u => countries.indexOf(u.country)) };
     st.unitSet = list.map(u => u.id).join(',');
 }
 
@@ -142,6 +147,8 @@ function stepChains(rows, opts = {}) {
     }
     for (let ci = 0; ci < C; ci++) { actCountry[ci] = wCountry[ci] > 0 ? actCountry[ci] / wCountry[ci] : 1; actTrend[ci] = wCountry[ci] > 0 ? actTrend[ci] / wCountry[ci] : 1; }
     const goods = cal.goods;
+    const whc = getChainWarehouseFactors(st, units, cal); st.whc = Object.fromEntries(cal.countries.map((c, ci) => [c, whc[ci]]));
+    updateChainSubstitution(st, units, cal);
     for (let gi = 0; gi < goods.length; gi++) {
         const gid = goods[gi], good = GOOD_BY_ID[gid], s = ensureChainGood(st, gid, C, prevCountries);
         s.S.fill(0); s.D.fill(0);
@@ -150,28 +157,34 @@ function stepChains(rows, opts = {}) {
             const a = cal.A[gi * U + ui], b = cal.B[gi * U + ui], ci = cal.unitCountry[ui];
             if (a) {
                 if (good.cls === 'K') kMult = 1 + Math.min(R.kExpansionBand[1], Math.max(R.kExpansionBand[0], R.kExpansion * dx[ui] / good.delta));
-                s.D[ci] += a * x[ui] * (good.cls === 'K' ? kMult : 1);
-                dTr += a * x[ui]; dK += a * x[ui] * (good.cls === 'K' ? kMult : 1);
+                const sub = 1 - (st.subst?.[cal.units[ui]]?.[gid] || 0); // M3: technologie zastępują część wsadu
+                s.D[ci] += a * x[ui] * sub * (good.cls === 'K' ? kMult : 1);
+                dTr += a * x[ui] * sub; dK += a * x[ui] * sub * (good.cls === 'K' ? kMult : 1);
             }
             if (b) { s.S[ci] += b * Math.min(x[ui], cap[ui]); sTr += b * x[ui]; } // zdolność bez szoku
         }
         if (good.cls === 'K' && dTr > 0) { const ratio = dK / dTr; s.kEma = s.kEma == null ? ratio : s.kEma * (1 - R.trendW) + ratio * R.trendW; dTr *= s.kEma; } // stała rozbudowa wchodzi w zdolność, skok rozbudowy (efekt byka) — nie
-        for (let ci = 0; ci < C; ci++) dTr += cal.Aext[gi * C + ci] * actCountry[ci];
+        const hhMult = new Float64Array(C);
+        for (let ci = 0; ci < C; ci++) { // M2: dobra Z rosną z aktywnością kraju, L mocniej reagują na cykl i rosną z udziałem klas wyższych
+            const lux = getGoodClass(good, cal.countries[ci]) === 'L', rel = actTrend[ci] > 0 ? actCountry[ci] / actTrend[ci] : 1;
+            hhMult[ci] = lux ? actTrend[ci] * Math.pow(rel, R.luxuryElasticity) * (opts.upper?.[cal.countries[ci]] ?? 1) : actCountry[ci];
+            dTr += cal.Aext[gi * C + ci] * actCountry[ci] + (cal.Ahh?.[gi * C + ci] || 0) * hhMult[ci];
+        }
         const adjW = sTr > 0 ? Math.min(R.adaptBand[1], Math.max(R.adaptBand[0], dTr / sTr)) : 1; // zdolność świata = popyt bez szoków i bez rozbudowy (jedna wartość na dobro): odchylenia tylko z szoków, rozbudowy i handlu
         for (let ci = 0; ci < C; ci++) {
-            s.D[ci] += cal.Aext[gi * C + ci] * actCountry[ci];
+            s.D[ci] += cal.Aext[gi * C + ci] * actCountry[ci] + (cal.Ahh?.[gi * C + ci] || 0) * hhMult[ci];
             s.adj[ci] = adjW; s.S[ci] *= adjW;
             if (recal) { s.S0[ci] = s.S[ci] / Math.max(1e-9, s.adj[ci]); s.D0[ci] = s.D[ci]; }
-            if (s.fresh[ci]) s.z[ci] = R.cover; // nowe dobro albo kraj (bez stanu z zapisu): zapas = cel (z w kwartałach popytu)
+            if (s.fresh[ci]) s.z[ci] = R.cover * whc[ci]; // nowe dobro albo kraj (bez stanu z zapisu): zapas = cel (z w kwartałach popytu)
         }
         // handel: świat dzieli niedobór proporcjonalnie (wspólne pokrycie f), kraj z deficytem importuje do limitu przepustowości (porty, szok)
         let availW = 0, demandW = 0;
-        for (let ci = 0; ci < C; ci++) { availW += s.S[ci] + (s.z[ci] - R.cover) / R.tau * s.D[ci]; demandW += s.D[ci]; }
+        for (let ci = 0; ci < C; ci++) { availW += s.S[ci] + (s.z[ci] - R.cover * whc[ci]) / R.tau * s.D[ci]; demandW += s.D[ci]; }
         const f = demandW > 0 ? Math.min(1, Math.max(0, availW / demandW)) : 1;
         let surplus = 0, deficit = 0;
         const pos = new Float64Array(C), want = new Float64Array(C);
         for (let ci = 0; ci < C; ci++) {
-            const release = (s.z[ci] - R.cover) / R.tau * s.D[ci];
+            const release = (s.z[ci] - R.cover * whc[ci]) / R.tau * s.D[ci];
             pos[ci] = s.S[ci] + release - f * s.D[ci]; // nadwyżka ponad udział kraju w pokryciu świata
             if (pos[ci] > 0) surplus += pos[ci];
             else {
@@ -184,11 +197,11 @@ function stepChains(rows, opts = {}) {
         for (let ci = 0; ci < C; ci++) {
             s.I[ci] = pos[ci] < 0 ? want[ci] * fill : 0;
             s.E[ci] = pos[ci] > 0 ? pos[ci] * exportShare : 0;
-            const D = s.D[ci], avail = s.S[ci] + s.I[ci] - s.E[ci], zV = s.z[ci] * D, release = (s.z[ci] - R.cover) / R.tau * D; // zapas w wartości przy bieżącym popycie
+            const D = s.D[ci], avail = s.S[ci] + s.I[ci] - s.E[ci], zV = s.z[ci] * D, release = (s.z[ci] - R.cover * whc[ci]) / R.tau * D; // zapas w wartości przy bieżącym popycie
             s.b[ci] = D > 0 ? Math.min(R.bBand[1], Math.max(R.bBand[0], (avail + release) / D)) : 1;
             const served = Math.min(D, Math.max(0, avail + zV));
             let z = zV + avail - served, waste = 0;
-            const zcap = R.stockCapMult * R.cover * D;
+            const zcap = R.stockCapMult * R.cover * whc[ci] * D;
             if (z > zcap) { waste = z - zcap; z = zcap; }
             s.served[ci] = served; s.waste[ci] = waste; s.zV0[ci] = zV; s.zV[ci] = Math.max(0, z); s.z[ci] = D > 0 ? Math.max(0, z) / D : R.cover;
             const target = Math.min(R.priceBand[1], Math.max(R.priceBand[0], Math.pow(Math.max(1e-3, s.b[ci]), -R.eps)));
@@ -207,6 +220,29 @@ function stepChains(rows, opts = {}) {
     return st;
 }
 
+/** M1: zaplecze magazynowe kraju (podsektor Nieruchomości/Magazyny wobec średniej świata) → mnożnik celu i pojemności zapasu (0,6–1,6). */
+function getChainWarehouseFactors(st, units, cal) {
+    const C = cal.countries.length, wh = new Float64Array(C), tot = new Float64Array(C), out = new Float64Array(C);
+    for (const u of units.values()) { const ci = cal.countries.indexOf(u.country); if (ci < 0) continue; tot[ci] += u.revenue; if (u.key === 'Nieruchomości/Magazyny') wh[ci] += u.revenue; }
+    const world = wh.reduce((a, b) => a + b, 0) / Math.max(1e-9, tot.reduce((a, b) => a + b, 0));
+    for (let ci = 0; ci < C; ci++) { const share = tot[ci] > 0 ? wh[ci] / tot[ci] : 0; out[ci] = world > 0 ? Math.min(CHAIN_RULES.warehouse[1], Math.max(CHAIN_RULES.warehouse[0], Math.sqrt(share / world))) : 1; }
+    return out;
+}
+/** M3: udział zastąpionego wsadu jednostki rośnie z poziomem badań jej spółek (pole `tech` w wierszach), najwyżej o 5 pp na rok. */
+function updateChainSubstitution(st, units, cal) {
+    if (typeof CHAIN_SUBSTITUTION !== 'object') return;
+    st.subst = st.subst || {};
+    for (const id of cal.units) {
+        const u = units.get(id), rule = CHAIN_SUBSTITUTION[matchChainKey(CHAIN_SUBSTITUTION, id.split('|')[0])];
+        if (!rule || !u) continue;
+        const cur = st.subst[id] || (st.subst[id] = {});
+        for (const [gid, r] of Object.entries(rule)) {
+            const target = Math.min(r.max, r.perLevel * Math.max(0, u.tech || 0));
+            cur[gid] = (cur[gid] || 0) + Math.max(-CHAIN_RULES.substStep, Math.min(CHAIN_RULES.substStep, target - (cur[gid] || 0)));
+        }
+    }
+}
+
 /** Czynnik jednostki: { rev, margin, short } — producent zyskuje z ceny (bez dóbr z kontraktem: ich cenę liczy giełda towarowa), odbiorca płaci i traci przy niedoborze. */
 function computeChainFactors(st, units) {
     const cal = st.cal, U = cal.units.length, R = CHAIN_RULES, out = {};
@@ -220,12 +256,13 @@ function computeChainFactors(st, units) {
             const P = s.P[ci];
             const w = cal.B[gi * U + ui] / Math.max(1e-9, st.base[cal.units[ui]]);
             if (w > 0) rev += w * (Math.pow(P, R.productExp) - 1);
-            const share = recipe?.[gid] || 0;
+            const share = (recipe?.[gid] || 0) * (1 - (st.subst?.[cal.units[ui]]?.[gid] || 0));
             if (share > 0) {
                 margin -= share * (P - 1) * (1 - R.costPass);
                 if (good.cls !== 'K') short += share * Math.max(0, 1 - s.b[ci]) * R.shortagePass * (u?.priority ? R.priorityShortage : 1); // P3: brak dobra K przesuwa inwestycję (tylko cena), nie tnie bieżącej produkcji
             }
         });
+        if (key === 'Nieruchomości/Magazyny') { const cover = Object.values(st.g).reduce((a, s) => a + (s.z?.[ci] || 0), 0) / Math.max(1, Object.keys(st.g).length); rev += R.holdingRevenue * (cover / (R.cover * (st.whc?.[cal.countries[ci]] || 1)) - 1); } // M1: koszt trzymania zapasu to przychód magazynów
         out[cal.units[ui]] = { rev, margin, short };
     }
     return out;
@@ -274,13 +311,13 @@ function getChainsSnapshot() {
     const r = v => Math.round(v * 1e4) / 1e4, cs = chainState.cal.countries;
     const g = {};
     for (const [gid, s] of Object.entries(chainState.g)) g[gid] = Object.fromEntries(cs.map((c, ci) => [c, { P: r(s.P[ci]), adj: r(s.adj[ci]), z: Number(s.z[ci].toPrecision(5)) }]));
-    return { v: 2, lr: Object.fromEntries(Object.entries(chainState.lastRev || {}).map(([k, v]) => [k, Number(Number(v).toPrecision(6))])), q: chainState.q, n: chainState.quarters, base: Object.fromEntries(Object.entries(chainState.base).map(([k, v]) => [k, Number(Number(v).toPrecision(6))])), x: Object.fromEntries(Object.entries(chainState.xPrev).map(([k, v]) => [k, r(v)])), t: Object.fromEntries(Object.entries(chainState.xTrend).map(([k, v]) => [k, r(v)])), g, h: chainState.hist };
+    return { v: 2, sb: chainState.subst || {}, lr: Object.fromEntries(Object.entries(chainState.lastRev || {}).map(([k, v]) => [k, Number(Number(v).toPrecision(6))])), q: chainState.q, n: chainState.quarters, base: Object.fromEntries(Object.entries(chainState.base).map(([k, v]) => [k, Number(Number(v).toPrecision(6))])), x: Object.fromEntries(Object.entries(chainState.xPrev).map(([k, v]) => [k, r(v)])), t: Object.fromEntries(Object.entries(chainState.xTrend).map(([k, v]) => [k, r(v)])), g, h: chainState.hist };
 }
 function applyChainsSnapshot(snap) {
     chainState = null;
     if (!snap || typeof snap !== 'object' || !snap.base) return; // stary zapis: stan buduje pierwszy kwartał
     const num = o => Object.fromEntries(Object.entries(o || {}).filter(([, v]) => Number.isFinite(Number(v))).map(([k, v]) => [k, Number(v)]));
-    chainState = { q: Number.isFinite(snap.q) ? snap.q : null, base: num(snap.base), xPrev: num(snap.x), xTrend: num(snap.t), lastRev: num(snap.lr), g: {}, hist: {}, factor: {}, quarters: Number(snap.n) || 0, ms: 0 };
+    chainState = { q: Number.isFinite(snap.q) ? snap.q : null, base: num(snap.base), xPrev: num(snap.x), xTrend: num(snap.t), lastRev: num(snap.lr), subst: snap.sb && typeof snap.sb === 'object' ? snap.sb : {}, g: {}, hist: {}, factor: {}, quarters: Number(snap.n) || 0, ms: 0 };
     for (const [gid, byC] of Object.entries(snap.g || {})) if (GOOD_BY_ID[gid]) chainState.g[gid] = { byCountry: Object.fromEntries(Object.entries(byC).map(([c, v]) => [c, { P: Number(v.P) || 1, adj: Number(v.adj) || 1, z: snap.v === 2 && Number(v.z) >= 0 ? Number(v.z) : CHAIN_RULES.cover }])), P: [] };
     for (const [gid, byC] of Object.entries(snap.h || {})) if (GOOD_BY_ID[gid] && byC && typeof byC === 'object') chainState.hist[gid] = Object.fromEntries(Object.entries(byC).filter(([, a]) => Array.isArray(a)).map(([c, a]) => [c, a.map(Number).filter(Number.isFinite).slice(-CHAIN_RULES.historyQ)]));
 }

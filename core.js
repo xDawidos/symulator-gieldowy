@@ -6167,7 +6167,8 @@ function collectChainRows() {
         if (!(h?.revenue > 0)) continue;
         const priority = Boolean(stock.isStateOwned) || getMainSector(stock) === 'Obronność';
         const products = productsOf(stock, h.revenue), prev = stock.fundamentals.history[stock.fundamentals.history.length - 2]?.revenue || 0;
-        getStockSegments(stock).forEach((seg, n) => rows.push({ key: getChainUnitKey(seg.sector, seg.subsector), country: home, revenue: h.revenue * seg.share, prev: prev * seg.share, products: n === 0 ? products : {}, priority }));
+        const tech = Number(stock.departments?.research?.level) || 0; // M3: poziom badań spółki
+        getStockSegments(stock).forEach((seg, n) => rows.push({ key: getChainUnitKey(seg.sector, seg.subsector), country: home, revenue: h.revenue * seg.share, prev: prev * seg.share, products: n === 0 ? products : {}, priority, tech }));
     }
     for (const i of (typeof getForeignIssuerList === 'function' ? getForeignIssuerList() : [])) {
         const h = i.fundamentals?.history?.[i.fundamentals.history.length - 1];
@@ -6200,7 +6201,10 @@ function getChainShocks() {
 }
 function processChainsQuarterly() {
     if (typeof stepChains !== 'function') return null;
-    return stepChains(collectChainRows(), { q: macro.quarter, capacity: getChainImportCapacity, shocks: getChainShocks() });
+    const cls = typeof society === 'object' ? society?.classes : null, start = typeof SOCIETY_CLASSES === 'object' ? SOCIETY_CLASSES : [];
+    const upperNow = cls ? (cls.upperMid || 0) + (cls.rich || 0) + (cls.veryRich || 0) : 0, upper0 = start.filter(c => ['upperMid', 'rich', 'veryRich'].includes(c.id)).reduce((a, c) => a + c.start, 0);
+    const upper = upper0 > 0 && upperNow > 0 ? { [typeof getStartCountry === 'function' ? getStartCountry() : 'PL']: upperNow / upper0 } : null; // M2: luksus w kraju startowym rośnie z udziałem klas wyższych
+    return stepChains(collectChainRows(), { q: macro.quarter, capacity: getChainImportCapacity, shocks: getChainShocks(), upper });
 }
 /** 0.18.1 P3: czynnik łańcucha dla spółki: suma po segmentach (udział × odchylenie jednostki „podsektor × kraj”). Null w trybie cichym. */
 function getChainStockAdj(stock) {

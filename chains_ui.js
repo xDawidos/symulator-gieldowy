@@ -10,7 +10,7 @@ const CHAIN_STATUS = {
 };
 const chainStatusOf = b => b >= 1.05 ? 'surplus' : b >= 0.95 ? 'ok' : b >= 0.85 ? 'tight' : b >= 0.6 ? 'short' : 'broken';
 const CHAIN_COLS = [['mining', 'Wydobycie', 'kopalnia'], ['processing', 'Przetwórstwo', 'huta'], ['factory', 'Fabryka', 'fabryka'], ['transport', 'Transport', 'transport-land'], ['distribution', 'Dystrybucja', 'koszyk'], ['consumption', 'Konsumpcja', 'klienci']];
-let chainsView = { chain: 'metals', good: null, country: null };
+let chainsView = { chain: 'metals', good: null, country: null, view: 'chain' };
 
 const chPct = v => `${formatNumberPl(Math.round(v * 100), 0)}%`;
 const chSigned = v => `${v > 0.0005 ? '▲ +' : v < -0.0005 ? '▼ ' : '■ '}${formatNumberPl(Math.round(v * 100), 0)}%`;
@@ -69,7 +69,9 @@ function renderChainsPanel() {
         <ol class="ch-axis" style="grid-template-columns:repeat(${cols.length}, minmax(0, 1fr))" aria-label="Ogniwa łańcucha ${escapeHtml(chain.name)}">${cols.map(([, name, ic, gs]) => `<li class="ch-col"><h5>${uiIcon(ic, 14)} ${name}</h5>${gs.map(g => chainNodeHtml(g, views[g], g === chainsView.good)).join('')}</li>`).join('')}</ol></div>
         <ul class="ch-legend"><li><span class="ln"></span> normalnie</li><li><span class="ln is-tight"></span> napięte</li><li><span class="ln is-broken"></span> niedobór lub przerwa</li><li>grubość: udział wsadu</li></ul>`;
     const mode = typeof CHAINS_ACTIVE !== 'undefined' && !CHAINS_ACTIVE ? `<p class="notice-inline">${uiIcon('info', 14)}<span>Tryb pomiaru: łańcuch liczy podaż i popyt, ale jeszcze nie zmienia wyników spółek.</span></p>` : '';
-    return `${mode}<div class="sector-chips mt-3" role="group" aria-label="Łańcuch">${chips}</div><div class="sector-chips mt-2" role="group" aria-label="Kraj">${countryChips}</div>${ticker}${axis}${renderChainDetail(chainsView.good, country)}${renderChainShock(shock)}`;
+    const viewChips = `<div class="sector-chips mt-2" role="group" aria-label="Widok"><button type="button" class="sector-chip${chainsView.view !== 'routes' ? ' active' : ''}" aria-pressed="${chainsView.view !== 'routes'}" onclick="selectChainView('chain')">${uiIcon('lancuch', 14)} Ogniwa</button><button type="button" class="sector-chip${chainsView.view === 'routes' ? ' active' : ''}" aria-pressed="${chainsView.view === 'routes'}" onclick="selectChainView('routes')">${uiIcon('szlak', 14)} Szlaki</button></div>`;
+    if (chainsView.view === 'routes') return `${mode}${viewChips}${renderChainRoutes()}`;
+    return `${mode}${viewChips}<div class="sector-chips mt-3" role="group" aria-label="Łańcuch">${chips}</div><div class="sector-chips mt-2" role="group" aria-label="Kraj">${countryChips}</div>${ticker}${axis}${renderChainDetail(chainsView.good, country)}${renderChainShock(shock)}`;
 }
 
 function renderChainDetail(g, country) {
@@ -121,6 +123,40 @@ function drawChainEdges() {
 function rerenderChainsPanel() { if (typeof stateTab !== 'undefined' && stateTab === 'chains' && typeof updateStateModalContent === 'function') updateStateModalContent(); }
 function selectChain(id) { chainsView.chain = id; chainsView.good = null; rerenderChainsPanel(); }
 function selectChainGood(g) { chainsView.good = g; rerenderChainsPanel(); }
+function selectChainView(v) { chainsView.view = v; rerenderChainsPanel(); }
+
+// --- 0.18.3 M5: mapa szlaków (Państwo → Łańcuchy → Szlaki; projekt 16_szlaki_miasta_0.18.md) ---
+const ROUTE_POS = { PL: [330, 112], DE: [300, 112], CZ: [318, 128], FR: [268, 128], CH: [290, 140], SE: [322, 70], US: [96, 132], JP: [590, 128], CN: [528, 142], IN: [478, 182], TW: [566, 168] };
+const ROUTE_LAND = ['PL', 'DE', 'CZ', 'FR', 'CH'];
+const ROUTE_MODES = { land: ['Lądowy', 'transport-land'], sea: ['Morski', 'transport-sea'], air: ['Lotniczy', 'transport-air'] };
+/** Szlaki z kraju startowego do krajów w grze: rodzaj, stan słowem (aktywny, utrudniony, wstrzymany), przepustowość i udział w imporcie. */
+function getChainRoutes() {
+    if (typeof chainState === 'undefined' || !chainState?.cal) return [];
+    const home = typeof getStartCountry === 'function' ? getStartCountry() : 'PL', cs = chainState.cal.countries;
+    const shocks = typeof getChainShocks === 'function' ? getChainShocks() || {} : {}, homeCap = typeof getChainImportCapacity === 'function' ? getChainImportCapacity(home) : 1;
+    let exportsTotal = 0; const ex = {};
+    for (const s of Object.values(chainState.g)) cs.forEach((c, ci) => { ex[c] = (ex[c] || 0) + (s.E?.[ci] || 0); exportsTotal += s.E?.[ci] || 0; });
+    const hi = cs.indexOf(home), imports = hi >= 0 ? Object.values(chainState.g).reduce((t, s) => t + (s.I?.[hi] || 0), 0) : 0;
+    return cs.filter(c => c !== home).map(c => {
+        const mode = ROUTE_LAND.includes(home) && ROUTE_LAND.includes(c) ? 'land' : 'sea';
+        const sea = mode === 'sea' ? (shocks['import|*'] ?? 1) : 1, cap = Math.min(homeCap, sea * (shocks[`import|${c}`] ?? 1));
+        const status = cap >= 0.9 ? 'ok' : cap >= 0.65 ? 'hamp' : 'stop';
+        const reason = status === 'ok' ? '' : typeof crisisLine === 'object' && crisisLine?.id === 'supply' ? CRISIS_LINES.supply.variants[crisisLine.variant]?.name || 'szok podażowy' : 'embargo na szlaku';
+        return { c, mode, cap, status, share: exportsTotal > 0 ? (ex[c] || 0) / exportsTotal : 0, load: imports * (exportsTotal > 0 ? (ex[c] || 0) / exportsTotal : 0), reason };
+    });
+}
+const ROUTE_STATUS = { ok: ['Aktywny', 'badge--neutral', 'ok'], hamp: ['Utrudniony', 'badge--warn', 'alert'], stop: ['Wstrzymany', 'badge--down', 'blokada'] };
+function renderChainRoutes() {
+    const routes = getChainRoutes(), home = typeof getStartCountry === 'function' ? getStartCountry() : 'PL';
+    if (!routes.length) return `<p class="notice-inline">${uiIcon('info', 14)}<span>Szlaki pojawią się, gdy w grze będzie drugi kraj.</span></p>`;
+    const [hx, hy] = ROUTE_POS[home] || [330, 112], name = c => COUNTRY_DEFS?.[c]?.name || (c === 'PL' ? 'Polska' : c);
+    const lines = routes.filter(r => ROUTE_POS[r.c]).map(r => { const [x, y] = ROUTE_POS[r.c], mx = (hx + x) / 2, my = Math.min(hy, y) - 30 - Math.abs(hx - x) * 0.08; return `<path class="rt${r.status === 'ok' ? '' : ' is-' + r.status}" d="M${hx} ${hy} Q${mx} ${my} ${x} ${y}"><title>${escapeHtml(name(r.c))}: ${ROUTE_STATUS[r.status][0].toLowerCase()}</title></path>`; }).join('');
+    const nodes = [home, ...routes.map(r => r.c)].filter(c => ROUTE_POS[c]).map(c => { const [x, y] = ROUTE_POS[c]; return `<g class="ct"><circle r="${c === home ? 9 : 7}" cx="${x}" cy="${y}"/><text x="${x}" y="${y - 12}">${c}</text></g>`; }).join('');
+    const rows = routes.sort((a, b) => b.share - a.share).map(r => { const st = ROUTE_STATUS[r.status], md = ROUTE_MODES[r.mode]; return `<tr><td>${escapeHtml(name(home))} ↔ ${escapeHtml(name(r.c))}</td><td>${uiIcon(md[1], 14)} ${md[0]}</td><td><span class="badge ${st[1]}">${uiIcon(st[2], 12)} ${st[0]}</span></td><td class="text-right">${formatNumberPl(Math.round(r.cap * 100), 0)}%</td><td class="text-right">${formatNumberPl(Math.round(r.share * 100), 0)}%</td><td>${escapeHtml(r.reason || '—')}</td></tr>`; }).join('');
+    return `<div class="rt-wrap"><div class="rt-map-box"><svg class="rt-map" viewBox="0 0 660 240" role="img" aria-label="Mapa szlaków handlowych z kraju startowego; szczegóły w tabeli pod mapą">${lines}${nodes}</svg></div>
+        <div style="overflow-x:auto"><table class="asset-mini-table w-full"><thead><tr><th>Szlak</th><th>Transport</th><th>Stan</th><th class="text-right">Przepustowość</th><th class="text-right">Udział w imporcie</th><th>Powód</th></tr></thead><tbody>${rows}</tbody></table></div>
+        <p class="text-xs text-muted">Stan zawsze słowem: aktywny (przepustowość ≥ 90%), utrudniony (65–90%), wstrzymany (poniżej 65%). Udział w imporcie to część dostaw z danego kraju wśród eksporterów dóbr łańcuchów.</p></div>`;
+}
 function selectChainCountry(c) { chainsView.country = c; rerenderChainsPanel(); }
 function openChainForStock(symbol) {
     const tile = getStockChainTile(stocks.find(s => s.symbol === symbol) || getCompanyCardSource?.(symbol));

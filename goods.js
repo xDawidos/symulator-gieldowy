@@ -52,11 +52,23 @@ const GOODS = [
     { id: 'robots', name: 'Roboty', cls: 'K', link: 'factory', producers: ['Przemysł/Robotyka'], contract: null, delta: 0.03, use: { 'Przemysł': 0.5, 'Motoryzacja': 0.3, 'Przemysł/Wydobycie': 0.2 }, icon: 'fabryka', active: true },
     { id: 'med_equipment', name: 'Sprzęt medyczny', cls: 'K', link: 'factory', producers: ['Medycyna/Sprzęt medyczny'], contract: null, delta: 0.02, use: { 'Medycyna': 1 }, icon: 'fabryka', active: true },
     { id: 'drugs', name: 'Leki', cls: 'Z', link: 'consumption', producers: ['Chemia/Farmacja', 'Medycyna', 'Medycyna/Biotechnologia'], contract: null, use: { '#': 0.55, 'Usługi': 0.15, 'Medycyna': 0.3 }, icon: 'kosz', active: true },
-    { id: 'luxury', name: 'Dobra luksusowe', cls: 'L', link: 'consumption', producers: ['Alkohole', 'Żywność/Słodycze', 'Dobra konsumpcyjne'], contract: null, use: { '#': 1 }, icon: 'kosz', active: false }
+    { id: 'tea', name: 'Herbata', cls: 'Z', classByCountry: { asia: 'Z', other: 'L' }, link: 'consumption', producers: ['Żywność/Herbata'], contract: null, use: { '#': 1 }, icon: 'kosz', active: true }, // 0.18.3 M2: w Azji zwykła, poza nią luksus
+    { id: 'luxury', name: 'Dobra luksusowe', cls: 'L', link: 'consumption', producers: ['Alkohole', 'Żywność/Słodycze', 'Dobra konsumpcyjne'], // 0.18.3 M2: wino, whiskey, słodycze, auta i jachty luksusowe
+      contract: null, use: { '#': 1 }, icon: 'kosz', active: true }
 ];
 /** 0.18.2 G7: Mennica (papier, maszyny, złoto, srebro, miedź → gotówka dla banków) — eksperyment z wyłącznikiem; jednostkę „Mennica” dodaje adapter (core.js). */
 let MINT_ACTIVE = false;
 const GOOD_BY_ID = Object.fromEntries(GOODS.map(g => [g.id, g]));
+const CHAIN_ASIA = ['JP', 'CN', 'TW', 'IN'];
+/** Klasa dobra w kraju (herbata: Z w Azji, L poza nią). */
+function getGoodClass(good, country) { return good.classByCountry ? good.classByCountry[CHAIN_ASIA.includes(country) ? 'asia' : 'other'] : good.cls; }
+/** 0.18.3 M3: substytucja i R&D — technologie spółek ogniwa (średni poziom badań) obniżają udział wsadu stopniowo, z limitem rocznej zmiany. */
+const CHAIN_SUBSTITUTION = {
+    'Motoryzacja': { steel: { name: 'kompozyty zamiast stali', perLevel: 0.06, max: 0.30 } },
+    'Przemysł/Przemysł lotniczy': { steel: { name: 'kompozyty zamiast stali', perLevel: 0.06, max: 0.30 } },
+    'Przemysł/Maszyny': { steel: { name: 'lżejsze konstrukcje', perLevel: 0.04, max: 0.20 } },
+    'Chemia/Chemia polimerowa': { chem: { name: 'recykling tworzyw', perLevel: 0.04, max: 0.20 } }
+};
 function getActiveGoods() { return GOODS.filter(g => g.active); }
 
 /**
@@ -109,7 +121,7 @@ const CHAIN_RECIPES = {
 const CHAINS = {
     metals: { name: 'Metale → motoryzacja i stocznie', icon: 'huta', goods: ['iron_ore', 'coal', 'steel', 'machines', 'ships', 'trucks', 'cars'], active: true },
     oil: { name: 'Ropa i gaz → paliwa i chemia', icon: 'surowiec-oil', goods: ['oil', 'gas', 'fuel', 'chem', 'rubber', 'fertilizer'], active: true },
-    food: { name: 'Zboże → żywność', icon: 'kosz', goods: ['fertilizer', 'grain', 'food', 'beer'], active: true },
+    food: { name: 'Zboże → żywność', icon: 'kosz', goods: ['fertilizer', 'grain', 'food', 'beer', 'tea', 'luxury'], active: true },
     // 0.18.2: pełny graf
     paper: { name: 'Drewno → papier i tarcica', icon: 'lisc', goods: ['wood', 'lumber', 'paper'], active: true },
     copper: { name: 'Miedź i srebro → elektronika i energia', icon: 'surowiec-copper', goods: ['copper', 'silver', 'batteries', 'chips', 'power'], active: true },

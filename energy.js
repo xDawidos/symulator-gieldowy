@@ -422,9 +422,25 @@ const SECTOR_EMISSIONS = { 'Chemia': 0.7, 'Przemysł': 0.6, 'Motoryzacja': 0.3, 
 const CHEM_EMISSIONS = { refinery: 1.0, fertilizer: 0.9, plastics: 0.6, pharma: 0.2 };
 const CHEM_PROFILE_BY_SUBSECTOR = { 'Chemia polimerowa': 'plastics', 'Nawozy': 'fertilizer', 'Farmacja': 'pharma' }; // 0.18.1 P1: profil z podsektora
 function getSegmentEmission(stock, seg) {
-    if (seg.sector !== 'Chemia') return SECTOR_EMISSIONS[seg.sector] || 0;
+    if (seg.sector !== 'Chemia') return (SECTOR_EMISSIONS[seg.sector] || 0) * getRecipeEmissionFactor(seg.sector, seg.subsector);
     const profile = CHEM_PROFILE_BY_SUBSECTOR[seg.subsector] || null;
     return profile ? CHEM_EMISSIONS[profile] : SECTOR_EMISSIONS.Chemia;
+}
+// 0.18.3 M4: emisyjność podsektora z receptury łańcucha (ciężkie wsady: stal, paliwa, węgiel, półprodukty chemiczne) wobec receptury sektora; średnia sektora bez zmian, widełki 0,7–1,3
+const RECIPE_EMISSION_WEIGHTS = { iron_ore: 0.8, steel: 1, fuel: 1, coal: 1.5, chem: 0.6, rubber: 0.4, lumber: 0.2, machines: 0.2 };
+function getRecipeEmissionFactor(sector, subsector) {
+    if (!subsector || typeof CHAIN_RECIPES !== 'object') return 1;
+    const heavy = key => 1 + Object.entries(CHAIN_RECIPES[key] || {}).reduce((t, [g, w]) => t + w * (RECIPE_EMISSION_WEIGHTS[g] || 0), 0);
+    const own = CHAIN_RECIPES[`${sector}/${subsector}`];
+    return own ? Math.min(1.3, Math.max(0.7, heavy(`${sector}/${subsector}`) / heavy(sector))) : 1;
+}
+/** 0.18.3 M4: ocena ESG spółki (A: ścieżka ESG, B: emisje nie wyższe niż średnia sektora, C: wyższe) — do karty i ocen (0.18.4). */
+function getEsgRating(stock) {
+    if (!stock || stock.assetType) return null;
+    if (stock.esg) return 'A';
+    const segs = typeof getStockSegments === 'function' ? getStockSegments(stock) : [];
+    const own = segs.reduce((t, seg) => t + seg.share * getSegmentEmission(stock, seg), 0), base = segs.reduce((t, seg) => t + seg.share * (SECTOR_EMISSIONS[seg.sector] || 0), 0);
+    return own <= base * 1.0001 ? 'B' : 'C';
 }
 const POLLUTION_RULES = {
     start: 40, keep: 0.9, elasticity: 3.3, elasticityLate: 2.2, fadeFrom: 26, fadeTo: 80, normGrowth: 0.015, powerShare: 0.4, healthyLevel: 40, populationLoss: 0.0002, productionFrom: 80, productionCut: 0.02
