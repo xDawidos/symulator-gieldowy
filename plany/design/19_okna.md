@@ -1,6 +1,6 @@
 # 19. Wspólna rama okna i grupy zakładek Państwa (R9)
 
-Makieta: [makiety/19_okna.html](makiety/19_okna.html), samodzielna (tokens.css + sprite). Realizuje O1, O2, O3 i O4 z [17_przeglad_2026-11-10.md](17_przeglad_2026-11-10.md). **Trzeba to zrobić przed L4 z 0.18**, bo w grze zakładka Łańcuchy już jest dziesiątą zakładką Państwa.
+Makieta: [makiety/19_okna.html](makiety/19_okna.html), samodzielna (tokens.css + sprite). CSS ramy w `makiety/19_okna.css` (ten blok idzie do style.css; używają go też makiety 20 i 21). Realizuje O1, O2, O3 i O4 z [17_przeglad_2026-11-10.md](17_przeglad_2026-11-10.md). **Trzeba to zrobić przed L4 z 0.18**, bo w grze zakładka Łańcuchy już jest dziesiątą zakładką Państwa.
 
 ## Decyzje użytkownika (2026-11-10)
 - Zakładki Państwa w **bocznej szynie** z grupami. Na telefonie szyna zwija się do przycisku „Grupa › Zakładka” z listą.

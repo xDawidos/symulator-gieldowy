@@ -1,0 +1,176 @@
+<!doctype html><html lang="pl"><head><meta charset="utf-8"><title>Makieta UI — Budownictwo (R13)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../../tokens.css">
+<link rel="stylesheet" href="19_okna.css">
+<style>
+/* ===== Rama makiety (do gry nie idzie) ===== */
+html, body { margin: 0; background: #05070a; color: var(--color-text-primary); font-family: var(--font-family-sans); }
+.frame-title { max-width: 1366px; margin: 24px auto 8px; padding: 0 16px; font-size: 18px; font-weight: 600; }
+.frame-sub { max-width: 1366px; margin: 0 auto 12px; padding: 0 16px; font-size: 13px; color: var(--color-text-muted); }
+.frame { position: relative; max-width: 1366px; height: 900px; margin: 0 auto 40px; border: 1px solid var(--ink-700); border-radius: 6px; overflow: hidden; background: var(--color-bg-base); }
+.frame.is-phone { width: 390px; max-width: 100%; height: 780px; }
+.wn--build { --wn-accent: var(--color-section-build); }
+
+/* ===== Blok do gry: Budownictwo jako tabela porównawcza (projekt plany/design/20_budownictwo.md) ===== */
+.bd-sec { display: flex; align-items: baseline; gap: 12px; margin: 0 0 8px; }
+.bd-sec h3 { margin: 0; font-family: 'IBM Plex Sans Condensed', var(--font-family-sans); font-size: 17px; font-weight: 600; }
+.bd-sec small { color: var(--color-text-muted); font-size: 12px; }
+.bd-sec + .bd-sec, .bd-table + .bd-sec { margin-top: 28px; }
+.bd-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.bd-table th { padding: 6px 10px; border-bottom: 1px solid var(--ink-600); color: var(--color-text-muted); font-size: 12px; font-weight: 400; text-align: left; white-space: nowrap; }
+.bd-table th[aria-sort] { color: var(--color-text-primary); }
+.bd-table th.r, .bd-table td.r { text-align: right; }
+.bd-table td { padding: 8px 10px; border-bottom: 1px solid var(--ink-700); vertical-align: middle; }
+.bd-table tbody tr.bd-row { cursor: pointer; }
+.bd-table tbody tr.bd-row:hover td { background: var(--color-bg-raised); }
+.bd-table tbody tr[aria-expanded="true"] td { background: var(--color-bg-raised); border-bottom-color: transparent; }
+.bd-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.bd-name svg { color: var(--color-text-muted); transition: transform .15s; }
+tr[aria-expanded="true"] .bd-name svg { transform: rotate(90deg); }
+.bd-name b { font-weight: 600; white-space: nowrap; }
+.bd-tk { font-family: 'IBM Plex Sans Condensed', var(--font-family-sans); font-size: 12px; color: var(--color-text-muted); }
+.n { font-family: var(--font-family-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.muted { color: var(--color-text-muted); }
+.bd-show-sm { display: none; }
+
+/* Moce: kratki = budowy (zajęta / wolna / ponad limit nie ma), od razu widać wolne miejsca */
+.bd-slots { display: inline-flex; gap: 3px; vertical-align: middle; margin-right: 8px; }
+.bd-slots i { width: 10px; height: 14px; border-radius: 2px; border: 1px solid var(--ink-500); }
+.bd-slots i.on { background: var(--color-text-secondary); border-color: var(--color-text-secondary); }
+.bd-tech { display: inline-flex; gap: 6px; }
+.bd-table td.bd-moc { white-space: nowrap; }
+.bd-tech span { white-space: nowrap; }
+.bd-tech .z { color: var(--color-text-disabled); }
+
+/* Ryzyko: słowo + ikona, kolor tylko gdy jest problem */
+.bd-risk { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; font-size: 12px; }
+.bd-risk.is-ok { color: var(--color-text-muted); }
+.bd-risk.is-warn { color: var(--color-text-warn); }
+.bd-risk.is-down { color: var(--color-text-down); }
+
+/* Rozwinięty wiersz: budowy spółki + liczby, których nie ma w tabeli */
+.bd-detail td { padding: 0 10px 14px 34px; background: var(--color-bg-raised); }
+.bd-detail-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 20px; }
+.bd-detail h4 { margin: 4px 0 6px; font-size: 12px; font-weight: 600; color: var(--color-text-muted); }
+.bd-builds { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.bd-builds li { display: grid; grid-template-columns: minmax(0, 1fr) 120px auto; align-items: center; gap: 12px; }
+.bd-builds small { display: block; color: var(--color-text-muted); font-size: 12px; }
+.bd-dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; }
+.bd-dl dt { color: var(--color-text-muted); }
+.bd-dl dd { margin: 0; }
+
+/* Postęp budowy: neutralny (R4), kreska = gdzie powinna być wg terminu */
+.bd-prog { position: relative; height: 6px; border-radius: 3px; background: var(--color-bg-sunken); }
+.bd-prog i { position: absolute; inset: 0 auto 0 0; width: calc(var(--v) * 1%); border-radius: 3px; background: var(--color-text-secondary); }
+.bd-prog.is-late i { background: var(--color-text-warn); }
+.bd-prog.is-stop i { background: var(--color-text-down); }
+.bd-prog b { position: absolute; top: -3px; left: calc(var(--plan) * 1%); width: 2px; height: 12px; margin-left: -1px; background: var(--color-text-primary); }
+.bd-prog-cell { display: grid; gap: 4px; min-width: 120px; }
+.bd-prog-cell span { font-size: 12px; }
+
+@container (max-width: 640px) {
+  .bd-hide-sm { display: none; }
+  .bd-show-sm { display: inline; }
+  .bd-table th, .bd-table td { padding: 8px 6px; }
+  .bd-table td:first-child { width: 50%; }
+  .bd-name b { white-space: normal; }
+  .bd-prog-cell { min-width: 72px; }
+  .bd-prog-cell .n { white-space: normal; }
+  .bd-sec small.bd-hide-sm { display: none; }
+  .bd-risk { white-space: normal; }
+  .bd-table td.bd-moc { white-space: normal; }
+  .bd-slots { display: none; }
+  .bd-detail td { padding: 0 6px 12px 12px; }
+  .bd-detail-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .bd-builds li { grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; }
+  .bd-builds li > .bd-prog-cell { grid-column: 1 / -1; grid-row: 2; }
+}
+@media (prefers-reduced-motion: reduce) { .bd-name svg { transition: none; } }
+</style></head><body>
+
+<h1 class="frame-title">Budownictwo: spółki w tabeli, budowy w drugiej tabeli</h1>
+<p class="frame-sub">Klik w wiersz spółki rozwija jej budowy i szczegóły (wzór z makiety 14). Budowy posortowane: wstrzymane, zagrożony termin, w toku.</p>
+<div class="frame"><div class="cq" id="f-desk"></div></div>
+<h1 class="frame-title">Telefon 390 px</h1>
+<p class="frame-sub">Zostają kolumny: spółka, moce, ryzyko. Reszta w rozwinięciu.</p>
+<div class="frame is-phone"><div class="cq" id="f-ph"></div></div>
+
+<script>
+const ic = (n, s = 16) => `<svg width="${s}" height="${s}" aria-hidden="true"><use href="../../../img/ikony/sprite.svg#ic-${n}"/></svg>`;
+const pl = (n, d = 0) => n.toLocaleString('pl-PL', { minimumFractionDigits: d, maximumFractionDigits: d });
+const mln = v => `${pl(v / 1e6, 1)} mln PLN`;
+
+/* builder: [nazwa, ticker, budowy, max, oferty, dośw., wygrane, ukończone, gotówka, kredyt, [tempo, koszt, ryzyko]] */
+const B = [
+  ['Bractwo Stali', 'BRST', 3, 5, 2, 46, 14, 11, 38.4e6, 6.0e6, [8, 5, 15]],
+  ['Infrastrukturex', 'INFX', 4, 4, 0, 41, 12, 8, 9.1e6, 14.5e6, [5, 0, 25]],
+  ['Budimix', 'BDMX', 2, 4, 1, 33, 9, 7, 21.7e6, 0, [10, 3, 0]],
+  ['Giereklud', 'GRKL', 1, 3, 1, 22, 5, 4, 12.2e6, 2.0e6, [0, 3, 0]],
+  ['Budipol', 'BDPL', 1, 2, 3, 14, 3, 2, 4.3e6, 3.1e6, [0, 0, 10]],
+  ['Majsterbud', 'MJST', 1, 1, 0, 6, 1, 0, 0.4e6, 1.2e6, [0, 0, 0]],
+];
+/* budowa: [typ, zamawiający, wykonawca (ticker), postęp %, plan %, stan, do terminu, opóźnienia] */
+const P = [
+  ['Szpital powiatowy', 'Skarb Państwa', 'MJST', 38, 61, 'stop', 'brak finansowania, 6 tyg. przerwy', '3 tyg. / 2 tyg.'],
+  ['Obwodnica Kielc', 'Skarb Państwa', 'INFX', 52, 66, 'late', 'prognoza: 5 tyg. po terminie', '4 tyg. / 1 tydz.'],
+  ['Most na Wiśle', 'Miasto Toruń', 'INFX', 71, 74, 'late', 'prognoza: 1 tydz. po terminie', '1 tydz. / 0'],
+  ['Hala magazynowa', 'Logistyka Wschód', 'BRST', 84, 70, 'ok', 'zapas 6 tyg.', '0 / 0'],
+  ['Osiedle Zielone', 'Domdev', 'BDMX', 23, 20, 'ok', 'zapas 3 tyg.', '0 / 1 tydz.'],
+  ['Terminal kontenerowy', 'Port Gdańsk', 'BRST', 12, 10, 'ok', 'zapas 9 tyg.', '0 / 0'],
+];
+const tk = t => B.find(b => b[1] === t);
+const risk = t => { const mine = P.filter(p => p[2] === t); const s = mine.find(p => p[5] === 'stop'), l = mine.filter(p => p[5] === 'late');
+  return s ? ['is-down', 'blokada', '1 budowa wstrzymana'] : l.length ? ['is-warn', 'alert', `${l.length} ${l.length === 1 ? 'budowa' : 'budowy'} po terminie`] : ['is-ok', 'ok', 'bez opóźnień']; };
+const STW = { stop: 'wstrzymana', late: 'zagrożony termin', ok: 'w toku' };
+const prog = p => `<div class="bd-prog-cell"><div class="bd-prog${p[5] === 'stop' ? ' is-stop' : p[5] === 'late' ? ' is-late' : ''}" role="img" aria-label="Postęp ${p[3]}%, według planu ${p[4]}%" style="--v:${p[3]};--plan:${p[4]}"><i></i><b></b></div><span class="n">${p[3]}% <span class="muted bd-hide-sm">z planu ${p[4]}%</span></span></div>`;
+const stCell = p => `<span class="bd-risk ${p[5] === 'stop' ? 'is-down' : p[5] === 'late' ? 'is-warn' : 'is-ok'}">${p[5] === 'ok' ? '' : ic(p[5] === 'stop' ? 'blokada' : 'alert', 12)}${STW[p[5]]}</span>`;
+
+function view(open) {
+  const rows = B.map(b => {
+    const [n, t, act, max, bids, exp, won, done, cash, cred, tech] = b, [rc, ri, rt] = risk(t), isOpen = t === open;
+    const builds = P.filter(p => p[2] === t);
+    return `<tr class="bd-row" tabindex="0" aria-expanded="${isOpen}" data-t="${t}">
+      <td><span class="bd-name">${ic('chevron-right', 14)}<b>${n}</b><span class="bd-tk">${t}</span></span></td>
+      <td class="bd-moc"><span class="bd-slots" aria-hidden="true">${Array.from({ length: max }, (_, i) => `<i class="${i < act ? 'on' : ''}"></i>`).join('')}</span><span class="n">${act}/${max}</span></td>
+      <td class="r n bd-hide-sm">${bids || '<span class="muted">0</span>'}</td>
+      <td class="r n bd-hide-sm">${won} / ${done}</td>
+      <td class="r n bd-hide-sm">${mln(cash)}</td>
+      <td class="r n bd-hide-sm">${cred ? mln(cred) : '<span class="muted">—</span>'}</td>
+      <td class="bd-hide-sm"><span class="bd-tech n" aria-label="Tempo +${tech[0]}%, koszt −${tech[1]}%, ryzyko opóźnień −${tech[2]}%">${['+', '−', '−'].map((l, i) => `<span class="${tech[i] ? '' : 'z'}">${tech[i] ? l + tech[i] : '0'}</span>`).join('<span class="z">/</span>')}</span></td>
+      <td><span class="bd-risk ${rc}">${rc === 'is-ok' ? '' : ic(ri, 12)}${rt}</span></td></tr>` +
+      (isOpen ? `<tr class="bd-detail"><td colspan="8"><div class="bd-detail-grid">
+        <div><h4>Budowy</h4>${builds.length ? `<ul class="bd-builds">${builds.map(p => `<li><span>${p[0]}<small>${p[1]}, ${p[6]}</small></span>${prog(p)}${stCell(p)}</li>`).join('')}</ul>` : '<p class="muted">Brak aktywnych budów. Spółka startuje w przetargach.</p>'}</div>
+        <dl class="bd-dl"><dt>Doświadczenie</dt><dd class="n">${exp} pkt</dd><dt>Limit budów</dt><dd>${max}, rośnie co 10 pkt (maks. 5)</dd><dt>Oferty w toku</dt><dd class="n">${bids}</dd><dt>Gotówka</dt><dd class="n">${mln(cash)}</dd><dt>Kredyt obrotowy</dt><dd class="n">${cred ? mln(cred) : 'brak'}</dd></dl>
+      </div></td></tr>` : '');
+  }).join('');
+  const projects = P.map(p => `<tr><td>${p[0]}<br><small class="muted">${p[1]}<span class="bd-show-sm">, ${p[2]}</span></small></td><td class="bd-hide-sm"><span class="bd-tk">${p[2]}</span> ${tk(p[2])[0]}</td><td>${prog(p)}</td><td class="bd-hide-sm">${p[6]}</td><td class="bd-hide-sm n">${p[7]}</td><td>${stCell(p)}</td></tr>`).join('');
+  return `<div class="wn-backdrop"></div>
+  <section class="wn wn--build" role="dialog" aria-modal="true" aria-labelledby="t-b">
+    <header class="wn-head"><span class="wn-emblem">${ic('budownictwo', 22)}</span>
+      <div><h2 id="t-b">Budownictwo</h2><p>12 budów w toku, 3 z problemem. 2 przetargi otwarte do końca miesiąca.</p></div>
+      <button class="wn-close" aria-label="Zamknij (Esc)" title="Zamknij (Esc)">${ic('zamknij', 20)}</button></header>
+    <div class="wn-strip"><div><span>Budowy w toku</span><b>12</b></div><div><span>Wolne moce</span><b>7 z 19</b></div><div><span>Po terminie</span><b style="color:var(--color-text-warn)">2</b></div><div><span>Wstrzymane</span><b style="color:var(--color-text-down)">1</b></div><div><span>Przetargi otwarte</span><b>2</b></div></div>
+    <div class="wn-body is-tabs">
+      <nav class="wn-tabs" role="tablist"><button class="wn-tab" role="tab" aria-selected="true">Spółki i budowy</button><button class="wn-tab" role="tab" aria-selected="false">Podwykonawcy</button><button class="wn-tab" role="tab" aria-selected="false">Finansowanie pomostowe</button></nav>
+      <div class="wn-main">
+        <div class="bd-sec"><h3>Spółki budowlane</h3><small class="bd-hide-sm">moce: kratka = jedna budowa</small></div>
+        <table class="bd-table"><colgroup><col class="c-name"></colgroup><thead><tr><th>Spółka</th><th aria-sort="descending">Moce</th><th class="r bd-hide-sm">Oferty</th><th class="r bd-hide-sm">Wygrane / ukończone</th><th class="r bd-hide-sm">Gotówka</th><th class="r bd-hide-sm">Kredyt obrotowy</th><th class="bd-hide-sm" title="Bonusy z technologii, w procentach">Tempo / koszt / ryzyko</th><th>Ryzyko</th></tr></thead><tbody>${rows}</tbody></table>
+        <div class="bd-sec"><h3>Budowy</h3><small>kreska na pasku: postęp według planu</small></div>
+        <table class="bd-table"><colgroup><col class="c-name"></colgroup><thead><tr><th>Budowa</th><th class="bd-hide-sm">Wykonawca</th><th>Postęp</th><th class="bd-hide-sm">Termin</th><th class="bd-hide-sm">Opóźnienia (wykonawca / zewn.)</th><th>Stan</th></tr></thead><tbody>${projects}</tbody></table>
+      </div>
+    </div>
+  </section>`;
+}
+function wire(id, open) {
+  const el = document.getElementById(id); let cur = open;
+  const draw = () => { const st = el.querySelector('.wn-main')?.scrollTop || 0; el.innerHTML = view(cur); el.querySelector('.wn-main').scrollTop = st; };
+  draw();
+  el.addEventListener('click', e => { const r = e.target.closest('.bd-row'); if (!r) return; cur = cur === r.dataset.t ? null : r.dataset.t; draw(); el.querySelector(`[data-t="${r.dataset.t}"]`).focus(); });
+  el.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('bd-row')) { e.preventDefault(); e.target.click(); } });
+}
+wire('f-desk', 'INFX');
+wire('f-ph', null);
+</script>
+</body></html>

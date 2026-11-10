@@ -3,6 +3,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../../../tokens.css">
+<link rel="stylesheet" href="19_okna.css">
 <style>
 /* ===== Rama makiety (do gry nie idzie) ===== */
 html, body { margin: 0; background: #05070a; color: var(--color-text-primary); font-family: var(--font-family-sans); }
@@ -12,103 +13,6 @@ html, body { margin: 0; background: #05070a; color: var(--color-text-primary); f
 .frame.is-phone { width: 390px; max-width: 100%; height: 780px; margin: 0; }
 .phones { display: flex; flex-wrap: wrap; gap: 24px; justify-content: center; max-width: 1366px; margin: 0 auto 40px; }
 .frame::before { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(0deg, transparent 0 37px, var(--ink-800) 37px 38px); } /* tło: ekran główny pod spodem */
-
-/* ===== Blok do gry: wspólna rama okna (projekt plany/design/19_okna.md) ===== */
-.cq { container-type: inline-size; position: absolute; inset: 0; font-size: 13px; line-height: 1.45; }
-.cq svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
-.cq :focus-visible { outline: 2px solid var(--color-text-primary); outline-offset: 2px; }
-.num { font-family: var(--font-family-mono); font-variant-numeric: tabular-nums; }
-
-/* Tło pod oknem: w grze position: fixed na całe okno przeglądarki */
-.wn-backdrop { position: absolute; inset: 0; background: rgba(5, 7, 10, .72); }
-
-/* O1 + O2: jedna skorupa. Przypięta do góry, STAŁA wysokość, przewija się tylko treść */
-.wn { --wn-accent: var(--color-border-strong); position: absolute; top: 6%; left: 50%; transform: translateX(-50%);
-  width: min(1120px, calc(100% - 48px)); height: min(86%, 820px);
-  display: grid; grid-template-rows: auto auto minmax(0, 1fr);
-  background: var(--color-bg-surface); border: 1px solid var(--ink-700); border-top: 3px solid var(--wn-accent); border-radius: 6px;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, .55); overflow: hidden; }
-.wn--state { --wn-accent: var(--color-section-state); }
-.wn--firm { --wn-accent: var(--color-section-market); }
-.wn--net { --wn-accent: var(--ink-600); }
-
-/* Nagłówek: emblemat, tytuł, JEDNO zdanie stanu (zamiast kickera z kropkami, O3), zamknij */
-.wn-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 14px 16px 12px 20px; }
-.wn-emblem { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 6px; background: var(--color-bg-raised); color: var(--wn-accent); }
-.wn-head h2 { margin: 0; font-family: 'IBM Plex Sans Condensed', var(--font-family-sans); font-size: 22px; font-weight: 600; line-height: 1.15; }
-.wn-head p { margin: 2px 0 0; color: var(--color-text-secondary); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.wn-close { width: 40px; height: 40px; display: grid; place-items: center; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--color-text-secondary); cursor: pointer; }
-.wn-close:hover { background: var(--color-bg-raised); border-color: var(--ink-700); color: var(--color-text-primary); }
-.wn-close kbd { display: none; }
-
-/* Pasek liczb (obecny .bank-ticker): stałe miejsce pod nagłówkiem, ten sam układ w każdym oknie */
-.wn-strip { display: flex; gap: 28px; padding: 8px 20px 10px; border-bottom: 1px solid var(--ink-700); overflow-x: auto; scrollbar-width: none; }
-.wn-strip div { display: grid; gap: 1px; min-width: max-content; }
-.wn-strip span { font-size: 12px; color: var(--color-text-muted); }
-.wn-strip b { font-family: var(--font-family-mono); font-variant-numeric: tabular-nums; font-size: 15px; font-weight: 600; }
-.wn-strip .up { color: var(--color-text-up); } .wn-strip .down { color: var(--color-text-down); }
-
-/* Ciało: [szyna | treść] albo [zakładki / treść] */
-.wn-body { display: grid; grid-template-columns: 208px minmax(0, 1fr); min-height: 0; }
-.wn-body.is-tabs { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
-.wn-main { min-height: 0; overflow-y: auto; padding: 20px 24px 32px; scrollbar-gutter: stable; }
-
-/* O4: boczna szyna z grupami (okna z >6 zakładkami: Państwo, Miasto) */
-.wn-rail { min-height: 0; overflow-y: auto; padding: 10px 8px 16px; border-right: 1px solid var(--ink-700); background: var(--color-bg-sunken); }
-.wn-pick { display: none; }
-.wn-group { margin: 0 0 10px; padding: 0; list-style: none; }
-.wn-group > h3 { display: flex; align-items: center; gap: 8px; margin: 6px 8px 4px; font-family: 'IBM Plex Sans Condensed', var(--font-family-sans); font-size: 13px; font-weight: 600; color: var(--color-text-muted); }
-.wn-tab { position: relative; display: flex; align-items: center; gap: 8px; width: 100%; min-height: 34px; padding: 0 10px 0 30px; border: 0; border-radius: 4px; background: none; color: var(--color-text-secondary); font: 400 13px var(--font-family-sans); text-align: left; cursor: pointer; }
-.wn-tab.is-solo { padding-left: 10px; font-family: 'IBM Plex Sans Condensed', var(--font-family-sans); font-weight: 600; color: var(--color-text-muted); } /* grupa z jedną zakładką = sama zakładka */
-.wn-tab.is-solo svg { color: var(--color-text-muted); }
-.wn-tab:hover { background: var(--color-bg-raised); color: var(--color-text-primary); }
-.wn-tab[aria-selected="true"] { background: var(--color-bg-raised); color: var(--color-text-primary); font-weight: 600; }
-.wn-tab[aria-selected="true"]::before { content: ""; position: absolute; left: 0; top: 7px; bottom: 7px; width: 3px; border-radius: 2px; background: var(--wn-accent); }
-.wn-count { margin-left: auto; min-width: 20px; padding: 0 6px; border-radius: 999px; background: var(--color-bg-warn-soft, rgba(245,165,36,.14)); color: var(--color-text-warn); font: 600 11px/18px var(--font-family-mono); text-align: center; }
-
-/* Zakładki poziome (okna do 6 zakładek: Firma, Bank, Klienci). Ten sam znacznik wyboru co szyna */
-.wn-tabs { display: flex; gap: 2px; padding: 0 16px; border-bottom: 1px solid var(--ink-700); overflow-x: auto; scrollbar-width: none; }
-.wn-tabs .wn-tab { width: auto; min-height: 40px; padding: 0 12px; border-radius: 0; white-space: nowrap; }
-.wn-tabs .wn-tab[aria-selected="true"] { background: none; }
-.wn-tabs .wn-tab[aria-selected="true"]::before { left: 10px; right: 10px; top: auto; bottom: -1px; width: auto; height: 3px; }
-
-/* Skórka Internetu: pasek przeglądarki zamiast nagłówka, reszta ramy ta sama */
-.wn-browser { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--ink-700); background: var(--color-bg-sunken); }
-.wn-nav { display: flex; gap: 2px; }
-.wn-nav button { width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 6px; background: none; color: var(--color-text-secondary); cursor: pointer; }
-.wn-nav button:disabled { color: var(--color-text-disabled); cursor: default; }
-.wn-nav button:not(:disabled):hover { background: var(--color-bg-raised); }
-.wn-url { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px; border: 1px solid var(--ink-700); border-radius: 999px; background: var(--color-bg-base); color: var(--color-text-secondary); font: 400 13px var(--font-family-mono); min-width: 0; }
-.wn-url span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.wn-url b { color: var(--color-text-primary); font-weight: 400; }
-.wn-favs { display: flex; gap: 4px; padding: 6px 12px; border-bottom: 1px solid var(--ink-700); overflow-x: auto; scrollbar-width: none; }
-.wn-favs .wn-tab { width: auto; min-height: 30px; padding: 0 10px; white-space: nowrap; font-size: 12px; }
-.wn-favs .wn-tab[aria-selected="true"]::before { content: none; }
-
-/* Telefon: okno na cały ekran, szyna zwija się do przycisku „Grupa › Zakładka” z listą */
-@container (max-width: 640px) {
-  .wn { inset: 0; top: 0; left: 0; transform: none; width: 100%; height: 100%; border-radius: 0; border-left: 0; border-right: 0; }
-  .wn-head { padding: 10px 8px 8px 12px; gap: 10px; }
-  .wn-emblem { width: 32px; height: 32px; }
-  .wn-head h2 { font-size: 19px; }
-  .wn-head p { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-size: 12px; }
-  .wn-close { width: 44px; height: 44px; }
-  .wn-strip { gap: 20px; padding: 6px 12px 8px; mask-image: linear-gradient(90deg, #000 85%, transparent); } /* sygnał, że pasek się przewija */
-  .wn-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); position: relative; }
-  .wn-rail { padding: 0; border-right: 0; border-bottom: 1px solid var(--ink-700); overflow: visible; }
-  .wn-pick { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 48px; padding: 0 12px; border: 0; background: none; color: var(--color-text-primary); font: 600 14px var(--font-family-sans); text-align: left; cursor: pointer; }
-  .wn-pick small { color: var(--color-text-muted); font-weight: 400; font-size: 13px; }
-  .wn-pick svg:last-child { margin-left: auto; color: var(--color-text-muted); transition: transform .15s; }
-  .wn-pick[aria-expanded="true"] svg:last-child { transform: rotate(180deg); }
-  .wn-list { display: none; position: absolute; left: 0; right: 0; top: 49px; z-index: 3; max-height: calc(100% - 49px); overflow-y: auto; padding: 6px 8px 12px; background: var(--color-bg-sunken); border-bottom: 1px solid var(--ink-600); box-shadow: 0 16px 32px rgba(0, 0, 0, .5); }
-  .wn-pick[aria-expanded="true"] + .wn-list { display: block; }
-  .wn-tab { min-height: 44px; }
-  .wn-tabs .wn-tab { min-height: 44px; }
-  .wn-main { padding: 16px 12px 24px; }
-  .wn-browser { grid-template-columns: auto minmax(0, 1fr) auto; padding: 8px; gap: 6px; }
-  .wn-nav button:nth-child(2) { display: none; }
-}
-@media (prefers-reduced-motion: reduce) { .wn-pick svg:last-child { transition: none; } }
 
 /* ===== Treść przykładowa (do gry nie idzie: w grze zostają obecne zakładki) ===== */
 .dm h3 { margin: 0 0 4px; font-family: 'IBM Plex Sans Condensed', var(--font-family-sans); font-size: 18px; font-weight: 600; }

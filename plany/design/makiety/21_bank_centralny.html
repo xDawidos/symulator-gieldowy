@@ -1,0 +1,151 @@
+<!doctype html><html lang="pl"><head><meta charset="utf-8"><title>Makieta UI — Bank Centralny (R13)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../../tokens.css">
+<link rel="stylesheet" href="19_okna.css">
+<style>
+/* ===== Rama makiety (do gry nie idzie) ===== */
+html, body { margin: 0; background: #05070a; color: var(--color-text-primary); font-family: var(--font-family-sans); }
+.frame-title { max-width: 1366px; margin: 24px auto 8px; padding: 0 16px; font-size: 18px; font-weight: 600; }
+.frame-sub { max-width: 1366px; margin: 0 auto 12px; padding: 0 16px; font-size: 13px; color: var(--color-text-muted); }
+.frame { position: relative; max-width: 1366px; height: 900px; margin: 0 auto 40px; border: 1px solid var(--ink-700); border-radius: 6px; overflow: hidden; background: var(--color-bg-base); }
+.frame.is-phone { width: 390px; max-width: 100%; height: 780px; }
+
+/* ===== Blok do gry: Bank Centralny (projekt plany/design/21_bank_centralny.md) ===== */
+.wn--bank { --wn-accent: var(--ink-300); } /* propozycja: Bank bez bursztynu (R4), patrz notka */
+.wn-strip .is-mine { color: var(--color-text-accent); } /* R4: pieniądze funduszu */
+.n { font-family: var(--font-family-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.muted { color: var(--color-text-muted); }
+.cb-grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(260px, 1fr); gap: 20px; }
+.cb-box { padding: 14px 16px; border: 1px solid var(--ink-700); border-radius: 6px; background: var(--color-bg-raised); min-width: 0; }
+.cb-box h3 { margin: 0 0 2px; font-family: 'IBM Plex Sans Condensed', var(--font-family-sans); font-size: 17px; font-weight: 600; }
+.cb-box > p { margin: 0 0 10px; color: var(--color-text-secondary); }
+
+/* Decyzja: najważniejsza liczba okna */
+.cb-decision { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; }
+.cb-rate { font-family: var(--font-family-mono); font-size: 34px; font-weight: 600; line-height: 1.1; }
+.cb-decision small { color: var(--color-text-muted); font-size: 12px; }
+.cb-next { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 8px 10px; border-radius: 4px; background: var(--color-bg-sunken); }
+.cb-next svg { color: var(--color-text-warn); }
+
+/* Wykres: stopa (schodki) i inflacja (linia), cel jako pas */
+.cq .cb-chart { width: 100%; height: auto; display: block; overflow: visible; stroke: none; stroke-width: 0; } /* .cq svg to styl ikon */
+.cb-chart .grid line { stroke: var(--ink-700); }
+.cb-chart .grid text, .cb-chart .ax text { fill: var(--color-text-muted); font: 11px var(--font-family-mono); }
+.cb-chart .band { fill: var(--color-bg-up-soft, rgba(52, 211, 153, .08)); }
+.cb-chart .tgt { stroke: var(--color-text-up); stroke-dasharray: 4 4; stroke-width: 1; }
+.cb-chart .rate { fill: none; stroke: var(--color-text-primary); stroke-width: 2.25; }
+.cb-chart .infl { fill: none; stroke: var(--color-text-info); stroke-width: 2; }
+.cb-chart .lbl { font: 600 12px var(--font-family-mono); }
+.cb-chart .hit { fill: transparent; }
+.cb-chart .hit:hover + .tip, .cb-chart .hit:focus + .tip { opacity: 1; }
+.cb-chart .tip { opacity: 0; pointer-events: none; }
+.cb-chart .tip rect { fill: var(--ink-950); stroke: var(--ink-600); }
+.cb-chart .tip text { fill: var(--color-text-primary); font: 11px var(--font-family-mono); }
+.cb-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 8px 0 0; padding: 0; list-style: none; font-size: 12px; color: var(--color-text-secondary); }
+.cb-legend i { display: inline-block; width: 16px; height: 0; margin-right: 6px; vertical-align: middle; border-top: 2px solid; }
+.cb-legend .l-rate { border-color: var(--color-text-primary); }
+.cb-legend .l-infl { border-color: var(--color-text-info); }
+.cb-legend .l-tgt { border-top: 1px dashed var(--color-text-up); }
+
+/* Rozkład reguły: skąd się bierze stopa docelowa */
+.cb-rule { margin: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; }
+.cb-rule dt { color: var(--color-text-secondary); }
+.cb-rule dt small { display: block; color: var(--color-text-muted); font-size: 12px; }
+.cb-rule dd { margin: 0; text-align: right; font-family: var(--font-family-mono); font-variant-numeric: tabular-nums; }
+.cb-rule .sum { padding-top: 6px; border-top: 1px solid var(--ink-600); font-weight: 600; color: var(--color-text-primary); }
+
+.cb-ceo { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 12px; align-items: center; }
+.cb-ceo .av { grid-row: span 2; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--ink-700); color: var(--color-text-secondary); }
+.cb-ceo small { color: var(--color-text-muted); font-size: 12px; }
+.cb-traits { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.cb-traits span { padding: 0 8px; border: 1px solid var(--ink-600); border-radius: 999px; font-size: 12px; line-height: 22px; color: var(--color-text-secondary); }
+.cb-side { display: grid; gap: 20px; align-content: start; }
+.cb-history { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 12px; }
+.cb-history li { display: grid; grid-template-columns: 74px minmax(0, 1fr) auto; gap: 8px; }
+.cb-history .up::before { content: "▲ "; } .cb-history .dn::before { content: "▼ "; } /* kierunek bez oceny: podwyżka nie jest „dobra” ani „zła” */
+
+@container (max-width: 640px) {
+  .cb-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .cb-box { padding: 12px; }
+  .cb-rate { font-size: 28px; }
+}
+</style></head><body>
+
+<h1 class="frame-title">Bank Centralny: decyzja, wykres stopy i inflacji, reguła</h1>
+<p class="frame-sub">Okno z ramy 19. Dane: macro.history (16 kwartałów, stopa i inflacja), getTaylorRate(), macro.expectation, centralBank.ceo. Najedź na wykres, żeby zobaczyć kwartał.</p>
+<div class="frame"><div class="cq" id="f-desk"></div></div>
+<h1 class="frame-title">Telefon 390 px</h1>
+<div class="frame is-phone"><div class="cq" id="f-ph"></div></div>
+
+<script>
+const ic = (n, s = 16) => `<svg width="${s}" height="${s}" aria-hidden="true"><use href="../../../img/ikony/sprite.svg#ic-${n}"/></svg>`;
+const pl = (n, d = 2) => n.toLocaleString('pl-PL', { minimumFractionDigits: d, maximumFractionDigits: d });
+/* 16 kwartałów jak MACRO_HISTORY_LIMIT: stopa (krok 0,25) i inflacja, w % */
+const RATE = [3.5, 3.5, 3.25, 3.25, 3.25, 3.5, 3.5, 3.75, 4.0, 4.25, 4.5, 4.75, 5.0, 5.25, 5.25, 5.25];
+const INFL = [2.1, 2.3, 2.0, 1.9, 2.4, 2.9, 3.3, 3.6, 3.9, 4.4, 4.6, 4.3, 3.9, 3.7, 3.9, 4.1];
+const Q = RATE.map((_, i) => { const k = i + 5; return `R${Math.floor(k / 4) + 1} kw.${k % 4 + 1}`; }); // R2 kw.2 … R6 kw.1
+
+function chart(w) {
+  const h = 230, L = 36, Rr = 58, T = 12, B = 26, max = 6, iw = w - L - Rr, ih = h - T - B;
+  const x = i => L + (i / (RATE.length - 1)) * iw, y = v => T + ih - (v / max) * ih;
+  const grid = [0, 2, 4, 6].map(v => `<line x1="${L}" x2="${L + iw}" y1="${y(v)}" y2="${y(v)}"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${v}%</text>`).join('');
+  const step = RATE.map((v, i) => i ? `H${x(i)}V${y(v)}` : `M${x(0)},${y(v)}`).join('');
+  const infl = INFL.map((v, i) => `${i ? 'L' : 'M'}${x(i)},${y(v)}`).join('');
+  const ax = [0, 4, 8, 12, 15].map(i => `<text x="${x(i)}" y="${h - 6}" text-anchor="${i === 15 ? 'end' : i ? 'middle' : 'start'}">${Q[i]}</text>`).join('');
+  const colw = iw / (RATE.length - 1);
+  const hits = RATE.map((v, i) => { const tx = Math.min(x(i) + 8, L + iw - 120); return `<rect class="hit" tabindex="0" x="${x(i) - colw / 2}" y="${T}" width="${colw}" height="${ih}" aria-label="${Q[i]}: stopa ${pl(v)}%, inflacja ${pl(INFL[i], 1)}%"/><g class="tip"><line x1="${x(i)}" x2="${x(i)}" y1="${T}" y2="${T + ih}" stroke="var(--ink-500)"/><rect x="${tx}" y="${T + 4}" width="116" height="48" rx="3"/><text x="${tx + 8}" y="${T + 20}">${Q[i]}</text><text x="${tx + 8}" y="${T + 34}">stopa ${pl(v)}%</text><text x="${tx + 8}" y="${T + 47}" fill="var(--color-text-info)">inflacja ${pl(INFL[i], 1)}%</text></g>`; }).join('');
+  return `<svg class="cb-chart" viewBox="0 0 ${w} ${h}" role="img" aria-label="Stopa bazowa wzrosła z 3,50% do 5,25% w 16 kwartałów. Inflacja 4,1%, cel 2,5%.">
+    <rect class="band" x="${L}" y="${y(3.5)}" width="${iw}" height="${y(1.5) - y(3.5)}"/>
+    <g class="grid">${grid}</g>
+    <line class="tgt" x1="${L}" x2="${L + iw}" y1="${y(2.5)}" y2="${y(2.5)}"/>
+    <path class="infl" d="${infl}"/><path class="rate" d="${step}"/>
+    <text class="lbl" x="${L + iw + 6}" y="${y(5.25) + 4}" fill="var(--color-text-primary)">${pl(5.25)}%</text>
+    <text class="lbl" x="${L + iw + 6}" y="${y(4.1) + 4}" fill="var(--color-text-info)">${pl(4.1, 1)}%</text>
+    <text class="lbl" x="${L + iw + 6}" y="${y(2.5) + 4}" fill="var(--color-text-up)" font-weight="400">cel</text>
+    <g class="ax">${ax}</g>${hits}</svg>`;
+}
+
+function view(w) {
+  return `<div class="wn-backdrop"></div>
+  <section class="wn wn--bank" role="dialog" aria-modal="true" aria-labelledby="t-bc">
+    <header class="wn-head"><span class="wn-emblem">${ic('bank', 22)}</span>
+      <div><h2 id="t-bc">Centrum bankowe</h2><p>Inflacja 4,1%, cel 2,5%. Analitycy czekają na podwyżkę stopy o 0,50 pkt proc. na najbliższym posiedzeniu.</p></div>
+      <button class="wn-close" aria-label="Zamknij (Esc)" title="Zamknij (Esc)">${ic('zamknij', 20)}</button></header>
+    <div class="wn-strip"><div><span>Stopa bazowa</span><b>5,25%</b></div><div><span>Kredyt (rynek)</span><b>7,75%</b></div><div><span>Depozyt (rynek)</span><b>4,25%</b></div><div><span>Gotówka funduszu</span><b class="is-mine">184 220 PLN</b></div><div><span>Lokaty funduszu</span><b class="is-mine">40 000 PLN</b></div><div><span>Obligacje funduszu</span><b class="is-mine">0 PLN</b></div></div>
+    <div class="wn-body is-tabs">
+      <nav class="wn-tabs" role="tablist"><button class="wn-tab" role="tab" aria-selected="true">Bank Centralny</button><button class="wn-tab" role="tab" aria-selected="false">Banki i lokaty</button><button class="wn-tab" role="tab" aria-selected="false">Obligacje</button></nav>
+      <div class="wn-main"><div class="cb-grid">
+        <div class="cb-box">
+          <div class="cb-decision"><span class="cb-rate">5,25%</span><span>stopa bazowa, bez zmian od 2 posiedzeń<br><small>od niej zależą kredyty, lokaty i ceny obligacji</small></span></div>
+          ${chart(w)}
+          <ul class="cb-legend"><li><i class="l-rate"></i>stopa bazowa</li><li><i class="l-infl"></i>inflacja r/r</li><li><i class="l-tgt"></i>cel 2,5% (pas 1,5–3,5%)</li></ul>
+          <div class="cb-next">${ic('zegar', 16)}<span>Następne posiedzenie: koniec kwartału. Oczekiwanie analityków: <b>podwyżka o 0,50 pkt proc.</b> Decyzja inna niż oczekiwana porusza kursami i obligacjami.</span></div>
+        </div>
+        <div class="cb-side">
+          <div class="cb-box"><h3>Skąd bierze się stopa</h3><p>Bank liczy stopę docelową z inflacji i bezrobocia, a potem zmienia stopę najwyżej o 0,50 pkt na posiedzenie.</p>
+            <dl class="cb-rule">
+              <dt>Inflacja teraz</dt><dd>4,10%</dd>
+              <dt>Neutralna stopa realna</dt><dd>+1,00</dd>
+              <dt>Inflacja ponad cel<small>połowa z 4,1% − 2,5%</small></dt><dd>+0,80</dd>
+              <dt>Bezrobocie pod naturalnym<small>połowa z 6,0% − 5,4%</small></dt><dd>+0,30</dd>
+              <dt>Prezes: jastrząb</dt><dd>+0,50</dd>
+              <dt class="sum">Stopa docelowa</dt><dd class="sum">6,70%</dd>
+            </dl></div>
+          <div class="cb-box"><div class="cb-ceo"><span class="av">${ic('osoba', 20)}</span><b>Halina Wrona</b><small>prezes Banku Centralnego</small></div>
+            <div class="cb-traits"><span title="Stopa docelowa o 0,5 pkt wyżej">Jastrząb</span><span title="Rzadko zaskakuje rynek">Przewidywalna</span></div></div>
+          <div class="cb-box"><h3>Ostatnie decyzje</h3><ul class="cb-history">
+            <li><span class="n muted">R6 kw.1</span><span>bez zmian</span><span class="n">5,25%</span></li>
+            <li><span class="n muted">R5 kw.4</span><span>bez zmian</span><span class="n">5,25%</span></li>
+            <li><span class="n muted">R5 kw.3</span><span class="up">podwyżka o 0,25</span><span class="n">5,25%</span></li>
+            <li><span class="n muted">R5 kw.2</span><span class="up">podwyżka o 0,25</span><span class="n">5,00%</span></li></ul></div>
+        </div>
+      </div></div>
+    </div>
+  </section>`;
+}
+const desk = document.getElementById('f-desk'), ph = document.getElementById('f-ph');
+desk.innerHTML = view(640); ph.innerHTML = view(360);
+</script>
+</body></html>
