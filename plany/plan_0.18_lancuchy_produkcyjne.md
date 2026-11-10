@@ -187,6 +187,38 @@ Szczegóły w serii, sekcja 6.
 
 ---
 
+## Lista ekranów dla designu (do przekazania czatowi „Design 0.18”)
+
+Wymogi wspólne: ciemny motyw i tokeny z `tokens.css`, ikony SVG (bez emoji), PLN, „udział” zamiast JU, status zawsze słowem i liczbą (kolor nie może być jedynym nośnikiem), bez nowych okien modalnych, komponenty z 0.14.5. Stan pusty (stary zapis przed pierwszym kwartałem bilansu) i stan kraju obcego dla każdego panelu. Ekrany 1–4 są już w makiecie `13_lancuch_018.html`: do sprawdzenia z tą listą.
+
+| # | Wersja | Ekran / panel | Co pokazuje | Dane (moduł, pole) |
+|---|---|---|---|---|
+| 1 | 0.18.1 | **Ikony** dóbr, ogniw i transportu | 16 dóbr pilotażu, klasy M/P/K/Z/L, rodzaje ogniw (wydobycie, przetwórstwo, fabryka, transport, dystrybucja, konsumpcja), transport (morski, lotniczy, lądowy), ikona linii `supply`. W 0.18.2 dojdzie ok. 20 kolejnych dóbr | rejestr `goods.js`: `id`, `class`, `icon` |
+| 2 | 0.18.1 | **Państwo → Łańcuchy** (zakładka) | wybór łańcucha (3 w pilotażu), ogniwa jako oś: nazwa podsektora, status słowem (w normie, napięty, niedobór, nadwyżka), bilans `b` liczbą, zapas w kwartałach, cena wewnętrzna wobec startu (%), przepustowość; kto importuje i skąd; przełącznik kraju | `chains.js`: `balance[g][kraj]`, `stock`, `price/P0`, `activity`, `capacity`, `imports[]`; kraje z `countries.js` |
+| 3 | 0.18.1 | **Karta spółki → Przegląd: wiersz łańcucha** | ogniwo spółki, główny wsad i produkt, zapas, wystawienie na szok (niskie, średnie, wysokie) i jego powód; odnośnik do zakładki Łańcuchy | `factor[podsektor][kraj]`, udział wsadu w kosztach, linia `supply` |
+| 4 | 0.18.1 | **Stany szczególne** | pusty stan (bilans jeszcze nie policzony), kraj bez danego ogniwa, ogniwo w szoku | jak wyżej + `crisisLine` |
+| 5 | 0.18.1 | **Szok podażowy w wiadomościach i pasku kryzysu** | 6. linia: nazwa wariantu (blokada cieśniny, strajk portowy, strajk w kopalni), etap, dotknięte ogniwa, kto zyskuje | `crises.js`: `crisisLine.id = 'supply'`, `stage`, `victims` |
+| 6 | 0.18.1 | **Giełda towarowa: żelazo i miedź zamiast metali** | dwa wiersze kontraktów zamiast jednego, nowe wagi ETF koszykowego, informacja po migracji zapisu („pozycja na metalach podzielona po połowie”) | `COMMODITY_DEFS`, `commodity_market.js` |
+| 7 | 0.18.1 | **Akademia** | 3 hasła: Łańcuch wartości, Efekt byka, Bilans dobra (schemat pomocniczy jak w haśle o energii) | `learning.js` |
+| 8 | 0.18.2 | **Łańcuchy: pełny graf** | ok. 10 łańcuchów; widok listy łańcuchów ze statusem najgorszego ogniwa; łańcuchy rozgałęzione (ruda → stal → wielu odbiorców), czyli oś musi przyjąć rozgałęzienie albo listę odbiorców | `chains.js` jak w 2, `goods.js` |
+| 9 | 0.18.2 | **Blok jądrowy w 3 etapach** (Państwo → Energia) | etap (badania, konsorcjum do 3 firm, uruchomienie), postęp, członkowie konsorcjum, koszt i termin | `energy.js`, `companies.js` (blok) |
+| 10 | 0.18.2 | **Mennica** (karta spółki państwowej) | wsady (papier, maszyny, złoto, srebro, miedź), produkcja gotówki, stan wyłącznika eksperymentu (tylko debug) | `chains.js`, `MINT_ACTIVE` |
+| 11 | 0.18.2 | **Rynek podwykonawców** (okno budownictwa) | specjalności (w tym geolodzy i energetyczni), nowi podwykonawcy, obłożenie | `subcontractors.js` |
+| 12 | 0.18.3 | **Magazyny** (Łańcuchy → szczegół ogniwa) | zapas wobec celu 0,5 kw., pojemność, koszt trzymania, bufor w szoku | `chains.js`: `stock`, `capacity`; `reits.js` (`warehouse`) |
+| 13 | 0.18.3 | **Konsumpcja** (Państwo → Łańcuchy albo Społeczeństwo) | popyt na dobra Z i L według klas, reakcja na cykl, herbata jako Z lub L w zależności od kraju | `chains.js` (konsumpcja), klasy z 0.13 |
+| 14 | 0.18.3 | **Substytucja i R&D** (karta technologii) | które wsady zastępuje technologia i o ile rocznie | `chains.js` (`A`), technologie 0.13 |
+| 15 | 0.18.3 | **ESG** (karta spółki i Państwo → Środowisko) | ścieżka ESG: koszt, emisje przed i po, ocena ESG, wymagany poziom UEiE | `energy.js` |
+| 16 | 0.18.3 | **Mapa szlaków** (Państwo → Łańcuchy → Mapa) | państwa i połączenia morskie, lotnicze i lądowe, status słowem (aktywny, utrudniony, wstrzymany), obciążenie przepustowości; widok listy jako zamiennik dla czytników ekranu | `infrastructure.js`, `freight.js`, `chains.js` (`imports`) |
+| 17 | 0.18.4 | **Ocena kredytowa** (karta spółki) | ocena AAA–D, audytor, data ważności, „brak oceny” jako informacja, ujawnione przekupstwo | `listings.js` |
+| 18 | 0.18.4 | **Nowe IPO** (karta debiutu i zapis gracza) | etapy: gotowość, audyt, opiekun emisji (prowizja), cena emisyjna i dyskonto, subskrypcja i redukcja, wycofanie; zapis gracza na akcje | `listings.js`, `companies.js` (`chooseDebutMarket`) |
+| 19 | 0.18.4 | **Poziomy giełdy z wymogiem oceny** | przy poziomach GOLD–DIAMOND wymagana ocena; spółka „zatrzymana na poziomie do audytu” | `listings.js` |
+| 20 | 0.18.4 | **Finanse:** lombard, Wrona, filie banków | oferta lombardu (zastaw akcji), pożyczki konsumenckie, filie za granicą | `finance.js`, `internet.js` |
+| 21 | 0.18.5 | **Ustawienia: rysowanie przy ×200** i ewentualny wskaźnik poziomu szczegółu spółki (polubione liczone dokładnie) | opcja „rysuj co N kroków”, znacznik w karcie spółki | `ui.js` |
+
+**Kolejność dla designu:** 1–7 przed P5 (pilotaż), 8–11 przed G9, 12–16 przed M6, 17–20 przed A5, 21 przed W4.
+
+---
+
 ## Główne ryzyka
 
 | Ryzyko | Zabezpieczenie |
