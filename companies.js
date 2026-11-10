@@ -3034,10 +3034,10 @@ const INFLATION_PASS_THROUGH = 0.15;   // inflacja w przychodach (było 0,3)
 // 0.13.1 (D2): limit dotyczy spółek krajowych — bez spółek zależnych, startupów w inkubatorze i rynków internetowych
 // (te mają własny limit na rynek). Powyżej limitu: rzadsze debiuty i nowe spółki z wydarzeń tylko przy wolnym miejscu,
 // słabe spółki szybciej spadają i upadają, a startupy dostają mniejsze i droższe finansowanie.
-const LISTING_SOFT_CAP = 100;
-const LISTING_HARD_CAP = 110;        // P1: twardy sufit — od 110 spółek krajowych żadnych nowych debiutów ani przenosin na rynek krajowy
+const LISTING_SOFT_CAP = 120; // 0.18.4 A4: 100 → 120 (sufit 130, hamulec 120–130 jak dawniej 100–110)
+const LISTING_HARD_CAP = 130;        // 0.18.4 A4: 110 → 130 (nowe podsektory dodają spółki)
 const LISTING_PRESSURE_RANGE = LISTING_HARD_CAP - LISTING_SOFT_CAP;   // hamulec 100–110 (pełna presja przy suficie)
-const LISTING_TOTAL_CAP = 150;       // P1: zwykłe spółki łącznie (krajowe, zależne, rynków internetowych); bez stałych podmiotów i startupów
+const LISTING_TOTAL_CAP = 180;       // 0.18.4 A4: 150 → 180
 const AWAITING_LISTING_MAX_QUARTERS = 8; // startup bez miejsca na giełdzie czeka najwyżej 2 lata, potem zostaje przejęty
 
 /**
@@ -3138,7 +3138,7 @@ function processAwaitingListings() {
 // 0.15.4 P5: polityka zaostrzania, gdy rynek krajowy jest zatłoczony. Luźne ok. 110 (111–115 w porządku) zostaje; powyżej:
 // nowe debiuty już stoją (sufit 110), pełne wydzielenia przechodzą w carve-out (SPINOFF_DOMESTIC_LIMIT = 110), córki są wchłaniane szybciej,
 // a powyżej 115 spółek krajowych państwo wymusza wycofanie najsłabszych z wykupem po kursie +10% (cel: nigdy > 125 dłużej niż 4 kw.).
-const LISTING_DELIST_AT = 115;
+const LISTING_DELIST_AT = 135; // 0.18.4 A4: 115 → 135 (cel: > 145 najwyżej 2 kw.)
 const LISTING_DELIST_MAX_PER_QUARTER = 2;
 const LISTING_DELIST_PREMIUM = 0.10;
 const LISTING_DELIST_RANGE = 10;       // 115…125: pełna presja wchłonięć córek
@@ -7421,7 +7421,12 @@ function reviewCompanyPlacements() {
 
         const currentExchangeKey = stock.exchange;
         const currentLevel = exchanges[currentExchangeKey].level;
-        const correctExchangeKey = getPriceTierKey(stock.price);
+        let correctExchangeKey = getPriceTierKey(stock.price);
+        if (typeof meetsRatingGate === 'function' && exchanges[correctExchangeKey] && exchanges[correctExchangeKey].level > (exchanges[currentExchangeKey]?.level ?? 0) && !meetsRatingGate(stock, correctExchangeKey)) { // 0.18.4 A2: awans na Złotą/Platynową wymaga oceny
+            stock.awaitingAudit = true;
+            const below = Object.keys(exchanges).filter(k => !exchanges[k].rankBased && exchanges[k].level < exchanges[correctExchangeKey].level && exchanges[k].level >= (exchanges[currentExchangeKey]?.level ?? 0) && meetsRatingGate(stock, k)).sort((a, b) => exchanges[b].level - exchanges[a].level)[0];
+            correctExchangeKey = below || currentExchangeKey; // zostaje na poprzednim poziomie do audytu
+        }
 
 
         if (!correctExchangeKey || correctExchangeKey === currentExchangeKey) return;
@@ -7610,6 +7615,8 @@ function finalizeStartup(startup) {
         showToast(`${successType}! ${startup.name} wchodzi na giełdę!`, toastType, 4000);
         logEvent(`[IPO] ${successType} dla ${startup.name}! Mnożnik wyceny: x${successMultiplier.toFixed(1)}`, 'review');
 
+        // 0.18.4 A3: w bessie słaba emisja jest wycofywana (startup czeka w kolejce i próbuje w kolejnym kwartale)
+        if (typeof shouldWithdrawIpo === 'function' && shouldWithdrawIpo(startup)) { parkStartupForListing(startup, successMultiplier); if (typeof ipoStats === 'object') ipoStats.withdrawn++; logEvent(`IPO ${startup.name} wycofane: bessa i słaby popyt na emisję. Spółka spróbuje w kolejnym kwartale.`, 'market'); return; }
         // Wywołanie funkcji pomocniczej, która zajmie się całym procesem IPO
         handleSuccessfulIPO(startup, successMultiplier);
     }
@@ -9728,14 +9735,15 @@ function handleSuccessfulIPO(startup, successMultiplier) {
     const raisedCapital = Math.max(totalClaims, totalShares * ipoPrice * 0.9);
     startup.balanceSheet = { assets: raisedCapital, liabilities: 0, shareCapital: raisedCapital * 0.8, retainedEarnings: raisedCapital * 0.2 };
     startup.cash = totalClaims * 0.5; // połowa wpłat zostaje w kasie, reszta poszła na rozwój (aktywa niematerialne)
+    if (!startup.operatorStartup && typeof applyIpoProcess === 'function') applyIpoProcess(startup, raisedCapital); // 0.18.4 A3: audyt, opiekun emisji, dyskonto, „pop”
     startup.quarterlyEarnings = 0;
     if (typeof initializeDescriptionParts === 'function') initializeDescriptionParts(startup);
     if (typeof initializeResearchForStock === 'function') initializeResearchForStock(startup);
     if (typeof initializeFundamentals === 'function') initializeFundamentals(startup, true);
     if (!startup.reputation) startup.reputation = { player: 0 };
 
-    const fundValue = (playerPortfolio[symbol]?.shares || 0) * ipoPrice;
-    logEvent(`🔔 IPO: ${startup.name} debiutuje${debutMarket !== 'GPW' ? ` na ${getMarketLabel(debutMarket)}` : ''} po ${formatZl(ipoPrice, 2)} (${totalShares.toLocaleString('pl-PL')} akcji).${fundClaim > 0 ? ` Fundusz: ${formatZl(fundClaim, 0)} → ${formatZl(fundValue, 0)}.` : ''}`, 'review');
+    const fundValue = (playerPortfolio[symbol]?.shares || 0) * startup.price; // 0.18.4 A3: cena po dyskoncie i „popie”
+    logEvent(`🔔 IPO: ${startup.name} debiutuje${debutMarket !== 'GPW' ? ` na ${getMarketLabel(debutMarket)}` : ''} po ${formatZl(startup.price, 2)}${startup.ipo ? ` (ocena ${startup.ipo.grade}, dyskonto ${Math.round(startup.ipo.discount * 100)}%)` : ''} (${totalShares.toLocaleString('pl-PL')} akcji).${fundClaim > 0 ? ` Fundusz: ${formatZl(fundClaim, 0)} → ${formatZl(fundValue, 0)}.` : ''}`, 'review');
     if (startup.operatorStartup && typeof activateMarketOperator === 'function') activateMarketOperator(startup); // nowy rynek (markets.js)
     if (fundClaim > 0) playerProfile?.cv.push({ type: 'milestone', text: `Startup ${startup.name}: debiut na giełdzie (${fundClaim.toFixed(0)} → ${formatZl(fundValue, 0)}).` });
 }
@@ -12068,7 +12076,7 @@ const SPINOFF_FAKE_RUMOR_CHANCE = SPINOFF_QUARTER_CHANCE * 0.4 / 0.6; // 60% plo
 const SPINOFF_ANNOUNCE_JUMP = [0.03, 0.08];
 const SPINOFF_CARVE_CHANCE = 0.25;
 const SPINOFF_CARVE_KEEP = [0.51, 0.80];
-const SPINOFF_DOMESTIC_LIMIT = 110;       // 0.15.4 P5: pełny spin-off tylko poniżej 110 spółek krajowych (było 115), powyżej tylko carve-out (córka)
+const SPINOFF_DOMESTIC_LIMIT = 130; // 0.18.4 A4 (było 110)      // 0.15.4 P5: pełny spin-off tylko poniżej 110 spółek krajowych (było 115), powyżej tylko carve-out (córka)
 const SPINOFF_LOG_LIMIT = 20;
 const SPINOFF_PLAYER_BLOCK_QUARTERS = 4;
 let spinoffLog = [];                       // { parent, child, quarter, carve, keep, valueBefore, gigBefore, ratio2q, gig2q }

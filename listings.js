@@ -569,3 +569,124 @@ function processListingsQuarterly() {
     processNhPathQuarterly();
     processNewHorizonsQuarterly();
 }
+
+
+// =================================================================================
+// 0.18.4 A2: AUDYT I OCENA AAA–D. Audytorzy (Wielka Trójka i małe firmy) to usługa B2B poza giełdą. Ocena ważna 4 kw., szum ±1 stopień
+// (Wielka Trójka myli się rzadziej), przekupstwo zawyża ocenę o 2 stopnie; ujawnienie = spadek kursu, kara, utrata licencji audytora, śledztwo.
+// Spółki ujawniają tylko oceny ≥ A (błąd selekcji: „brak oceny” często znaczy słaba). Ocena jest bramką awansu na Złotą (≥ BBB) i Platynową (≥ A).
+// =================================================================================
+const RATING_GRADES = ['D', 'C', 'CCC', 'B', 'BB', 'BBB', 'A', 'AA', 'AAA'];
+const RATING_RULES = { validQ: 4, randomPerQ: 2, publicFrom: 'A', bribeChance: 0.03, bribeBoost: 2, revealChance: 0.25, revealDrop: -0.15, fineShare: 0.02, licenseLossQ: 8 };
+const AUDITORS = [
+    { id: 'aud1', name: 'Biegły & Wspólnicy', big: true, noise: 0.10 }, { id: 'aud2', name: 'Bilans Global', big: true, noise: 0.10 }, { id: 'aud3', name: 'Audyt Centralny', big: true, noise: 0.12 },
+    { id: 'aud4', name: 'Saldo Plus', big: false, noise: 0.30 }, { id: 'aud5', name: 'Rachunek s.c.', big: false, noise: 0.35 }, { id: 'aud6', name: 'Księgi Rzetelne', big: false, noise: 0.30 }
+];
+const GATE_BY_TIER = { GOLD: 'BBB', PLATINUM: 'A' };
+let ratingState = { banned: {}, log: [], stats: { audits: 0, bribes: 0, reveals: 0 } };
+function resetRatings() { ratingState = { banned: {}, log: [], stats: { audits: 0, bribes: 0, reveals: 0 } }; }
+function ratingIndex(grade) { return RATING_GRADES.indexOf(grade); }
+/** Ocena „prawdziwa” z fundamentów: kondycja, marża, zadłużenie (spółka bez historii: z kondycji). */
+function getTrueRatingIndex(stock) {
+    const health = Number(stock.financialHealth) || 0, f = stock.fundamentals;
+    const h = f?.history?.[f.history.length - 1], margin = h && h.revenue > 0 ? h.ebitda / h.revenue : 0.15;
+    const debt = stock.balanceSheet?.assets > 0 ? (stock.balanceSheet.liabilities || 0) / stock.balanceSheet.assets : 0.3;
+    const score = 4 + health * 0.6 + (margin - 0.15) * 12 - (debt - 0.35) * 5;
+    return Math.max(0, Math.min(RATING_GRADES.length - 1, Math.round(score)));
+}
+function pickAuditor(stock) {
+    const q = typeof macro === 'object' ? macro.quarter : 0, list = AUDITORS.filter(a => !(ratingState.banned[a.id] > q));
+    const big = list.filter(a => a.big), wantBig = (stock.price * stock.totalShares) > 2_000_000 || Math.random() < 0.4;
+    const pool = wantBig && big.length ? big : list;
+    return pool[Math.floor(Math.random() * pool.length)] || AUDITORS[0];
+}
+/** Audyt spółki: nowa ocena na 4 kw. Zwraca ocenę. */
+function auditStock(stock) {
+    if (!stock || stock.assetType === 'REIT') return null;
+    const q = typeof macro === 'object' ? macro.quarter : 0, auditor = pickAuditor(stock);
+    let idx = getTrueRatingIndex(stock);
+    if (Math.random() < auditor.noise) idx += Math.random() < 0.5 ? -1 : 1;
+    const corruption = typeof oversight === 'object' ? Number(oversight?.corruption) || 0 : 0;
+    const bribed = !auditor.big && Math.random() < RATING_RULES.bribeChance * (1 + corruption / 50); // w kraju z dużą korupcją przekupstwo częstsze
+    if (bribed) { idx += RATING_RULES.bribeBoost; ratingState.stats.bribes++; }
+    idx = Math.max(0, Math.min(RATING_GRADES.length - 1, idx));
+    stock.rating = { grade: RATING_GRADES[idx], q, until: q + RATING_RULES.validQ, auditor: auditor.id, bribed: bribed || undefined };
+    ratingState.stats.audits++;
+    return stock.rating.grade;
+}
+function getValidRating(stock, q = (typeof macro === 'object' ? macro.quarter : 0)) { return stock?.rating && stock.rating.until > q ? stock.rating : null; }
+/** Ocena widoczna dla gracza: tylko ≥ A (spółki nie chwalą się słabszymi), inaczej null („brak oceny”). */
+function getPublicRating(stock) { const r = getValidRating(stock); return r && ratingIndex(r.grade) >= ratingIndex(RATING_RULES.publicFrom) ? r : null; }
+/** Bramka awansu: czy spółka może wejść na poziom `tier` (bez oceny albo za niska → zostaje). */
+function meetsRatingGate(stock, tier) {
+    const need = GATE_BY_TIER[tier];
+    if (!need) return true;
+    const r = getValidRating(stock);
+    return Boolean(r && ratingIndex(r.grade) >= ratingIndex(need));
+}
+/** Ujawnienie przekupstwa: spadek kursu, kara dla spółki, audytor traci licencję na 8 kw., wpis o śledztwie policji. */
+function revealBribedRating(stock) {
+    const q = typeof macro === 'object' ? macro.quarter : 0, aud = AUDITORS.find(a => a.id === stock.rating.auditor);
+    stock.rating.revealed = true; stock.rating.until = q; ratingState.banned[stock.rating.auditor] = q + RATING_RULES.licenseLossQ; ratingState.stats.reveals++;
+    if (typeof applyPriceEffect === 'function') applyPriceEffect(stock.symbol, RATING_RULES.revealDrop, 'negative', 'company');
+    const fine = Math.round(stock.price * stock.totalShares * RATING_RULES.fineShare);
+    if (typeof adjustCompanyCash === 'function') { adjustCompanyCash(stock, -fine); if (typeof adjustBalanceSheet === 'function') adjustBalanceSheet(stock, { assets: -fine, retainedEarnings: -fine }); if (typeof coverNegativeCash === 'function') coverNegativeCash(stock); }
+    if (typeof recordPayment === 'function') recordPayment(stock, 'external:skarb-panstwa', fine, 'Kara za przekupiony audyt');
+    const text = `Afera audytowa: ${aud?.name || 'audytor'} zawyżył ocenę ${stock.name} po łapówce. Spółka płaci karę, audytor traci licencję, sprawą zajmuje się policja.`;
+    if (typeof logEvent === 'function') logEvent(text, 'company');
+    if (typeof pushNews === 'function') pushNews(text, stock.symbol);
+    ratingState.log.push({ q, symbol: stock.symbol, auditor: stock.rating.auditor }); if (ratingState.log.length > 20) ratingState.log.shift();
+}
+/** Co kwartał: 2 losowe audyty, audyt spółek czekających na awans, możliwe ujawnienie przekupstwa. */
+function processRatingsQuarterly() {
+    const list = stocks.filter(s => !s.assetType && !s.isBankrupt);
+    for (const s of list.filter(s => s.awaitingAudit)) { auditStock(s); delete s.awaitingAudit; }
+    for (let i = 0; i < RATING_RULES.randomPerQ && list.length; i++) auditStock(list[Math.floor(Math.random() * list.length)]);
+    for (const s of list) if (s.rating?.bribed && !s.rating.revealed && getValidRating(s) && Math.random() < RATING_RULES.revealChance) revealBribedRating(s);
+}
+function getRatingSnapshot() { return ratingState; }
+function applyRatingSnapshot(snap) { resetRatings(); if (snap && typeof snap === 'object') ratingState = { banned: snap.banned || {}, log: Array.isArray(snap.log) ? snap.log.slice(-20) : [], stats: { audits: 0, bribes: 0, reveals: 0, ...(snap.stats || {}) } }; }
+
+// =================================================================================
+// 0.18.4 A3: NOWE IPO — audyt → opiekun emisji (bank inwestycyjny, prowizja 3–7%) → cena emisyjna z dyskontem 5–15% → „pop” w hossie;
+// w bessie słaba emisja jest wycofywana (spółka czeka kwartał). Wołane z handleSuccessfulIPO (companies.js).
+// =================================================================================
+const IPO_RULES = { feeRange: [0.03, 0.07], discountRange: [0.05, 0.15], popRange: [0.03, 0.12], withdrawChance: 0.5 };
+let ipoStats = { ipos: 0, withdrawn: 0, fees: 0 };
+function shouldWithdrawIpo(startup) {
+    const phase = typeof getMarketRegime === 'function' ? getMarketRegime('home')?.phase : null;
+    return ['bear', 'capitulation'].includes(phase) && (Number(startup.successChance) || 0.5) < 0.6 && Math.random() < IPO_RULES.withdrawChance;
+}
+function applyIpoProcess(startup, raised) {
+    const grade = auditStock(startup), gi = ratingIndex(grade);
+    const banks = typeof commercialBanks === 'object' ? commercialBanks.filter(b => b.isActive && !b.isParabank && b.type === BANK_TYPES.INVESTMENT) : [];
+    const bank = banks.length ? banks[Math.floor(Math.random() * banks.length)] : null;
+    const fee = Math.round(Math.max(0, raised) * (IPO_RULES.feeRange[0] + Math.random() * (IPO_RULES.feeRange[1] - IPO_RULES.feeRange[0])) * 0.25); // prowizja od części oferowanej (ok. ¼ akcji)
+    if (bank && fee > 0 && typeof adjustCompanyCash === 'function') { adjustCompanyCash(startup, -fee); if (typeof adjustBalanceSheet === 'function') adjustBalanceSheet(startup, { assets: -fee, retainedEarnings: -fee }); bank.cash = (Number(bank.cash) || 0) + fee; if (typeof recordPayment === 'function') recordPayment(startup, bank.id, fee, 'Prowizja opiekuna emisji (IPO)'); ipoStats.fees += fee; }
+    const phase = typeof getMarketRegime === 'function' ? getMarketRegime('home')?.phase : null;
+    const bear = ['bear', 'capitulation'].includes(phase), hot = ['euphoria', 'bull'].includes(phase);
+    const [dl, dh] = IPO_RULES.discountRange, discount = Math.min(dh, Math.max(dl, 0.10 - (gi - 5) * 0.015 + (bear ? 0.04 : 0)));
+    const pop = hot ? IPO_RULES.popRange[0] + Math.random() * (IPO_RULES.popRange[1] - IPO_RULES.popRange[0]) : 0;
+    startup.price = Math.max(0.01, startup.price * (1 - discount) * (1 + pop));
+    startup.ipo = { grade, underwriter: bank?.id || null, fee, discount: Math.round(discount * 1000) / 1000, pop: Math.round(pop * 1000) / 1000 };
+    ipoStats.ipos++;
+    return startup.ipo;
+}
+
+// =================================================================================
+// 0.18.4 A4 (Z13): HISTORIA LICZBY SPÓŁEK NA GIEŁDACH (łącznie, według poziomu) — co kwartał, do wykresu i eksportu CSV.
+// =================================================================================
+let listingHistory = [];
+function recordListingHistoryQuarterly() {
+    const q = typeof macro === 'object' ? macro.quarter : 0, by = {};
+    const list = stocks.filter(s => !s.assetType && !s.isBankrupt);
+    for (const s of list) by[s.exchange] = (by[s.exchange] || 0) + 1;
+    const foreign = typeof getHomeListedIssuers === 'function' ? getHomeListedIssuers().length : 0;
+    listingHistory.push({ q, total: list.length, foreign, by });
+    if (listingHistory.length > 120) listingHistory.shift();
+}
+function getListingHistoryCsv() {
+    const tiers = Object.keys(exchanges);
+    const head = ['kwartał', 'łącznie', 'obce_na_liście', ...tiers].join(';');
+    return [head, ...listingHistory.map(r => [r.q, r.total, r.foreign, ...tiers.map(t => r.by[t] || 0)].join(';'))].join('\n');
+}

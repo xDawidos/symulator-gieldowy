@@ -1801,7 +1801,9 @@ function startNewCareer(profile = {}) {
     if (typeof resetMarginState === 'function') resetMarginState(); // 0.16.4 G21: bez pozycji forex
     if (typeof initCommodityState === 'function') initCommodityState(); // 0.17 S1: surowce od cen średnich
     if (typeof resetForeignIssuers === 'function') resetForeignIssuers();
-    if (typeof resetChainState === 'function') resetChainState(); // 0.18.1 P2: bilans łańcuchów od nowa (kalibruje pierwszy kwartał)
+    if (typeof resetChainState === 'function') resetChainState();
+    if (typeof resetRatings === 'function') resetRatings(); // 0.18.4
+    if (typeof listingHistory === 'object') { listingHistory = []; ipoStats = { ipos: 0, withdrawn: 0, fees: 0 }; } // 0.18.1 P2: bilans łańcuchów od nowa (kalibruje pierwszy kwartał)
     if (typeof resetForeignBots === 'function') resetForeignBots(); // 0.16.2 G8: nowa gra bez botów zagranicznych
     for (const symbol of Object.keys(playerPortfolio)) delete playerPortfolio[symbol];
     playerWallet = createPlayerWallet(GRANDMA_POCKET_MONEY);

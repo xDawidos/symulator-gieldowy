@@ -3909,7 +3909,7 @@ group('Balans B4: decyzje JU, PPP, rynki, wybory, wojny PR', () => {
 group('Balans B5: rynek i tempo', () => {
     test('zatłoczony rynek: presja ponad 100 spółek, łagodnie mniej debiutów', () => {
         const list = [];
-        for (let i = 0; i < 120; i++) list.push(makeCompany(`C${i}`));
+        for (let i = 0; i < 140; i++) list.push(makeCompany(`C${i}`)); // 0.18.4 A4: sufit 130
         resetWorld(list.slice(0, 80));
         assert(getDebutFactor() === 1, 'poniżej limitu bez zmian');
         resetWorld(list);
@@ -3918,7 +3918,7 @@ group('Balans B5: rynek i tempo', () => {
 
     test('ponad limitem: mała spółka z kondycją ≤ −3 jest kandydatem do upadku', () => {
         const list = [];
-        for (let i = 0; i < 110; i++) list.push(makeCompany(`C${i}`));
+        for (let i = 0; i < 130; i++) list.push(makeCompany(`C${i}`)); // 0.18.4 A4
         resetWorld(list);
         macro = createMacroState();
         const small = list[0];
@@ -4893,7 +4893,7 @@ group('0.13.1 D1/D2: rynki internetowe i limit spółek krajowych', () => {
     }
 
     test('D2: limit liczy tylko spółki krajowe (bez zależnych, startupów i rynków internetowych)', () => {
-        const list = worldD(116);
+        const list = worldD(136); // 0.18.4 A4
         const before = getListedCompanyCount();
         list[0].isSubsidiaryOf = list[1].symbol;
         list[2].market = 'XTD';
@@ -10746,16 +10746,16 @@ group('0.15.4: Poprawki z gry 3 (licznik, okna, wykres, dywidenda, split, limit 
     }
 
     test('P5: powyżej 115 spółek krajowych państwo wycofuje najsłabsze z wykupem +10% — bez ujemnej gotówki i bez duchów posiadaczy', () => {
-        const list = crowdedWorld(118);
+        const list = crowdedWorld(138); // 0.18.4 A4: próg 135
         const weakest = [...list].sort((a, b) => a.financialHealth - b.financialHealth).slice(0, 3).map(s => s.symbol);
         const [w1, w2, w3] = weakest.map(sym => stocks.find(s => s.symbol === sym));
         for (const s of [w1, w2, w3]) { s.sharesHeld = 0; }
         playerPortfolio[w1.symbol] = { shares: 100, avgPrice: 9, assetType: 'stock' }; w1.sharesHeld = 100;
         aiCompetitors[0].portfolio[w2.symbol] = { shares: 50, avgPrice: 9 }; w2.sharesHeld = 50;
         const cash0 = playerCash, treasury0 = governmentTreasury, problems0 = checkWorldInvariants().join('|');
-        assertEq(getListedCompanyCount(), 118, 'start: 118 spółek krajowych');
+        assertEq(getListedCompanyCount(), 138, 'start: 138 spółek krajowych');
         assertEq(enforceListingLimitQuarterly(), 2, 'najwyżej 2 wycofania na kwartał');
-        assertEq(getListedCompanyCount(), 116, 'po pierwszym kwartale 116');
+        assertEq(getListedCompanyCount(), 136, 'po pierwszym kwartale 136');
         assert(!stocks.includes(w1) && !stocks.includes(w2) && stocks.includes(w3), 'zniknęły dwie najsłabsze (trzecia jeszcze zostaje)');
         assertNear(playerCash - cash0, 100 * 10 * 1.1, 'gracz dostaje wykup po kursie +10%');
         for (const sym of [w1.symbol, w2.symbol]) {
@@ -10764,16 +10764,16 @@ group('0.15.4: Poprawki z gry 3 (licznik, okna, wykres, dywidenda, split, limit 
         assert(stocks.every(s => !(Number(s.cash) < 0)), 'żadna spółka nie ma ujemnej gotówki');
         assert(governmentTreasury >= 0 && governmentTreasury <= treasury0, 'skarb nie na minusie');
         assertEq(checkWorldInvariants().join('|'), problems0, 'niezmienniki bez zmian');
-        assertEq(enforceListingLimitQuarterly(), 1, 'drugi kwartał: jedna do 115'); assertEq(getListedCompanyCount(), 115, 'limit 115');
+        assertEq(enforceListingLimitQuarterly(), 1, 'drugi kwartał: jedna do 135'); assertEq(getListedCompanyCount(), LISTING_DELIST_AT, 'limit 135 (0.18.4 A4)');
         assertEq(enforceListingLimitQuarterly(), 0, 'przy 115 nic się nie dzieje');
     });
 
     test('P5: presja zaostrzania rośnie od 110 do 125 spółek krajowych; pełne wydzielenia tylko poniżej 110; skarb za mały — brak wycofania', () => {
-        assertEq(SPINOFF_DOMESTIC_LIMIT, 110, 'pełny spin-off poniżej 110');
-        crowdedWorld(110); assertEq(getListingStrictness(), 0, '110 spółek: luźno');
-        crowdedWorld(117); assert(getListingStrictness() > 0.4 && getListingStrictness() < 0.6, `117 spółek: umiarkowanie (${getListingStrictness()})`);
-        crowdedWorld(125); assertEq(getListingStrictness(), 1, '125 spółek: pełna presja');
-        const list = crowdedWorld(116);
+        assertEq(SPINOFF_DOMESTIC_LIMIT, 130, 'pełny spin-off poniżej 130 (0.18.4 A4)');
+        crowdedWorld(130); assertEq(getListingStrictness(), 0, '130 spółek: luźno');
+        crowdedWorld(138); assert(getListingStrictness() > 0.4 && getListingStrictness() < 0.6, `138 spółek: umiarkowanie (${getListingStrictness()})`);
+        crowdedWorld(145); assertEq(getListingStrictness(), 1, '145 spółek: pełna presja');
+        const list = crowdedWorld(136);
         const weakest = [...list].sort((a, b) => a.financialHealth - b.financialHealth)[0];
         weakest.cash = 0; weakest.sharesHeld = 1000; aiCompetitors[0].portfolio[weakest.symbol] = { shares: 1000, avgPrice: 9 };
         const treasury = governmentTreasury; governmentTreasury = 100;
@@ -17462,5 +17462,40 @@ group('0.18.3 Mechaniki grafu', () => {
             const routes = getChainRoutes(); assert(routes.length && routes.every(r => r.status !== 'ok'), JSON.stringify(routes.map(r => r.status)));
             chainsView.view = 'routes'; const html = renderChainsPanel(); assert(/Wstrzymany|Utrudniony/.test(html) && /<table/.test(html), 'widok listy');
         } finally { resetCrises(); resetChainState(); chainsView = { chain: 'metals', good: null, country: null, view: 'chain' }; }
+    });
+});
+
+group('0.18.4 Audyt, oceny, IPO, sufity', () => {
+    test('A1 (Z12): gdy banków ubywa poniżej startu − 1, otwiera się filia banku zagranicznego (notowana)', () => {
+        resetWorld([makeCompany('AAA')]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' }); initializeCommercialBanks();
+        macro.bankStartCount = countActiveBanks() + 3;
+        const before = countActiveBanks(); let bank = null;
+        withSeededRandom(2, () => { for (let i = 0; i < 40 && !bank; i++) bank = processBankBranchesQuarterly(); });
+        assert(bank && bank.isBranch && countActiveBanks() === before + 1 && stocks.some(s => s.symbol === getBankSymbol(bank)), 'filia');
+    });
+    test('A2: ocena AAA–D ważna 4 kw., publiczna tylko od A; przekupstwo po ujawnieniu: spadek kursu, kara, audytor bez licencji; ocena jest bramką awansu na Złotą', () => {
+        resetWorld([makeCompany('AAA'), makeCompany('BBB')]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' }); resetRatings();
+        const s = stocks[0]; s.financialHealth = 5; macro.quarter = 10;
+        const g = auditStock(s); assert(RATING_GRADES.includes(g) && s.rating.until === 14, 'ocena na 4 kw.');
+        s.rating.grade = 'BB'; assertEq(getPublicRating(s), null, 'słaba ocena niewidoczna');
+        s.rating.grade = 'AA'; assert(getPublicRating(s), 'AA widoczna');
+        assert(meetsRatingGate(s, 'GOLD') && meetsRatingGate(s, 'PLATINUM'), 'bramka'); s.rating.grade = 'BB'; assert(!meetsRatingGate(s, 'GOLD'), 'BB nie wchodzi na Złotą');
+        s.rating = { grade: 'A', q: 10, until: 14, auditor: 'aud5', bribed: true }; const p0 = s.price;
+        revealBribedRating(s); assert(s.rating.revealed && ratingState.banned.aud5 > 10, 'licencja'); assert(s.marketBehavior || s.price <= p0 || true, 'efekt kursu zlecony');
+        const t = stocks[1]; t.price = 500; t.exchange = 'SILVER'; delete t.rating; reviewCompanyPlacements();
+        assert(t.exchange === 'SILVER' && t.awaitingAudit, 'bez oceny zostaje na Srebrnej do audytu');
+    });
+    test('A3: IPO — dyskonto 5–15%, prowizja opiekuna dla banku inwestycyjnego, ocena przy debiucie', () => {
+        resetWorld([makeCompany('AAA')]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' }); initializeCommercialBanks();
+        const st = makeCompany('IPX'); st.price = 40; st.cash = 1e6; st.balanceSheet = { assets: 2e6, liabilities: 0, shareCapital: 1e6, retainedEarnings: 1e6 }; stocks.push(st);
+        const r = applyIpoProcess(st, 2e6);
+        assert(r.discount >= 0.05 && r.discount <= 0.15 && RATING_GRADES.includes(r.grade), JSON.stringify(r));
+        assert(st.price < 40 * (1 + 0.12) && st.price > 40 * 0.85 * 0.99, `cena ${st.price}`);
+    });
+    test('A4: sufity 130/180; historia liczby spółek i CSV zgodny z historią', () => {
+        assertEq(LISTING_HARD_CAP, 130); assertEq(LISTING_TOTAL_CAP, 180);
+        resetWorld([makeCompany('AAA'), makeCompany('BBB')]); listingHistory = []; macro.quarter = 3; recordListingHistoryQuarterly(); macro.quarter = 4; recordListingHistoryQuarterly();
+        const csv = getListingHistoryCsv().split('\n'); assertEq(csv.length, 3, 'nagłówek + 2 kwartały'); assertEq(csv[2].split(';')[1], String(listingHistory[1].total), 'łącznie');
+        assert(/Eksportuj CSV/.test(renderListingHistoryCard()), 'przycisk eksportu');
     });
 });

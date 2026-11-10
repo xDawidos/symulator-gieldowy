@@ -2295,3 +2295,33 @@ function toggleMarketStocksList(marketId) {
     selectedMarketPreview = selectedMarketPreview === marketId ? null : marketId;
     if (typeof updateStateModalContent === 'function') updateStateModalContent();
 }
+
+
+// =================================================================================
+// 0.18.4 A1 (Z12): FILIE BANKÓW ZAGRANICZNYCH — gdy liczba aktywnych banków spadnie poniżej startowej − 1, bank z kraju w grze otwiera filię
+// (zwykły bank komercyjny, notowany na Srebrnej, poza sufitem spółek). Liczba startowa zapisuje się w `macro.bankStartCount`.
+// =================================================================================
+const BANK_BRANCH_RULES = { chance: 0.25, capital: [4_000_000, 8_000_000], maxBranches: 6 };
+function countActiveBanks() { return commercialBanks.filter(b => b.isActive && !b.isParabank).length; }
+function processBankBranchesQuarterly() {
+    if (typeof macro !== 'object' || !macro) return null;
+    if (!(macro.bankStartCount > 0)) { macro.bankStartCount = countActiveBanks(); return null; }
+    const branches = commercialBanks.filter(b => b.isBranch).length;
+    if (countActiveBanks() >= macro.bankStartCount - 1 || branches >= BANK_BRANCH_RULES.maxBranches || Math.random() >= BANK_BRANCH_RULES.chance) return null;
+    const home = typeof getStartCountry === 'function' ? getStartCountry() : 'PL';
+    const pool = (typeof getJoinedCountries === 'function' ? getJoinedCountries() : []).filter(c => c !== home && COUNTRY_DEFS[c]);
+    const country = pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
+    const parent = country ? COUNTRY_DEFS[country].companies.find(c => [].concat(c.sector)[0] === 'Bankowość' && !commercialBanks.some(b => b.parentId === c.id)) : null;
+    const n = branches + 1;
+    const def = { id: `branch${n}`, symbol: typeof uniqueSymbol === 'function' ? uniqueSymbol(`FB${n}`) : `FB${n}`, name: parent ? `${parent.name} Polska` : `Bank Zagraniczny ${n} Polska`, type: BANK_TYPES.UNIVERSAL,
+        initialCapital: Math.round(getRandomInRange(...BANK_BRANCH_RULES.capital)), reserveRatio: 0.12, baseInterestRateMargin: 0.019, isBranch: true, parentId: parent?.id || null, parentCountry: country };
+    const bank = createBankFromDef(def, true);
+    commercialBanks.push(bank);
+    const stock = createBankStockObject(bank, 'SILVER');
+    if (stock && !stocks.some(s => s.symbol === stock.symbol)) stocks.push(stock);
+    if (typeof updateInterestRates === 'function') updateInterestRates();
+    const text = `Nowy bank na rynku: ${def.name} (filia${country ? ` banku z kraju: ${COUNTRY_DEFS[country].name}` : ' banku zagranicznego'}) zaczyna działać i wchodzi na giełdę.`;
+    logEvent(text, 'market');
+    if (typeof pushNews === 'function') pushNews(text, null);
+    return bank;
+}

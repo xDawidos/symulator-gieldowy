@@ -234,6 +234,7 @@ function buildSaveSnapshot({ compact = 0 } = {}) {
         currencies: typeof getCurrencySnapshot === 'function' ? getCurrencySnapshot() : undefined, // 0.16.1 G2: kursy, gotówka w walutach (v16)
         forex: typeof getForexSnapshot === 'function' ? getForexSnapshot() : undefined, // 0.16.4 G21: pozycje z depozytem (pole opcjonalne v16)
         commodities: typeof getCommoditiesSnapshot === 'function' ? getCommoditiesSnapshot() : undefined, // 0.17 S1: ceny surowców (pole opcjonalne)
+        ratings: typeof getRatingSnapshot === 'function' ? getRatingSnapshot() : undefined, listingHistory: typeof listingHistory === 'object' ? listingHistory : undefined, ipoStats: typeof ipoStats === 'object' ? ipoStats : undefined, // 0.18.4 A2–A4 (pola opcjonalne)
         chains: typeof getChainsSnapshot === 'function' ? getChainsSnapshot() : undefined, // 0.18.1 P2: bilans łańcuchów (pole opcjonalne; stary zapis: stan buduje pierwszy kwartał)
         antitrustOffice, antitrustLog, // 0.15.6 E5: poziom urzędu antymonopolowego i interwencje (pola opcjonalne)
         subcontractLog, subcontractorDeals, subcontractorAcquisitionCount, // 0.15.5 B2–B3: okno zleceń podwykonawców, przejęcia pionowe (pola opcjonalne)
@@ -642,6 +643,9 @@ function applySaveSnapshot(snapshot) {
     if (typeof applyForexSnapshot === 'function') applyForexSnapshot(snapshot.forex); // 0.16.4 G21
     if (typeof applyCommoditiesSnapshot === 'function') applyCommoditiesSnapshot(snapshot.commodities); // 0.17 S1: stary zapis → ceny średnie
     if (typeof applyChainsSnapshot === 'function') applyChainsSnapshot(snapshot.chains); // 0.18.1 P2
+    if (typeof applyRatingSnapshot === 'function') applyRatingSnapshot(snapshot.ratings); // 0.18.4
+    if (typeof listingHistory === 'object') listingHistory = Array.isArray(snapshot.listingHistory) ? snapshot.listingHistory.slice(-120) : [];
+    if (typeof ipoStats === 'object') ipoStats = { ipos: 0, withdrawn: 0, fees: 0, ...(snapshot.ipoStats || {}) };
     if (typeof commodityMetalsMigration === 'object' && commodityMetalsMigration && typeof splitMetalsContracts === 'function') { // 0.18.1 P1: pozycje gracza na MET-* → IRON + COP po połowie
         const before = marginPositions.length;
         const seen = new Set();
@@ -1489,6 +1493,7 @@ function runQuarterlyTick() {
         processSpecialProjectsQuarterly(); // konsorcja i projekty specjalne (projects.js)
         if (typeof processSubcontractorsQuarterly === 'function') processSubcontractorsQuarterly(); // 0.15.5 B2–B3: podwykonawcy (subcontractors.js)
         if (typeof processReitsQuarterly === 'function') processReitsQuarterly(); // 0.15.5 B5: dźwignia REIT-ów, rezerwa gotówki, zlecenia budowy (reits.js)
+        if (typeof processBankBranchesQuarterly === 'function') processBankBranchesQuarterly(); // 0.18.4 A1 (Z12): filie banków, gdy banków ubywa
         if (typeof processBankRiskQuarterly === 'function') processBankRiskQuarterly(); // 0.15.5 B4: ekspozycje banków, odpisy w kryzysie bankowym (finance.js)
         if (typeof processSplitsQuarterly === 'function') processSplitsQuarterly(); // 0.15.4 P4: split i konsolidacja akcji (splits.js)
         reconcileSharesHeld(); // audyt A1: akcje w obrocie = suma posiadaczy
@@ -1508,12 +1513,14 @@ function runQuarterlyTick() {
         if (typeof processIndexLaunchQuarterly === 'function') processIndexLaunchQuarterly(); // 0.16.1: Bank Centralny uruchamia SIG40 i BSIG80
         if (typeof processGiantEventQuarterly === 'function') processGiantEventQuarterly(); // 0.16.1 G3: „Gigant wkracza na scenę” (countries.js)
         if (typeof processCountriesQuarterly === 'function') processCountriesQuarterly(); // 0.16.2 G5: rynki zagraniczne, bilety, boty (countries.js)
+        if (typeof processRatingsQuarterly === 'function') processRatingsQuarterly(); // 0.18.4 A2: audyty i oceny
         if (typeof processListingsQuarterly === 'function') processListingsQuarterly(); // 0.15.6: wymogi utrzymania, rynki NH i prywatny (listings.js)
         if (typeof enforceListingLimitQuarterly === 'function') enforceListingLimitQuarterly(); // 0.15.4 P5: powyżej 115 spółek krajowych wymuszone wycofanie najsłabszych
         processAwaitingListings(); // P1: startupy czekające na wolne miejsce na giełdzie
         processWorkforceQuarter(); // 0.13: zatrudnienie, zadowolenie, związki i strajki przed raportami (workforce.js)
         processFinancialReports(); // zawiera koszty R&D, wynik kontraktów, pozycje okresu i dywidendy
         if (typeof processCommoditiesQuarterly === 'function') processCommoditiesQuarterly(); // 0.17 S1: średnia kwartalna surowców (po raportach spółek), zdarzenia
+        if (typeof recordListingHistoryQuarterly === 'function') recordListingHistoryQuarterly(); // 0.18.4 A4 (Z13): liczba spółek na giełdach
         if (typeof processChainsQuarterly === 'function') processChainsQuarterly(); // 0.18.1 P2: bilans łańcuchów (po raportach krajowych i obcych)
         updateInfluence();
         updateCeoTenureAndAge(); // Zmieniona nazwa, ale to samo

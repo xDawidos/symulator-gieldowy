@@ -4361,6 +4361,7 @@ function renderCompanyCard() {
         tile('C/WK', f?.pbRatio ? formatNumberPl(f.pbRatio, 2) : '—', 'Cena / wartość księgowa na akcję. Poniżej 1 = rynek wycenia spółkę niżej niż jej majątek netto.', '', vs(f?.pbRatio, med?.pb, { format: v => formatNumberPl(v, 2) })),
         tile('Stopa dywidendy', `${formatNumberPl(dividendYield * 100, 2)}%`, 'Dywidendy z ostatniego roku / kurs.', '', dividendYield > 0 ? vs(dividendYield, med?.dy, { lowerIsCheap: false, format: pctFmt, labels: ['wyższa', 'niższa'] }) : ''),
         tile('Zadłużenie', debtRatio === null ? '—' : `${formatNumberPl(debtRatio * 100, 0)}%`, 'Zobowiązania / aktywa. Powyżej ~70% spółka jest mocno zadłużona.', debtRatio > 0.7 ? 'text-down' : '', vs(debtRatio, med?.debt, { format: pctFmt, labels: ['niższe', 'wyższe'] })),
+        typeof getPublicRating === 'function' && !foreign ? (r => tile('Ocena', r ? `${uiIcon('audyt', 14)} ${r.grade}` : 'brak oceny', r ? `Ocena kredytowa od audytora, ważna do kw. ${r.until}. Spółki ujawniają tylko oceny od A w górę.` : 'Spółka nie ujawnia oceny. Brak oceny często znaczy, że ocena jest niska (spółki pokazują tylko A i wyżej).', '', r?.revealed ? '<em class="text-down">przekupiony audyt</em>' : ''))(getPublicRating(stock)) : '', // 0.18.4 A2
         tile('Kondycja', `${formatNumberPl(health, 1)} · ${healthLabel}`, 'Kondycja finansowa od −5 (bankructwo) do +5.', health >= 1 ? 'text-up' : health <= -2 ? 'text-down' : ''),
         sectorPremiumTile(),
         typeof isCrisisActive === 'function' && isCrisisActive() ? tile('Wystawienie na kryzys', (label => `${uiIcon({ wysoki: 'alert', 'średni': 'info', niski: 'ok' }[label], 14)} ${label}`)(getCrisisExposureLabel(stock)), `Udział segmentów spółki w sektorach tracących w linii „${CRISIS_LINES[crisisLine.id].name}”.`, getCrisisExposure(stock) >= 0.6 ? 'text-down' : '') : ''
@@ -8451,7 +8452,7 @@ function updateStateModalContent() {
     } else if (stateTab === 'country') {
         body.innerHTML = renderCountryPanel();
     } else if (stateTab === 'markets') {
-        body.innerHTML = renderMarketsPanel();
+        body.innerHTML = renderMarketsPanel() + (typeof renderListingHistoryCard === 'function' ? renderListingHistoryCard() : ''); // 0.18.4 A4 (Z13)
     } else if (stateTab === 'oversight') {
         body.innerHTML = renderOversightPanel();
     } else if (stateTab === 'taxes') {
@@ -9564,3 +9565,27 @@ function showCrisisBanner(line, stage) {
     return el;
 }
 function closeCrisisBanner() { const el = document.getElementById('crisis-banner'); if (el) el.hidden = true; }
+
+
+// =================================================================================
+// 0.18.4 A4 (Z13): wykres liczby spółek na giełdach (łącznie, według poziomu) z eksportem CSV — Państwo → Rynki
+// =================================================================================
+function renderListingHistoryCard() {
+    const h = typeof listingHistory === 'object' ? listingHistory : [];
+    if (h.length < 2) return `<article class="bank-card mt-3"><h4>Liczba spółek na giełdach</h4><p class="text-muted text-sm">Wykres pojawi się po dwóch kwartałach gry.</p></article>`;
+    const W = 560, H = 160, pad = 28, max = Math.max(...h.map(r => r.total)) * 1.1, x = i => pad + i * (W - 2 * pad) / (h.length - 1), y = v => H - pad - v / max * (H - 2 * pad);
+    const line = key => h.map((r, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)} ${y(key(r)).toFixed(1)}`).join(' ');
+    const top = ['PLATINUM', 'GOLD', 'SILVER'];
+    const series = [['łącznie', r => r.total, 'var(--color-text-primary)', ''], ...top.map((t, k) => [stripEmoji(exchanges[t].name), r => r.by[t] || 0, `var(--exchange-${EXCHANGE_TOKEN?.[t] || 'gold'})`, k === 0 ? '6 3' : k === 1 ? '2 3' : '1 0'])];
+    const last = h[h.length - 1];
+    return `<article class="bank-card mt-3"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('wykres', 20)}</span><div><h4>Liczba spółek na giełdach</h4><span class="bank-card-type">kw. ${h[0].q}–${last.q}: teraz ${last.total} (Platynowa ${last.by.PLATINUM || 0}, Złota ${last.by.GOLD || 0})</span></div></header>
+        <svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Liczba spółek na giełdach w czasie: teraz ${last.total}">${series.map(([, f, c, dash]) => `<path d="${line(f)}" fill="none" stroke="${c}" stroke-width="2"${dash ? ` stroke-dasharray="${dash}"` : ''}/>`).join('')}
+        <text x="4" y="${pad}" font-size="11" fill="currentColor">${Math.round(max)}</text><text x="4" y="${H - pad}" font-size="11" fill="currentColor">0</text></svg>
+        <ul class="ch-legend">${series.map(([name, , c, dash]) => `<li><span class="ln" style="border-top: 2px ${dash ? 'dashed' : 'solid'} ${c}"></span> ${escapeHtml(name)}</li>`).join('')}</ul>
+        <button type="button" class="btn-secondary" onclick="downloadListingHistoryCsv()">${uiIcon('zapisz', 14)} Eksportuj CSV</button></article>`;
+}
+function downloadListingHistoryCsv() {
+    const blob = new Blob(['\uFEFF' + getListingHistoryCsv()], { type: 'text/csv;charset=utf-8' }), a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = `liczba_spolek_kw${macro.quarter}.csv`; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
