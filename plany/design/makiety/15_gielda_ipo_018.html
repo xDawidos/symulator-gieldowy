@@ -1,0 +1,159 @@
+<!doctype html><html lang="pl"><head><meta charset="utf-8"><title>Makieta UI 0.18 — Giełda towarowa i debiuty</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../../../tokens.css"><link rel="stylesheet" href="../../../style.css"><link rel="stylesheet" href="018.css">
+<style>
+/* Tylko rama makiety, do gry nie idzie */
+html, body { overflow: auto !important; height: auto !important; }
+body { display: block !important; padding: 24px !important; }
+.demo { max-width: 1180px; margin: 0 auto 32px; padding: 24px; background: var(--color-bg-base); border: 1px solid var(--color-border-subtle); border-radius: 6px; }
+.demo-title { margin: 0 0 4px; font-size: 20px; }
+.demo-sub { margin: 0 0 16px; color: var(--color-text-muted); font-size: 13px; max-width: 75ch; }
+.demo-h { margin: 20px 0 8px; font-size: 13px; color: var(--color-text-muted); font-weight: 600; }
+.sheet { display: flex; flex-wrap: wrap; gap: 12px 20px; }
+@media (max-width: 640px) { body { padding: 8px !important; } .demo { padding: 12px; } }
+</style></head><body class="dark-mode">
+<svg style="display:none" id="ic-defs"></svg><svg style="display:none" id="ic-defs-018"></svg>
+
+<section class="demo"><h2 class="demo-title">1. Kantor → Giełda towarowa: nowe kontrakty</h2>
+<p class="demo-sub">Ta sama tabela co w 0.17. „Metale” znikają, w ich miejsce wchodzą Ruda żelaza i Miedź. Dochodzi Kawa jako 8. kontrakt, bez producenta i odbiorcy w grze. Kontrakt, którego dobro jest w bilansie, ma przy cenie strzałkę wpływu bilansu (cel ceny × b<sup>−0,3</sup>, najwyżej ±15%).</p>
+<p class="notice-inline"><i data-ic="info" data-s="14"></i><span>Od 0.18.2 kontrakt „Metale” dzieli się na Rudę żelaza i Miedź. Twoje pozycje na metale zostały zamknięte po cenie z dnia zmiany: <b>+1 240 PLN</b> trafiło na konto prywatne.</span></p>
+<div style="overflow-x:auto" class="mt-3"><table class="asset-mini-table w-full"><thead><tr><th>Surowiec</th><th class="text-right">Cena</th><th class="text-right">Zmiana</th><th>Krzywa</th><th>Bilans w grze</th><th class="text-right">Dźwignia</th></tr></thead><tbody>
+<tr><td><span class="cm-name"><i data-ic="surowiec-gold"></i> Złoto <span class="text-muted">(uncja)</span></span></td><td class="text-right">2 012,40 USD</td><td class="text-right">▲ +1,2%</td><td><span class="badge badge--neutral">↗ contango</span></td><td class="text-sm">■ obojętny</td><td class="text-right">1:10</td></tr>
+<tr class="row-selected"><td><span class="cm-name"><i data-ic="surowiec-iron"></i> Ruda żelaza <span class="text-muted">(tona)</span> <span class="badge badge--accent">nowy</span></span></td><td class="text-right">118,60 USD</td><td class="text-right">▲ +9,8%</td><td><span class="badge badge--info">↘ backwardation</span></td><td class="text-sm text-warn" title="Bilans rudy 0,78 podnosi cel ceny kontraktu">▲ niedobór, +8% do celu</td><td class="text-right">1:5</td></tr>
+<tr><td><span class="cm-name"><i data-ic="surowiec-copper"></i> Miedź <span class="text-muted">(tona)</span> <span class="badge badge--accent">nowy</span></span></td><td class="text-right">8 940 USD</td><td class="text-right">▼ −0,6%</td><td><span class="badge badge--neutral">↗ contango</span></td><td class="text-sm">■ równowaga</td><td class="text-right">1:5</td></tr>
+<tr><td><span class="cm-name"><i data-ic="surowiec-oil"></i> Ropa <span class="text-muted">(baryłka)</span></span></td><td class="text-right">82,10 USD</td><td class="text-right">▲ +2,1%</td><td><span class="badge badge--neutral">↗ contango</span></td><td class="text-sm">■ równowaga</td><td class="text-right">1:5</td></tr>
+<tr><td><span class="cm-name"><i data-ic="surowiec-grain"></i> Zboże <span class="text-muted">(buszel)</span></span></td><td class="text-right">6,12 USD</td><td class="text-right">▼ −3,0%</td><td><span class="badge badge--neutral">↗ contango</span></td><td class="text-sm text-up">▼ nadwyżka, −3% do celu</td><td class="text-right">1:3</td></tr>
+<tr><td><span class="cm-name"><i data-ic="surowiec-coffee"></i> Kawa <span class="text-muted">(funt)</span> <span class="badge badge--accent">nowy</span></span></td><td class="text-right">1,94 USD</td><td class="text-right">▲ +4,4%</td><td><span class="badge badge--info">↘ backwardation</span></td><td class="text-sm text-muted">tylko kontrakt</td><td class="text-right">1:3</td></tr>
+</tbody></table></div>
+<p class="text-xs text-muted">Pozostałe wiersze (gaz, węgiel, uran) bez zmian. Przy 390 px tabela przewija się w poziomie jak w 0.17.</p>
+<div class="bank-grid mt-3">
+  <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon"><i data-ic="surowiec-metals" data-s="20"></i></span><div><h4>ETF koszykowy</h4><span class="bank-card-type">8 surowców, bez dźwigni</span></div></header><p class="text-sm">Koszyk: złoto, ruda żelaza, miedź, ropa, gaz, węgiel, zboże, uran. Kawa jest poza koszykiem.</p></article>
+</div>
+</section>
+
+<section class="demo"><h2 class="demo-title">2. Startupy → Debiuty</h2>
+<p class="demo-sub">Nowa sekcja pod tabelą startupów. Pokazuje debiuty startupów i spółek prywatnych w tym kwartale. Drabinka startupu wydłuża się o Audyt i Subskrypcję. Zapisy trwają kwartał i dzień debiutu przypada na jego koniec. Kwoty idą z konta prywatnego gracza.</p>
+<h3 class="demo-h">Drabinka startupu (<code>.sc-steps</code>, nowe kroki)</h3>
+<ol class="sc-steps"><li class="done"><i data-ic="ok" data-s="12"></i> Zbiórka</li><li class="done"><i data-ic="ok" data-s="12"></i> Rozwój</li><li class="done"><i data-ic="ok" data-s="12"></i> Audyt</li><li class="cur" aria-current="step">Subskrypcja</li><li>Rynek</li></ol>
+
+<h3 class="bank-section-title mt-3">Debiuty w tym kwartale</h3>
+<div class="ipo-list">
+  <article class="ipo-card is-open" aria-label="Debiut NeuroLab, zapisy otwarte">
+    <div>
+      <div class="ipo-head"><i data-ic="debiut" data-s="18"></i><h4>NeuroLab <span class="sc-sym">NRL</span></h4><span class="badge badge--accent">zapisy otwarte</span></div>
+      <p class="text-muted">AI naukowe, startup z inkubatora</p>
+      <dl class="ipo-facts">
+        <dt>Rynek</dt><dd>NewHorizon, start na Giełdzie Srebrnej</dd>
+        <dt>Ocena</dt><dd><span class="cr-badge is-inv"><b>A</b> inwestycyjna</span> <span class="text-muted">audyt: Kowalczyk &amp; Wspólnicy</span></dd>
+        <dt>Opiekun</dt><dd>Bank Inwestycyjny Wisła, reputacja <b>4/5</b>, prowizja 4%</dd>
+      </dl>
+    </div>
+    <div class="ipo-demand">
+      <dl class="ipo-facts">
+        <dt>Cena emisyjna</dt><dd><b class="ch-num">42,00 PLN</b> <span class="text-muted">wycena 47,20, dyskonto 11%</span></dd>
+        <dt>W ofercie</dt><dd>2 400 akcji, 100 800 PLN</dd>
+      </dl>
+      <p class="mt-3">Zapisy: <strong>2,4×</strong> oferty</p>
+      <span class="limit-meter" role="img" aria-label="Zapisy 2,4 razy więcej niż oferta, kreska na 100% oferty" style="--v:100;--limit:42"><i></i><b></b></span>
+      <small class="text-muted">Nadsubskrypcja: każdy dostanie ok. 42% zapisu. Kreska: pełna oferta.</small>
+    </div>
+    <form class="ipo-form" onsubmit="return false">
+      <label>Kwota zapisu (PLN)<input type="number" value="12000" min="42" step="42"></label>
+      <p class="text-sm">285 akcji. Przy redukcji 42%: ok. <b>120 akcji, 5 040 PLN</b>. Reszta wraca po debiucie.</p>
+      <div class="btn-row"><button class="btn-primary">Zapisz się</button></div>
+      <small class="text-muted">Zapisy do końca kwartału, 41 dni.</small>
+    </form>
+  </article>
+
+  <article class="ipo-card is-open" aria-label="Debiut Agro Bałtyk, zapisy otwarte, brak oceny">
+    <div>
+      <div class="ipo-head"><i data-ic="debiut" data-s="18"></i><h4>Agro Bałtyk <span class="sc-sym">AGB</span></h4><span class="badge badge--accent">zapisy otwarte</span></div>
+      <p class="text-muted">Rolnictwo, spółka prywatna</p>
+      <dl class="ipo-facts">
+        <dt>Rynek</dt><dd>Prywatny (PRV), Giełda Brązowa</dd>
+        <dt>Ocena</dt><dd><span class="cr-badge is-none" title="Spółka nie ujawniła oceny. Spółki zwykle ujawniają tylko oceny od A w górę."><b>—</b> brak oceny</span></dd>
+        <dt>Opiekun</dt><dd>Dom Maklerski Brzeg, reputacja <b>2/5</b>, prowizja 7%</dd>
+      </dl>
+    </div>
+    <div class="ipo-demand">
+      <dl class="ipo-facts"><dt>Cena emisyjna</dt><dd><b class="ch-num">8,50 PLN</b> <span class="text-muted">dyskonto 15%</span></dd><dt>W ofercie</dt><dd>1 000 akcji, 8 500 PLN</dd></dl>
+      <p class="mt-3">Zapisy: <strong>0,6×</strong> oferty</p>
+      <span class="limit-meter is-warn" role="img" aria-label="Zapisy 60% oferty" style="--v:60;--limit:100"><i></i><b></b></span>
+      <small class="text-muted">Poniżej 100% emisja przepada, a spółka czeka kwartał.</small>
+    </div>
+    <form class="ipo-form" onsubmit="return false">
+      <label>Kwota zapisu (PLN)<input type="number" value="" placeholder="np. 850"></label>
+      <p class="notice-inline"><i data-ic="info" data-s="14"></i><span>Brak oceny często oznacza słabą spółkę. Ocena nie jest wymagana na rynku prywatnym.</span></p>
+      <div class="btn-row"><button class="btn-secondary">Zapisz się</button></div>
+    </form>
+  </article>
+
+  <article class="ipo-card is-pulled" aria-label="Debiut Orbita Space wycofany">
+    <div><div class="ipo-head"><i data-ic="debiut" data-s="18"></i><h4>Orbita Space <span class="sc-sym">ORB</span></h4><span class="badge badge--down"><i data-ic="blokada" data-s="12"></i> wycofany</span></div><p class="text-muted">Kosmos, startup</p></div>
+    <div><p>Bessa: zapisy 0,4× oferty. Spółka spróbuje w kolejnym kwartale.</p></div>
+    <div><p class="text-sm">Twój zapis <b>6 000 PLN</b> wrócił na konto prywatne.</p></div>
+  </article>
+
+  <article class="ipo-card is-done" aria-label="Debiut Ferrum Tech zakończony">
+    <div><div class="ipo-head"><i data-ic="debiut" data-s="18"></i><h4>Ferrum Tech <span class="sc-sym">FRT</span></h4><span class="badge badge--up"><i data-ic="ok" data-s="12"></i> na giełdzie</span></div><p class="text-muted">Robotyka, GPW, Giełda Złota</p></div>
+    <div><dl class="ipo-facts"><dt>Cena emisyjna</dt><dd class="ch-num">120,00 PLN</dd><dt>Pierwszy dzień</dt><dd><b class="ch-num text-up">▲ +18%</b> <span class="text-muted">142,10 PLN, gorąca hossa</span></dd></dl></div>
+    <div><p class="text-sm">Przydział: <b>36 z 80 akcji</b> (redukcja 55%). Zwrot 5 280 PLN.</p></div>
+  </article>
+</div>
+
+<h3 class="demo-h">Stany puste i blokady</h3>
+<div class="bank-card">
+  <p class="notice-inline"><i data-ic="info" data-s="14"></i><span>W tym kwartale nie ma debiutów. Startupy z oceną wejdą do zapisów po audycie.</span></p>
+  <p class="notice-inline is-warn"><i data-ic="alert" data-s="14"></i><span>Za mało gotówki na koncie prywatnym: brakuje 3 200 PLN.</span></p>
+  <p class="notice-inline"><i data-ic="zegar" data-s="14"></i><span>Lumen Bio czeka na miejsce na giełdzie: 132 z 130 spółek krajowych. Czeka 2 z 4 kw.</span></p>
+</div>
+</section>
+
+<section class="demo"><h2 class="demo-title">3. Ocena kredytowa na karcie spółki</h2>
+<p class="demo-sub">Kafelek <code>.cc-kpi</code> „Ocena” w Przeglądzie, obok kafelka giełdy. Ocena to zawsze litery i słowo klasy. Ważność to 4 kw. od audytu. Nowość: ocena blokuje awans na wyższą giełdę.</p>
+<h3 class="demo-h">Skala</h3>
+<div class="sheet">
+  <span class="cr-badge is-inv"><b>AAA</b> inwestycyjna</span><span class="cr-badge is-inv"><b>AA</b> inwestycyjna</span><span class="cr-badge is-inv"><b>A</b> inwestycyjna</span>
+  <span class="cr-badge is-mid"><b>BBB</b> inwestycyjna, najniższa</span><span class="cr-badge is-spec"><b>BB</b> spekulacyjna</span><span class="cr-badge is-spec"><b>B</b> spekulacyjna</span>
+  <span class="cr-badge is-bad"><b>CCC</b> zagrożona</span><span class="cr-badge is-bad"><b>D</b> niewypłacalna</span><span class="cr-badge is-none"><b>—</b> brak oceny</span>
+</div>
+<h3 class="demo-h">Karta spółki → Przegląd</h3>
+<div class="cc-kpis">
+  <div class="cc-kpi"><span>Giełda</span><strong style="font-family:inherit">Złota</strong><em class="text-muted">od 6 kw.</em></div>
+  <div class="cc-kpi" title="Audyt Kowalczyk &amp; Wspólnicy, ważny do końca II kw. 2027"><span>Ocena</span><strong><span class="cr-badge is-mid"><b>BBB</b> inwestycyjna</span></strong><em class="text-muted">ważna jeszcze 1 kw.</em></div>
+</div>
+<p class="notice-inline is-warn"><i data-ic="klodka" data-s="14"></i><span>Cena przekroczyła próg Giełdy Platynowej, ale awans wymaga oceny co najmniej A. Spółka zostaje na Złotej do następnego audytu.</span></p>
+<h3 class="demo-h">Ocena wygasła albo cofnięta</h3>
+<div class="cc-kpis">
+  <div class="cc-kpi"><span>Ocena</span><strong><span class="cr-badge is-none"><b>—</b> wygasła</span></strong><em class="text-warn">ostatnia: A, 2 kw. temu</em></div>
+</div>
+<div class="alert alert--warn mt-3"><i data-ic="audyt" data-s="16"></i><div><strong>Ocena cofnięta.</strong> Audytor Rewizja Plus zawyżył ocenę spółki z BB do A (przekupstwo). Spółka płaci karę 40 000 PLN, kurs ▼ −14%, audytor traci licencję. Policja prowadzi śledztwo.</div></div>
+</section>
+
+<section class="demo"><h2 class="demo-title">4. Wymogi rynków i poziomów giełdy</h2>
+<p class="demo-sub">Ściąga w dwóch miejscach: Akademia („Jak spółka wchodzi na giełdę”) i rozwijana sekcja <code>&lt;details&gt;</code> pod Debiutami. Trzy osie: rynek, poziom giełdy, ocena.</p>
+<details open><summary class="text-sm">Wymogi wejścia na rynek</summary>
+<div style="overflow-x:auto"><table class="asset-mini-table w-full req-table mt-3"><thead><tr><th>Rynek</th><th class="text-right">Kapitalizacja</th><th class="text-right">Free float</th><th>Zysk</th><th>Ocena</th></tr></thead><tbody>
+  <tr><th scope="row">Prywatny (PRV)</th><td class="text-right">od 5 000 PLN</td><td class="text-right">—</td><td>niewymagany</td><td>niewymagana</td></tr>
+  <tr><th scope="row">NewHorizon (NH)</th><td class="text-right">od 24 000 PLN</td><td class="text-right">20%</td><td>tak, innowacyjne zwolnione</td><td><span class="cr-badge is-spec"><b>BB</b> lub wyżej</span></td></tr>
+  <tr><th scope="row">GPW</th><td class="text-right">od 90 000 PLN</td><td class="text-right">30%</td><td>tak</td><td><span class="cr-badge is-mid"><b>BBB</b> lub wyżej</span></td></tr>
+</tbody></table></div></details>
+<details open class="mt-3"><summary class="text-sm">Wymogi poziomu giełdy</summary>
+<div style="overflow-x:auto"><table class="asset-mini-table w-full req-table mt-3"><thead><tr><th>Giełda</th><th>Jak się wchodzi</th><th>Ocena</th></tr></thead><tbody>
+  <tr><th scope="row">Śmieciowa, Brązowa, Srebrna</th><td>cena akcji</td><td>niewymagana</td></tr>
+  <tr><th scope="row">Złota</th><td>cena akcji</td><td><span class="cr-badge is-mid"><b>BBB</b> lub wyżej</span></td></tr>
+  <tr><th scope="row">Platynowa</th><td>cena akcji</td><td><span class="cr-badge is-inv"><b>A</b> lub wyżej</span></td></tr>
+  <tr><th scope="row">Rubinowa</th><td>miejsce w rankingu kapitalizacji</td><td><span class="cr-badge is-inv"><b>A+</b> lub wyżej</span></td></tr>
+  <tr><th scope="row">Szmaragdowa</th><td>miejsce w rankingu kapitalizacji</td><td><span class="cr-badge is-inv"><b>AA</b> lub wyżej</span></td></tr>
+  <tr><th scope="row">Diamentowa</th><td>miejsce w rankingu kapitalizacji</td><td><span class="cr-badge is-inv"><b>AAA</b></span></td></tr>
+</tbody></table></div></details>
+<p class="text-xs text-muted mt-3">Bez wymaganej oceny spółka zostaje na poprzednim poziomie, aż przejdzie audyt.</p>
+</section>
+
+<script>
+Promise.all(['../../../img/ikony/sprite.svg', '018_ikony.svg'].map(u => fetch(u).then(r => r.text()))).then(([a, b]) => {
+  document.getElementById('ic-defs').outerHTML = a; document.getElementById('ic-defs-018').outerHTML = b;
+  document.querySelectorAll('i[data-ic]').forEach(el => { const s = el.dataset.s || 16; el.outerHTML = `<svg class="ic" width="${s}" height="${s}" viewBox="0 0 24 24" aria-hidden="true"><use href="#ic-${el.dataset.ic}"/></svg>`; });
+});
+</script>
+</body></html>

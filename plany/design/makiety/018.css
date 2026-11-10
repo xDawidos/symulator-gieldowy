@@ -114,3 +114,37 @@
   .gd-name { flex-wrap: wrap; gap: 2px var(--space-2); }
   .gd-detail > td { padding: var(--space-2) 0; }
 }
+
+/* Ocena kredytowa AAA–D (projekt 15): litery + słowo klasy, kolor tylko wspiera */
+.cr-badge { display: inline-flex; align-items: baseline; gap: 6px; padding: 1px 8px; border: 1px solid var(--cr-c, var(--color-border-default)); border-radius: var(--radius-sm); font-size: var(--text-caption-size); color: var(--color-text-secondary); white-space: nowrap; }
+.cr-badge b { font-family: var(--font-family-mono); font-size: var(--text-body-sm-size); font-weight: 700; color: var(--cr-c, var(--color-text-primary)); }
+.cr-badge.is-inv { --cr-c: var(--color-text-up); }
+.cr-badge.is-mid { --cr-c: var(--color-text-secondary); }
+.cr-badge.is-spec { --cr-c: var(--color-text-warn); }
+.cr-badge.is-bad { --cr-c: var(--color-text-down); }
+.cr-badge.is-none { border-style: dashed; }
+.cc-kpi .cr-badge, .cc-kpi .cr-badge b { text-transform: none; letter-spacing: 0; } /* .cc-kpi span daje wersaliki etykiety */
+.cc-kpi .cr-badge { font-weight: 400; color: var(--color-text-secondary); }
+
+/* Debiuty (IPO) na stronie Startupy */
+.ipo-list { display: grid; gap: var(--space-3); }
+.ipo-card { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(220px, .9fr); gap: var(--space-3) var(--space-4); padding: var(--space-3) var(--space-4); background: var(--color-bg-raised); border: 1px solid var(--color-border-subtle); border-left: 3px solid var(--ipo-c, var(--color-border-default)); border-radius: var(--radius-md); font-size: var(--text-body-sm-size); }
+.ipo-card.is-open { --ipo-c: var(--color-border-accent); }
+.ipo-card.is-pulled { --ipo-c: var(--color-text-down); }
+.ipo-card.is-done { --ipo-c: var(--color-text-up); }
+.ipo-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); }
+.ipo-head h4 { margin: 0; font-size: var(--text-body-size); }
+.ipo-facts { margin: var(--space-2) 0 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px var(--space-3); }
+.ipo-facts dt { color: var(--color-text-muted); }
+.ipo-facts dd { margin: 0; }
+.ipo-demand .limit-meter { max-width: none; }
+.ipo-demand strong { font-family: var(--font-family-mono); font-size: var(--text-num-strong-size); }
+.ipo-form { display: flex; flex-direction: column; gap: var(--space-2); }
+.ipo-form label { display: grid; gap: 2px; color: var(--color-text-muted); }
+.ipo-form input { width: 100%; }
+.ipo-form .btn-row { margin: 0; }
+.req-table th[scope="row"] { font-weight: 600; text-align: left; white-space: nowrap; }
+
+@media (max-width: 860px) {
+  .ipo-card { grid-template-columns: minmax(0, 1fr); }
+}
