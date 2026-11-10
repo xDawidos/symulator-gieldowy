@@ -5747,6 +5747,7 @@ function openStateModal() {
     if (!modal) return;
     modal.style.display = 'block';
     switchStateTab(stateTab);
+    document.getElementById('state-title')?.focus(); // U19: fokus na tytuł
 }
 
 function toggleSubsidiaryVisibility(parentSymbol) {
@@ -8360,10 +8361,52 @@ function renderTicker(elementId, items) {
 
 // ---------- Państwo ----------
 let stateTab = 'overview';
+// 0.18.3 U19 (makieta 19): zakładki Państwa w bocznej szynie z grupami; grupa z jedną zakładką jest od razu zakładką.
+const STATE_TAB_GROUPS = [
+    { name: 'Gospodarka', icon: 'wykres', tabs: [['overview', 'Przegląd'], ['macro', 'Makro'], ['energy', 'Energia'], ['chains', 'Łańcuchy']] },
+    { name: 'Prawo', icon: 'waga', tabs: [['country', 'Kraj'], ['taxes', 'Podatki'], ['oversight', 'Nadzór']] },
+    { name: 'Programy', icon: 'panstwo', tabs: [['pension', 'Program emerytalny'], ['interventions', 'Działania państwa']] },
+    { name: 'Rynki', icon: 'rynek', tabs: [['markets', 'Rynki']] }
+];
+let stateRailOpen = false;
+
+/** Liczniki przy zakładkach („coś czeka”): napięte ogniwa łańcuchów. */
+function getStateTabCount(tab) {
+    if (tab === 'chains' && typeof chainState === 'object' && chainState?.g && typeof getStartCountry === 'function') {
+        const ci = chainState.cal?.countries.indexOf(getStartCountry());
+        return ci >= 0 ? Object.values(chainState.g).filter(s => s.b?.[ci] < 0.95).length : 0;
+    }
+    return 0;
+}
+function renderStateRail() {
+    const rail = document.getElementById('state-rail');
+    if (!rail) return;
+    const group = STATE_TAB_GROUPS.find(g => g.tabs.some(([id]) => id === stateTab)) || STATE_TAB_GROUPS[0], label = group.tabs.find(([id]) => id === stateTab)?.[1] || '';
+    const tabBtn = ([id, name], solo, icon) => { const n = getStateTabCount(id); return `<button type="button" role="tab" class="wn-tab${solo ? ' is-solo' : ''}" data-tab="${id}" aria-selected="${id === stateTab}" tabindex="${id === stateTab ? 0 : -1}" onclick="switchStateTab('${id}')" onkeydown="stateRailKey(event)">${solo ? uiIcon(icon, 16) : ''}${escapeHtml(name)}${n ? `<span class="wn-count" aria-label="${n} wymaga uwagi">${n}</span>` : ''}</button>`; };
+    rail.innerHTML = `<button type="button" class="wn-pick" aria-expanded="${stateRailOpen}" onclick="toggleStateRail()">${uiIcon(group.icon, 16)}${escapeHtml(group.name)} <small>› ${escapeHtml(label)}</small>${uiIcon('chevron-down', 16)}</button>
+        <div class="wn-list" role="tablist" aria-orientation="vertical">${STATE_TAB_GROUPS.map(g => g.tabs.length === 1 ? tabBtn(g.tabs[0], true, g.icon) : `<ul class="wn-group" role="group" aria-label="${escapeHtml(g.name)}"><h3>${uiIcon(g.icon, 14)} ${escapeHtml(g.name)}</h3>${g.tabs.map(t => tabBtn(t, false)).join('')}</ul>`).join('')}</div>`;
+}
+function toggleStateRail() { stateRailOpen = !stateRailOpen; renderStateRail(); }
+/** Strzałki góra/dół między zakładkami szyny, Enter i Spacja wybierają (przyciski). */
+function stateRailKey(event) {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+    const tabs = [...document.querySelectorAll('#state-rail .wn-tab')], i = tabs.indexOf(event.currentTarget), next = tabs[(i + (event.key === 'ArrowDown' ? 1 : tabs.length - 1)) % tabs.length];
+    event.preventDefault(); next?.focus();
+}
+/** Jedno zdanie stanu zamiast kickera z kropkami (O3). */
+function getStateHeadline() {
+    const rate = (Number(centralBank?.baseInterestRate) || 0) * 100, inf = (Number(macro?.inflation) || 0) * 100, target = 2.5;
+    const infWord = inf > target + 0.5 ? 'powyżej celu' : inf < target - 1 ? 'poniżej celu' : 'blisko celu';
+    const checks = typeof oversight === 'object' && oversight?.records?.player?.inspections ? ` Nadzór prowadzi kontrolę Twojego funduszu.` : '';
+    return `Stopa bazowa ${formatNumberPl(rate, 2)}%, inflacja ${formatNumberPl(inf, 1)}% (${infWord}). Rządzi: ${getRulingParty().name}.${checks}`;
+}
 
 function switchStateTab(tab) {
     stateTab = tab;
-    document.querySelectorAll('#state-modal .bank-tab-btn').forEach(button => button.classList.toggle('active', button.dataset.tab === tab));
+    stateRailOpen = false;
+    renderStateRail();
+    const main = document.getElementById('state-body');
+    if (main) main.scrollTop = 0; // zmiana zakładki: treść od góry, okno bez zmiany rozmiaru
     updateStateModalContent();
 }
 
@@ -8371,6 +8414,8 @@ function updateStateModalContent() {
     const modal = document.getElementById('state-modal');
     if (!modal || modal.style.display !== 'block') return;
     const phase = getEconomyPhaseInfo();
+    const headline = document.getElementById('state-headline');
+    if (headline) headline.textContent = getStateHeadline();
     renderTicker('state-ticker', [
         ['Skarb Państwa', formatZl(governmentTreasury, 0)],
         ['Faza koniunktury', escapeHtml(phase.name || '—')],

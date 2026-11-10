@@ -879,29 +879,19 @@
     </div>
 
 
-    <div id="state-modal" class="modal modal-xl bank-window state-window" style="display: none;">
-        <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
-        <header class="bank-hero state-hero">
-            <div class="bank-emblem" aria-hidden="true"><svg class="ic" width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21h16M6 21V11M18 21V11M10 21v-6h4v6M3 11h18L12 4z"/></svg></div>
-            <div>
-                <div class="bank-hero-kicker">Skarb Państwa · regulacje · programy</div>
-                <h2 class="bank-hero-title">Państwo</h2>
+    <div id="state-modal" class="modal wn-host" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="state-title">
+        <section class="wn wn--state"><!-- 0.18.3 U19: wspólna rama okna (plany/design/19_okna.md) -->
+            <header class="wn-head">
+                <div class="wn-emblem" aria-hidden="true"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21h16M6 21V11M18 21V11M10 21v-6h4v6M3 11h18L12 4z"/></svg></div>
+                <div><h2 id="state-title" tabindex="-1">Państwo</h2><p id="state-headline"></p></div>
+                <button class="wn-close" onclick="closeModalFrom(this)" aria-label="Zamknij (Esc)"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+            </header>
+            <div class="wn-strip bank-ticker" id="state-ticker"></div>
+            <div class="wn-body">
+                <nav class="wn-rail" id="state-rail" aria-label="Zakładki Państwa"></nav>
+                <div class="wn-main" id="state-body"></div>
             </div>
-        </header>
-        <div class="bank-ticker" id="state-ticker"></div>
-        <nav class="bank-tabs" role="tablist">
-            <button class="bank-tab-btn active" data-tab="overview" onclick="switchStateTab('overview')">Przegląd</button>
-            <button class="bank-tab-btn" data-tab="macro" onclick="switchStateTab('macro')">Makro</button>
-            <button class="bank-tab-btn" data-tab="country" onclick="switchStateTab('country')">Kraj</button>
-            <button class="bank-tab-btn" data-tab="energy" onclick="switchStateTab('energy')">Energia</button>
-            <button class="bank-tab-btn" data-tab="chains" onclick="switchStateTab('chains')">Łańcuchy</button>
-            <button class="bank-tab-btn" data-tab="markets" onclick="switchStateTab('markets')">Rynki</button>
-            <button class="bank-tab-btn" data-tab="oversight" onclick="switchStateTab('oversight')">Nadzór</button>
-            <button class="bank-tab-btn" data-tab="taxes" onclick="switchStateTab('taxes')">Podatki</button>
-            <button class="bank-tab-btn" data-tab="pension" onclick="switchStateTab('pension')">Program emerytalny</button>
-            <button class="bank-tab-btn" data-tab="interventions" onclick="switchStateTab('interventions')">Działania państwa</button>
-        </nav>
-        <div id="state-body" class="bank-tab-content"></div>
+        </section>
     </div>
 
     <div id="management-modal" class="modal" style="display: none;">

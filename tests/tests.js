@@ -17399,3 +17399,24 @@ group('0.18.2 Pełny graf', () => {
         assert(GOOD_BY_ID.food.use['Usługi'] > 0 && CHAIN_RECIPES['Usługi'].food > 0, 'dystrybucja');
     });
 });
+
+group('0.18.3 U19 Rama okna Państwa', () => {
+    test('10 zakładek Państwa w 4 grupach; szyna zaznacza wybraną; zdanie stanu bez kickera z kropkami', () => {
+        assertEq(STATE_TAB_GROUPS.length, 4, 'grupy'); assertEq(STATE_TAB_GROUPS.flatMap(g => g.tabs).length, 10, 'zakładki');
+        assertEq(STATE_TAB_GROUPS.map(g => g.name).join(), 'Gospodarka,Prawo,Programy,Rynki');
+        resetWorld([makeCompany('AAA')]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+        const host = document.createElement('div'); host.id = 'state-modal'; host.innerHTML = '<p id="state-headline"></p><div id="state-ticker"></div><nav id="state-rail"></nav><div id="state-body"></div>';
+        const old = document.getElementById('state-modal'); if (old) old.id = 'state-modal-old';
+        document.body.appendChild(host); host.style.display = 'block';
+        const saved = stateTab;
+        try {
+            switchStateTab('taxes');
+            const sel = [...document.querySelectorAll('#state-rail .wn-tab[aria-selected="true"]')];
+            assert(sel.length === 1 && sel[0].dataset.tab === 'taxes', 'jedna wybrana zakładka');
+            assertEq(document.querySelectorAll('#state-rail .wn-tab').length, 10, '10 przycisków');
+            assert(/Prawo/.test(document.querySelector('#state-rail .wn-pick').textContent), 'przycisk „Grupa › Zakładka”');
+            const head = document.getElementById('state-headline').textContent;
+            assert(head.length > 20 && !head.includes('·') && /\.$/.test(head), `zdanie stanu: ${head}`);
+        } finally { stateTab = saved; host.remove(); if (old) old.id = 'state-modal'; }
+    });
+});
