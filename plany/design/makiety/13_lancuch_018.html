@@ -1,0 +1,197 @@
+<!doctype html><html lang="pl"><head><meta charset="utf-8"><title>Makieta UI 0.18 — Łańcuchy produkcyjne</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../../../tokens.css"><link rel="stylesheet" href="../../../style.css"><link rel="stylesheet" href="018.css">
+<style>
+/* Tylko rama makiety, do gry nie idzie */
+html, body { overflow: auto !important; height: auto !important; }
+body { display: block !important; padding: 24px !important; }
+.demo { max-width: 1180px; margin: 0 auto 32px; padding: 24px; background: var(--color-bg-base); border: 1px solid var(--color-border-subtle); border-radius: 6px; }
+.demo-title { margin: 0 0 4px; font-size: 20px; }
+.demo-sub { margin: 0 0 16px; color: var(--color-text-muted); font-size: 13px; max-width: 75ch; }
+.demo-h { margin: 20px 0 8px; font-size: 13px; color: var(--color-text-muted); font-weight: 600; }
+.sheet { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+.sheet div { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+@media (max-width: 640px) { body { padding: 8px !important; } .demo { padding: 12px; } }
+</style></head><body class="dark-mode">
+<svg style="display:none" id="ic-defs"></svg><svg style="display:none" id="ic-defs-018"></svg>
+
+<section class="demo"><h2 class="demo-title">0. Nowe ikony 0.18</h2><p class="demo-sub">Plik <code>makiety/018_ikony.svg</code>. 24×24, kreska 1,8, currentColor. Ogniwa: wydobycie <code>kopalnia</code>, hutnictwo <code>huta</code>, fabryka <code>fabryka</code>, spedycja <code>transport-*</code>, dystrybucja <code>koszyk</code>, konsumpcja <code>klienci</code>. Zapas: <code>magazyn</code>.</p>
+<div class="sheet">
+  <div><i data-ic="huta" data-s="24"></i><i data-ic="huta"></i> huta</div>
+  <div><i data-ic="fabryka" data-s="24"></i><i data-ic="fabryka"></i> fabryka</div>
+  <div><i data-ic="szok" data-s="24"></i><i data-ic="szok"></i> szok</div>
+  <div><i data-ic="szlak" data-s="24"></i><i data-ic="szlak"></i> szlak</div>
+  <div><i data-ic="magistrala" data-s="24"></i><i data-ic="magistrala"></i> magistrala</div>
+  <div><i data-ic="audyt" data-s="24"></i><i data-ic="audyt"></i> audyt</div>
+  <div><i data-ic="debiut" data-s="24"></i><i data-ic="debiut"></i> debiut</div>
+  <div><i data-ic="surowiec-iron" data-s="24"></i><i data-ic="surowiec-iron"></i> surowiec-iron</div>
+  <div><i data-ic="surowiec-copper" data-s="24"></i><i data-ic="surowiec-copper"></i> surowiec-copper</div>
+  <div><i data-ic="surowiec-coffee" data-s="24"></i><i data-ic="surowiec-coffee"></i> surowiec-coffee</div>
+</div>
+<h3 class="demo-h">Status ogniwa (bilans b = podaż / popyt)</h3>
+<div class="sheet" id="status-sheet"></div>
+<h3 class="demo-h">Klasa dobra</h3>
+<div class="sheet">
+  <div><span class="gd-cls" title="Materiał">M</span> materiał</div>
+  <div><span class="gd-cls" title="Półprodukt">P</span> półprodukt</div>
+  <div><span class="gd-cls is-K" title="Dobro kapitałowe">K</span> dobro kapitałowe</div>
+  <div><span class="gd-cls" title="Dobro końcowe zwykłe">Z</span> końcowe zwykłe</div>
+  <div><span class="gd-cls is-L" title="Dobro końcowe luksusowe">L</span> końcowe luksusowe</div>
+</div></section>
+
+<section class="demo"><h2 class="demo-title">1. Państwo → Łańcuchy</h2>
+<p class="demo-sub">Nowa zakładka za „Energia”. Szok trwa: strajk w kopalniach rudy w Brazylii, etap Zarażanie. Kafle ogniw stoją w 6 kolumnach, wyśrodkowane w pionie. Krawędzie pod kaflami pokazują przepływ: grubość to ilość towaru, styl to stan dostawcy (szara: normalnie, bursztynowa: napięte, czerwone kropki: niedobór lub przerwa). Kafel to <code>&lt;button&gt;</code> i otwiera szczegóły pod łańcuchem. Przy jednej kolumnie (≤ 860 px) krawędzi nie ma, kolejność niesie strzałka ↓.</p>
+<nav class="bank-tabs" role="tablist">
+  <button class="bank-tab-btn">Przegląd</button><button class="bank-tab-btn">Makro</button><button class="bank-tab-btn">Kraj</button><button class="bank-tab-btn">Energia</button><button class="bank-tab-btn active" aria-selected="true">Łańcuchy</button><button class="bank-tab-btn">Rynki</button><button class="bank-tab-btn">Nadzór</button>
+</nav>
+<div class="sector-chips mt-3" role="tablist" aria-label="Łańcuch">
+  <button class="sector-chip active" aria-selected="true"><i data-ic="huta"></i> Metale i pojazdy <small>szok</small></button>
+  <button class="sector-chip"><i data-ic="surowiec-oil"></i> Ropa i paliwa</button>
+  <button class="sector-chip"><i data-ic="surowiec-grain"></i> Zboże i żywność</button>
+</div>
+<div class="bank-ticker mt-3">
+  <div class="bank-ticker-item"><span>Najsłabsze ogniwo</span><strong>Ruda żelaza</strong><small class="text-muted">pokrycie 78%</small></div>
+  <div class="bank-ticker-item"><span>Na końcu łańcucha</span><strong>91%</strong><small class="text-muted">popytu obywateli pokryte</small></div>
+  <div class="bank-ticker-item"><span>Cena na końcu</span><strong class="text-down">▲ +7%</strong><small class="text-muted">samochody, wobec startu</small></div>
+  <div class="bank-ticker-item"><span>Zapas w łańcuchu</span><strong>0,3 kw.</strong><small class="text-muted">cel 0,5 kw.</small></div>
+</div>
+<div class="ch-flow mt-3" id="flow">
+  <ul class="ch-heads" id="heads" aria-hidden="true"></ul>
+  <svg class="ch-edges" id="edges" aria-hidden="true"></svg>
+  <ol class="ch-axis" id="axis-a" aria-label="Ogniwa łańcucha Metale i pojazdy"></ol>
+</div>
+<ul class="ch-legend"><li><span class="ln"></span> normalnie</li><li><span class="ln is-tight"></span> napięte</li><li><span class="ln is-broken"></span> niedobór lub przerwa</li><li>grubość: ilość towaru</li><li>kafel: status i pokrycie popytu, zapas (kreska: cel 0,5 kw.), zmiana ceny wewnętrznej, główne kraje</li></ul>
+
+<h3 class="demo-h">Szczegóły wybranego ogniwa (Stal)</h3>
+<div class="ch-detail">
+  <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon"><i data-ic="huta" data-s="20"></i></span><div><h4>Stal <span class="gd-cls" title="Półprodukt">P</span></h4><span class="bank-card-type">Hutnictwo, 5 spółek w 4 krajach</span></div></header>
+    <div class="en-state st-tight"><span class="badge badge--warn"><i data-ic="alert" data-s="12"></i> Napięte</span> pokrycie <b class="ch-num">88%</b>, cena wewnętrzna <b class="ch-num text-down">▲ +9%</b></div>
+    <table class="asset-mini-table w-full"><thead><tr><th>Kraj</th><th class="text-right">Podaż</th><th class="text-right">Popyt</th><th class="text-right">Bilans</th></tr></thead><tbody>
+      <tr><td>Polska</td><td class="text-right">1,8</td><td class="text-right">2,1</td><td class="text-right">86%</td></tr>
+      <tr><td>Niemcy</td><td class="text-right">3,4</td><td class="text-right">3,9</td><td class="text-right">87%</td></tr>
+      <tr><td>Chiny</td><td class="text-right">9,6</td><td class="text-right">10,4</td><td class="text-right">92%</td></tr>
+      <tr><td>Brazylia</td><td class="text-right">1,1</td><td class="text-right">1,4</td><td class="text-right">79%</td></tr>
+    </tbody></table>
+    <p class="text-xs text-muted">Podaż i popyt w mln t na kwartał. Niedobór pokrywa import do limitu portów, koszt to fracht.</p>
+  </article>
+  <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon"><i data-ic="magazyn" data-s="20"></i></span><div><h4>Zapas i przepływ</h4><span class="bank-card-type">co ogniwo bierze i komu oddaje</span></div></header>
+    <p class="text-sm">Zapas <b class="ch-num">0,3 kw.</b> z celu 0,5 kw.</p>
+    <span class="limit-meter is-warn en-wide" role="img" aria-label="Zapas 0,3 kwartału, cel 0,5" style="--v:30;--limit:50"><i></i><b></b></span>
+    <p class="text-sm">Zdolność wykorzystana w <b class="ch-num">96%</b>.</p>
+    <span class="limit-meter en-wide" role="img" aria-label="Wykorzystanie zdolności 96%" style="--v:96"><i></i></span>
+    <h5 class="bank-section-title mt-3">Wsady</h5>
+    <p class="text-sm">Ruda żelaza 55% kosztu, węgiel 25%, prąd 20%.</p>
+    <h5 class="bank-section-title mt-3">Odbiorcy</h5>
+    <p class="text-sm">Motoryzacja 25%, maszyny 25%, budownictwo 20%, stocznie 12%, obronność 8%, inne 10%. Przy niedoborze obronność dostaje całość, reszta po równo.</p>
+  </article>
+</div>
+
+<h3 class="demo-h">Szok podażowy (6. linia kryzysu)</h3>
+<div class="alert alert--warn"><i data-ic="szok" data-s="16"></i><div><strong>Strajk w kopalniach rudy, Brazylia.</strong> Wydobycie rudy w kraju −40% od 2 kw. Stal drożeje o 9%, stocznie dostają 83% potrzebnej stali. Koniec szacowany za 3–5 kw.</div></div>
+<div class="crisis-section mt-3">
+  <ol class="crisis-axis" aria-label="Etapy szoku">
+    <li class="done"><span class="crisis-step-no">1</span>Zapowiedź</li><li class="done"><span class="crisis-step-no">2</span>Wybuch</li><li class="current" aria-current="step"><span class="crisis-step-no">3</span>Zarażanie (teraz)</li><li><span class="crisis-step-no">4</span>Interwencja</li><li><span class="crisis-step-no">5</span>Dno</li><li><span class="crisis-step-no">6</span>Odbicie</li>
+  </ol>
+</div>
+<div class="ch-gainers mt-3">
+  <article class="bank-card"><h5 class="bank-section-title"><i data-ic="faza-bessa" data-s="14"></i> Tracą</h5><ul>
+    <li><span>Stocznie</span><b class="ch-num text-down">▼ −11% marży</b></li><li><span>Motoryzacja</span><b class="ch-num text-down">▼ −6%</b></li><li><span>Huty w Brazylii</span><b class="ch-num text-down">▼ −9%</b></li></ul></article>
+  <article class="bank-card"><h5 class="bank-section-title"><i data-ic="faza-hossa" data-s="14"></i> Zyskują</h5><ul>
+    <li><span>Górnictwo żelaza, Australia</span><b class="ch-num text-up">▲ +14% marży</b></li><li><span>Fracht morski</span><b class="ch-num text-up">▲ +5%</b></li><li><span>Huty w Chinach</span><b class="ch-num text-up">▲ +3%</b></li></ul></article>
+</div>
+</section>
+
+<section class="demo"><h2 class="demo-title">2. Karta spółki → Przegląd: wiersz łańcucha</h2>
+<p class="demo-sub">Trzy kafelki <code>.cc-kpi</code> za kafelkami 0.17.2. Widać je tylko u spółek, których podsektor jest ogniwem. „Wystawienie” to udział wsadów z ogniw w szoku w koszcie spółki, słowem: niskie, średnie, wysokie.</p>
+<div class="cc-kpis">
+  <div class="cc-kpi" title="Ogniwo w łańcuchu Metale i pojazdy"><span>Ogniwo</span><strong style="font-family:inherit"><i data-ic="huta" data-s="14"></i> Hutnictwo</strong><em class="text-muted">Metale i pojazdy</em></div>
+  <div class="cc-kpi st-tight" title="Zapas stali w spółce wobec celu"><span>Zapas</span><strong>0,3 kw.</strong><em class="text-warn">▼ cel 0,5 kw.</em></div>
+  <div class="cc-kpi" title="Udział wsadów z ogniw w szoku w kosztach"><span>Wystawienie na szok</span><strong>wysokie</strong><em class="text-warn"><i data-ic="szok" data-s="12"></i> 55% kosztu z rudy</em></div>
+</div>
+<p class="text-sm"><a href="#">Zobacz łańcuch Metale i pojazdy</a> otwiera Państwo → Łańcuchy z zaznaczonym ogniwem spółki.</p>
+<h3 class="demo-h">Spółka bez szoku</h3>
+<div class="cc-kpis">
+  <div class="cc-kpi"><span>Ogniwo</span><strong style="font-family:inherit"><i data-ic="fabryka" data-s="14"></i> Motoryzacja</strong><em class="text-muted">Metale i pojazdy</em></div>
+  <div class="cc-kpi"><span>Zapas</span><strong>0,5 kw.</strong><em class="text-muted">■ w celu</em></div>
+  <div class="cc-kpi"><span>Wystawienie na szok</span><strong>niskie</strong><em class="text-muted">żaden wsad w szoku</em></div>
+</div>
+</section>
+
+<section class="demo"><h2 class="demo-title">3. Stany puste i szczególne</h2>
+<div class="bank-card">
+  <p class="notice-inline"><i data-ic="info" data-s="14"></i><span>Dane pojawią się po pierwszym kwartale gry.</span></p>
+  <p class="notice-inline"><i data-ic="info" data-s="14"></i><span>Tryb pomiaru (0.18.1): łańcuch liczy podaż i popyt, ale jeszcze nie zmienia wyników spółek.</span></p>
+  <p class="notice-inline"><i data-ic="ok" data-s="14"></i><span>Żadne ogniwo nie ma teraz niedoboru. Szok podażowy pojawia się najwyżej 1–2 razy na 20 lat.</span></p>
+  <p class="notice-inline is-warn"><i data-ic="alert" data-s="14"></i><span>Import stali zatrzymany: porty w Polsce mają pełną przepustowość (1,45 z 1,45).</span></p>
+  <p class="notice-inline"><i data-ic="klodka" data-s="14"></i><span>Łańcuch Elektronika i chipy wejdzie w 0.18.6.</span></p>
+</div>
+</section>
+
+<script>
+// Dane przykładowe. W grze: rejestr CHAINS + stan bilansu (b, zapas, zdolność, cena) na ogniwo.
+const ST = { // próg b → status; zawsze ikona + słowo + liczba
+  surplus: { w: 'Nadwyżka', badge: 'up', ic: 'faza-hossa' }, ok: { w: 'Równowaga', badge: 'neutral', ic: 'waga' },
+  tight: { w: 'Napięte', badge: 'warn', ic: 'alert' }, short: { w: 'Niedobór', badge: 'warn', ic: 'alert' }, broken: { w: 'Przerwane', badge: 'down', ic: 'blokada' }
+};
+const statusOf = b => b >= 1.05 ? 'surplus' : b >= 0.95 ? 'ok' : b >= 0.85 ? 'tight' : b >= 0.6 ? 'short' : 'broken';
+const CLS = { M: 'Materiał', P: 'Półprodukt', K: 'Dobro kapitałowe', Z: 'Dobro końcowe zwykłe', L: 'Dobro końcowe luksusowe' };
+const COLS = [['wydobycie', 'Wydobycie', 'kopalnia'], ['hutnictwo', 'Hutnictwo', 'huta'], ['fabryka', 'Fabryka', 'fabryka'], ['spedycja', 'Spedycja', 'transport-land'], ['dystrybucja', 'Dystrybucja', 'koszyk'], ['konsumpcja', 'Konsumpcja', 'klienci']];
+const NODES = [
+  { id: 'ore', col: 0, name: 'Ruda żelaza', cls: 'M', ic: 'surowiec-iron', b: 0.78, stock: 0.1, cap: 81, price: 18, where: 'AU, BR, CN' },
+  { id: 'coal', col: 0, name: 'Węgiel koksowy', cls: 'M', ic: 'surowiec-coal', b: 1.01, stock: 0.5, cap: 88, price: 1, where: 'PL, AU, US' },
+  { id: 'steel', col: 1, name: 'Stal', cls: 'P', ic: 'huta', b: 0.88, stock: 0.3, cap: 96, price: 9, where: 'CN, DE, PL, BR', sel: true },
+  { id: 'mach', col: 2, name: 'Maszyny', cls: 'K', ic: 'fabryka', b: 0.94, stock: 0.4, cap: 92, price: 6, where: 'DE, CN, US' },
+  { id: 'auto', col: 2, name: 'Motoryzacja', cls: 'Z', ic: 'transport-land', b: 0.90, stock: 0.4, cap: 90, price: 7, where: 'DE, CN, PL' },
+  { id: 'ship', col: 2, name: 'Stocznie', cls: 'K', ic: 'transport-sea', b: 0.83, stock: 0.2, cap: 84, price: 8, where: 'CN, PL' },
+  { id: 'air', col: 2, name: 'Lotnictwo', cls: 'K', ic: 'transport-air', b: 0.97, stock: 0.5, cap: 79, price: 2, where: 'US, FR' },
+  { id: 'land', col: 3, name: 'Transport lądowy', cls: 'K', ic: 'transport-land', b: 0.99, stock: null, cap: 87, price: 1, where: 'kraj' },
+  { id: 'sea', col: 3, name: 'Fracht morski', cls: 'K', ic: 'transport-sea', b: 0.92, stock: null, cap: 95, price: 5, where: 'porty PL, DE' },
+  { id: 'shop', col: 4, name: 'Salony i dealerzy', cls: 'Z', ic: 'koszyk', b: 0.96, stock: 0.4, cap: 80, price: 3, where: 'kraj' },
+  { id: 'cit', col: 5, name: 'Obywatele', cls: 'Z', ic: 'klienci', b: 0.91, stock: null, cap: null, price: 7, where: 'samochody osobowe' },
+  { id: 'lux', col: 5, name: 'Klasy wyższe', cls: 'L', ic: 'korona', b: 0.74, stock: null, cap: null, price: 12, where: 'jachty, auta luksusowe' },
+  { id: 'firm', col: 5, name: 'Firmy', cls: 'K', ic: 'firma', b: 0.93, stock: null, cap: null, price: 5, where: 'inwestycje' }
+];
+const EDGES = [['ore', 'steel', 7], ['coal', 'steel', 5], ['steel', 'mach', 5], ['steel', 'auto', 6], ['steel', 'ship', 4], ['steel', 'air', 2], ['mach', 'firm', 4], ['auto', 'land', 6], ['ship', 'sea', 4], ['air', 'firm', 2], ['land', 'shop', 6], ['sea', 'shop', 2], ['sea', 'firm', 2], ['shop', 'cit', 6], ['shop', 'lux', 2], ['land', 'firm', 2]];
+const pl = (n, d = 0) => n.toLocaleString('pl-PL', { minimumFractionDigits: d, maximumFractionDigits: d });
+const pct = b => pl(Math.round(b * 100)) + '%';
+const label = n => { const s = ST[statusOf(n.b)]; return `${n.name}, ${CLS[n.cls].toLowerCase()}: ${s.w}, pokrycie ${pct(n.b)}` + (n.stock != null ? `, zapas ${pl(n.stock, 1)} kw.` : ''); };
+
+// Wariant A (w grze: renderChainAxis(chain))
+function nodeHtml(n) {
+  const k = statusOf(n.b), s = ST[k];
+  return `<button data-node="${n.id}" class="ch-node st-${k}${n.sel ? ' is-selected' : ''}" aria-pressed="${!!n.sel}" aria-label="${label(n)}">
+    <span class="ch-node-top"><i data-ic="${n.ic}" data-s="14"></i><strong title="${n.name}">${n.name}</strong><span class="gd-cls${n.cls === 'K' || n.cls === 'L' ? ' is-' + n.cls : ''}" title="${CLS[n.cls]}">${n.cls}</span></span>
+    <span><span class="badge badge--${s.badge}"><i data-ic="${s.ic}" data-s="12"></i> ${s.w}</span> <b class="ch-num">${pct(n.b)}</b></span>
+    ${n.stock != null ? `<span class="limit-meter${n.stock < 0.5 ? ' is-warn' : ''}" style="--v:${Math.min(100, n.stock * 100)};--limit:50" aria-hidden="true"><i></i><b></b></span><small>zapas ${pl(n.stock, 1)} kw.${n.cap ? `, zdolność ${n.cap}%` : ''}</small>` : `<small>${n.cap ? `zdolność ${n.cap}%` : 'popyt końcowy'}</small>`}
+    <small>${n.price > 0 ? '▲ +' : n.price < 0 ? '▼ ' : '■ '}${pl(n.price)}% ceny · ${n.where}</small>
+  </button>`;
+}
+function renderAxis(el) {
+  el.innerHTML = COLS.map(([, name, ic], i) => `<li class="ch-col"><h5><i data-ic="${ic}" data-s="14"></i> ${name}</h5>${NODES.filter(n => n.col === i).map(nodeHtml).join('')}</li>`).join('');
+}
+renderAxis(document.getElementById('axis-a'));
+document.getElementById('heads').innerHTML = COLS.map(([, name, ic]) => `<li><i data-ic="${ic}" data-s="14"></i> ${name}</li>`).join('');
+document.getElementById('status-sheet').innerHTML = [['surplus', 1.08], ['ok', 1], ['tight', 0.9], ['short', 0.75], ['broken', 0.5]].map(([k, b]) => `<div><span class="badge badge--${ST[k].badge}"><i data-ic="${ST[k].ic}" data-s="12"></i> ${ST[k].w}</span> ${{ surplus: 'b ≥ 1,05', ok: '0,95–1,05', tight: '0,85–0,95', short: '0,6–0,85', broken: '< 0,6' }[k]}</div>`).join('');
+
+// Krawędzie (w grze: drawChainEdges(flowEl) po renderze i przy ResizeObserver). Mierzy kafle, rysuje krzywe od prawej krawędzi dostawcy do lewej odbiorcy.
+function drawEdges() {
+  const flow = document.getElementById('flow'), svg = document.getElementById('edges'), box = flow.getBoundingClientRect();
+  if (getComputedStyle(svg).display === 'none') return;
+  const r = id => document.querySelector(`[data-node="${id}"]`).getBoundingClientRect();
+  const by = Object.fromEntries(NODES.map(n => [n.id, n]));
+  svg.setAttribute('viewBox', `0 0 ${box.width} ${box.height}`);
+  svg.innerHTML = EDGES.map(([a, b, w]) => {
+    const A = r(a), B = r(b), x1 = A.right - box.left, y1 = A.top + A.height / 2 - box.top, x2 = B.left - box.left, y2 = B.top + B.height / 2 - box.top, mx = (x1 + x2) / 2;
+    const k = statusOf(by[a].b), cls = k === 'tight' ? ' is-tight' : (k === 'short' || k === 'broken') ? ' is-broken' : '';
+    return `<path class="g-edge${cls}" d="M${x1} ${y1} C${mx} ${y1} ${mx} ${y2} ${x2} ${y2}" stroke-width="${w}"/>`;
+  }).join('');
+}
+new ResizeObserver(drawEdges).observe(document.getElementById('flow'));
+
+// Sprite gry + sprite 0.18; <i data-ic> → <svg class="ic">, w grze to samo robi uiIcon(nazwa, 16)
+Promise.all(['../../../img/ikony/sprite.svg', '018_ikony.svg'].map(u => fetch(u).then(r => r.text()))).then(([a, b]) => {
+  document.getElementById('ic-defs').outerHTML = a; document.getElementById('ic-defs-018').outerHTML = b;
+  document.querySelectorAll('i[data-ic]').forEach(el => { const s = el.dataset.s || 16; el.outerHTML = `<svg class="ic" width="${s}" height="${s}" viewBox="0 0 24 24" aria-hidden="true"><use href="#ic-${el.dataset.ic}"/></svg>`; });
+});
+</script>
+</body></html>

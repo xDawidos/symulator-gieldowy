@@ -1,0 +1,65 @@
+/* 0.18: Łańcuchy, bilans dóbr, IPO, szlaki i miasta (projekt: plany/design/13–16_*.md).
+   Blok do przeniesienia na koniec style.css. Tylko istniejące tokeny; status zawsze ikoną, słowem i liczbą. */
+
+/* Status ogniwa / dobra / szlaku: --st-c to kolor akcentu, nigdy jedyny nośnik */
+.st-surplus { --st-c: var(--color-text-up); }
+.st-ok      { --st-c: var(--color-text-secondary); }
+.st-tight   { --st-c: var(--color-text-warn); }
+.st-short   { --st-c: var(--color-text-warn); }
+.st-broken  { --st-c: var(--color-text-down); }
+
+/* Klasa dobra: M P K Z L jako litera w ramce + title z pełną nazwą */
+.gd-cls { display: inline-grid; place-items: center; min-width: 20px; height: 18px; padding: 0 4px; border: 1px solid var(--color-border-default); border-radius: var(--radius-sm); font-family: var(--font-family-mono); font-size: var(--text-caption-size); font-weight: 700; color: var(--color-text-secondary); cursor: help; }
+.gd-cls.is-K { border-color: var(--color-border-accent); color: var(--color-text-accent); }
+.gd-cls.is-L { border-style: double; border-width: 3px; padding: 0 2px; }
+
+/* Łańcuch: kafle ogniw w 6 kolumnach, wyśrodkowane w pionie; krawędzie SVG pod kaflami (rysuje JS po pomiarze kafli) */
+.ch-flow { position: relative; margin-top: var(--space-2); }
+.ch-heads { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); column-gap: var(--space-6); margin: 0 0 var(--space-2); padding: 0; list-style: none; }
+.ch-heads li { display: flex; align-items: center; gap: var(--space-1); font-size: var(--text-body-sm-size); font-weight: 600; color: var(--color-text-secondary); }
+.ch-flow .ch-axis { column-gap: var(--space-6); align-items: stretch; }
+.ch-flow .ch-col { justify-content: center; gap: var(--space-3); }
+.ch-flow .ch-col:not(:last-child)::after { content: none; }
+.ch-flow .ch-col > h5 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); } /* widać .ch-heads; h5 zostaje dla czytnika, na telefonie wraca */
+.ch-flow .ch-node { position: relative; z-index: 1; }
+.ch-edges { position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.ch-edges .g-edge { fill: none; stroke: var(--color-border-strong); }
+.ch-edges .g-edge.is-tight { stroke: color-mix(in srgb, var(--color-text-warn) 70%, transparent); }
+.ch-edges .g-edge.is-broken { stroke: var(--color-text-down); stroke-dasharray: 2 5; }
+
+/* Oś ogniw (6 kolumn), w kolumnie 1–4 kafle */
+.ch-axis { list-style: none; margin: var(--space-2) 0 0; padding: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--space-4); }
+.ch-col { position: relative; display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.ch-col > h5 { margin: 0; display: flex; align-items: center; gap: var(--space-1); font-size: var(--text-body-sm-size); font-weight: 600; color: var(--color-text-secondary); }
+.ch-col:not(:last-child)::after { content: "→"; position: absolute; top: 34px; right: calc(var(--space-4) * -1); width: var(--space-4); text-align: center; color: var(--color-text-muted); font-size: 14px; }
+.ch-node { display: flex; flex-direction: column; gap: 4px; padding: var(--space-2); background: var(--color-bg-raised); border: 1px solid var(--color-border-subtle); border-top: 3px solid var(--st-c, var(--color-border-default)); border-radius: var(--radius-md); font-size: var(--text-caption-size); text-align: left; color: var(--color-text-primary); cursor: pointer; }
+.ch-node:hover, .ch-node:focus-visible { border-color: var(--color-border-strong); border-top-color: var(--st-c); }
+.ch-node.is-selected { background: var(--color-bg-accent-soft); border-color: var(--color-border-accent); border-top-color: var(--st-c); }
+.ch-node-top { display: flex; align-items: center; gap: var(--space-1); font-size: var(--text-body-sm-size); font-weight: 600; min-width: 0; }
+.ch-node-top strong { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; line-height: 1.25; }
+.ch-node .badge { align-self: flex-start; }
+.ch-node .limit-meter { max-width: none; margin: 2px 0; }
+.ch-node small { color: var(--color-text-muted); }
+.ch-num { font-family: var(--font-family-mono); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* Panel szczegółów wybranego ogniwa (pod osią lub grafem) */
+.ch-detail { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-3); }
+.ch-legend { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); margin: var(--space-2) 0 0; padding: 0; list-style: none; font-size: var(--text-caption-size); color: var(--color-text-secondary); }
+.ch-legend li { display: inline-flex; align-items: center; gap: 4px; }
+.ch-legend .ln { display: inline-block; width: 22px; height: 0; border-top: 2px solid var(--color-border-strong); }
+.ch-legend .ln.is-tight { border-top-color: var(--color-text-warn); }
+.ch-legend .ln.is-broken { border-top: 2px dotted var(--color-text-down); }
+.ch-gainers { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+.ch-gainers ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: var(--text-body-sm-size); }
+.ch-gainers li { display: flex; justify-content: space-between; gap: var(--space-2); }
+
+@media (max-width: 860px) {
+  .ch-axis, .ch-flow .ch-axis { grid-template-columns: minmax(0, 1fr); gap: var(--space-5); }
+  .ch-heads, .ch-edges { display: none; } /* jedna kolumna: krawędzi nie rysujemy, kolejność niesie strzałka ↓ */
+  .ch-flow .ch-col > h5 { position: static; width: auto; height: auto; clip-path: none; }
+  .ch-flow .ch-col:not(:last-child)::after { content: "↓"; }
+  .ch-col:not(:last-child)::after { content: "↓"; top: auto; bottom: calc(var(--space-5) * -1); right: auto; left: 50%; width: auto; }
+  .ch-col { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .ch-col > h5 { grid-column: 1 / -1; }
+  .ch-detail, .ch-gainers { grid-template-columns: minmax(0, 1fr); }
+}
