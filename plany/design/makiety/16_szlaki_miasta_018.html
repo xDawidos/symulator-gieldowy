@@ -35,7 +35,7 @@ body { display: block !important; padding: 24px !important; }
 <div class="rt-wrap">
   <div>
     <div class="rt-map-box"><svg class="rt-map" id="map" viewBox="0 0 1000 370" role="group" aria-label="Mapa szlaków handlowych"></svg></div>
-    <ul class="ch-legend rt-legend"><li><span class="ln"></span> aktywny</li><li><span class="ln is-hamp"></span> utrudniony</li><li><span class="ln is-stop"></span> wstrzymany</li><li>koło: kraj, kliknij, żeby zobaczyć miasta</li></ul>
+    <ul class="ch-legend rt-legend"><li><span class="ln"></span> aktywny</li><li><span class="ln is-hamp"></span> utrudniony</li><li><span class="ln is-stop"></span> wstrzymany</li><li>koło: kraj, kliknij, żeby zobaczyć miasta</li><li><span class="ct-soon-mark"></span> przerywane: kraj wkrótce</li></ul>
   </div>
   <aside class="rt-side" id="side" aria-live="polite"></aside>
 </div>
@@ -59,6 +59,7 @@ body { display: block !important; padding: 24px !important; }
 <script>
 // Dane przykładowe. Pozycje krajów są schematyczne (jak plan metra), nie geograficzne. W grze: kraje z countries_data.js, szlaki z grafu (krawędź: kraj–kraj, transport, przepustowość, stan), miasta z 0.19.2.
 const COUNTRIES = { US: ['USA', 140, 210], FR: ['Francja', 405, 245], CH: ['Szwajcaria', 455, 300], DE: ['Niemcy', 470, 200], CZ: ['Czechy', 540, 245], PL: ['Polska', 580, 175], SE: ['Szwecja', 510, 85], IN: ['Indie', 735, 330], CN: ['Chiny', 805, 215], TW: ['Tajwan', 880, 300], JP: ['Japonia', 925, 165] };
+const SOON = new Set(['SE', 'CH', 'FR', 'JP', 'TW', 'CN', 'IN']); // jak na globusie wyboru kraju: niegrywalne, ale handlują
 const R = 22, ROPEN = 78;
 const MODE = { sea: ['transport-sea', 'morski', 0.28], air: ['transport-air', 'lotniczy', 0.45], land: ['transport-land', 'lądowy', 0] };
 const STW = { ok: 'aktywny', hamp: 'utrudniony', stop: 'wstrzymany' };
@@ -74,6 +75,7 @@ const ROUTES = [
 const CITIES = { PL: [['Gdańsk', -8, -52], ['Warszawa', 30, -6], ['Poznań', -42, -14], ['Wrocław', -38, 28], ['Katowice', 4, 46], ['Kraków', 34, 40]] };
 let open = 'PL', city = 'Gdańsk';
 
+const szl = n => `${n} ${n === 1 ? 'szlak' : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? 'szlaki' : 'szlaków'}`;
 const pl = (n, d = 0) => n.toLocaleString('pl-PL', { minimumFractionDigits: d, maximumFractionDigits: d });
 const fac = (ic, name, v, note) => `<li${v < 50 ? ' class="is-warn"' : ''}><i data-ic="${ic}"></i><span>${name}</span><b class="en-num">${v}</b><span class="limit-meter${v < 50 ? ' is-warn' : ''}" role="img" aria-label="${name} ${v} na 100" style="--v:${v}"><i></i></span>${note ? `<small>${note}</small>` : ''}</li>`;
 
@@ -94,10 +96,10 @@ function renderMap() {
   const regions = `<text class="region" x="60" y="120">Ameryka Północna</text><text class="region" x="300" y="345">Europa</text><text class="region" x="700" y="360">Azja</text>`;
   const rs = ROUTES.map(routeSvg);
   const cts = Object.entries(COUNTRIES).map(([id, [name, x, y]]) => {
-    const isOpen = id === open, r = isOpen ? ROPEN : R;
+    const isOpen = id === open && !SOON.has(id), r = isOpen ? ROPEN : R, soon = SOON.has(id);
     const cities = isOpen && CITIES[id] ? CITIES[id].map(([cn, dx, dy]) => `<g class="city${cn === city ? ' is-selected' : ''}" tabindex="0" role="button" aria-label="Miasto ${cn}" aria-pressed="${cn === city}" data-city="${cn}"><circle cx="${x + dx}" cy="${y + dy}" r="${cn === city ? 7 : 5.5}"/><text x="${x + dx + 9}" y="${y + dy + 4}">${cn}</text></g>`).join('') : '';
     const n = ROUTES.filter(r => r[0] === id || r[1] === id), bad = n.filter(r => r[3] !== 'ok').length;
-    return `<g class="ct${isOpen ? ' is-open' : ''}" tabindex="0" role="button" aria-expanded="${isOpen}" aria-label="${name}: ${n.length} szlaków${bad ? `, ${bad} z problemem` : ''}" data-ct="${id}"><circle cx="${x}" cy="${y}" r="${r}"/><text x="${x}" y="${isOpen ? y + r + 16 : y + 4}">${isOpen ? name : id}</text></g>${cities}`;
+    return `<g class="ct${isOpen ? ' is-open' : ''}${soon ? ' is-soon' : ''}${soon && id === open ? ' is-picked' : ''}" tabindex="0" role="button" aria-expanded="${isOpen}" aria-label="${name}${soon ? ', wkrótce' : ''}: ${szl(n.length)}${bad ? `, ${bad} z problemem` : ''}" data-ct="${id}"><circle cx="${x}" cy="${y}" r="${r}"/><text x="${x}" y="${isOpen ? y + r + 16 : y + 4}">${isOpen ? name : id}</text></g>${cities}`;
   }).join('');
   svg.classList.toggle('has-open', !!open);
   requestAnimationFrame(() => { const box = svg.parentElement; if (open && box.scrollWidth > box.clientWidth) box.scrollLeft = COUNTRIES[open][1] / 1000 * svg.clientWidth - box.clientWidth / 2; }); // telefon: rozwinięty kraj na środek
@@ -105,9 +107,9 @@ function renderMap() {
 }
 function countryPanel(id) {
   const [name] = COUNTRIES[id], list = ROUTES.filter(r => r[0] === id || r[1] === id);
-  return `<article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon"><i data-ic="kraj" data-s="20"></i></span><div><h4>${name}</h4><span class="bank-card-type">${list.length} szlaków, 6 miast</span></div></header>
+  return `<article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon"><i data-ic="kraj" data-s="20"></i></span><div><h4>${name}</h4><span class="bank-card-type">${szl(list.length)}${SOON.has(id) ? ', kraj wkrótce' : ', 6 miast'}</span></div></header>
     <ul class="en-rows">${list.map(([a, b, m, st, cap, why]) => `<li><i data-ic="${MODE[m][0]}"></i><span>${COUNTRIES[a === id ? b : a][0]}<small>${why || MODE[m][1] + ', przepustowość ' + cap + '%'}</small></span><span class="rt-status is-${st}">${st === 'ok' ? '' : '<i data-ic="alert" data-s="12"></i>'}${STW[st]}</span></li>`).join('')}</ul>
-    <p class="text-sm text-muted">Kliknij kropkę miasta, żeby zobaczyć jego dane.</p></article>`;
+    <p class="text-sm text-muted">${SOON.has(id) ? 'Kraj jeszcze niegrywalny: widać jego szlaki i handel, bez miast i spółek.' : 'Kliknij kropkę miasta, żeby zobaczyć jego dane.'}</p></article>`;
 }
 function cityPanel() { // Gdańsk: przykład; w grze dane miasta z 0.19.2
   return `<article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon"><i data-ic="miasto" data-s="20"></i></span><div><h4>${city}</h4><span class="bank-card-type">Polska, port morski</span></div></header>

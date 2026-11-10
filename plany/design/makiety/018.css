@@ -176,6 +176,11 @@
 .rt-map .ct:hover > circle, .rt-map .ct:focus-visible > circle { stroke: var(--color-text-primary); }
 .rt-map .ct.is-open > circle { fill: color-mix(in srgb, var(--color-text-accent) 10%, var(--color-bg-sunken)); stroke: var(--color-border-accent); stroke-dasharray: 4 3; }
 .rt-map .ct > text { fill: var(--color-text-primary); font-size: 12px; font-weight: 600; text-anchor: middle; pointer-events: none; }
+/* Kraj „wkrótce” (R13): przygaszony jak na globusie wyboru, klikalny tylko dla listy szlaków */
+.rt-map .ct.is-soon > circle { fill: var(--color-bg-sunken); stroke: var(--color-border-default); stroke-dasharray: 3 3; }
+.rt-map .ct.is-soon > text { fill: var(--color-text-muted); font-weight: 400; }
+.rt-map .ct.is-soon.is-picked > circle { stroke: var(--color-text-secondary); }
+.ct-soon-mark { display: inline-block; width: 12px; height: 12px; border: 1px dashed var(--color-border-strong); border-radius: 50%; vertical-align: -2px; }
 .rt-map.has-open .ct:not(.is-open), .rt-map.has-open .rt-layer { opacity: .35; }
 .rt-map .city { cursor: pointer; outline: none; }
 .rt-map .city circle { fill: var(--color-text-secondary); stroke: var(--color-bg-sunken); stroke-width: 2; }

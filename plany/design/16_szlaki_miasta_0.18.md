@@ -14,6 +14,7 @@ Markup powstaje z tablic `COUNTRIES` (pozycje schematyczne), `ROUTES` i `CITIES`
 |---|---|---|
 | Filtr i liczby | transport (wszystkie, morskie, lotnicze, lądowe); szlaki aktywne, utrudnione (z powodem), wstrzymane | `.sector-chips`, `.bank-ticker` |
 | Kraj | koło z kodem; `aria-label`: nazwa, liczba szlaków i ile z problemem | `g.ct` (`tabindex`, `role="button"`, `aria-expanded`) |
+| Kraj „wkrótce” (R13) | SE, CH, FR, JP, TW, CN, IN: koło przerywane, tło `sunken`, kod szarym tekstem, jak na globusie wyboru kraju. Szlaki i handel widać, klik pokazuje tylko kartę szlaków z dopiskiem „kraj wkrótce”, bez miast. W legendzie „przerywane: kraj wkrótce”. Lista z `COUNTRIES[].soon` w grze | `.ct.is-soon`, `.ct.is-soon.is-picked`, `.ct-soon-mark` |
 | Szlak | linia kraj–kraj: morski łukiem, lotniczy wyższym łukiem (najwyżej 70 px), lądowy prosto. Stan: aktywny (szara ciągła), utrudniony (bursztynowa, kreski, słowo), wstrzymany (czerwone kropki, „× wstrzymany”). Na środku kółko z ikoną transportu | `path.rt.is-hamp / .is-stop`, `g.rt-mark` |
 | Rozwinięty kraj | koło rośnie (r 78), reszta mapy przygasa (35%), kropki miast z nazwami. Na telefonie mapa przewija się tak, żeby kraj był na środku | `.ct.is-open`, `.rt-map.has-open`, `g.city` |
 | Karta kraju | szlaki kraju z partnerem, transportem, powodem albo przepustowością, stanem słowem | `.bank-card`, `.en-rows`, `.rt-status` |
