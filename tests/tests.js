@@ -17334,3 +17334,27 @@ group('0.18.1 P4 Szok podażowy i baner kryzysu', () => {
         } finally { resetCrises(); document.getElementById('crisis-banner')?.remove(); }
     });
 });
+
+group('0.18.1 P5 Interfejs łańcuchów i Akademia', () => {
+    test('panel Łańcuchy: stan pusty, PL i kraj obcy bez błędów i bez emoji; wiersz w karcie spółki tylko dla ogniw; 3 hasła Akademii', () => {
+        resetWorld(JSON.parse(JSON.stringify(initialStocks))); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+        initFxState(); resetForeignIssuers(); resetChainState(); macro.subsectors018 = false; applySubsectors018();
+        try {
+            assert(/pierwszym kwartale/.test(renderChainsPanel()), 'stan pusty');
+            joinCountry('DE');
+            for (const s of stocks) if (!s.assetType) { s.fundamentals = s.fundamentals || initializeFundamentals(s); s.fundamentals.history.push({ revenue: 1000 + s.price, ebitda: 100, netIncome: 50, eps: 1 }); }
+            for (const i of getCountryIssuers('DE')) { ensureForeignCompany(i, true); i.fundamentals.history.push({ revenue: 500, ebitda: 50, netIncome: 20, eps: 1 }); }
+            processChainsQuarterly();
+            for (const country of ['PL', 'DE']) for (const id of Object.keys(CHAINS)) {
+                chainsView = { chain: id, good: null, country };
+                const html = renderChainsPanel();
+                assert(html.includes('ch-node') && html.includes('bank-ticker'), `${country} ${id}: kafle i pasek`);
+                assert(!/\p{Extended_Pictographic}/u.test(html.replace(/<[^>]+>/g, '')), `${country} ${id}: bez emoji`);
+            }
+            assert(renderStockChainTiles(stocks.find(s => s.symbol === 'HUT')).includes('Hutnictwo'), 'huta ma wiersz łańcucha');
+            const bank = stocks.find(s => getMainSector(s) === 'Bankowość');
+            assertEq(renderStockChainTiles(bank), '', 'bank bez wiersza');
+            for (const id of ['lancuchWartosci', 'efektByka', 'bilansDobra']) { const e = ACADEMY_ENTRIES[id]; assert(e && e.text.length > 100 && e.quiz.length === 3 && typeof e.example() === 'string', id); }
+        } finally { resetForeignIssuers(); initFxState(); resetChainState(); chainsView = { chain: 'metals', good: null, country: null }; }
+    });
+});
