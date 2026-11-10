@@ -55,7 +55,7 @@ function hasEntryMarketSlot(marketId) {
     return getEntryMarketCount(marketId) < capacity && hasFreeTotalListingSlot();
 }
 
-/** 0.16.6 S2: spółka państwowa nie opuszcza GPW (ani nie dostaje GDR, ani zagranicznego przejęcia); spółki miejskie startują na NH i mogą tylko awansować na GPW. */
+/** 0.16.6 S2: spółka państwowa nie opuszcza GPW (ani zagranicznego przejęcia); spółki miejskie startują na NH i mogą tylko awansować na GPW. */
 function isStateGpwOnly(stock) { return Boolean(stock?.isStateOwned); }
 
 /** Przeniesienie spółki na inny rynek (NH / PRV / GPW) z komunikatem; zwraca true, gdy przeniesiona. */

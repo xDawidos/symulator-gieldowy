@@ -1,9 +1,187 @@
 // =================================================================================
+// 0.16.1 G3 → 0.18.0 R2: EMITENCI ZAGRANICZNI I ZDARZENIE „GIGANT WKRACZA NA SCENĘ”
+// Rejestr `foreignIssuers` (spółki krajów dołączonych, `kind: 'share'`, definicje w countries_data.js) i zagraniczne przejęcie spółki krajowej.
+// Kwity depozytowe usunięte w 0.18.0 (decyzja 2026-11-10, bez migracji: kwity ze starych zapisów przepadają bez zwrotu).
+// =================================================================================
+
+/** Giganci zagraniczni (id, kraj, waluta): przejmujący koncern w zdarzeniu „Gigant wkracza na scenę”; jako spółki żyją w countries_data.js. */
+const FOREIGN_GIANTS = [
+    { id: 'GLS', name: 'Glasses', country: 'US', currency: 'USD' }, { id: 'AMZ', name: 'Amazonka Corp.', country: 'US', currency: 'USD' },
+    { id: 'PER', name: 'Pear', country: 'US', currency: 'USD' }, { id: 'VWA', name: 'VolksDeutsch Auto', country: 'DE', currency: 'EUR' },
+    { id: 'CRH', name: 'Chemiefabrik Rhein AG', country: 'DE', currency: 'EUR' }, { id: 'TYM', name: 'Toyotomi Motors', country: 'JP', currency: 'JPY' },
+    { id: 'ARS', name: 'Araska Corp.', country: 'JP', currency: 'JPY' }, { id: 'ALB', name: 'Alibaka Group', country: 'CN', currency: 'CNY' },
+    { id: 'TNC', name: 'Tencentyl', country: 'CN', currency: 'CNY' }, { id: 'TTM', name: 'TikTak Media', country: 'CN', currency: 'CNY' },
+    { id: 'TBN', name: 'TybetNaft', country: 'CN', currency: 'CNY' }, { id: 'LVT', name: 'Luxe Vuitonnet', country: 'FR', currency: 'EUR' },
+    { id: 'IKJ', name: 'IKEJA', country: 'SE', currency: 'SEK' }, { id: 'ROV', name: 'Rochevartis Pharma', country: 'CH', currency: 'CHF' },
+    { id: 'NSK', name: 'Nestlik', country: 'CH', currency: 'CHF' }, { id: 'HSR', name: 'HelloSir!', country: 'IN', currency: 'INR' },
+    { id: 'KWS', name: 'Krzemowa Wyspa Semiconductor', country: 'TW', currency: 'TWD' }
+];
+
+const GIANT_EVENT_RULES = {
+    eventChancePerQuarter: 0.035, // 0.18.0 R2: dawniej 0,115 × 30% przejęć (reszta to były kwity), więc częstość przejęć bez zmian
+    eventCooldownQuarters: 4,
+    takeoverPremium: [0.25, 0.45]
+};
+
+let foreignIssuers = {};      // id → emitent zagraniczny (countries.js)
+let giantEventState = { lastQ: -99, count: 0, takeover: 0, replacements: [] };
+let giantEventLog = [];       // { q, kind, giant, symbol } — ostatnie zdarzenia
+let pendingGiantEvent = null; // wynik do pokazania w oknie (UI w currency_ui.js; bez UI zostaje w dzienniku)
+
+function resetForeignIssuers() { foreignIssuers = {}; giantEventState = { lastQ: -99, count: 0, takeover: 0, replacements: [] }; giantEventLog = []; pendingGiantEvent = null; if (typeof resetCountriesState === 'function') resetCountriesState(); }
+
+function getForeignIssuerList() { return Object.values(foreignIssuers); }
+function getIssuerHeld(issuer, holder = 'player') { return Number(issuer.holders?.[holder]) || 0; }
+function getIssuerFree(issuer) { return issuer.float - Object.values(issuer.holders || {}).reduce((s, v) => s + (Number(v) || 0), 0); }
+
+/** Wartość akcji zagranicznych funduszu w złotych (do NAV). */
+function getFundForeignSharesValue() {
+    let total = 0;
+    for (const issuer of Object.values(foreignIssuers)) total += getIssuerHeld(issuer) * toPln(issuer.price, issuer.currency);
+    return total;
+}
+
+/** Przymusowa sprzedaż akcji zagranicznych: sprzedaż w walucie kraju i od razu wymiana w kantorze. */
+function sellShareForPln(issuer, qty) {
+    const r = sellForeignShares(issuer.id, qty);
+    if (!r.ok) return r;
+    const k = kantorSellCurrency(issuer.currency, r.proceeds);
+    return k.ok ? { ok: true, proceeds: k.pln } : k;
+}
+
+/** Przymusowa płynność: po obcej gotówce sprzedajemy akcje zagraniczne (od największej pozycji). Zwraca zdobyte złote. */
+function liquidateForeignShares(amountPln) {
+    let raised = 0;
+    const mid = i => toPln(i.price, i.currency);
+    const positions = Object.values(foreignIssuers).filter(i => getIssuerHeld(i) > 0).sort((a, b) => getIssuerHeld(b) * mid(b) - getIssuerHeld(a) * mid(a));
+    for (const issuer of positions) {
+        if (raised >= amountPln) break;
+        const qty = Math.min(getIssuerHeld(issuer), Math.ceil((amountPln - raised) / Math.max(1e-9, mid(issuer))));
+        const result = sellShareForPln(issuer, qty);
+        if (result.ok) raised += result.proceeds;
+    }
+    return raised;
+}
+
+// ---------------------------------------------------------------------------------
+// Wydarzenie „Gigant wkracza na scenę” (zagraniczne przejęcie spółki krajowej)
+// ---------------------------------------------------------------------------------
+
+/** Cel zagranicznego przejęcia: zdrowa spółka krajowa z górnej połowy kapitalizacji (te same zabezpieczenia co przy wycofaniu z giełdy). */
+function pickForeignTakeoverTarget() {
+    const pool = stocks.filter(s => hasListingMoveGuards(s) && !isStateGpwOnly(s) && (Number(s.financialHealth) || 0) >= 0 && !s.assetType && (playerPortfolio?.[s.symbol]?.shares || 0) <= s.totalShares * 0.3);
+    if (pool.length < 4) return null;
+    pool.sort((a, b) => getMarketCapValue(b) - getMarketCapValue(a));
+    const top = pool.slice(0, Math.max(3, Math.ceil(pool.length / 2)));
+    const weights = top.map(s => Math.sqrt(getMarketCapValue(s)));
+    let roll = Math.random() * weights.reduce((a, b) => a + b, 0);
+    for (let i = 0; i < top.length; i++) { roll -= weights[i]; if (roll <= 0) return top[i]; }
+    return top[0];
+}
+
+/** Zagraniczny inwestor wykupuje wszystkich akcjonariuszy z premią i zdejmuje spółkę z giełdy; gotówka płynie z zewnątrz (po kursie). */
+function executeForeignTakeover(stock, giant) {
+    const premium = getRandomInRange(GIANT_EVENT_RULES.takeoverPremium[0], GIANT_EVENT_RULES.takeoverPremium[1]);
+    const offer = stock.price * (1 + premium);
+    const heldByPlayer = (playerPortfolio?.[stock.symbol]?.shares || 0) > 0 || (playerWallet?.portfolio?.[stock.symbol]?.shares || 0) > 0;
+    const symbol = stock.symbol, name = stock.name;
+    const paid = buyOutAllHolders(stock, offer);
+    removeStockFromGame(symbol);
+    purgeSymbolHolders(symbol);
+    for (const ai of aiCompetitors) for (const loan of ai.loans || []) if (loan.collateral?.symbol === symbol) loan.collateral = null;
+    for (const bank of commercialBanks) for (const loans of Object.values(bank.loanPortfolio || {})) if (Array.isArray(loans)) for (const loan of loans) if (loan.collateral?.symbol === symbol) loan.collateral = null;
+    if (paid > 0) recordPayment('external:inwestor-zagraniczny', 'external:akcjonariusze', paid, 'Przejęcie przez zagranicznego inwestora');
+    const q = typeof macro === 'object' ? macro.quarter : 0, sector = getMainSector(stock);
+    (giantEventState.replacements ||= []).push({ due: q + 1 + Math.floor(Math.random() * 4), sector: sector || '', replaces: name, since: q }); // 0.16.9: w miejsce zdjętej spółki debiutuje nowa krajowa
+    const text = `🌍 ${giant.name} (${CURRENCIES[giant.currency]?.name || giant.currency}) przejmuje ${name} (${symbol}): wykup wszystkich akcjonariuszy po cenie ${formatNumberPl(offer, 2)} zł (premia ${(premium * 100).toFixed(0)}%). Spółka znika z giełdy; w ciągu 1–4 kwartałów w jej miejsce zadebiutuje nowa spółka krajowa.`;
+    logEvent(text, 'market');
+    if (typeof pushNews === 'function') pushNews(text, null);
+    if (heldByPlayer && typeof addMail === 'function') addMail({ sender: 'PULS', subject: `🌍 ${name}: przejęcie przez zagraniczny koncern`, body: `${text}\n\nTwoje akcje rozliczono gotówką po cenie wykupu.` });
+    return { symbol, name, offer, premium, paid, heldByPlayer, replacementSector: sector || null };
+}
+
+/** 0.16.9: debiuty spółek w miejsce przejętych (1–4 kw. po przejęciu): nowy startup z tego samego sektora od razu przez zwykłe IPO (limity spółek i wymogi wejścia jak zawsze); brak miejsca = próba w kolejnym kwartale, najdłużej 8 kw. */
+function processTakeoverReplacements() {
+    const q = typeof macro === 'object' ? macro.quarter : 0, list = giantEventState.replacements || [], debuts = [];
+    giantEventState.replacements = list.filter(r => {
+        if (q < r.due) return true;
+        if (q - r.since > 8) return false;
+        if (!hasFreeListingSlot()) return true;
+        const startup = generateNewStartup(r.sector);
+        stocks.push(startup);
+        handleSuccessfulIPO(startup, getRandomInRange(2, 4));
+        if (startup.assetType === 'Startup') { stocks.splice(stocks.indexOf(startup), 1); return true; } // IPO zaparkowane (brak miejsca na rynku wejścia) — bez duchów w inkubatorze
+        const text = `🆕 W miejsce ${r.replaces} wchodzi na giełdę ${startup.name} (${startup.symbol}), sektor: ${getMainSector(startup)}.`;
+        logEvent(text, 'market');
+        if (typeof pushNews === 'function') pushNews(text, null);
+        debuts.push({ symbol: startup.symbol, name: startup.name, replaces: r.replaces });
+        return false;
+    });
+    return debuts;
+}
+
+/** Raz na kwartał: szansa na zagraniczne przejęcie (nie częściej niż raz na rok). force: 'takeover' wymusza zdarzenie. */
+function processGiantEventQuarterly(force = null) {
+    const q = typeof macro === 'object' ? macro.quarter : 0;
+    if (!force) processTakeoverReplacements();
+    if (!force && (q - giantEventState.lastQ < GIANT_EVENT_RULES.eventCooldownQuarters || q < 4 || Math.random() >= GIANT_EVENT_RULES.eventChancePerQuarter)) return null;
+    const target = pickForeignTakeoverTarget();
+    if (!target) return null;
+    const free = FOREIGN_GIANTS.filter(g => !foreignIssuers[g.id]);
+    const pool = free.length ? free : FOREIGN_GIANTS; // przejmuje koncern, którego jeszcze nie ma w grze — wchodzi na naszą listę jako zwykłe akcje
+    const giant = pool[Math.floor(Math.random() * pool.length)];
+    const result = { kind: 'takeover', giant: giant.id, giantName: giant.name, country: giant.country, ...executeForeignTakeover(target, giant) };
+    // poprawka z gry 2026-11-02: gigant wchodzi jako zwykłe akcje: giełda jego kraju dołącza do gry, a on sam jest notowany na naszej liście bez biletu
+    if (typeof joinCountry === 'function' && !isCountryJoined(giant.country)) joinCountry(giant.country, 'takeover');
+    const issuer = foreignIssuers[giant.id];
+    if (issuer?.kind === 'share' && !issuer.homeListed && !isIssuerOnHomeList(issuer)) {
+        issuer.homeListed = true;
+        const text = `${issuer.name} (${COUNTRY_DEFS[issuer.country]?.name || issuer.country}) po przejęciu ${result.name} wchodzi na naszą giełdę jako zwykłe akcje ${getShareSymbol(issuer)}.`;
+        logEvent(text, 'market');
+        if (typeof pushNews === 'function') pushNews(text, null);
+        result.listedSymbol = getShareSymbol(issuer);
+    }
+    result.q = q;
+    giantEventState.lastQ = q; giantEventState.count++; giantEventState.takeover++;
+    giantEventLog.push({ q, kind: result.kind, giant: result.giant, symbol: result.symbol || null });
+    if (giantEventLog.length > 20) giantEventLog.shift();
+    pendingGiantEvent = result;
+    if (typeof showGiantEventWindow === 'function') showGiantEventWindow(result); // okno z pauzą (currency_ui.js); bez interfejsu zostaje dziennik
+    return result;
+}
+
+/** Niezmiennik emitentów: cena dodatnia, posiadacze nieujemni i nie więcej niż akcji w obrocie. */
+function checkForeignIssuerInvariants() {
+    const problems = [];
+    for (const issuer of Object.values(foreignIssuers)) {
+        if (!(issuer.price > 0) || !Number.isFinite(issuer.price)) problems.push(`cena ${issuer.id} (${issuer.price})`);
+        let sum = 0;
+        for (const [holder, qty] of Object.entries(issuer.holders || {})) {
+            if (!Number.isFinite(qty) || qty < 0) problems.push(`akcje ${getShareSymbol(issuer)}: ${holder} ${qty}`);
+            sum += qty;
+        }
+        if (sum > issuer.float + 1e-6) problems.push(`akcje ${getShareSymbol(issuer)}: posiadacze ${sum} > obrót ${issuer.float}`);
+    }
+    return problems;
+}
+
+/** Zapis zdarzeń gigantów (akcje krajów: countries.js). Zapis do v23 trzymał je razem z kwitami pod kluczem `gdr`; kwity są pomijane. */
+function getGiantEventSnapshot() { return { events: giantEventState, log: giantEventLog }; }
+
+function applyGiantEventSnapshot(snapshot) {
+    resetForeignIssuers();
+    if (!snapshot || typeof snapshot !== 'object') return;
+    const ev = snapshot.events || {};
+    giantEventState = { lastQ: Number.isFinite(Number(ev.lastQ)) ? Number(ev.lastQ) : -99, count: Number(ev.count) || 0, takeover: Number(ev.takeover) || 0, replacements: Array.isArray(ev.replacements) ? ev.replacements.map(r => ({ due: Number(r.due) || 0, sector: String(r.sector || ''), replaces: String(r.replaces || ''), since: Number(r.since) || 0 })) : [] };
+    giantEventLog = (Array.isArray(snapshot.log) ? snapshot.log : []).filter(e => e?.kind === 'takeover').slice(-20);
+}
+
+// =================================================================================
 // 0.16.2 G5: PLATFORMA RYNKU ZAGRANICZNEGO
 // Kraj dołączony do giełdy ma operatora (prowizja), własną stopę, nastrój (`marketRegimes[kraj]` skorelowany z PL), limit spółek
-// (1,5 × liczba startowa) i spółki w wersji uproszczonej: cena w walucie kraju, bez bilansu i pracowników (jak obcy giganci z gdr.js).
+// (1,5 × liczba startowa) i spółki w wersji uproszczonej: cena w walucie kraju, bez bilansu i pracowników (jak dawni obcy giganci).
 // Definicje krajów (`COUNTRY_DEFS`, dane w countries_data.js) są w kodzie, nie w zapisie — zapisujemy tylko kraje, które dołączyły,
-// i dynamikę ich spółek (cena, krótka historia, posiadacze). Obcy emitent żyje w `foreignIssuers` (gdr.js), `kind: 'share'`.
+// i dynamikę ich spółek (cena, krótka historia, posiadacze). Obcy emitent żyje w `foreignIssuers` (sekcja na początku pliku), `kind: 'share'`.
 // Zasada niezmiennika: posiadacze (gracz, boty) ≤ float; pakiet państwa jest poza floatem. Zwrot z dywidend jest w cenie (zwrot całkowity).
 // =================================================================================
 
@@ -16,7 +194,7 @@ const COUNTRY_RULES = {
     limitMultRange: [1.6, 2.6], // 0.16.8 F3 (podniesione 2026-10-31 z [1.2, 2.0]: córki obcych zajmowały miejsca, 74/74 po ok. 15 latach): mnożnik liczby startowej rośnie z wielkością rynku (logarytmicznie od najmniejszego do największego)
     sizeIndex: { US: 10, CN: 8, JP: 4, DE: 3.5, IN: 3, FR: 2.5, TW: 1.5, CH: 1.2, SE: 1, PL: 1, CZ: 0.6 }, // względna wielkość (PKB / kapitalizacja giełdy), jedno miejsce parametrów
     sectorShareCap: 0.4,       // 0.16.8 F3: debiut nie może zwiększyć udziału jednego sektora głównego powyżej 40% spółek giełdy
-    historyWeeks: 13,          // zapis uproszczony: 25% długości historii GDR (52 tyg.)
+    historyWeeks: 13,          // zapis uproszczony: 13 tygodni
     volScale: 0.24,            // zmienność roczna × beta sektora
     driftYear: 0.08,           // dryf roczny przy zerowej premii (zwrot całkowity)
     premiumDrift: 0.6,         // dryf roczny na jednostkę premii rynku
@@ -119,8 +297,8 @@ function delistForeignIssuer(issuer, price) {
 }
 function getCountryIssuers(id) { return getForeignIssuerList().filter(i => i.kind === 'share' && i.country === id); }
 
-/** Symbol spółki zagranicznej w jej kraju, np. PLT.US (kwit na giganta jeszcze niedołączonego kraju: ID.GDR). */
-function getShareSymbol(issuer) { return issuer.kind === 'share' ? `${issuer.id}.${issuer.country}` : `${issuer.id}.GDR`; }
+/** Symbol spółki zagranicznej w jej kraju, np. PLT.US. */
+function getShareSymbol(issuer) { return `${issuer.id}.${issuer.country}`; }
 
 function getSectorBeta(sector) { return (typeof SECTORS === 'object' && SECTORS[sector]?.profile?.beta) || 1; }
 function getSectorRateSens(sector) { return (typeof SECTORS === 'object' && SECTORS[sector]?.profile?.rateSens) ?? 0.7; }
@@ -214,7 +392,6 @@ function joinCountry(id, by = 'test') {
     const text = `Giełda w kraju: ${def.name} dołącza do świata gry (${def.operator.name}, waluta ${def.currency}, ${def.companies.length} spółek).`;
     logEvent(`🌍 ${text}`, 'market');
     if (typeof pushNews === 'function') pushNews(`🌍 ${text}`, null);
-    if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('adrGdr');
     return countryState[id];
 }
 
@@ -382,7 +559,7 @@ function applySpecialEvents(issuer) {
             const text = `🌍 Swiss Leaks: kontrola ujawnia pranie pieniędzy w ${issuer.name}. Kurs spada o 30–60%, bank płaci karę.`;
             logEvent(text, 'market');
             if (typeof pushNews === 'function') pushNews(text, null);
-            if (getGdrHeld(issuer) > 0 && typeof addMail === 'function') addMail({ sender: 'PULS', subject: `🌍 ${issuer.name}: Swiss Leaks`, body: `${text}\n\nMasz ${formatNumberPl(getGdrHeld(issuer), 0)} akcji tego banku.`, importance: 3 });
+            if (getIssuerHeld(issuer) > 0 && typeof addMail === 'function') addMail({ sender: 'PULS', subject: `🌍 ${issuer.name}: Swiss Leaks`, body: `${text}\n\nMasz ${formatNumberPl(getIssuerHeld(issuer), 0)} akcji tego banku.`, importance: 3 });
         }
     }
 }
@@ -447,7 +624,7 @@ function checkCountryInvariants() {
     for (const issuer of getForeignIssuerList()) {
         if (issuer.kind !== 'share') continue;
         if (!countryState[issuer.country]) problems.push(`spółka ${issuer.id} w kraju niedołączonym ${issuer.country}`);
-        if (issuer.state && getGdrFree(issuer) < -1e-6) problems.push(`pakiet państwa ${issuer.id} naruszony`);
+        if (issuer.state && getIssuerFree(issuer) < -1e-6) problems.push(`pakiet państwa ${issuer.id} naruszony`);
     }
     if (typeof checkForeignCompanyInvariants === 'function') problems.push(...checkForeignCompanyInvariants());
     if (typeof checkForeignBotInvariants === 'function') problems.push(...checkForeignBotInvariants());
@@ -644,7 +821,7 @@ const FOREIGN_OVERSIGHT = { fine: 0.02, trustLoss: 3, resaleQuarters: 2, resaleL
 /** Krok drabiny po kupnie ponad próg wezwania: 1 — ostrzeżenie, 2 — kara (2% wartości nadwyżki), ≥ 3 — nakaz odsprzedaży do progu w 2 kw. Licznik wspólny z KNF (getTenderRecord). */
 function applyForeignOversightStep(issuer, overValuePln) {
     const rec = getTenderRecord(), strike = (rec.tenderStrikes = (Number(rec.tenderStrikes) || 0) + 1);
-    const o = getOversight(issuer.country), thr = Math.round(o.callThreshold * 100), sym = getGdrSymbol(issuer);
+    const o = getOversight(issuer.country), thr = Math.round(o.callThreshold * 100), sym = getShareSymbol(issuer);
     let step, body;
     if (strike === 1) {
         step = 'warning';
@@ -672,7 +849,7 @@ function processForeignOversightQuarterly() {
     for (const issuer of getForeignIssuerList()) {
         const order = issuer.oversightResale;
         if (!order) continue;
-        const excess = getGdrHeld(issuer) - Math.floor(getCallThreshold(issuer.country) * issuer.shares);
+        const excess = getIssuerHeld(issuer) - Math.floor(getCallThreshold(issuer.country) * issuer.shares);
         if (excess <= 0) { delete issuer.oversightResale; continue; }
         if (macro.quarter < order.until) continue;
         const r = sellForeignShares(issuer.id, excess);
@@ -719,7 +896,7 @@ function unhideCash(amount) {
     return { ok: true, received: amount - fee, fee };
 }
 
-/** Wypłata awaryjna pod umorzenia / margin call (w forceLiquidation, po obcej gotówce i GDR). Zwraca wpływ netto. */
+/** Wypłata awaryjna pod umorzenia / margin call (w forceLiquidation, po obcej gotówce i akcjach zagranicznych). Zwraca wpływ netto. */
 function liquidateHiddenCash(amountPln) {
     const gross = Math.min(getHiddenBalance(), amountPln / (1 - HIDDEN_CASH_RULES.withdrawFee));
     return gross > 0 ? (unhideCash(gross).received || 0) : 0;
@@ -764,8 +941,8 @@ function buyForeignShares(issuerId, quantity, opts = {}) {
     if (!canTradeCountry('player', issuer.country) && !issuer.homeListed) return { ok: false, reason: `Brak biletu na rynek: ${def?.name || issuer.country}. Bilet kupisz na lotnisku.` };
     if (typeof isMarketHalted === 'function' && isMarketHalted()) return { ok: false, reason: 'Handel wstrzymany — zadziałał bezpiecznik giełdowy.' };
     if (issuer.tradeHalted) return { ok: false, reason: 'Notowania spółki są zawieszone.' };
-    if (quantity > getGdrFree(issuer)) return { ok: false, reason: 'Nie ma tylu akcji w wolnym obrocie.' };
-    const room = Math.floor(getCallThreshold(issuer.country) * issuer.shares) - getGdrHeld(issuer); // drabina nadzoru (G15): bez wezwania nie przekroczysz progu
+    if (quantity > getIssuerFree(issuer)) return { ok: false, reason: 'Nie ma tylu akcji w wolnym obrocie.' };
+    const room = Math.floor(getCallThreshold(issuer.country) * issuer.shares) - getIssuerHeld(issuer); // drabina nadzoru (G15): bez wezwania nie przekroczysz progu
     const over = quantity > room;
     if (over && !opts.overThreshold) {
         const o = getOversight(issuer.country);
@@ -780,7 +957,7 @@ function buyForeignShares(issuerId, quantity, opts = {}) {
     if (total > playerCash + 1e-9) return { ok: false, reason: 'Za mało gotówki funduszu.' };
     playerCash -= total;
     if (useLocal > 0) { playerCashByCurrency[cur] = have - useLocal; if (playerCashByCurrency[cur] < 1e-9) delete playerCashByCurrency[cur]; }
-    issuer.holders.player = getGdrHeld(issuer) + quantity;
+    issuer.holders.player = getIssuerHeld(issuer) + quantity;
     if (over) applyForeignOversightStep(issuer, toPln((quantity - Math.max(0, room)) * issuer.price, cur));
     if (spreadCost > 0) recordPayment('player-fund', 'external:kantor', spreadCost, 'Kantor: spread przy zakupie akcji zagranicznych');
     if (commissionPln > 0) recordPayment('player-fund', `external:${def.operator.id}`, commissionPln, `Prowizja: ${def.operator.name}`);
@@ -794,7 +971,7 @@ function sellForeignShares(issuerId, quantity) {
     if (!issuer || issuer.kind !== 'share' || !(quantity > 0)) return { ok: false, reason: 'Podaj liczbę akcji.' };
     if (typeof isMarketHalted === 'function' && isMarketHalted()) return { ok: false, reason: 'Handel wstrzymany — zadziałał bezpiecznik giełdowy.' };
     if (issuer.tradeHalted) return { ok: false, reason: 'Notowania spółki są zawieszone.' };
-    const held = getGdrHeld(issuer);
+    const held = getIssuerHeld(issuer);
     if (quantity > held) return { ok: false, reason: 'Za mało akcji.' };
     const def = COUNTRY_DEFS[issuer.country], gross = quantity * issuer.price, fee = gross * getCountryCommission(issuer.country);
     issuer.holders.player = held - quantity;
@@ -923,7 +1100,7 @@ function botAccess(bot, country) {
 }
 
 function botPickTarget(bot, def) {
-    const pool = id => getCountryIssuers(id).filter(i => !i.tradeHalted && !(i.state && getGdrFree(i) <= 0));
+    const pool = id => getCountryIssuers(id).filter(i => !i.tradeHalted && !(i.state && getIssuerFree(i) <= 0));
     let candidates = pool(bot.homeCountry);
     if (def.style === 'banker') { // Gutzwiller: tylko banki; Waschmabank z preferencją
         const fav = foreignIssuers[def.favorite];
@@ -957,7 +1134,7 @@ function foreignBotBuy(bot, def) {
     if (!issuer) return false;
     const budgetPln = botSpendable(bot) * (def.spend || BOT_RULES.spendShare), mid = toPln(issuer.price, issuer.currency);
     const cap = Math.floor(issuer.shares * botStakeCap(issuer, bot)) - (Number(issuer.holders[bot.id]) || 0);
-    let qty = Math.min(Math.floor(budgetPln / mid), cap, Math.floor(getGdrFree(issuer)));
+    let qty = Math.min(Math.floor(budgetPln / mid), cap, Math.floor(getIssuerFree(issuer)));
     if (!(qty >= 1)) return false;
     const cost = qty * issuer.price * (1 + getCountryCommission(issuer.country));
     if (!botPay(bot, issuer.currency, cost)) return false;

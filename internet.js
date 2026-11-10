@@ -1,6 +1,6 @@
 // =================================================================================
 // 0.16.5 „Internet”: przeglądarka w grze zamiast okna Kantor. Strony otwierają się TYLKO z ulubionych (kafelki, pasek adresu
-// tylko do odczytu), każda ma własny cel: Kantory24 (kantor, GDR, rynki, forex), Tied (posty prezesów i wiadomości od inwestorów),
+// tylko do odczytu), każda ma własny cel: Kantory24 (kantor, rynki, forex), Tied (posty prezesów i wiadomości od inwestorów),
 // Startupy (inkubator i pula), Ferie i wakacje (bilety do rynków zagranicznych), Lombard. Logika (bez DOM) jest na górze pliku,
 // wyświetlanie niżej; bilety i dostęp do rynku zostają w countries.js. Komponenty 0.14.5, ikony SVG, tylko ciemny motyw.
 // =================================================================================
@@ -8,7 +8,7 @@
 
 /** Ulubione: jedyna droga do stron. */
 const INTERNET_FAVORITES = [
-    { id: 'kantory24', tag: 'Waluty i forex', tone: 'amber', title: 'Kantory24', host: 'kantory24.pl', icon: 'moneta', desc: 'Waluty, kwity GDR, rynki zagraniczne i forex.' },
+    { id: 'kantory24', tag: 'Waluty i forex', tone: 'amber', title: 'Kantory24', host: 'kantory24.pl', icon: 'moneta', desc: 'Waluty, rynki zagraniczne i forex.' },
     { id: 'tied', tag: 'Sieć zawodowa', tone: 'blue', title: 'Tied', host: 'tied.net', icon: 'grupa', desc: 'Posty prezesów i wiadomości od inwestorów.' },
     { id: 'startupy', tag: 'Venture capital', tone: 'violet', title: 'Startupy', host: 'startupy.gielda.pl', icon: 'rakieta', desc: 'Inkubator, pula start-upów i rundy finansowania.' },
     { id: 'ferie', tag: 'Mobilność', tone: 'teal', title: 'Ferie i wakacje', host: 'ferie-i-wakacje.pl', icon: 'samolot', desc: 'Bilety do rynków zagranicznych, lotnisko miasta.' },
@@ -181,7 +181,7 @@ function renderFeriePage() {
         <div class="net-dests">${cards}</div><div id="net-ferie-country"></div>`;
     const box = document.getElementById('net-ferie-country');
     if (!owns) return;
-    const rows = getCountryIssuers(c).map(i => `<tr><td><strong>${getGdrSymbol(i)}</strong> <span class="text-muted">${escapeHtml(i.name)}</span></td><td>${escapeHtml(i.sectors.map(s => s[0]).join(' + '))}</td><td class="text-right">${formatNumberPl(i.price, 2)} ${i.currency}</td><td class="text-right">${formatZl(toPln(i.price, i.currency), 2)}</td></tr>`).join('');
+    const rows = getCountryIssuers(c).map(i => `<tr><td><strong>${getShareSymbol(i)}</strong> <span class="text-muted">${escapeHtml(i.name)}</span></td><td>${escapeHtml(i.sectors.map(s => s[0]).join(' + '))}</td><td class="text-right">${formatNumberPl(i.price, 2)} ${i.currency}</td><td class="text-right">${formatZl(toPln(i.price, i.currency), 2)}</td></tr>`).join('');
     box.innerHTML = `<div class="net-section-head"><h3>Rynek: ${escapeHtml(COUNTRY_DEFS[c].name)}</h3></div>${renderCountryCard(c)}<table class="asset-mini-table w-full mt-3"><thead><tr><th>Spółka</th><th>Sektor</th><th class="text-right">Cena</th><th class="text-right">Cena w ${getBaseCurrency()}</th></tr></thead><tbody>${rows}</tbody></table>
         <div class="btn-row"><button class="btn-primary" onclick="marketsSelected='${c}'; kantorTab='markets'; openInternetPage('kantory24')">Handluj w Kantory24</button><button class="btn-ghost" onclick="selectInternetCountry(null); renderFeriePage()">Wróć do neutralnego okna</button></div>`;
 }

@@ -3,7 +3,7 @@
 // Definicje są w kodzie, nie w zapisie. Pola spółki: id (symbol), name, sector (lub [główny, drugi]), subsector, kind ('giant' | 'normal' | 'state'),
 // price (w walucie kraju), special (jeden modyfikator: defense | loyal | summer | volatile | premiere | season), vol (mnożnik zmienności), desc.
 // Kraj: rho (korelacja nastroju z PL: Europa 0,8 → 0,75/0,7, Ameryka–Europa 0,6), rateMean (średnia stopa), labour (stały profil dla pracowników, 0.13).
-// Giganci mają to samo id i cenę co w FOREIGN_GIANTS (gdr.js): kwity zamieniają się w akcje 1:1 po dołączeniu kraju.
+// Giganci mają to samo id co w FOREIGN_GIANTS (countries.js): przejmujący koncern w zdarzeniu „Gigant wkracza na scenę”.
 // =================================================================================
 
 COUNTRY_DEFS.DE = {

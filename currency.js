@@ -203,7 +203,7 @@ function getKantorQuote(code, amountPln, side = 'buy') {
 const KANTOR_PROVIDER_RULES = {
     [BANK_TYPES.INTERNET]: { spread: [0.010, 0.016], maxPln: 300_000, currencies: ['EUR', 'USD', 'CHF', 'CZK', 'SEK'], tag: 'e-bank' },
     [BANK_TYPES.UNIVERSAL]: { spread: [0.017, 0.026], maxPln: Infinity, currencies: ['EUR', 'USD', 'CHF', 'CZK', 'SEK'], tag: 'bank uniwersalny' },
-    [BANK_TYPES.INTERNATIONAL]: { spread: [0.006, 0.011], minPln: 100_000, maxPln: Infinity, currencies: null, tag: 'bank międzynarodowy', gdrSpreadFactor: 0.5 }
+    [BANK_TYPES.INTERNATIONAL]: { spread: [0.006, 0.011], minPln: 100_000, maxPln: Infinity, currencies: null, tag: 'bank międzynarodowy' }
 };
 const MUNICIPAL_KANTOR_RULE = { spread: [0.012, 0.020], maxPln: 30_000, currencies: ['EUR', 'USD', 'CZK'], tag: 'spółka miejska' };
 const KANTOR_OFFER_WEEKS = WEEKS_PER_QUARTER; // oferty dostawców odświeżane co kwartał gry

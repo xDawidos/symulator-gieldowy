@@ -121,8 +121,8 @@ function renderMarketsTab() {
     const id = marketsSelected, def = COUNTRY_DEFS[id], access = canTradeCountry('player', id);
     const tabs = joined.map(c => `<button class="tab-btn ${c === id ? 'active' : ''}" onclick="selectMarketCountry('${c}')" aria-pressed="${c === id}">${escapeHtml(COUNTRY_DEFS[c].name)} · ${COUNTRY_DEFS[c].currency}</button>`).join('');
     const rows = [...getCountryIssuers(id)].sort((a, b) => getForeignTier(b).level - getForeignTier(a).level || toPln(b.price, b.currency) - toPln(a.price, a.currency)).map(i => {
-        const h = i.history, change = h.length > 1 ? i.price / h[0] - 1 : 0, held = getGdrHeld(i), free = getGdrFree(i);
-        return `<tr><td><strong>${getGdrSymbol(i)}</strong> <span class="text-muted">${escapeHtml(i.name)}</span>${i.state ? ' <span class="text-xs">(państwowa)</span>' : ''}${i.giant ? ' <span class="text-xs">(gigant)</span>' : ''} <button type="button" class="info-btn" aria-label="Karta spółki ${escapeHtml(i.name)}" title="Karta spółki" onclick="openDescriptionModal('${getShareSymbol(i)}')">${uiIcon('karta', 14)}</button> <button type="button" class="info-btn" aria-label="Wykres ${escapeHtml(i.name)}" title="Wykres ceny" onclick="showPriceHistoryModal('${getShareSymbol(i)}')">${uiIcon('wykres', 14)}</button><br><span class="text-muted text-xs">${escapeHtml(getForeignTier(i).label)}</span>${typeof renderForeignCompanyLine === 'function' ? renderForeignCompanyLine(i) : ''}</td>
+        const h = i.history, change = h.length > 1 ? i.price / h[0] - 1 : 0, held = getIssuerHeld(i), free = getIssuerFree(i);
+        return `<tr><td><strong>${getShareSymbol(i)}</strong> <span class="text-muted">${escapeHtml(i.name)}</span>${i.state ? ' <span class="text-xs">(państwowa)</span>' : ''}${i.giant ? ' <span class="text-xs">(gigant)</span>' : ''} <button type="button" class="info-btn" aria-label="Karta spółki ${escapeHtml(i.name)}" title="Karta spółki" onclick="openDescriptionModal('${getShareSymbol(i)}')">${uiIcon('karta', 14)}</button> <button type="button" class="info-btn" aria-label="Wykres ${escapeHtml(i.name)}" title="Wykres ceny" onclick="showPriceHistoryModal('${getShareSymbol(i)}')">${uiIcon('wykres', 14)}</button><br><span class="text-muted text-xs">${escapeHtml(getForeignTier(i).label)}</span>${typeof renderForeignCompanyLine === 'function' ? renderForeignCompanyLine(i) : ''}</td>
             <td>${escapeHtml(i.sectors.map(s => s[0]).join(' + '))}</td>
             <td class="text-right">${formatNumberPl(i.price, 2)} ${i.currency}<br><span class="text-muted text-xs">${fxArrow(change)} ${fxPct(change)} w ${h.length - 1} tyg.</span></td>
             <td class="text-right">${formatZl(toPln(i.price, i.currency), 2)}</td>
@@ -134,13 +134,13 @@ function renderMarketsTab() {
         ${renderCountryCard(id)}
         ${id === 'CH' ? renderHiddenCashCard() : ''}
         ${access ? '' : `<p class="text-sm" role="status">Brak biletu na ten rynek — kupowanie jest zablokowane (sprzedaż posiadanych akcji działa). Bilet kupisz w Internecie, na stronie Ferie i wakacje (${formatZl(getTicketPrice(id), 0)}).</p>`}
-        ${countryState[id]?.link ? `<p class="text-sm" role="status">Giełda połączona z naszą: spółki ${escapeHtml(def.name)} (${id}) są na głównej liście akcji, na poziomach naszych giełd (wg ceny i kapitalizacji), z kupnem i sprzedażą jak krajowe (prowizja krajowa, bez biletu; dostęp wg poziomu giełdy). Tu zostają kursy walut, forex i kwity GDR.</p>` : `<table class="asset-mini-table w-full mt-3"><thead><tr><th>Spółka</th><th>Sektor</th><th class="text-right">Cena (waluta)</th><th class="text-right">Cena w ${getBaseCurrency()}</th><th class="text-right">Twoje akcje</th><th class="text-right">Zlecenie</th></tr></thead><tbody>${rows}</tbody></table>`}
+        ${countryState[id]?.link ? `<p class="text-sm" role="status">Giełda połączona z naszą: spółki ${escapeHtml(def.name)} (${id}) są na głównej liście akcji, na poziomach naszych giełd (wg ceny i kapitalizacji), z kupnem i sprzedażą jak krajowe (prowizja krajowa, bez biletu; dostęp wg poziomu giełdy). Tu zostają kursy walut i forex.</p>` : `<table class="asset-mini-table w-full mt-3"><thead><tr><th>Spółka</th><th>Sektor</th><th class="text-right">Cena (waluta)</th><th class="text-right">Cena w ${getBaseCurrency()}</th><th class="text-right">Twoje akcje</th><th class="text-right">Zlecenie</th></tr></thead><tbody>${rows}</tbody></table>`}
         <p class="text-sm text-muted">Kupno płacisz najpierw gotówką w ${def.currency}, resztę wymienia kantor (spread). Prowizja ${formatNumberPl(getCountryCommission(id) * 100, 1)}%. Wpływy ze sprzedaży trafiają na konto walutowe — złotówki dostaniesz w kantorze. Zysk to zmiana ceny <em>i</em> kursu ${def.currency}; ceny zawierają dywidendy.</p>`;
 }
 
 /** 0.16.9 W3: wiersz spółki kraju połączonego na głównej liście — w grupie poziomu giełdy razem z krajowymi; karta i wykres jak u krajowych, handel przez marketsUiTrade (jedno źródło cen i transakcji). */
 function renderLinkedStockRow(tbody, i, previous = {}) {
-    const row = tbody.insertRow(), c = i.country, h = i.history, change = h.length > 1 ? i.price / h[h.length - 2] - 1 : 0, held = getGdrHeld(i), free = getGdrFree(i), sym = getShareSymbol(i);
+    const row = tbody.insertRow(), c = i.country, h = i.history, change = h.length > 1 ? i.price / h[h.length - 2] - 1 : 0, held = getIssuerHeld(i), free = getIssuerFree(i), sym = getShareSymbol(i);
     const tier = getForeignTier(i), allowed = tier.level <= playerAccessLevel;
     const cls = change > 0 ? 'up' : change < 0 ? 'down' : 'flat';
     row.className = 'stock-row foreign-row clickable'; row.dataset.symbol = sym; row.dataset.country = c; row.dataset.level = tier.key;
@@ -188,7 +188,7 @@ function marketsUiTrade(id, side) {
         gameConfirm(`${r.reason} Kupno ponad próg grozi ostrzeżeniem, karą i nakazem odsprzedaży nadzoru. Kupić mimo to?`, () => { const t = buyForeignShares(id, qty, { overThreshold: true }); showToast(t.ok ? `Kupiono ${qty} akcji (ponad próg wezwania).` : t.reason, t.ok ? 'warning' : 'error'); renderKantor(); if (typeof updateUI === 'function') updateUI(); }, { title: 'Przekroczenie progu wezwania', confirmLabel: 'Kupuję mimo to', danger: true });
         return;
     }
-    const label = foreignIssuers[id] ? getGdrSymbol(foreignIssuers[id]) : id;
+    const label = foreignIssuers[id] ? getShareSymbol(foreignIssuers[id]) : id;
     showToast(r.ok ? `${side === 'buy' ? 'Kupiono' : 'Sprzedano'} ${qty} akcji ${label}${side === 'buy' ? ` za ${formatZl(r.cost, 0)} (prowizja ${formatZl(r.commissionPln, 0)})` : ` — wpływ ${formatNumberPl(r.proceeds, 2)} ${r.currency}`}.` : r.reason, r.ok ? 'success' : 'warning');
     renderKantor();
     if (typeof updateUI === 'function') updateUI();

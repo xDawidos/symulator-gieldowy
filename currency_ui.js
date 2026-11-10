@@ -1,14 +1,12 @@
 // =================================================================================
-// 0.16.1 G4: INTERFEJS — okno kantoru (kursy, wykres, kupno i sprzedaż), zakładka „Obce” (GDR), okno „Gigant wkracza na scenę”,
+// 0.16.1 G4: INTERFEJS — okno kantoru (kursy, wykres, kupno i sprzedaż), okno „Gigant wkracza na scenę”,
 // hasła Akademii. Komponenty 0.14.5 (bank-card, bank-grid, asset-mini-table, tab-btn), ikony SVG ze sprite'a, bez emoji,
 // kolor nigdy jedynym nośnikiem (znak ▲▼ i słowa), jedyne nowe okna: kantor i wydarzenie z pauzą gry.
 // =================================================================================
 
 let kantorSelected = 'EUR';
 let kantorTab = 'rates';
-let obceFilter = { country: '', currency: '' };
 let kantorProviderId = 'std';
-let gdrBrokerId = 'std';
 
 const COUNTRY_NAMES = { PL: 'Polska', DE: 'Niemcy', US: 'USA', CZ: 'Czechy', SE: 'Szwecja', CH: 'Szwajcaria', JP: 'Japonia', CN: 'Chiny', IN: 'Indie', TW: 'Tajwan', FR: 'Francja' };
 
@@ -103,8 +101,8 @@ function renderKantor() {
     const body = document.getElementById('kantor-body');
     if (!body || !playerFund) { if (body) body.innerHTML = '<p class="text-muted">Kantor działa po założeniu funduszu.</p>'; return; }
     const ticker = document.getElementById('kantor-ticker');
-    if (ticker) ticker.textContent = `Gotówka funduszu: ${formatZl(playerCash, 0)} · waluty: ${formatZl(getForeignCashPln('player'), 0)} · kwity GDR: ${formatZl(getFundGdrValue(), 0)}`;
-    body.innerHTML = kantorTab === 'foreign' ? renderForeignTab() : (kantorTab === 'forex' && typeof renderForexTab === 'function') ? renderForexTab() : (kantorTab === 'markets' && typeof renderMarketsTab === 'function') ? renderMarketsTab() : (kantorTab === 'commodities' && typeof renderCommodityTab === 'function') ? renderCommodityTab() : renderRatesTab();
+    if (ticker) ticker.textContent = `Gotówka funduszu: ${formatZl(playerCash, 0)} · waluty: ${formatZl(getForeignCashPln('player'), 0)} · akcje zagraniczne: ${formatZl(getFundForeignSharesValue(), 0)}`;
+    body.innerHTML = (kantorTab === 'forex' && typeof renderForexTab === 'function') ? renderForexTab() : (kantorTab === 'markets' && typeof renderMarketsTab === 'function') ? renderMarketsTab() : (kantorTab === 'commodities' && typeof renderCommodityTab === 'function') ? renderCommodityTab() : renderRatesTab();
     if (kantorTab === 'rates') updateKantorQuote();
 }
 
@@ -181,40 +179,6 @@ function kantorUiSell() {
 
 // --- Zakładka „Obce”: kwity depozytowe ---
 
-function setObceFilter(key, value) { obceFilter[key] = value; renderKantor(); }
-
-function renderForeignTab() {
-    const issuers = getForeignIssuerList().filter(i => i.kind !== 'share'); // akcje krajów dołączonych są w zakładce Rynki
-    const countries = [...new Set(FOREIGN_GIANTS.map(g => g.country))], currencies = [...new Set(FOREIGN_GIANTS.map(g => g.currency))];
-    const opts = (list, current, label) => `<option value="">${label}</option>` + list.map(v => `<option value="${v}" ${v === current ? 'selected' : ''}>${escapeHtml(COUNTRY_NAMES[v] || v)}</option>`).join('');
-    const filtered = issuers.filter(i => (!obceFilter.country || i.country === obceFilter.country) && (!obceFilter.currency || i.currency === obceFilter.currency));
-    const rows = filtered.map(i => {
-        const held = getGdrHeld(i), h = i.history, change = h.length > 1 ? i.price / h[0] - 1 : 0;
-        return `<tr><td><strong>${getGdrSymbol(i)}</strong> <span class="text-muted">${escapeHtml(i.name)}</span></td>
-            <td>${escapeHtml(COUNTRY_NAMES[i.country] || i.country)} · ${currencyIcon(i.currency, 14)} ${i.currency}</td>
-            <td class="text-right">${formatNumberPl(i.price, 2)} ${i.currency}<br><span class="text-muted text-xs">${fxArrow(change)} ${fxPct(change)} w ${h.length - 1} tyg.</span></td>
-            <td class="text-right">${formatZl(getGdrMid(i), 2)}<br><span class="text-muted text-xs">kupno ${formatZl(getGdrQuote(i, 'buy'), 2)} · sprzedaż ${formatZl(getGdrQuote(i, 'sell'), 2)}</span></td>
-            <td class="text-right">${held > 0 ? `${formatNumberPl(held, 0)} (${formatZl(held * getGdrMid(i), 0)})` : '—'}</td>
-            <td class="text-right"><input type="number" min="1" step="1" value="100" id="gdr-qty-${i.id}" aria-label="Liczba kwitów ${escapeHtml(i.name)}" style="width:5.5em">
-                <button class="btn-primary btn-sm" onclick="gdrUiTrade('${i.id}','buy')">Kup</button> <button class="btn-ghost btn-sm" onclick="gdrUiTrade('${i.id}','sell')" ${held > 0 ? '' : 'disabled'}>Sprzedaj</button></td></tr>`;
-    }).join('');
-    const brokers = getKantorProviders().filter(p => p.kind === 'international');
-    const brokerSel = `<label class="text-sm">Pośrednik <select onchange="gdrBrokerId = this.value">${`<option value="std">Depozytariusz (spread ${formatNumberPl(GDR_RULES.depositSpread * 100, 2)}%)</option>` + brokers.map(b => `<option value="${escapeHtml(b.id)}" ${b.id === gdrBrokerId ? 'selected' : ''}>${escapeHtml(b.name)} (połowa spreadu)</option>`).join('')}</select></label>`;
-    return `<div class="btn-row">${brokerSel}<label class="text-sm">Kraj <select onchange="setObceFilter('country', this.value)">${opts(countries, obceFilter.country, 'wszystkie')}</select></label>
-        <label class="text-sm">Waluta <select onchange="setObceFilter('currency', this.value)">${`<option value="">wszystkie</option>` + currencies.map(c => `<option value="${c}" ${c === obceFilter.currency ? 'selected' : ''}>${c}</option>`).join('')}</select></label></div>
-        ${issuers.length ? `<table class="asset-mini-table w-full mt-3"><thead><tr><th>Kwit</th><th>Kraj · waluta</th><th class="text-right">Cena obca</th><th class="text-right">Cena kwitu w PLN</th><th class="text-right">Twoje kwity</th><th class="text-right">Zlecenie</th></tr></thead><tbody>${rows || '<tr><td colspan="6" class="text-muted">Brak kwitów dla tego filtra.</td></tr>'}</tbody></table>`
-            : '<p class="text-muted mt-3">Żaden zagraniczny gigant nie jest jeszcze notowany. Pojawi się w wydarzeniu „Gigant wkracza na scenę” (średnio raz na 2 lata).</p>'}
-        <p class="text-sm text-muted">Kwit depozytowy (GDR) to notowany u nas w złotych papier oparty na akcji zagranicznej spółki. Jego cena to cena akcji × kurs waluty ± ${formatNumberPl(GDR_RULES.depositSpread * 100, 1)}% spreadu depozytowego, więc zysk z akcji może zjeść kurs waluty — i odwrotnie.</p>`;
-}
-
-function gdrUiTrade(id, side) {
-    const qty = Number(document.getElementById(`gdr-qty-${id}`)?.value) || 0;
-    const r = side === 'buy' ? buyGdr(id, qty, gdrBrokerId) : sellGdr(id, qty, gdrBrokerId);
-    showToast(r.ok ? `${side === 'buy' ? 'Kupiono' : 'Sprzedano'} ${qty} kwitów ${id}.GDR za ${formatZl(r.cost ?? r.proceeds, 0)}.` : r.reason, r.ok ? 'success' : 'warning');
-    renderKantor();
-    if (typeof updateUI === 'function') updateUI();
-}
-
 // --- Okno wydarzenia „Gigant wkracza na scenę” (pauza gry; w przebiegach pauza jest blokowana przez narzędzia) ---
 
 function showGiantEventWindow(result) {
@@ -222,15 +186,11 @@ function showGiantEventWindow(result) {
     if (!modal || !result) return;
     if (!isGamePaused && typeof togglePauseGame === 'function') togglePauseGame();
     const body = document.getElementById('giant-event-body');
-    if (result.kind === 'gdr') {
-        body.innerHTML = `<p><strong>${escapeHtml(result.giantName)}</strong> (${escapeHtml(COUNTRY_NAMES[result.country] || result.country)}) wchodzi na naszą giełdę jako kwity depozytowe <strong>${escapeHtml(result.symbol)}</strong>.</p>
-            <dl class="bank-card-rates"><div><dt>Cena w ${result.currency}</dt><dd>${formatNumberPl(result.priceForeign, 2)}</dd></div><div><dt>Cena kwitu w PLN</dt><dd>${formatZl(result.pricePln, 2)}</dd></div><div><dt>Spread depozytowy</dt><dd>${formatNumberPl(GDR_RULES.depositSpread * 100, 1)}%</dd></div></dl>
-            <p class="text-sm">Kupisz je w Internecie: Kantory24 → Obce (kwity GDR). Pamiętaj: wynik kwitu to zmiana ceny akcji <em>i</em> kursu ${result.currency}.</p>`;
-    } else {
+    {
         body.innerHTML = `<p><strong>${escapeHtml(result.giantName)}</strong> przejmuje <strong>${escapeHtml(result.name)}</strong> (${escapeHtml(result.symbol)}).</p>
             <dl class="bank-card-rates"><div><dt>Cena wykupu</dt><dd>${formatZl(result.offer, 2)}</dd></div><div><dt>Premia do kursu</dt><dd>${formatNumberPl(result.premium * 100, 0)}%</dd></div><div><dt>Wypłacono akcjonariuszom</dt><dd>${formatZl(result.paid, 0)}</dd></div></dl>
             <p class="text-sm">${result.heldByPlayer ? 'Twoje akcje rozliczono gotówką po cenie wykupu.' : 'Nie miałeś akcji tej spółki.'} Spółka znika z giełdy.${result.listedSymbol ? ` ${escapeHtml(result.giantName)} wchodzi na naszą listę jako zwykłe akcje <strong>${escapeHtml(result.listedSymbol)}</strong>.` : ''}</p>
-            <p class="text-sm">W jej miejsce w ciągu 1–4 kwartałów zadebiutuje nowa spółka krajowa${result.replacementSector ? ` z sektora ${escapeHtml(result.replacementSector)}` : ''} (informacja w wiadomościach).${result.listedSymbol ? ` Przejmujący koncern wchodzi do obrotu jako kwity <strong>${escapeHtml(result.listedSymbol)}</strong> (Kantor → Obce).` : ''}</p>`;
+            <p class="text-sm">W jej miejsce w ciągu 1–4 kwartałów zadebiutuje nowa spółka krajowa${result.replacementSector ? ` z sektora ${escapeHtml(result.replacementSector)}` : ''} (informacja w wiadomościach).</p>`;
     }
     modal.hidden = false;
     modal.style.display = 'block';
@@ -369,16 +329,6 @@ Object.assign(ACADEMY_ENTRIES, {
             { q: 'Co się dzieje z kursami, gdy obca giełda przejmuje naszą?', a: ['chwilowo spadają', 'rosną na stałe', 'nic'], c: 0 },
             { q: 'Czy spółki połączonego kraju kupisz bez biletu?', a: ['tak, z prowizją krajową', 'nie, zawsze trzeba biletu', 'tylko za dolary'], c: 0 },
             { q: 'Co zwykle daje wspólny rynek?', a: ['niższe koszty i szybsze zarażanie kryzysami', 'brak ryzyka', 'zamknięcie giełdy'], c: 0 }
-        ]
-    },
-    adrGdr: {
-        title: 'ADR i GDR (kwity depozytowe)', get icon() { return academyIcon('samolot'); },
-        text: 'Kwit depozytowy (ADR w USA, GDR na innych giełdach) to papier notowany u nas, którego zabezpieczeniem są akcje zagranicznej spółki trzymane w depozycie. Kupujesz go w złotych, bez rachunku za granicą, ale płacisz spread depozytowy, a jego cena zależy od ceny akcji i kursu waluty. Kwit nie daje praw głosu w spółce.',
-        example: () => { const list = getForeignIssuerList(); return list.length ? `Notowane kwity: ${list.map(i => `${getGdrSymbol(i)} (${formatZl(getGdrMid(i), 2)})`).join(', ')}.` : 'Żaden kwit nie jest jeszcze notowany — pojawią się w wydarzeniu „Gigant wkracza na scenę”.'; },
-        quiz: [
-            { q: 'Od czego zależy cena kwitu depozytowego?', a: ['od ceny akcji zagranicznej i kursu waluty', 'tylko od ceny akcji', 'tylko od kursu'], c: 0 },
-            { q: 'Czy kwit daje prawo głosu w zagranicznej spółce?', a: ['nie', 'tak, pełne', 'tak, połowę'], c: 0 },
-            { q: 'Po co istnieją kwity depozytowe?', a: ['by kupować zagraniczne spółki bez rachunku za granicą', 'by omijać podatki', 'by zastąpić akcje krajowe'], c: 0 }
         ]
     }
 });

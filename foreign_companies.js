@@ -330,7 +330,7 @@ function getLinkedIssuersForExchange(key) {
     if (typeof getLinkedCountries !== 'function' || (typeof sectorFilterState === 'object' && ((sectorFilterState.type && sectorFilterState.type !== 'all') || sectorFilterState.subsector))) return [];
     let list = getHomeListedIssuers().filter(i => getForeignTier(i).key === key);
     if (typeof sectorFilterState === 'object' && sectorFilterState.sector !== 'all') list = list.filter(i => i.sectors.some(x => x[0] === sectorFilterState.sector));
-    if (typeof ownedOnlyFilter !== 'undefined' && ownedOnlyFilter) list = list.filter(i => getGdrHeld(i) > 0);
+    if (typeof ownedOnlyFilter !== 'undefined' && ownedOnlyFilter) list = list.filter(i => getIssuerHeld(i) > 0);
     if (typeof favoritesOnlyFilter !== 'undefined' && favoritesOnlyFilter) list = list.filter(i => isFavoriteSymbol(getShareSymbol(i)));
     return list;
 }
@@ -509,7 +509,7 @@ function applyForeignAgmResolution(i, item) {
     switch (item.type) {
         case 'buyback': {
             if (typeof noteCapitalCycleResolution === 'function') noteCapitalCycleResolution(i, item);
-            const n = Math.floor(Math.min(getGdrFree(i), Math.max(0, i.cash) * 0.1 / Math.max(0.01, i.price)));
+            const n = Math.floor(Math.min(getIssuerFree(i), Math.max(0, i.cash) * 0.1 / Math.max(0.01, i.price)));
             if (n <= 0) return 'brak akcji do skupu';
             const cost = n * i.price;
             adjustCompanyCash(i, -cost); adjustBalanceSheet(i, { assets: -cost, retainedEarnings: -cost });
@@ -543,9 +543,9 @@ function applyForeignAgmResolution(i, item) {
  * Brak gotówki na całość: przy nadzorze poziomu ≥ 3 nakaz odsprzedaży, inaczej wezwanie na tyle akcji, na ile starcza gotówki. Zwraca 'tender' albo 'resale'.
  */
 function runForeignTenderOrder(issuer) {
-    const o = getOversight(issuer.country), cur = issuer.currency, price = Math.round(issuer.price * (1 + FOREIGN_AGM.tenderPremium) * 1000) / 1000, sym = getGdrSymbol(issuer);
+    const o = getOversight(issuer.country), cur = issuer.currency, price = Math.round(issuer.price * (1 + FOREIGN_AGM.tenderPremium) * 1000) / 1000, sym = getShareSymbol(issuer);
     const bots = Object.entries(issuer.holders).filter(([id, q]) => id !== 'player' && q >= 1).map(([id, q]) => [id, Math.floor(q * FOREIGN_AGM.tenderBotShare)]);
-    const botTotal = bots.reduce((s, [, n]) => s + n, 0), retail = Math.floor(Math.max(0, getGdrFree(issuer)) * getRandomInRange(...FOREIGN_AGM.tenderRetail));
+    const botTotal = bots.reduce((s, [, n]) => s + n, 0), retail = Math.floor(Math.max(0, getIssuerFree(issuer)) * getRandomInRange(...FOREIGN_AGM.tenderRetail));
     const localCash = getCurrencyCash('player', cur), have = Math.max(0, playerCash) + toPln(localCash, cur), costPln = toPln((botTotal + retail) * price, cur);
     let scale = 1;
     if (costPln > have) {
@@ -571,7 +571,7 @@ function runForeignTenderOrder(issuer) {
     const costPlnPaid = toPln(cost - useLocal, cur);
     playerCash -= costPlnPaid;
     if (costPlnPaid > 0) recordPayment('player-fund', 'external:akcjonariusze', costPlnPaid, `Wezwanie (nakaz ${o.name}) ${sym}`);
-    issuer.holders.player = getGdrHeld(issuer) + bought;
+    issuer.holders.player = getIssuerHeld(issuer) + bought;
     const body = `Na nakaz ${o.name} fundusz ogłosił wezwanie na pozostałe akcje ${issuer.name} po ${formatNumberPl(price, 2)} ${cur} (kurs +${Math.round(FOREIGN_AGM.tenderPremium * 100)}%). Sprzedano ${bought.toLocaleString('pl-PL')} akcji za ${formatZl(toPln(cost, cur), 0)}; fundusz ma teraz ${(getIssuerStake(issuer, 'player') * 100).toFixed(1)}% głosów.`;
     if (typeof addMail === 'function') addMail({ sender: o.name, subject: `📣 ${o.name}: nakaz wezwania ${issuer.name}`, body, importance: 3 });
     logEvent(`📣 ${o.name}: ${body}`, 'review');
@@ -632,7 +632,7 @@ function executeIssuerTakeover(acquirer, target, premium = FOREIGN_MA.premium) {
     const tgtName = target.name, acqName = acquirer.name, priceTgt = offer.price;
     const tgtSheet = target.balanceSheet || { assets: 0, liabilities: 0 }, tgtCashPln = tgtForeign ? toPln(target.cash || 0, target.currency) : (target.cash || 0);
     const rate = tgtForeign ? (acqForeign ? toPln(1, target.currency) / toPln(1, acqCur) : toPln(1, target.currency)) : (acqForeign ? 1 / toPln(1, acqCur) : 1); // waluta celu → waluta przejmującego
-    const heldByPlayer = tgtForeign ? getGdrHeld(target) > 0 : (playerPortfolio[target.symbol]?.shares || 0) > 0;
+    const heldByPlayer = tgtForeign ? getIssuerHeld(target) > 0 : (playerPortfolio[target.symbol]?.shares || 0) > 0;
     if (tgtForeign) { releaseForeignChildren(target.id); delistForeignIssuer(target, priceTgt); }
     else { settleTargetHolders(target, priceTgt, acquirer); removeStockFromGame(target.symbol); }
     // 3) księgowanie u przejmującego (aktywa celu, wartość firmy, gotówka celu)

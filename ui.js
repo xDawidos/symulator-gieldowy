@@ -1645,7 +1645,7 @@ function renderOwnershipPieChart(symbol) {
     }));
     const treasuryShares = Number(stock.treasuryShares) || 0;
     if (treasuryShares > 0) owners.push({ name: 'Akcje własne spółki', shares: treasuryShares, color: '#ff5733' });
-    const availableShares = foreignIssuer ? Math.max(0, getGdrFree(stock)) : getAvailableShares(stock);
+    const availableShares = foreignIssuer ? Math.max(0, getIssuerFree(stock)) : getAvailableShares(stock);
     if (availableShares > 0) owners.push({ name: 'Na rynku (do kupienia)', shares: availableShares, color: '#6c757d' });
     const unlisted = stock.totalShares - owners.reduce((sum, owner) => sum + owner.shares, 0);
     if (unlisted >= 1) owners.push({ name: 'Rozproszeni akcjonariusze', shares: unlisted, color: '#adb5bd' });
@@ -4410,7 +4410,7 @@ function describeForeignCompany(stock) {
 }
 
 function renderForeignCardManage(stock) {
-    const i = stock.foreignSource, o = getOversight(i.country), held = getGdrHeld(i) / Math.max(1, i.shares);
+    const i = stock.foreignSource, o = getOversight(i.country), held = getIssuerHeld(i) / Math.max(1, i.shares);
     return `<p class="text-sm">Udział funduszu: <strong>${formatNumberPl(held * 100, 2)}%</strong>. Nadzór kraju: <strong>${escapeHtml(o.name)}</strong> — próg wezwania ${Math.round(o.callThreshold * 100)}% (kupno ponad próg grozi ostrzeżeniem, karą i nakazem odsprzedaży).</p>
         <p class="text-sm text-muted">Walne zgromadzenia, spółki zależne i zlecenia strategii dla obcych spółek nie działają w tej wersji — kurs, raporty, dywidendy, splity i prezes są takie same jak u krajowych.</p>`;
 }
@@ -7477,7 +7477,7 @@ function checkWorldInvariants() {
     if (typeof checkCurrencyInvariants === 'function') problems.push(...checkCurrencyInvariants()); // 0.16.1 G2
     if (typeof checkMarginInvariants === 'function') problems.push(...checkMarginInvariants()); // 0.16.4 G21
     if (typeof checkCommodityInvariants === 'function') problems.push(...checkCommodityInvariants()); // 0.17 S1
-    if (typeof checkGdrInvariants === 'function') problems.push(...checkGdrInvariants()); // 0.16.1 G3
+    if (typeof checkForeignIssuerInvariants === 'function') problems.push(...checkForeignIssuerInvariants()); // 0.16.1 G3
     if (typeof checkHiddenCashInvariants === 'function') problems.push(...checkHiddenCashInvariants()); // 0.16.6 S1
     if (typeof checkCountryInvariants === 'function') problems.push(...checkCountryInvariants()); // 0.16.2 G5
     for (const bond of allBonds) finite(bond.faceValue, `obligacja ${bond.id}`);
@@ -8930,7 +8930,7 @@ function closeRescueOfferingModal() {
 let governanceView = { symbol: null };
 
 function getGovernanceCompanies() {
-    return [...stocks.filter(s => (playerPortfolio[s.symbol]?.shares || 0) > 0), ...getForeignGovernedList().filter(s => getGdrHeld(s) > 0)].filter(isGovernedCompany)
+    return [...stocks.filter(s => (playerPortfolio[s.symbol]?.shares || 0) > 0), ...getForeignGovernedList().filter(s => getIssuerHeld(s) > 0)].filter(isGovernedCompany)
         .sort((a, b) => ensureGovernance(a).quartersToAgm - ensureGovernance(b).quartersToAgm || getFundStakePct(b) - getFundStakePct(a));
 }
 

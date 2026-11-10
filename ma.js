@@ -59,7 +59,7 @@ function findMajorityShareholder(stock) {
 }
 
 function getFundStakePct(stock) {
-    if (isForeignShare(stock)) return getGdrHeld(stock) / Math.max(1, stock.totalShares);
+    if (isForeignShare(stock)) return getIssuerHeld(stock) / Math.max(1, stock.totalShares);
     return (playerPortfolio[stock.symbol]?.shares || 0) / Math.max(1, stock.totalShares);
 }
 
@@ -1903,7 +1903,7 @@ function holdAgm(stock) {
             importance: 2, symbol: stock.symbol, action: { type: 'agm', symbol: stock.symbol }
         });
     }
-    if (!isForeignShare(stock) || getGdrHeld(stock) > 0) logEvent(`🗳️ Walne zgromadzenie ${stock.name}: ${results.filter(r => r.passed).length}/${results.length} uchwał przyjętych (frekwencja ${(turnout * 100).toFixed(0)}%).`, 'company');
+    if (!isForeignShare(stock) || getIssuerHeld(stock) > 0) logEvent(`🗳️ Walne zgromadzenie ${stock.name}: ${results.filter(r => r.passed).length}/${results.length} uchwał przyjętych (frekwencja ${(turnout * 100).toFixed(0)}%).`, 'company');
     return record;
 }
 

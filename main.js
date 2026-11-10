@@ -29,8 +29,8 @@ const LEGACY_SAVE_KEYS = ['gra_inwestycyjna_dawid_save_v2', 'gra_inwestycyjna_da
 // v13: społeczeństwo i rynek pracy (society, stock.workforce, trzecia partia). Starsze zapisy: kraj od zera,
 // zatrudnienie według giełdy, polityka według cech prezesa, związki tylko w spółkach państwowych (30%).
 // v16: waluty i kantor (kursy, gotówka w walutach), kwity depozytowe GDR. Zapis v15 migruje: kursy startowe, bez walut i GDR.
-const SAVE_FORMAT_VERSION = 23; // 0.17.2: society.energy, society.greens, stock.power, deposit, energyOrder, ecoCut, esg, nuclearUnits, oversight.energy (pola opcjonalne, stare zapisy uzupełnia pierwszy kwartał)
-const SUPPORTED_SAVE_VERSIONS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23];
+const SAVE_FORMAT_VERSION = 24; // 0.18.0 R2: bez kwitów depozytowych (klucz `giants` zamiast `gdr`); v23 0.17.2: society.energy, society.greens, stock.power, deposit, energyOrder, ecoCut, esg, nuclearUnits, oversight.energy (pola opcjonalne, stare zapisy uzupełnia pierwszy kwartał)
+const SUPPORTED_SAVE_VERSIONS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24];
 
 let lastSaveReport = null;
 let saveDisabledUntilReload = false;
@@ -229,7 +229,7 @@ function buildSaveSnapshot({ compact = 0 } = {}) {
         centralBank: serializeWithStockRefs(centralBank),
         specialists: typeof serializeSubcontractors === 'function' ? serializeSubcontractors() : serializeWithStockRefs(specialists), // 0.15.5 B6: wersja skrócona
         constructionAwardLog, // 0.15.5 B1: okno wygranych przetargów (pole opcjonalne)
-        gdr: typeof getGdrSnapshot === 'function' ? getGdrSnapshot() : undefined, // 0.16.1 G3: kwity depozytowe i zdarzenia
+        giants: typeof getGiantEventSnapshot === 'function' ? getGiantEventSnapshot() : undefined, // 0.18.0 R2: zdarzenia gigantów (do v23 pod kluczem `gdr` razem z kwitami)
         countries: typeof getCountriesSnapshot === 'function' ? getCountriesSnapshot() : undefined, // 0.16.2 G5: dołączone kraje (pole opcjonalne v16)
         currencies: typeof getCurrencySnapshot === 'function' ? getCurrencySnapshot() : undefined, // 0.16.1 G2: kursy, gotówka w walutach (v16)
         forex: typeof getForexSnapshot === 'function' ? getForexSnapshot() : undefined, // 0.16.4 G21: pozycje z depozytem (pole opcjonalne v16)
@@ -635,7 +635,7 @@ function applySaveSnapshot(snapshot) {
     if (playerProfile && playerProfile.country !== 'PL' && !isCountryJoined(playerProfile.country)) joinCountry(playerProfile.country, 'start');
     if (playerFund) delete playerFund.openSubscriptions; // 0.16.1: emisja ciągła wycofana także w starszych zapisach
     if (typeof ensureLaunchedIndexes === 'function') ensureLaunchedIndexes(); // 0.16.1: SIG40/BSIG80 z decyzji Banku Centralnego
-    if (typeof applyGdrSnapshot === 'function') applyGdrSnapshot(snapshot.gdr);
+    if (typeof applyGiantEventSnapshot === 'function') applyGiantEventSnapshot(snapshot.giants ?? snapshot.gdr); // zapis do v23: kwity pomijane, przepadają bez zwrotu
     if (typeof applyCountriesSnapshot === 'function') applyCountriesSnapshot(snapshot.countries); // 0.16.2 G5
     if (typeof applyCurrencySnapshot === 'function') applyCurrencySnapshot(snapshot.currencies); // 0.16.1 G2: v15 → kursy startowe, bez walut
     if (typeof applyForexSnapshot === 'function') applyForexSnapshot(snapshot.forex); // 0.16.4 G21
@@ -1496,7 +1496,7 @@ function runQuarterlyTick() {
         processCityQuarterly(); // festyn raz w roku (city.js)
         applyCrowdingPressureToWeak(); // D2: nasycony rynek — słabe spółki tanieją szybciej
         if (typeof processIndexLaunchQuarterly === 'function') processIndexLaunchQuarterly(); // 0.16.1: Bank Centralny uruchamia SIG40 i BSIG80
-        if (typeof processGiantEventQuarterly === 'function') processGiantEventQuarterly(); // 0.16.1 G3: „Gigant wkracza na scenę” (gdr.js)
+        if (typeof processGiantEventQuarterly === 'function') processGiantEventQuarterly(); // 0.16.1 G3: „Gigant wkracza na scenę” (countries.js)
         if (typeof processCountriesQuarterly === 'function') processCountriesQuarterly(); // 0.16.2 G5: rynki zagraniczne, bilety, boty (countries.js)
         if (typeof processListingsQuarterly === 'function') processListingsQuarterly(); // 0.15.6: wymogi utrzymania, rynki NH i prywatny (listings.js)
         if (typeof enforceListingLimitQuarterly === 'function') enforceListingLimitQuarterly(); // 0.15.4 P5: powyżej 115 spółek krajowych wymuszone wycofanie najsłabszych

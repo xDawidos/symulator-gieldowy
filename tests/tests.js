@@ -6149,7 +6149,7 @@ group('0.17.2 E10: Akademia i zapis', () => {
         }
     });
     test('zapis: wersja 23, stara wersja dalej obsługiwana, stary zapis dostaje energię w pierwszym kwartale', () => {
-        assertEq(SAVE_FORMAT_VERSION, 23, 'wersja');
+        assertEq(SAVE_FORMAT_VERSION, 24, 'wersja');
         assert(SUPPORTED_SAVE_VERSIONS.includes(22), 'stare zapisy');
         resetWorld([makeCompany('AAA')]);
         delete society.energy;
@@ -12591,75 +12591,52 @@ group('0.16.1', () => {
         initFxState();
     });
 
-    // --- G3: kwity depozytowe (GDR) i „Gigant wkracza na scenę” ---
-    test('G3a: cena kwitu = cena obca × kurs, kupno i sprzedaż w granicach spreadu depozytowego ±1%, kwity wchodzą do NAV', () => {
-        initFxState(); resetGdrState();
-        fundWithCash(10_000_000);
-        const issuer = createForeignIssuer('GLS');
-        fxRates.USD = 4.2;
-        const ref = issuer.price * 4.2;
-        assertNear(getGdrMid(issuer), ref, 'środek = cena obca × kurs', 1e-9);
-        assert(Math.abs(getGdrQuote(issuer, 'buy') / ref - 1) <= 0.01 && Math.abs(getGdrQuote(issuer, 'sell') / ref - 1) <= 0.01, 'kupno i sprzedaż w granicach ±1%');
-        const assets0 = getFundAssets(), cash0 = playerCash;
-        const buy = buyGdr('GLS', 1000);
-        assert(buy.ok, 'kupno kwitów');
-        assertNear(cash0 - playerCash, 1000 * ref * 1.005, 'koszt = 1000 × cena × (1 + 0,5%)', 1e-6);
-        assertNear(getFundAssets() - assets0, -1000 * ref * 0.005, 'NAV traci tylko spread depozytowy', 1e-6);
-        fxRates.USD = 4.62; // +10%
-        assertNear(getFundGdrValue(), 1000 * issuer.price * 4.62, 'kwity wyceniane po nowym kursie', 1e-6);
-        issuer.price *= 1.1;
-        assertNear(getFundGdrValue(), 1000 * issuer.price * 4.62, 'i po nowej cenie obcej', 1e-6);
-        assertEq(getGdrFree(issuer), issuer.float - 1000, 'pula kwitów: reszta w rynku');
-        assert(!buyGdr('GLS', issuer.float).ok, 'nie kupimy więcej niż jest w obrocie');
-        assertEq(checkWorldInvariants().length, 0, 'niezmienniki z GDR');
-        const sell = sellGdr('GLS', 1000);
-        assert(sell.ok && getGdrHeld(issuer) === 0 && getGdrFree(issuer) === issuer.float, 'sprzedaż zwraca kwity do puli');
-        assert(!sellGdr('GLS', 1).ok, 'nie sprzedamy czego nie mamy');
-        initFxState(); resetGdrState();
-    });
-
-    test('G3a: ceny obcych emitentów zostają dodatnie, a przymusowa płynność sprzedaje kwity po obcej gotówce', () => {
-        initFxState(); resetGdrState();
-        fundWithCash(2_000_000);
-        const issuer = createForeignIssuer('PER');
-        for (let i = 0; i < 2000; i++) stepForeignIssuers();
-        assert(issuer.price > 0 && Number.isFinite(issuer.price), 'cena dodatnia po 2000 tygodni'); assert(issuer.history.length <= GDR_RULES.historyWeeks, 'historia ograniczona');
-        issuer.price = 210;
-        const bought = buyGdr('PER', Math.floor(1_000_000 / getGdrQuote(issuer, 'buy')));
-        assert(bought.ok, `kupno kwitów: ${bought.reason} (cena ${issuer.price})`);
-        const cash0 = playerCash;
-        forceLiquidation(cash0 + 300_000);
-        assert(playerCash - cash0 >= 299_000 || playerCash >= cash0 + 290_000, `kwity sprzedane na płynność: ${playerCash - cash0}`);
-        assertEq(checkWorldInvariants().length, 0, 'niezmienniki po płynności');
-        initFxState(); resetGdrState();
-    });
-
-    test('G3: wydarzenie „Gigant wkracza na scenę” — 2–4 w 6,5 roku, nigdy częściej niż co 4 kwartały, GDR 60–80%', () => {
+    // --- G3: „Gigant wkracza na scenę” (0.18.0: bez kwitów depozytowych) ---
+    test('G3 (0.18.0 R2): wydarzenie „Gigant wkracza na scenę” to tylko przejęcia — ok. 0,8 w 6,5 roku, nigdy częściej niż co 4 kwartały', () => {
         const savedPick = pickForeignTakeoverTarget, savedExec = executeForeignTakeover;
         pickForeignTakeoverTarget = () => ({ symbol: 'X' });
         executeForeignTakeover = (stock, giant) => ({ symbol: 'X', name: 'X', offer: 1, premium: 0.3, paid: 0, heldByPlayer: false });
         const savedQ = macro.quarter, savedJoin = joinCountry; joinCountry = () => null; // statystyka zdarzeń: bez dołączania krajów
         try {
-            let total = 0, gdr = 0, runs = 150, minGap = 99;
+            let total = 0, other = 0, runs = 300, minGap = 99;
             for (let run = 0; run < runs; run++) {
-                resetGdrState();
-                let last = -99, perYear = {};
+                resetForeignIssuers();
+                let last = -99;
                 for (let q = 1; q <= 26; q++) {
                     macro.quarter = q;
                     const r = processGiantEventQuarterly();
-                    if (r) { total++; if (r.kind === 'gdr') gdr++; minGap = Math.min(minGap, q - last); last = q; perYear[Math.ceil(q / 4)] = (perYear[Math.ceil(q / 4)] || 0) + 1; }
+                    if (r) { total++; if (r.kind !== 'takeover') other++; minGap = Math.min(minGap, q - last); last = q; }
                 }
-                assert(Object.values(perYear).every(n => n <= 2), 'najwyżej 2 zdarzenia w roku kalendarzowym gry (cooldown 4 kwartały)');
             }
-            const perGame = total / runs, share = gdr / Math.max(1, total);
-            assert(minGap >= GDR_RULES.eventCooldownQuarters, `odstęp między zdarzeniami ≥ 4 kw. (min ${minGap})`);
-            assert(perGame >= 2 && perGame <= 4, `zdarzeń w 6,5 roku: ${perGame.toFixed(2)}`);
-            assert(share >= 0.6 && share <= 0.8, `udział GDR ${(share * 100).toFixed(0)}%`);
-        } finally { pickForeignTakeoverTarget = savedPick; executeForeignTakeover = savedExec; joinCountry = savedJoin; macro.quarter = savedQ; resetGdrState(); }
+            const perGame = total / runs;
+            assert(minGap >= GIANT_EVENT_RULES.eventCooldownQuarters, `odstęp między zdarzeniami ≥ 4 kw. (min ${minGap})`);
+            assert(perGame >= 0.5 && perGame <= 1.1, `przejęć w 6,5 roku: ${perGame.toFixed(2)} (dawniej 30% z 2–4 zdarzeń)`);
+            assertEq(other, 0, 'bez kwitów');
+        } finally { pickForeignTakeoverTarget = savedPick; executeForeignTakeover = savedExec; joinCountry = savedJoin; macro.quarter = savedQ; resetForeignIssuers(); }
     }, 4242);
 
+    test('0.18.0 R2: zapis v24 zachowuje stan zdarzeń gigantów; zapis v23 z kwitami wczytuje się bez błędu, kwity przepadają bez zwrotu', () => {
+        initFxState(); resetForeignIssuers();
+        fundWithCash(5_000_000);
+        giantEventState.lastQ = 7; giantEventState.count = 2; giantEventState.takeover = 2;
+        const cash = playerCash;
+        const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
+        assertEq(raw.version, 24, 'wersja 24'); assert(raw.giants && !('gdr' in raw), 'klucz giants');
+        resetForeignIssuers(); initFxState();
+        assert(applySaveSnapshot(JSON.parse(JSON.stringify(raw))).ok, 'wczytanie');
+        assertEq(giantEventState.lastQ, 7, 'ostatnie zdarzenie'); assertEq(giantEventState.takeover, 2, 'licznik przejęć');
+        const old = JSON.parse(JSON.stringify(raw)); old.version = 23; delete old.giants;
+        old.gdr = { issuers: { GLS: { id: 'GLS', price: 180, float: 1e6, holders: { player: 500 }, history: [180], listedQ: 3 } }, events: { lastQ: 5, count: 3, gdr: 2, takeover: 1, replacements: [] }, log: [{ q: 3, kind: 'gdr', giant: 'GLS' }, { q: 5, kind: 'takeover', giant: 'VWA' }] };
+        const r = applySaveSnapshot(old);
+        assert(r.ok && !r.errors?.length, 'stary zapis z kwitami wczytuje się');
+        assert(!foreignIssuers.GLS, 'kwit przepadł'); assertNear(playerCash, cash, 'bez zwrotu gotówki', 1e-6);
+        assertEq(giantEventState.lastQ, 5, 'stan zdarzeń ze starego zapisu'); assert(giantEventLog.every(e => e.kind === 'takeover'), 'dziennik bez kwitów');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+        resetForeignIssuers(); initFxState();
+    });
+
     test('G3b: zagraniczne przejęcie — akcjonariusze dostają gotówkę z premią, spółka znika, brak ujemnej gotówki i pieniędzy znikąd', () => {
-        initFxState(); resetGdrState();
+        initFxState(); resetForeignIssuers();
         const list = Array.from({ length: 12 }, (_, i) => mk156(`T${i}`, { price: 50 + i, financialHealth: 2 }));
         resetWorld(list);
         startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
@@ -12683,11 +12660,11 @@ group('0.16.1', () => {
         assert(paymentJournal.slice(journal0).some(e => e.purpose.startsWith('Przejęcie przez zagranicznego')), 'wpływ z zewnątrz w księdze płatności');
         assert(playerCash >= 0 && aiCompetitors.every(ai => ai.cash >= 0), 'brak ujemnej gotówki');
         assertEq(checkWorldInvariants().length, 0, 'niezmienniki po przejęciu');
-        resetGdrState(); resetForeignBots();
+        resetForeignIssuers(); resetForeignBots();
     });
 
     test('Poprawka 2026-11-02: gigant po przejęciu polskiej spółki wchodzi na naszą listę jako zwykłe akcje (nie kwity), z zapisem', () => {
-        initFxState(); resetGdrState();
+        initFxState(); resetForeignIssuers();
         try {
             resetWorld(Array.from({ length: 12 }, (_, i) => mk156(`T${i}`, { price: 50 + i, financialHealth: 2 })));
             startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
@@ -12698,10 +12675,10 @@ group('0.16.1', () => {
             assertEq(result.listedSymbol, getShareSymbol(issuer), 'symbol akcji, nie kwitu');
             assert(!/\.GDR$/.test(result.listedSymbol), 'bez kwitów');
             assert(getForeignTier(issuer).linked, 'na poziomach naszych giełd');
-            const snap = getCountriesSnapshot(); resetGdrState(); applyCountriesSnapshot(snap);
+            const snap = getCountriesSnapshot(); resetForeignIssuers(); applyCountriesSnapshot(snap);
             assert(foreignIssuers[result.giant]?.homeListed, 'notowanie u nas przetrwało zapis');
             assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
-        } finally { resetGdrState(); resetForeignBots(); }
+        } finally { resetForeignIssuers(); resetForeignBots(); }
     });
 
     test('Poprawka 2026-11-02: spółki zagraniczne mają różną, stałą liczbę akcji; stary zapis bez liczby akcji wczytuje dawne 10 mln', () => {
@@ -12710,15 +12687,15 @@ group('0.16.1', () => {
         assert(new Set(counts).size >= de.length * 0.8, 'liczby akcji różne');
         assert(counts.every(n => n >= 3_000_000 && n <= 30_000_000), 'zwykłe: 3–30 mln');
         assertEq(getDefaultIssuerShares(de[0]), counts[0], 'stała dla spółki');
-        initFxState(); resetGdrState();
+        initFxState(); resetForeignIssuers();
         try {
             joinCountry('DE');
             const i = getCountryIssuers('DE').find(x => !x.state && !x.giant);
             const snap = getCountriesSnapshot(); const row = snap.issuers[i.id];
             delete row.c; delete row.n; // zapis sprzed poprawki: spółka bez raportu i bez liczby akcji
-            resetGdrState(); applyCountriesSnapshot(snap);
+            resetForeignIssuers(); applyCountriesSnapshot(snap);
             assertEq(foreignIssuers[i.id].shares, COUNTRY_RULES.shares, 'stary zapis: 10 mln');
-        } finally { resetGdrState(); resetForeignBots(); }
+        } finally { resetForeignIssuers(); resetForeignBots(); }
     });
 
     test('Poprawka 2026-11-02: ulubione — gwiazdka dodaje i usuwa spółkę, filtr pokazuje tylko ulubione', () => {
@@ -12735,27 +12712,6 @@ group('0.16.1', () => {
         } finally { playerProfile = saved; }
     });
 
-    test('G3: zapis i wczytanie zachowują kwity, ceny obcych emitentów i stan zdarzeń; zapis v15 wczytuje się bez kwitów', () => {
-        initFxState(); resetGdrState();
-        fundWithCash(5_000_000);
-        const issuer = createForeignIssuer('VWA');
-        for (let i = 0; i < 20; i++) stepForeignIssuers();
-        buyGdr('VWA', 500);
-        giantEventState.lastQ = 7; giantEventState.count = 2; giantEventState.gdr = 1; giantEventState.takeover = 1;
-        const price = issuer.price, assets = getFundAssets();
-        const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
-        resetGdrState(); initFxState();
-        assert(applySaveSnapshot(raw).ok, 'wczytanie');
-        const back = foreignIssuers.VWA;
-        assert(back, 'emitent odtworzony'); assertNear(back.price, price, 'cena', 1e-9); assertEq(getGdrHeld(back), 500, 'kwity gracza');
-        assertEq(giantEventState.lastQ, 7, 'ostatnie zdarzenie'); assertEq(giantEventState.takeover, 1, 'licznik przejęć'); assertEq(back.history.length, 21, 'historia ceny');
-        assertNear(getFundAssets(), assets, 'majątek po wczytaniu', 1e-3);
-        const old = JSON.parse(JSON.stringify(raw)); old.version = 15; delete old.gdr; delete old.currencies;
-        assert(applySaveSnapshot(old).ok, 'v15 się wczytuje'); assertEq(Object.keys(foreignIssuers).length, 0, 'v15: brak kwitów');
-        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
-        resetGdrState(); initFxState();
-    });
-
     test('G0b: pułap napływu malejący z wielkością funduszu — mnożnik 1 dla małego, malejący i nie mniejszy niż 0,2 dla dużego', () => {
         assertEq(getFundCapacityFactor(10_000), 1, 'mały fundusz bez zmian'); assertEq(getFundCapacityFactor(FUND_CAPACITY_REF), 1, 'do progu bez zmian');
         const a = getFundCapacityFactor(120_000), b = getFundCapacityFactor(600_000), c = getFundCapacityFactor(5e9);
@@ -12767,8 +12723,8 @@ group('0.16.1', () => {
     });
 
     // --- G4: interfejs, Akademia ---
-    test('G4: widoki kantora i zakładki Obce renderują się (kursy, wykres z widełkami, spread słowem i liczbą, kwity po filtrze)', () => {
-        initFxState(); resetGdrState();
+    test('G4: widoki kantora renderują się (kursy, wykres z widełkami, spread słowem i liczbą); 0.18.0: bez zakładki kwitów', () => {
+        initFxState(); resetForeignIssuers();
         fundWithCash(1_000_000);
         for (let i = 0; i < 10; i++) stepFxRates();
         const rates = renderRatesTab();
@@ -12776,34 +12732,28 @@ group('0.16.1', () => {
         assert(rates.includes('<polyline') && rates.includes('dół widełek'), 'wykres z widełkami'); assert(!/[\u{1F300}-\u{1FAFF}]/u.test(rates), 'bez emoji');
         const holder = document.createElement('div'); holder.innerHTML = `<input id="kantor-amount" value="100000"><p id="kantor-quote"></p>`; document.body.appendChild(holder);
         try { updateKantorQuote(); assert(/Spread kantoru 1,5%/.test(document.getElementById('kantor-quote').textContent), 'spread słowem i liczbą'); } finally { holder.remove(); }
-        assert(renderForeignTab().includes('Żaden zagraniczny gigant'), 'pusta zakładka przed wydarzeniem');
-        createForeignIssuer('VWA'); createForeignIssuer('GLS');
-        let tab = renderForeignTab();
-        assert(tab.includes('VWA.GDR') && tab.includes('GLS.GDR'), 'oba kwity');
-        obceFilter.country = 'US';
-        try { tab = renderForeignTab(); assert(tab.includes('GLS.GDR') && !tab.includes('VWA.GDR'), 'filtr po kraju'); } finally { obceFilter = { country: '', currency: '' }; }
+        assert(typeof renderForeignTab === 'undefined' && !document.querySelector('[data-tab="foreign"]'), '0.18.0 R2: bez zakładki kwitów');
         assertEq(getCompanyCountryNote({ symbol: 'CTX', name: 'Cortex' }), 'Polska · PLN', 'karta spółki: kraj · waluta');
-        initFxState(); resetGdrState();
+        initFxState(); resetForeignIssuers();
     });
 
-    test('G4: hasła Akademii (Ryzyko walutowe, Spread, ADR/GDR) mają tekst, przykład i quiz z 3 pytaniami', () => {
-        for (const id of ['ryzykoWalutowe', 'spread', 'adrGdr']) {
+    test('G4: hasła Akademii (Ryzyko walutowe, Spread) mają tekst, przykład i quiz z 3 pytaniami; 0.18.0: bez hasła o kwitach', () => {
+        assert(!ACADEMY_ENTRIES.adrGdr, 'hasło o kwitach usunięte');
+        for (const id of ['ryzykoWalutowe', 'spread']) {
             const e = ACADEMY_ENTRIES[id];
             assert(e && e.title && e.text.length > 100, `${id}: tekst`); assertEq(e.quiz.length, 3, `${id}: quiz`);
             assert(typeof e.example() === 'string', `${id}: przykład`); assert(e.quiz.every(q => q.a[q.c]), `${id}: poprawne odpowiedzi wskazują istniejącą opcję`);
         }
     });
 
-    test('G4: przyrost zapisu v16 (kursy, historia, kwity, zdarzenia) poniżej 3% typowego zapisu gry', () => {
-        initFxState(); resetGdrState();
+    test('G4: przyrost zapisu v16 (kursy, historia, zdarzenia) poniżej 3% typowego zapisu gry', () => {
+        initFxState(); resetForeignIssuers();
         fundWithCash(1_000_000);
         for (let i = 0; i < 120; i++) { stepFxRates(); }
-        createForeignIssuer('GLS'); createForeignIssuer('VWA'); createForeignIssuer('KWS');
-        for (let i = 0; i < 60; i++) stepForeignIssuers();
-        kantorBuyCurrency('EUR', 100_000); buyGdr('GLS', 100);
-        const extra = JSON.stringify(getCurrencySnapshot()).length + JSON.stringify(getGdrSnapshot()).length;
+        kantorBuyCurrency('EUR', 100_000);
+        const extra = JSON.stringify(getCurrencySnapshot()).length + JSON.stringify(getGiantEventSnapshot()).length;
         assert(extra <= 0.03 * 2_300_000, `przyrost zapisu ${extra} znaków (${(extra / 2_300_000 * 100).toFixed(2)}% typowego zapisu)`);
-        initFxState(); resetGdrState();
+        initFxState(); resetForeignIssuers();
     });
 
     test('G4: ikony 10 walut jako SVG, bez flag krajów (decyzja użytkownika)', () => {
@@ -12867,13 +12817,13 @@ group('0.16.1', () => {
         savedBanks = commercialBanks;
         commercialBanks = [...commercialBanks, ...[['tNet', BANK_TYPES.INTERNET], ['tUni', BANK_TYPES.UNIVERSAL], ['tUni2', BANK_TYPES.UNIVERSAL], ['tInt', BANK_TYPES.INTERNATIONAL], ['tInt2', BANK_TYPES.INTERNATIONAL], ['tInv', BANK_TYPES.INVESTMENT]]
             .map(([id, type]) => ({ id, name: 'Bank ' + id, type, cash: 1e7, isActive: true, deposits: {}, loanPortfolio: {}, stockPortfolio: {} }))]; // testowe banki: w grze aktywują się z czasem
-        initFxState(); resetGdrState();
+        initFxState(); resetForeignIssuers();
         fundWithCash(50_000_000);
         initializeCityCompanies();
         for (let i = 0; i < 13; i++) stepFxRates();
     };
 
-    const endProviders = () => { commercialBanks = savedBanks; initFxState(); resetGdrState(); };
+    const endProviders = () => { commercialBanks = savedBanks; initFxState(); resetForeignIssuers(); };
 
     test('G7: dostawcami kursów są kantor gry, banki internetowe, uniwersalne i międzynarodowe oraz Kantor Miejski (spółka miejska, nigdy niewchodząca na giełdę)', () => {
         providersWorld();
@@ -12930,27 +12880,6 @@ group('0.16.1', () => {
         assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
         endProviders();
     });
-
-    test('G7: kwity GDR przez bank międzynarodowy mają połowę spreadu depozytowego; oferty dostawców zapisują się i wczytują', () => {
-        providersWorld();
-        const issuer = createForeignIssuer('GLS');
-        const intl = getKantorProviders().find(p => p.kind === 'international'), mid = getGdrMid(issuer);
-        assertNear(getGdrQuote(issuer, 'buy', 0.5) / mid - 1, GDR_RULES.depositSpread * 0.5, 'połowa spreadu', 1e-12);
-        const cash0 = playerCash;
-        assert(buyGdr('GLS', 100, intl.id).ok, 'kupno przez bank');
-        assertNear(cash0 - playerCash, 100 * mid * (1 + GDR_RULES.depositSpread * 0.5), 'koszt z połową spreadu', 1e-6);
-        assert(buyGdr('GLS', 100).ok, 'kupno przez depozytariusza'); assert(getGdrHeld(issuer) === 200, 'kwity');
-        getProviderQuote(intl.id, 'EUR', 100_000, 'buy');
-        const offer = JSON.parse(JSON.stringify(kantorOffers[intl.id]));
-        const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
-        initFxState(); resetGdrState();
-        assert(applySaveSnapshot(raw).ok, 'wczytanie');
-        assertEq(kantorOffers[intl.id].w, offer.w, 'oferta po wczytaniu'); assertNear(kantorOffers[intl.id].s.EUR, offer.s.EUR, 'spread oferty', 1e-12);
-        const w0 = fxWeek; for (let i = 0; i < KANTOR_OFFER_WEEKS; i++) stepFxRates();
-        getProviderQuote(intl.id, 'EUR', 100_000, 'buy');
-        assert(kantorOffers[intl.id].w > w0, 'oferta odświeżona po kwartale');
-        endProviders();
-    });
 });
 
 group('0.16.2', () => {
@@ -12964,8 +12893,8 @@ group('0.16.2', () => {
         ]
     });
     const withZZ = fn => {
-        COUNTRY_DEFS.ZZ = ZZ(); initFxState(); resetGdrState();
-        try { return fn(); } finally { delete COUNTRY_DEFS.ZZ; resetGdrState(); initFxState(); }
+        COUNTRY_DEFS.ZZ = ZZ(); initFxState(); resetForeignIssuers();
+        try { return fn(); } finally { delete COUNTRY_DEFS.ZZ; resetForeignIssuers(); initFxState(); }
     };
     const startFund = (cash = 5_000_000) => { resetWorld([mk156('GA', { price: 100 })]); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' }); playerCash = cash; };
 
@@ -12976,7 +12905,7 @@ group('0.16.2', () => {
         assert(isCountryJoined('ZZ'), 'dołączył'); assertEq(getCountryIssuers('ZZ').length, 4, '4 spółki'); assertEq(getCountryLimit('ZZ'), Math.ceil(COUNTRY_RULES.limitMult * 4), 'limit ceil(limitMult × 4)');
         assert(marketRegimes.ZZ && marketRegimes.ZZ.premiumTarget !== undefined, 'nastrój kraju');
         const zd = foreignIssuers.ZD1; assert(zd.state && zd.statePack === zd.shares / 2 && zd.float === zd.shares - zd.statePack, 'pakiet państwa poza floatem');
-        assertEq(getGdrSymbol(foreignIssuers.ZA1), 'ZA1.ZZ', 'symbol w kraju'); assert(joinCountry('ZZ') === null, 'drugie dołączenie nic nie robi');
+        assertEq(getShareSymbol(foreignIssuers.ZA1), 'ZA1.ZZ', 'symbol w kraju'); assert(joinCountry('ZZ') === null, 'drugie dołączenie nic nie robi');
         assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
     }));
 
@@ -13023,7 +12952,7 @@ group('0.16.2', () => {
         const price = foreignIssuers.ZA1.price, prem = marketRegimes.ZZ.premium, rate = countryState.ZZ.rate;
         const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
         assert(raw.countries && raw.countries.state.ZZ, 'pole countries w zapisie');
-        resetGdrState();
+        resetForeignIssuers();
         const report = applySaveSnapshot(raw);
         assert(report.ok, `wczytanie: ${(report.errors || []).join('; ')}`);
         assert(isCountryJoined('ZZ') && getCountryIssuers('ZZ').length === 4, 'kraj i spółki wróciły');
@@ -13048,15 +12977,6 @@ group('0.16.2', () => {
         assertEq(checkWorldInvariants().length, 0, 'niezmienniki z debiutami');
     }));
 
-    test('G5: GDR giganta zamienia się 1:1 w akcje po dołączeniu jego kraju (posiadacz zachowuje liczbę)', () => withZZ(() => {
-        startFund();
-        COUNTRY_DEFS.ZZ.companies[0].id = 'GLS'; // gigant, który ma już kwit
-        const issuer = createForeignIssuer('GLS'); issuer.holders.player = 321;
-        joinCountry('ZZ');
-        assertEq(foreignIssuers.GLS.kind, 'share', 'zamiana w akcję'); assertEq(foreignIssuers.GLS.holders.player, 321, '1:1');
-        assertEq(checkWorldInvariants().length, 0, 'niezmienniki po zamianie');
-    }));
-
     // --- G6a: nowe sektory ---
     test('G6a: Motoryzacja (grupa Przemysł i surowce) i Alkohole (Konsumpcja, podsektor Piwowarstwo i napoje) są w rejestrze z profilem, nazwami i elastycznością popytu', () => {
         assertEq(SECTORS['Motoryzacja'].group, 'industry', 'Motoryzacja w Przemyśle i surowcach'); assertEq(SECTORS['Alkohole'].group, 'consumer', 'Alkohole w Konsumpcji');
@@ -13071,7 +12991,7 @@ group('0.16.2', () => {
     const REAL_COUNTRIES = () => ['DE', 'US', 'CZ'].filter(id => COUNTRY_DEFS[id]);
     const COUNTRY_COUNTS = { DE: [38, 7], US: [19, 5], CZ: [9, 1] }; // 0.17 S2: US +JDM, NGR, GTG; CZ +DOL; S4: DE +HKR, DHX; US +POP // zwykłe + państwowe (załącznik B)
 
-    test('G6: dane krajów są spójne — liczby spółek z załącznika B, sektory i podsektory z rejestru, waluty, banki w Bankowości, giganci zgodni z gdr.js', () => {
+    test('G6: dane krajów są spójne — liczby spółek z załącznika B, sektory i podsektory z rejestru, waluty, banki w Bankowości, giganci zgodni z FOREIGN_GIANTS', () => {
         assert(REAL_COUNTRIES().length >= 1, 'jakiś kraj zdefiniowany');
         const ids = new Set();
         for (const id of REAL_COUNTRIES()) {
@@ -13087,7 +13007,7 @@ group('0.16.2', () => {
                 if (c.niche) assert(SECTORS[sectors[0]].niches?.[c.niche] || c.niche === 'Rozrywka' || c.niche === 'TV' || c.niche === 'Farmaceutyki', `${c.name}: nisza ${c.niche}`);
                 assert(c.price > 0 && ['giant', 'normal', 'state'].includes(c.kind), `${c.name}: cena i rodzaj`);
                 const giant = FOREIGN_GIANTS.find(g => g.id === c.id);
-                if (giant) { assertEq(giant.country, id, `${c.name}: kraj giganta`); assertEq(giant.price, c.price, `${c.name}: cena giganta`); assertEq(giant.currency, def.currency, `${c.name}: waluta giganta`); assertEq(giant.name, c.name, `${c.name}: nazwa giganta`); assertEq(c.kind, 'giant', `${c.name}: rodzaj giganta`); }
+                if (giant) { assertEq(giant.country, id, `${c.name}: kraj giganta`); assertEq(giant.currency, def.currency, `${c.name}: waluta giganta`); assertEq(giant.name, c.name, `${c.name}: nazwa giganta`); assertEq(c.kind, 'giant', `${c.name}: rodzaj giganta`); }
                 if (/Bank|Mortgage|Goldhaus/.test(c.name) && !/Wall Street Corp/.test(c.name)) assertEq(sectors[0], 'Bankowość', `${c.name}: banki w sektorze Bankowość`);
             }
             assert(def.companies.filter(c => c.kind === 'giant').every(c => FOREIGN_GIANTS.some(g => g.id === c.id)), `${id}: giganci są w FOREIGN_GIANTS`);
@@ -13096,7 +13016,7 @@ group('0.16.2', () => {
 
     test('G6: dołączenie każdego kraju — spółki, limit 1,5 ×, waluta, niezmienniki; kraj nie dotyka rynku krajowego i NAV gracza bez walut jest bez zmian', () => {
         for (const id of REAL_COUNTRIES()) {
-            initFxState(); resetGdrState(); startFund();
+            initFxState(); resetForeignIssuers(); startFund();
             const def = COUNTRY_DEFS[id], domestic = stocks.length, navBefore = getFundAssets();
             joinCountry(id);
             assertEq(getCountryIssuers(id).length, def.companies.length, `${id}: spółki po dołączeniu`);
@@ -13108,11 +13028,11 @@ group('0.16.2', () => {
             assertNear(getFundAssets(), navBefore, `${id}: NAV bez walut niezmieniony`, 1e-6);
             assertEq(checkWorldInvariants().length, 0, `${id}: niezmienniki`);
         }
-        resetGdrState(); initFxState();
+        resetForeignIssuers(); initFxState();
     });
 
     test('G6: zapis uproszczony po 6,5 roku z krajami — poniżej 6 KB na spółkę zagraniczną, a wszystkie kraje razem poniżej 3 MB zapisu', () => {
-        initFxState(); resetGdrState(); startFund();
+        initFxState(); resetForeignIssuers(); startFund();
         const q0 = macro.quarter;
         for (const id of REAL_COUNTRIES()) joinCountry(id);
         withSeededRandom(77, () => { for (let w = 0; w < 338; w++) { stepFxRates(); stepCountries(); if (w % 13 === 12) { macro.quarter++; processCountriesQuarterly(); } } });
@@ -13121,7 +13041,7 @@ group('0.16.2', () => {
         addTable('G6: rozmiar zapisu krajów po 6,5 roku', ['Kraje', 'Spółki', 'Bajty', 'B na spółkę'], [[REAL_COUNTRIES().join(', '), n, bytes, Math.round(bytes / n)]]);
         assert(bytes / n < 6000, `${Math.round(bytes / n)} B na spółkę (cel < 6 KB)`); assert(bytes < 3_000_000, 'poniżej 3 MB');
         assertEq(checkWorldInvariants().length, 0, 'niezmienniki po 6,5 roku');
-        resetGdrState(); initFxState();
+        resetForeignIssuers(); initFxState();
     });
 
     test('G6: spółki specjalne mają po jednym modyfikatorze: obronność podnosi dryf, Pear łagodzi spadki, Pivovar rośnie latem, Teslar jest zmienny', () => {
@@ -13211,7 +13131,7 @@ group('0.16.2', () => {
         assert(!sellForeignShares('ZB1', 301).ok, 'nie sprzedasz więcej niż masz');
         playerCash = 1e12;
         assert(!buyForeignShares('ZD1', zd.float + 1).ok, 'powyżej wolnego obrotu (pakiet państwa nie jest do kupienia)');
-        assertEq(getGdrFree(zd), zd.float - 0, 'pakiet państwa poza floatem');
+        assertEq(getIssuerFree(zd), zd.float - 0, 'pakiet państwa poza floatem');
         assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
     }));
 
@@ -13238,7 +13158,7 @@ group('0.16.2', () => {
         airportState.forced = true; buyTicket('ZZ');
         const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
         assert(raw.countries.tickets.t.player.includes('ZZ'), 'bilet w zapisie');
-        resetGdrState(); resetTicketsState();
+        resetForeignIssuers(); resetTicketsState();
         COUNTRY_DEFS.ZZ = ZZ();
         assert(applySaveSnapshot(raw).ok, 'wczytanie'); assert(hasTicket('player', 'ZZ') && airportState.forced, 'bilet i lotnisko wróciły');
         assertEq(checkWorldInvariants().length, 0, 'niezmienniki po wczytaniu');
@@ -13261,8 +13181,8 @@ group('0.16.2', () => {
 
     // --- G8: boty zagraniczne ---
     const withBots = fn => {
-        initFxState(); resetGdrState(); resetForeignBots(); startFund(10_000_000);
-        try { return fn(); } finally { resetForeignBots(); resetGdrState(); initFxState(); }
+        initFxState(); resetForeignIssuers(); resetForeignBots(); startFund(10_000_000);
+        try { return fn(); } finally { resetForeignBots(); resetForeignIssuers(); initFxState(); }
     };
     const botsReal = () => ['DE', 'US', 'CZ'].filter(id => COUNTRY_DEFS[id]);
 
@@ -13317,7 +13237,7 @@ group('0.16.2', () => {
         joinCountry('US'); const santos = aiCompetitors.find(a => a.id === 'fb_santos');
         const issuer = getCountryIssuers('US')[0]; issuer.holders.fb_santos = 1000; santos.cashByCurrency.USD = 777;
         const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
-        resetForeignBots(); resetGdrState();
+        resetForeignBots(); resetForeignIssuers();
         assert(applySaveSnapshot(raw).ok, 'wczytanie');
         const back = aiCompetitors.find(a => a.id === 'fb_santos');
         assert(back && back.isForeignBot && back.cashByCurrency.USD === 777, 'bot i gotówka wróciły'); assertEq(foreignIssuers[issuer.id].holders.fb_santos, 1000, 'pozycja wróciła');
@@ -13326,7 +13246,7 @@ group('0.16.2', () => {
 
     // --- G9: korelacja i zarażanie kryzysów ---
     const crisisWorld = (withCountry = true) => {
-        COUNTRY_DEFS.ZZ = ZZ(); initFxState(); resetGdrState(); resetForeignBots();
+        COUNTRY_DEFS.ZZ = ZZ(); initFxState(); resetForeignIssuers(); resetForeignBots();
         resetWorld([makeCompany('AAA', { sector: ['Energia'] }), makeCompany('BBB', { sector: ['Turystyka'] })]);
         startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
         initMarketRegimes(); marketCrash = createMarketCrashState(); marketHalt = createMarketHaltState(); macro.quarter = 20; mailbox = createMailbox();
@@ -13335,7 +13255,7 @@ group('0.16.2', () => {
         resetCrises(); playerFund.calWeek = 1;
         if (withCountry) joinCountry('ZZ');
     };
-    const endCrisisWorld = () => { delete COUNTRY_DEFS.ZZ; resetCrises(); resetGdrState(); initFxState(); };
+    const endCrisisWorld = () => { delete COUNTRY_DEFS.ZZ; resetCrises(); resetForeignIssuers(); initFxState(); };
     const crisisTick = (n = 1) => { for (let i = 0; i < n; i++) { macro.quarter++; processCrisesQuarterly(); processCrisesWeekly(); } };
 
     test('G9: ok. 25% linii zaczyna się w kraju otwartym, a do Polski dociera po 0–2 kwartałach w 100% przypadków; bez otwartego kraju linie są polskie', () => {
@@ -13358,7 +13278,7 @@ group('0.16.2', () => {
             });
             const share = pending / trials;
             assert(share > 0.15 && share < 0.36, `udział linii zagranicznych ${(share * 100).toFixed(0)}% (cel ok. 25%)`);
-            resetGdrState(); resetCrises(); macro.quarter = 20;
+            resetForeignIssuers(); resetCrises(); macro.quarter = 20;
             assert(startCrisisLine('oil') && !crisisState.pendingImport, 'bez otwartych krajów linia jest zawsze polska');
         } finally { endCrisisWorld(); }
     });
@@ -13406,7 +13326,7 @@ group('0.16.2', () => {
             const arrive = crisisState.pendingImport.arriveQ;
             const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
             assert(raw.crisisState?.pendingImport || raw.crises?.crisisState?.pendingImport || JSON.stringify(raw).includes('"pendingImport":{'), 'pendingImport w zapisie');
-            resetCrises(); resetGdrState();
+            resetCrises(); resetForeignIssuers();
             assert(applySaveSnapshot(raw).ok, 'wczytanie'); assert(crisisState.pendingImport && crisisState.pendingImport.arriveQ === arrive, 'linia w drodze wróciła');
             for (let k = 0; k < 4 && !crisisLine; k++) crisisTick();
             assert(crisisLine && crisisLine.origin === 'ZZ', 'po wczytaniu linia dotarła do Polski');
@@ -13451,7 +13371,7 @@ group('0.16.2', () => {
             const html = renderCrisisSection();
             assert(html.includes('dotrze do Polski za 2 kw.') && html.includes('Zetland') && html.includes('Powiązanie'), 'opóźnienie, kraj, powiązanie');
             assert(/[▲▼■]/.test(html), 'znak kierunku obok liczby');
-            resetGdrState(); resetCrises();
+            resetForeignIssuers(); resetCrises();
             assert(!renderCrisisSection().includes('Zarażanie między krajami'), 'bez krajów sekcja zarażania znika');
         } finally { endCrisisWorld(); }
     });
@@ -13471,20 +13391,17 @@ group('0.16.2', () => {
         try { const realRender = renderKantor; renderKantor = () => {}; try { marketsUiTrade('ZA1', 'buy'); } finally { renderKantor = realRender; } assertEq(foreignIssuers.ZA1.holders.player, 10, 'zlecenie z interfejsu'); } finally { host.remove(); }
     }));
 
-    test('G10: zakładka „Obce” pokazuje tylko kwity GDR (akcje krajów dołączonych są w zakładce Rynki), a przyrost zapisu 3 krajów po 6,5 roku mieści się w celu', () => {
-        initFxState(); resetGdrState(); startFund();
-        createForeignIssuer('GLS'); createForeignIssuer('KWS');
+    test('G10: emitenci zagraniczni to akcje krajów dołączonych, a przyrost zapisu 3 krajów po 6,5 roku mieści się w celu', () => {
+        initFxState(); resetForeignIssuers(); startFund();
         const countriesReal = ['DE', 'US', 'CZ'].filter(id => COUNTRY_DEFS[id]);
         for (const id of countriesReal) joinCountry(id);
-        // GLS jest gigantem USA: po dołączeniu USA kwit stał się akcją i znika z zakładki Obce
-        const gdrOnly = getForeignIssuerList().filter(i => i.kind !== 'share');
-        assert(gdrOnly.every(i => i.kind !== 'share') && gdrOnly.some(i => i.id === 'KWS') && !gdrOnly.some(i => i.id === 'GLS'), 'kwity: KWS zostaje, GLS zamienił się w akcję');
+        assert(getForeignIssuerList().every(i => i.kind === 'share'), 'emitenci to tylko akcje krajów');
         const q0 = macro.quarter;
         withSeededRandom(5, () => { for (let w = 0; w < 338; w++) { stepFxRates(); stepCountries(); if (w % 13 === 12) { macro.quarter++; processCountriesQuarterly(); } } });
         macro.quarter = q0;
         const bytes = JSON.stringify(getCountriesSnapshot()).length;
         assert(bytes <= 0.15 * 2_300_000, `zapis krajów ${bytes} B (cel: ≤ 15% typowego zapisu 20 lat)`);
-        resetGdrState(); initFxState();
+        resetForeignIssuers(); initFxState();
     });
     test('0.16.2 poprawki: aukcje liczą czas gry (pauza je zatrzymuje), aukcja zastawu się rozstrzyga, SMSR wskakuje przy resztce', () => {
         resetWorld([makeCompany('AAA')]);
@@ -13535,7 +13452,7 @@ group('0.16.3', () => {
     const startFund = (cash = 5_000_000) => { resetWorld([mk156('GA', { price: 100 })]); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' }); playerCash = cash; };
 
     // --- G11: Szwecja, Szwajcaria, Francja ---
-    test('G11: SE 7+2, CH 7+1, FR 11+2 spółek; symbole unikalne w całej grze; giganci zgodni z kwitami (to samo id i cena)', () => {
+    test('G11: SE 7+2, CH 7+1, FR 11+2 spółek; symbole unikalne w całej grze; giganci zgodni z FOREIGN_GIANTS (to samo id i kraj)', () => {
         const expected = { SE: [7, 3], CH: [8, 1], FR: [12, 2] }; // 0.17 S2: SE +KJM, CH +GLK; S4: FR +CMA
         for (const [id, [normal, state]] of Object.entries(expected)) {
             const def = COUNTRY_DEFS[id];
@@ -13551,7 +13468,7 @@ group('0.16.3', () => {
             assert(!seen.has(c.id), `symbol ${c.id} powtórzony (${seen.get(c.id)} i ${def.id})`);
             seen.set(c.id, def.id);
             const giant = FOREIGN_GIANTS.find(g => g.id === c.id);
-            if (c.kind === 'giant') { assert(giant, `gigant ${c.id} ma kwit`); assertEq(giant.price, c.price, `${c.id}: ta sama cena`); assertEq(giant.country, def.id, `${c.id}: ten sam kraj`); }
+            if (c.kind === 'giant') { assert(giant, `gigant ${c.id} w FOREIGN_GIANTS`); assertEq(giant.country, def.id, `${c.id}: ten sam kraj`); }
         }
     });
 
@@ -13568,7 +13485,7 @@ group('0.16.3', () => {
 
     for (const id of ['SE', 'CH', 'FR']) {
         test(`G11: dołączenie ${id} tworzy spółki, giełdę i profil pracowników; kurs waluty w widełkach; niezmienniki 0`, () => {
-            startFund(); initFxState(); resetGdrState();
+            startFund(); initFxState(); resetForeignIssuers();
             const def = COUNTRY_DEFS[id];
             joinCountry(id);
             assert(isCountryJoined(id), 'dołączył');
@@ -13581,11 +13498,11 @@ group('0.16.3', () => {
             const cur = CURRENCIES[def.currency];
             assert(getFxRate(def.currency) >= cur.min && getFxRate(def.currency) <= cur.max, 'kurs w widełkach');
             assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
-            resetGdrState(); initFxState();
+            resetForeignIssuers(); initFxState();
         });
     }
     // --- G12: połączone giełdy ---
-    const withLinks = fn => { startFund(); initFxState(); resetGdrState(); macro.quarter = 30; try { return fn(); } finally { resetGdrState(); initFxState(); } };
+    const withLinks = fn => { startFund(); initFxState(); resetForeignIssuers(); macro.quarter = 30; try { return fn(); } finally { resetForeignIssuers(); initFxState(); } };
     const withRandom = (value, fn) => { const r = Math.random; Math.random = () => value; try { return fn(); } finally { Math.random = r; } };
 
     test('G12: szansa 1% podwaja się co kwartał do 32%; po wydarzeniu wraca do 1% i są 4 kwartały przerwy', () => withLinks(() => {
@@ -13867,7 +13784,7 @@ group('0.16.3', () => {
         const issuer = foreignIssuers.SIE, room = Math.floor(0.75 * issuer.shares);
         const tooMany = buyForeignShares('SIE', room + 1);
         assert(!tooMany.ok && tooMany.reason.includes('75%') && tooMany.reason.includes('BaFin'), tooMany.reason);
-        assert(buyForeignShares('SIE', room).ok, 'do progu wolno'); assertEq(getGdrHeld(issuer), room, 'dokładnie próg');
+        assert(buyForeignShares('SIE', room).ok, 'do progu wolno'); assertEq(getIssuerHeld(issuer), room, 'dokładnie próg');
         assert(!buyForeignShares('SIE', 1).ok, 'ponad próg nie');
         // bot: limit udziału poniżej progu wezwania kraju
         const bot = getForeignBots()[0]; const saved = COUNTRY_DEFS.CZ.oversight.callThreshold;
@@ -13923,7 +13840,7 @@ group('0.16.3', () => {
 
 
     // --- G18b: Chiny i Indie, napięcie Chiny–Tajwan ---
-    test('G18b: CN 13+4, IN 10+4; symbole unikalne, giganci zgodni z kwitami, sektory istnieją', () => withLinks(() => {
+    test('G18b: CN 13+4, IN 10+4; symbole unikalne, giganci zgodni z FOREIGN_GIANTS, sektory istnieją', () => withLinks(() => {
         const expected = { CN: [14, 5], IN: [10, 5] }; // 0.17 S2: CN +TBN, UOW; IN +BHO
         for (const [id, [normal, state]] of Object.entries(expected)) {
             const def = COUNTRY_DEFS[id];
@@ -13935,7 +13852,7 @@ group('0.16.3', () => {
         const seen = new Map();
         for (const def of Object.values(COUNTRY_DEFS)) for (const c of def.companies) {
             assert(!seen.has(c.id), `symbol ${c.id} powtórzony (${seen.get(c.id)} i ${def.id})`); seen.set(c.id, def.id);
-            if (c.kind === 'giant') assertEq(FOREIGN_GIANTS.find(g => g.id === c.id)?.price, c.price, `${c.id}: kwit z tą samą ceną`);
+            if (c.kind === 'giant') assertEq(FOREIGN_GIANTS.find(g => g.id === c.id)?.country, def.id, `${c.id}: gigant w FOREIGN_GIANTS`);
         }
         assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
     }));
@@ -13960,7 +13877,7 @@ group('0.16.3', () => {
         assertEq(spawnPandaParabank(), null, 'tylko raz');
         assert(!PARABANK_SCENARIOS.filter(s => !s.foreignId).some(s => s.id === 'panda'), 'losowy parabank krajowy nie wybiera PanDa');
         const issuer = foreignIssuers.PND; foreignTickets.player = [...new Set([...(foreignTickets.player || []), 'CN'])];
-        const cash0 = playerCash; assert(buyParabankShares(pb.id, 100), 'kupno z rabatem'); assertEq(getGdrHeld(issuer), 100, 'akcje w portfelu');
+        const cash0 = playerCash; assert(buyParabankShares(pb.id, 100), 'kupno z rabatem'); assertEq(getIssuerHeld(issuer), 100, 'akcje w portfelu');
         const peak = issuer.price; pb.peakPrice = peak;
         collapseParabank(pb, 'investigation');
         assert(issuer.tradeHalted && issuer.price === 0.01 && bank.frozen, 'śledztwo: notowania zawieszone, wypłaty wstrzymane');
@@ -14013,10 +13930,10 @@ group('0.16.3', () => {
         const tiger = aiCompetitors.find(b => b.id === 'fb_tygrys'), kon = aiCompetitors.find(b => b.id === 'fb_konfucjusz');
         assertEq(withRandom(0.1, () => confuciusTrade(kon)), false, 'Tygrys nie ma jeszcze akcji japońskich');
         const sne = foreignIssuers.SNE; sne.holders[tiger.id] = 200; tiger.fx.cost.SNE = sne.price;
-        const cashBefore = getForeignCashPln(kon) + getForeignCashPln(tiger), freeBefore = getGdrFree(sne);
+        const cashBefore = getForeignCashPln(kon) + getForeignCashPln(tiger), freeBefore = getIssuerFree(sne);
         assert(withRandom(0.1, () => confuciusTrade(kon)), 'kupno od Tygrysa');
         const bought = sne.holders[kon.id]; assert(bought > 0 && sne.holders[tiger.id] === 200 - bought, 'akcje przeszły od Tygrysa');
-        assertEq(getGdrFree(sne), freeBefore, 'wolny obrót bez zmian — transakcja bot–bot');
+        assertEq(getIssuerFree(sne), freeBefore, 'wolny obrót bez zmian — transakcja bot–bot');
         assert(Math.abs(getForeignCashPln(kon) + getForeignCashPln(tiger) - cashBefore) < 1, 'gotówka botów zachowana');
         kon.fx.cost.SNE = sne.price / 2; // zysk ≥ 25%
         assert(withRandom(0.9, () => confuciusTrade(kon)), 'sprzedaż Tygrysowi z zyskiem');
@@ -14378,7 +14295,7 @@ group('0.16.6 Domknięcie', () => {
             assertEq(stocks.find(s => s.symbol === 'STX').stage, 'development', 'etap nietknięty');
         } finally { host.remove(); }
     });
-    const withWorld = fn => { fresh(); initFxState(); resetGdrState(); macro.quarter = 10; try { return fn(); } finally { resetGdrState(); initFxState(); } };
+    const withWorld = fn => { fresh(); initFxState(); resetForeignIssuers(); macro.quarter = 10; try { return fn(); } finally { resetForeignIssuers(); initFxState(); } };
     const withRandom = (value, fn) => { const r = Math.random; Math.random = () => value; try { return fn(); } finally { Math.random = r; } };
 
     test('S1: złota akcja Gutzwillera — weto wobec przejęcia szwajcarskiej giełdy raz na 12 kw.; inne kraje i inne rodzaje połączeń bez weta', () => withWorld(() => {
@@ -14431,9 +14348,9 @@ group('0.16.6 Domknięcie', () => {
         playerCash = toPln(issuer.price * 12, issuer.currency) * 1.2; delete playerCashByCurrency[issuer.currency]; // 0.16.12: bez gotówki na wezwanie → odsprzedaż (DE: nadzór poziomu 3)
         assert(buyForeignShares('SIE', 10, { overThreshold: true }).ok, 'trzecie przekroczenie');
         assert(issuer.oversightResale && issuer.oversightResale.until === macro.quarter + FOREIGN_OVERSIGHT.resaleQuarters, 'nakaz odsprzedaży');
-        processForeignOversightQuarterly(); assert(getGdrHeld(issuer) > room, 'przed terminem nadwyżka zostaje');
+        processForeignOversightQuarterly(); assert(getIssuerHeld(issuer) > room, 'przed terminem nadwyżka zostaje');
         macro.quarter += FOREIGN_OVERSIGHT.resaleQuarters; processForeignOversightQuarterly();
-        assert(getGdrHeld(issuer) <= room && !issuer.oversightResale, `po terminie nadzór sprzedał nadwyżkę (${getGdrHeld(issuer)} ≤ ${room})`);
+        assert(getIssuerHeld(issuer) <= room && !issuer.oversightResale, `po terminie nadzór sprzedał nadwyżkę (${getIssuerHeld(issuer)} ≤ ${room})`);
         assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
     }));
     // --- S1.1: gotówka w Waschmabanku — osobne testy niezmienników NAV ---
@@ -14521,9 +14438,9 @@ group('0.16.7 Pełne spółki zagraniczne', () => {
         ]
     });
     const withYY = fn => {
-        COUNTRY_DEFS.YY = YY(); initFxState(); resetGdrState(); resetWorld([mk156('GA', { price: 100 })]);
+        COUNTRY_DEFS.YY = YY(); initFxState(); resetForeignIssuers(); resetWorld([mk156('GA', { price: 100 })]);
         startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' }); playerCash = 5_000_000;
-        try { joinCountry('YY'); return fn(); } finally { delete COUNTRY_DEFS.YY; resetGdrState(); initFxState(); }
+        try { joinCountry('YY'); return fn(); } finally { delete COUNTRY_DEFS.YY; resetForeignIssuers(); initFxState(); }
     };
     const quarter = () => { macro.quarter++; processCountriesQuarterly(); };
     const withRand = (value, fn) => { const real = Math.random; Math.random = () => value; try { return fn(); } finally { Math.random = real; } };
@@ -14610,9 +14527,9 @@ group('0.16.7 Pełne spółki zagraniczne', () => {
         applyCountriesSnapshot(snap); const b = foreignIssuers.YA1;
         assertNear(b.balanceSheet.assets - b.balanceSheet.liabilities, eq, 'kapitał własny (zapis zaokrągla do 6 cyfr znaczących)', 0.05); assertEq(b.ceo.name, name, 'prezes'); assertNear(b.fundamentals.epsTtm, eps, 'EPS TTM', 1e-3); assertEq(b.dividendPolicy, pol, 'polityka');
         for (const row of Object.values(snap.issuers)) delete row.c; // zapis v17
-        resetGdrState(); applyCountriesSnapshot(snap); const c = foreignIssuers.YA1; assert(c.balanceSheet && c.cash > 0 && !c.fundamentals, 'v17: model z ceny, fundamenty przy pierwszym raporcie');
+        resetForeignIssuers(); applyCountriesSnapshot(snap); const c = foreignIssuers.YA1; assert(c.balanceSheet && c.cash > 0 && !c.fundamentals, 'v17: model z ceny, fundamenty przy pierwszym raporcie');
         quarter(); assert(foreignIssuers.YA1.fundamentals, 'po kwartale są fundamenty'); assertEq(checkWorldInvariants().join(' ; '), '', 'niezmienniki po migracji');
-        assertEq(SAVE_FORMAT_VERSION, 23, 'wersja zapisu'); assert(SUPPORTED_SAVE_VERSIONS.includes(17), 'v17 nadal wczytywany');
+        assertEq(SAVE_FORMAT_VERSION, 24, 'wersja zapisu'); assert(SUPPORTED_SAVE_VERSIONS.includes(17), 'v17 nadal wczytywany');
     }));
 
     test('F2: prezes po 65. roku odchodzi (nowa osoba, cecha kraju z definicji)', () => withYY(() => {
@@ -14636,12 +14553,12 @@ group('0.16.8 Limity i zegar giełd', () => {
         COUNTRY_DEFS.WW = { id: 'WW', name: 'Wuland', currency: 'EUR', region: 'EU', rho: 0.7, rateMean: 0.03, operator: { id: 'WWX', name: 'W' }, labour: { rights: 'standard', unionMult: 1, shadow: 0, wages: 1 },
             companies: [{ id: 'WA1', name: 'A', sector: 'Przemysł', kind: 'normal', price: 10 }, { id: 'WB1', name: 'B', sector: 'Przemysł', kind: 'normal', price: 10 }, { id: 'WC1', name: 'C', sector: 'Przemysł', kind: 'normal', price: 10 }, { id: 'WD1', name: 'D', sector: 'Żywność', kind: 'normal', price: 10 }] };
         try {
-            initFxState(); resetGdrState(); resetWorld([mk156('GA', { price: 100 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+            initFxState(); resetForeignIssuers(); resetWorld([mk156('GA', { price: 100 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
             joinCountry('WW'); countryState.WW.lastDebutQ = -99; COUNTRY_RULES.sizeIndex.WW = 10;
             const real = Math.random; Math.random = () => 0; let debut;
             try { debut = maybeCountryDebut('WW'); } finally { Math.random = real; }
             assert(debut, 'debiut wystąpił'); assertEq(debut.sector, 'Żywność', 'przemysł ma już ≥ 40% — debiut z innego sektora');
-        } finally { delete COUNTRY_RULES.sizeIndex.WW; delete COUNTRY_DEFS.WW; resetGdrState(); initFxState(); }
+        } finally { delete COUNTRY_RULES.sizeIndex.WW; delete COUNTRY_DEFS.WW; resetForeignIssuers(); initFxState(); }
     });
 
     test('F3b: godzina lokalna z czasu gry — doba = tydzień gry, strefy i czas letni (kw. 2–3; Sydney odwrotnie, Tokio bez zmiany)', () => {
@@ -14687,7 +14604,7 @@ group('0.16.8 Limity i zegar giełd', () => {
 
     test('F4: budżet — 10 krajów po 6,5 roku: zapis krajów ≤ 1,5 KB na spółkę i ≤ 250 tys. znaków (≈ +12% zapisu), kwartał krajów poniżej 100 ms, niezmienniki 0', () => {
         const ids = ['DE', 'US', 'CZ', 'SE', 'CH', 'FR', 'JP', 'CN', 'IN', 'TW'].filter(id => COUNTRY_DEFS[id]);
-        initFxState(); resetGdrState(); resetWorld([mk156('GA', { price: 100 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+        initFxState(); resetForeignIssuers(); resetWorld([mk156('GA', { price: 100 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
         const q0 = macro.quarter; let quarterMs = 0, quarters = 0;
         try {
             for (const id of ids) joinCountry(id);
@@ -14696,7 +14613,7 @@ group('0.16.8 Limity i zegar giełd', () => {
             addTable('F4: koszt pełnych spółek zagranicznych (10 krajów, 26 kw.)', ['Spółki', 'Zapis (B)', 'B na spółkę', 'ms na kwartał (kraje)'], [[n, bytes, Math.round(bytes / n), Math.round(quarterMs / quarters * 10) / 10]]);
             assert(bytes / n <= 1500, `${Math.round(bytes / n)} B na spółkę`); assert(bytes <= 250_000, `${bytes} znaków`); assert(quarterMs / quarters < 100, `${Math.round(quarterMs / quarters)} ms na kwartał`);
             assertEq(checkWorldInvariants().length, 0, 'niezmienniki po 6,5 roku'); assertEq(checkForeignCompanyInvariants().length, 0, 'niezmienniki spółek');
-        } finally { macro.quarter = q0; resetGdrState(); initFxState(); }
+        } finally { macro.quarter = q0; resetForeignIssuers(); initFxState(); }
     });
 });
 
@@ -14704,7 +14621,7 @@ runAllTests();
 
 group('0.16.9 Lombard w Internecie, rynek połączony na giełdzie', () => {
     test('Lombard: strona w Internecie ma pełną obsługę (informacje + zastawy funduszu), TeamedUP nie ma wejścia, okno Lombardex zastąpione stroną', () => {
-        initFxState(); resetGdrState(); resetWorld([mk156('GA', { price: 100 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+        initFxState(); resetForeignIssuers(); resetWorld([mk156('GA', { price: 100 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
         const host = document.createElement('div'); host.innerHTML = '<div id="net-lombard-body"></div>'; document.body.appendChild(host);
         try {
             renderLombardPage(); const html = host.innerHTML;
@@ -14718,7 +14635,7 @@ group('0.16.9 Lombard w Internecie, rynek połączony na giełdzie', () => {
 
 group('0.16.9 Lombard w Internecie, rynek połączony na giełdzie', () => {
     test('Lombard: strona w Internecie ma pełną obsługę (informacje + zastawy funduszu), TeamedUP nie ma wejścia, okno Lombardex zastąpione stroną', () => {
-        initFxState(); resetGdrState(); resetWorld([mk156('GA', { price: 100 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+        initFxState(); resetForeignIssuers(); resetWorld([mk156('GA', { price: 100 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
         const host = document.createElement('div'); host.innerHTML = '<div id="net-lombard-body"></div>'; document.body.appendChild(host);
         try {
             renderLombardPage(); const html = host.innerHTML;
@@ -14733,23 +14650,23 @@ group('0.16.9 Lombard w Internecie, rynek połączony na giełdzie', () => {
         const old = document.getElementById('stock-table-body'); if (old) old.id = 'stock-table-body-hidden'; // strona testów ma własną tabelę listy
         const table = document.createElement('table'), body = document.createElement('tbody'); body.id = 'stock-table-body'; table.appendChild(body); document.body.appendChild(table);
         const saved = { sort: currentSortState, filter: sectorFilterState, level: currentMarketLevel, owned: ownedOnlyFilter, country: countrySortState, op: selectedMarketOperator };
-        initFxState(); resetGdrState(); resetWorld([mk156('GA', { price: 100 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' }); playerCash = 5_000_000;
+        initFxState(); resetForeignIssuers(); resetWorld([mk156('GA', { price: 100 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' }); playerCash = 5_000_000;
         try {
             sectorFilterState = { sector: 'all', subsector: null, secondary: false, type: 'all' }; currentMarketLevel = 'ALL'; ownedOnlyFilter = false; currentSortState = 'none'; countrySortState = 'none'; selectedMarketOperator = 'GPW';
             joinCountry('DE'); joinCountry('CZ'); countryState.DE.link = 'intl'; countryState.CZ.link = 'intl';
             return fn(body);
-        } finally { sectorFilterState = saved.filter; currentMarketLevel = saved.level; ownedOnlyFilter = saved.owned; currentSortState = saved.sort; countrySortState = saved.country; selectedMarketOperator = saved.op; table.remove(); if (old) old.id = 'stock-table-body'; resetGdrState(); initFxState(); }
+        } finally { sectorFilterState = saved.filter; currentMarketLevel = saved.level; ownedOnlyFilter = saved.owned; currentSortState = saved.sort; countrySortState = saved.country; selectedMarketOperator = saved.op; table.remove(); if (old) old.id = 'stock-table-body'; resetForeignIssuers(); initFxState(); }
     }
 
     test('Rynek połączony: spółki kraju połączonego są na głównej liście akcji (cena w PLN, kraj tekstem, Kup/Sprzedaj), a w Kantory24 nie ma listy akcji tego kraju', () => withLinkedTable(body => {
         displayStocks();
-        const de = getCountryIssuers('DE')[0], row = body.querySelector(`tr.foreign-row[data-symbol="${getGdrSymbol(de)}"]`);
+        const de = getCountryIssuers('DE')[0], row = body.querySelector(`tr.foreign-row[data-symbol="${getShareSymbol(de)}"]`);
         assert(row && row.dataset.country === 'DE', 'wiersz spółki DE na liście');
         assert(row.textContent.includes(formatZl(toPln(de.price, de.currency), 2)) && /Niemcy · EUR/.test(row.querySelector('.stock-meta').textContent) && !row.querySelector('.stock-meta .flag-ic'), 'cena w PLN i kraj/waluta tekstem (bez flagi)');
-        const before = getGdrHeld(de); toggleStockDrawer(getShareSymbol(de)); // 0.16.9 W3: szuflada handlu jak u krajowych
+        const before = getIssuerHeld(de); toggleStockDrawer(getShareSymbol(de)); // 0.16.9 W3: szuflada handlu jak u krajowych
         assert(document.getElementById(`drawer-${getShareSymbol(de)}`), 'szuflada handlu spółki zagranicznej');
         document.getElementById(`mkt-qty-${de.id}`).value = '10'; marketsUiTrade(de.id, 'buy'); closeOpenStockDrawer();
-        assertEq(getGdrHeld(de), before + 10, 'kupno z listy głównej tą samą funkcją co w Kantorze');
+        assertEq(getIssuerHeld(de), before + 10, 'kupno z listy głównej tą samą funkcją co w Kantorze');
         assert(!/asset-mini-table/.test(renderMarketsTab()) && /głównej liście akcji/.test(renderMarketsTab()), 'Kantory24: bez listy akcji kraju połączonego');
         countryState.DE.link = null; assert(/asset-mini-table/.test(renderMarketsTab()), 'kraj z biletem nadal ma listę w Kantorze');
     }));
@@ -14789,7 +14706,7 @@ group('0.16.9 Lombard w Internecie, rynek połączony na giełdzie', () => {
     }));
 
     test('Przejęcie przez giganta: w ciągu 4 kwartałów w miejsce spółki debiutuje nowa krajowa (liczba wraca, z sufitem), news „w miejsce X wchodzi Y”, okno mówi o zastępstwie, niezmienniki 0', () => {
-        initFxState(); resetGdrState(); const q0 = macro.quarter;
+        initFxState(); resetForeignIssuers(); const q0 = macro.quarter;
         try {
             resetWorld(Array.from({ length: 12 }, (_, i) => mk156(`T${i}`, { price: 50 + i, financialHealth: 2 })));
             startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
@@ -14802,14 +14719,14 @@ group('0.16.9 Lombard w Internecie, rynek połączony na giełdzie', () => {
                 assert(news.some(t => /W miejsce .+ wchodzi na giełdę .+ \(.+\), sektor: /.test(t)), 'news o debiucie');
                 assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
             } finally { pushNews = saved; }
-        } finally { macro.quarter = q0; resetGdrState(); resetForeignBots(); }
+        } finally { macro.quarter = q0; resetForeignIssuers(); resetForeignBots(); }
     });
 
     test('0.16.10 S0: kraj startowy — DE/US/CZ dołączone od 1. dnia, gracz bez biletu (boty z biletem), PL bez zmian, nieznany kraj = PL', () => {
-        initFxState(); resetGdrState();
+        initFxState(); resetForeignIssuers();
         try {
             for (const id of ['DE', 'US', 'CZ']) {
-                resetGdrState(); resetWorld(Array.from({ length: 12 }, (_, i) => mk156(`T${i}`, { price: 50 + i, financialHealth: 2 })));
+                resetForeignIssuers(); resetWorld(Array.from({ length: 12 }, (_, i) => mk156(`T${i}`, { price: 50 + i, financialHealth: 2 })));
                 startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
                 assertEq(getStartCountry(), 'PL', 'domyślnie Polska'); assertEq(getJoinedCountries().length, 0, 'PL: żadne kraje obce');
                 assertEq(setStartCountry(id), id); assertEq(playerProfile.country, id); assert(isCountryJoined(id), `${id}: giełda od pierwszego dnia`);
@@ -14821,17 +14738,17 @@ group('0.16.9 Lombard w Internecie, rynek połączony na giełdzie', () => {
                 assertEq(checkWorldInvariants().length, 0, `${id}: niezmienniki`);
                 assertEq(setStartCountry(id), id, 'idempotentne');
             }
-            resetGdrState(); startNewCareer({}); assertEq(setStartCountry('JP'), 'PL', 'kraj spoza START_PLAYABLE = Polska'); assertEq(getJoinedCountries().length, 0);
-        } finally { resetGdrState(); }
+            resetForeignIssuers(); startNewCareer({}); assertEq(setStartCountry('JP'), 'PL', 'kraj spoza START_PLAYABLE = Polska'); assertEq(getJoinedCountries().length, 0);
+        } finally { resetForeignIssuers(); }
     });
 
     test('0.16.11 K1: zestaw krajowy — start z DE usuwa polskie firmy z rynku macierzystego, zostają UNI; Polska jako rynek zagraniczny z biletem; zapis i wczytanie; PL bez zmian', () => {
-        initFxState(); resetGdrState();
+        initFxState(); resetForeignIssuers();
         try {
             resetWorld([mk156('PIX', { price: 20 }), mk156('WZM', { price: 30 }), mk156('CTX', { price: 90 }), mk156('ECL', { price: 40 })]);
             startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
             assertEq(setStartCountry('PL'), 'PL'); assertEq(stocks.length, 4, 'PL: wszystkie firmy'); assert(!COUNTRY_DEFS.PL, 'PL: brak definicji Polski jako rynku obcego');
-            resetGdrState(); resetWorld([mk156('PIX', { price: 20 }), mk156('WZM', { price: 30 }), mk156('CTX', { price: 90 }), mk156('ECL', { price: 40 })]);
+            resetForeignIssuers(); resetWorld([mk156('PIX', { price: 20 }), mk156('WZM', { price: 30 }), mk156('CTX', { price: 90 }), mk156('ECL', { price: 40 })]);
             startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
             setStartCountry('DE');
             assertEq(stocks.map(s => s.symbol).sort().join(), 'CTX,ECL', 'DE: zostają tylko UNI');
@@ -14842,16 +14759,16 @@ group('0.16.9 Lombard w Internecie, rynek połączony na giełdzie', () => {
             assertEq(COUNTRY_DEFS.PL?.companies.length, 2, 'definicja Polski wraca z zapisu');
             assertEq(setStartCountry('DE'), 'DE', 'idempotentne'); assertEq(stocks.length, 2, 'bez ponownego usuwania');
             assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
-        } finally { resetGdrState(); }
+        } finally { resetForeignIssuers(); }
     });
 
     test('0.16.11 K2: waluta bazowa — PL bez zmian (PLN, skala 1); start z DE: konto w EUR, EUR nie pływa, PLN zwykłą walutą w kantorze, formatery, zapis v21', () => {
-        initFxState(); resetGdrState();
+        initFxState(); resetForeignIssuers();
         try {
             resetWorld([mk156('CTX', { price: 90 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
             assertEq(getBaseCurrency(), 'PLN'); assertEq(getBaseScale(), 1); assertEq(formatZl(1234.5), '1234,50 PLN', 'format PL'); assertEq(toPln(100, 'EUR'), 100 * fxRates.EUR, 'PL: kurs EUR w zł');
             assert(FOREIGN_CURRENCIES.includes('EUR') && !FOREIGN_CURRENCIES.includes('PLN'), 'PL: EUR obca, PLN nie');
-            resetGdrState(); resetWorld([mk156('CTX', { price: 90 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+            resetForeignIssuers(); resetWorld([mk156('CTX', { price: 90 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
             setStartCountry('DE');
             assertEq(getBaseCurrency(), 'EUR'); assertEq(playerProfile.baseCurrency, 'EUR');
             assert(FOREIGN_CURRENCIES.includes('PLN') && !FOREIGN_CURRENCIES.includes('EUR'), 'DE: PLN obca, EUR bazowa');
@@ -14866,19 +14783,19 @@ group('0.16.9 Lombard w Internecie, rynek połączony na giełdzie', () => {
             const back = convertCurrency('PLN', 'EUR', getCurrencyCash('player', 'PLN')); assert(back.ok && back.receivedCode === 'EUR', 'wymiana PLN→EUR');
             addCurrencyCash('player', 'EUR', 10); assertNear(playerCash, playerCash, 'brak NaN'); assert(!('EUR' in playerCashByCurrency), 'wpływ w EUR trafia do gotówki bazowej');
             assertEq(checkCurrencyInvariants().length, 0, 'niezmienniki walut'); assertEq(checkWorldInvariants().length, 0, 'niezmienniki świata');
-            const snap = JSON.parse(JSON.stringify(buildSaveSnapshot())); assertEq(snap.version, 23); assertEq(snap.playerProfile.baseCurrency, 'EUR');
+            const snap = JSON.parse(JSON.stringify(buildSaveSnapshot())); assertEq(snap.version, 24); assertEq(snap.playerProfile.baseCurrency, 'EUR');
             const old = JSON.parse(JSON.stringify(snap)); old.version = 20; delete old.playerProfile.baseCurrency;
             const rep = applySaveSnapshot(old); assert(rep.ok, 'v20 się wczytuje: ' + rep.errors.join('; ')); assertEq(getBaseCurrency(), 'PLN', 'stary zapis = PLN');
             assert(FOREIGN_CURRENCIES.includes('EUR') && !FOREIGN_CURRENCIES.includes('PLN'), 'lista walut po migracji');
-        } finally { initFxState(); resetGdrState(); startNewCareer({}); syncBaseCurrency(); }
+        } finally { initFxState(); resetForeignIssuers(); startNewCareer({}); syncBaseCurrency(); }
     });
 
     test('0.16.11 K1: banki komercyjne kraju startu — start z DE dodaje 5 niemieckich banków (aktywne, notowane, kredyty działają), PL bez zmian', () => {
-        initFxState(); resetGdrState();
+        initFxState(); resetForeignIssuers();
         try {
             resetWorld([mk156('CTX', { price: 90 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
             const before = commercialBanks.length; setStartCountry('PL'); assertEq(commercialBanks.length, before, 'PL: bez nowych banków');
-            resetGdrState(); resetWorld([mk156('CTX', { price: 90 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+            resetForeignIssuers(); resetWorld([mk156('CTX', { price: 90 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
             initializeCommercialBanks(); const n0 = commercialBanks.length;
             setStartCountry('DE');
             assertEq(commercialBanks.length, n0 + 5, '5 banków DE'); setStartCountry('DE'); assertEq(commercialBanks.length, n0 + 5, 'idempotentne');
@@ -14888,7 +14805,7 @@ group('0.16.9 Lombard w Internecie, rynek połączony na giełdzie', () => {
             }
             assert(!COUNTRY_DEFS.DE.companies.some(c => ['CBK', 'SPK', 'VBK', 'IBK', 'DGH'].includes(c.id)), 'brak duplikatu w spółkach zagranicznych DE');
             assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
-        } finally { resetGdrState(); }
+        } finally { resetForeignIssuers(); }
     });
 
     test('0.16.10 S0c: wybór kraju — karta kraju, lista zgodna z START_PLAYABLE, globus nie otwiera się w testach (bez WebGL), ekran wyboru: JP („wkrótce”) nie do potwierdzenia, callback z krajem', () => {
@@ -14920,9 +14837,9 @@ group('0.16.9 Lombard w Internecie, rynek połączony na giełdzie', () => {
 
 group('0.16.9 W3 Spółki zagraniczne jak krajowe', () => {
     function withWorld(fn) {
-        initFxState(); resetGdrState(); resetWorld([mk156('GA', { price: 100 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+        initFxState(); resetForeignIssuers(); resetWorld([mk156('GA', { price: 100 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
         const hosts = ['company-card-header', 'company-card-kpis', 'company-card-tabs', 'company-card-body'].filter(id => !document.getElementById(id)).map(id => { const el = document.createElement('div'); el.id = id; document.body.appendChild(el); return el; });
-        try { return fn(); } finally { hosts.forEach(el => el.remove()); resetGdrState(); initFxState(); }
+        try { return fn(); } finally { hosts.forEach(el => el.remove()); resetForeignIssuers(); initFxState(); }
     }
     const symOf = i => getShareSymbol(i);
 
@@ -15030,7 +14947,7 @@ group('0.16.9 W3 Spółki zagraniczne jak krajowe', () => {
         assert(foreignStats.reports >= getCountryIssuers('DE').length * 4, `raporty policzone: ${foreignStats.reports}`);
         const i = getCountryIssuers('DE')[0]; i.lastSplitQuarter = -99; applyForeignShareChange(i, 2); applyForeignShareChange(i, 0.5);
         assertEq(foreignStats.splits >= 1 && foreignStats.consolidations >= 1, true, 'split i konsolidacja policzone');
-        resetGdrState(); assertEq(foreignStats.reports, 0, 'reset z nową grą');
+        resetForeignIssuers(); assertEq(foreignStats.reports, 0, 'reset z nową grą');
     }));
 });
 
@@ -15112,7 +15029,7 @@ group('0.16.9 W1 Gotówka w wielu walutach', () => {
         assert(basis > 0 && snap.basis.CHF === basis, 'basis w zapisie');
         applyCurrencySnapshot(snap); assertNear(playerFxBasis.CHF, basis, 'odtworzony kurs nabycia', 1e-12);
         delete snap.basis; fxRates.CHF = fxRates.CHF; applyCurrencySnapshot(snap); assertNear(playerFxBasis.CHF, fxRates.CHF, 'v19: kurs nabycia = bieżący', 1e-12);
-        assertEq(SAVE_FORMAT_VERSION, 23); assert(SUPPORTED_SAVE_VERSIONS.includes(19) && SUPPORTED_SAVE_VERSIONS.includes(20) && SUPPORTED_SAVE_VERSIONS.includes(21), 'v19, v20 i v21 obsługiwane');
+        assertEq(SAVE_FORMAT_VERSION, 24); assert(SUPPORTED_SAVE_VERSIONS.includes(19) && SUPPORTED_SAVE_VERSIONS.includes(20) && SUPPORTED_SAVE_VERSIONS.includes(21), 'v19, v20 i v21 obsługiwane');
         assertEq(checkCurrencyInvariants().length, 0);
         initFxState();
     });
@@ -15134,7 +15051,7 @@ group('0.16.9 W1 Gotówka w wielu walutach', () => {
         } finally { kpi.remove(); document.getElementById('cash-modal')?.remove(); cashWindowState = { from: 'PLN', to: 'EUR', providerId: 'std' }; initFxState(); }
     });
     test('0.16.11: spółki kraju startowego są na głównej liście (link home), bez biletu dla botów i bez zmiany prowizji', () => {
-        initFxState(); resetGdrState();
+        initFxState(); resetForeignIssuers();
         try {
             resetWorld(Array.from({ length: 12 }, (_, i) => mk156(`T${i}`, { price: 50 + i, financialHealth: 2 })));
             startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
@@ -15143,14 +15060,14 @@ group('0.16.9 W1 Gotówka w wielu walutach', () => {
             assert(!canTradeCountry('bot-x', 'DE'), 'bot nadal potrzebuje biletu');
             assertEq(getCountryCommission('DE'), getCountryBaseCommission('DE'), 'prowizja bez zmian');
             assert(!getLinkCandidates().includes('DE'), 'kraj startowy nie jest kandydatem na połączenie');
-        } finally { resetGdrState(); initFxState(); }
+        } finally { resetForeignIssuers(); initFxState(); }
     });
 
 });
 
 group('0.16.12 Dokończenie krajów (D1–D4)', () => {
     // --- 0.16.12 D1: spółki zależne spółek zagranicznych ---
-    const withSubLinks = fn => { resetWorld([mk156('GA', { price: 100 })]); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' }); playerCash = 5_000_000; initFxState(); resetGdrState(); macro.quarter = 10; try { return fn(); } finally { resetGdrState(); initFxState(); } };
+    const withSubLinks = fn => { resetWorld([mk156('GA', { price: 100 })]); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' }); playerCash = 5_000_000; initFxState(); resetForeignIssuers(); macro.quarter = 10; try { return fn(); } finally { resetForeignIssuers(); initFxState(); } };
     const subParent = () => {
         const p = getCountryIssuers('DE').find(i => !i.state && !i.giant && !i.special);
         ensureForeignCompany(p, true); p.financialHealth = 3; p.cash = 80_000_000; p.name = 'Polskie Zakłady Testowe';
@@ -15166,7 +15083,7 @@ group('0.16.12 Dokończenie krajów (D1–D4)', () => {
         assertEq(getForeignSubsidiaryKind(kids[0]), 'córka'); assertEq(getForeignSubsidiaryKind(kids[1]), 'spółka zależna');
         for (const c of kids) {
             assert(c.parentPack > 0 && c.parentPack < c.shares && c.float === c.shares - c.parentPack, 'pakiet matki poza floatem');
-            assertEq(getGdrFree(c), c.float, 'wolny obrót = float');
+            assertEq(getIssuerFree(c), c.float, 'wolny obrót = float');
             assert(!/[ąćęłńóśźż]/i.test(c.name.replace(/^Polskie Zakłady Testowe/, '')), `nazwa bez polskich znaków w skrócie: ${c.name}`);
             assert(/^(Polskie Zakłady Testowe |Polskie |Pol)/.test(c.name), `nazwa dziedziczy po matce: ${c.name}`);
             assert(c.cash > 0 && c.balanceSheet.assets === c.cash, 'kapitał od matki');
@@ -15198,8 +15115,8 @@ group('0.16.12 Dokończenie krajów (D1–D4)', () => {
         const gone = getCountryIssuers('DE').find(i => i !== parent && !i.state && !i.giant && !i.special);
         delistForeignIssuer(gone, gone.price);
         const n = getCountryIssuers('DE').length;
-        const snap = JSON.parse(JSON.stringify({ gdr: getGdrSnapshot(), countries: getCountriesSnapshot() }));
-        applyGdrSnapshot(snap.gdr); applyCountriesSnapshot(snap.countries); // kolejność jak w main.js (wczytanie od zera)
+        const snap = JSON.parse(JSON.stringify({ giants: getGiantEventSnapshot(), countries: getCountriesSnapshot() }));
+        applyGiantEventSnapshot(snap.giants); applyCountriesSnapshot(snap.countries); // kolejność jak w main.js (wczytanie od zera)
         const back = foreignIssuers[child.id];
         assertEq(back.shares, 25_000_000, 'liczba akcji córki');
         assertEq(back.float, 7_000_000, 'pula = akcje − pakiet matki');
@@ -15228,8 +15145,8 @@ group('0.16.12 Dokończenie krajów (D1–D4)', () => {
         assertEq(i.statePack + (i.parentPack || 0) + i.float, i.shares, 'float spójny po emisji');
         i.cash = 1e9; i.governance = null; createPendingAgm(i);
         i.governance.pendingAgm.items = [{ id: 'buyback', kind: 'board', type: 'buyback', reason: 'cash', label: 'Skup', playerVote: 'for' }];
-        const free0 = getGdrFree(i), sh1 = i.shares; applyAgmResolution(i, i.governance.pendingAgm.items[0]);
-        assert(i.shares < sh1 && getGdrFree(i) < free0 && getGdrFree(i) >= 0, 'skup zmniejsza wolny obrót, nie schodzi poniżej zera');
+        const free0 = getIssuerFree(i), sh1 = i.shares; applyAgmResolution(i, i.governance.pendingAgm.items[0]);
+        assert(i.shares < sh1 && getIssuerFree(i) < free0 && getIssuerFree(i) >= 0, 'skup zmniejsza wolny obrót, nie schodzi poniżej zera');
         const m0 = i.marginAdj || 0; assertEq(applyAgmResolution(i, { type: 'pay' }), 'wyższe koszty wynagrodzeń'); assert(i.marginAdj < m0, 'wynagrodzenia obciążają marżę');
         const old = i.ceo.name; i.financialHealth = -3; i.ceo.tenure = 5; assert(getForeignAgmItems(i).some(x => x.type === 'replaceCeo'), 'zła kondycja → wniosek o odwołanie prezesa'); applyAgmResolution(i, { type: 'replaceCeo' }); assert(i.ceo.name !== old, 'nowy prezes');
         assert(getGovernanceCompanies().some(s => s === i), 'okno Walne widzi spółkę zagraniczną');
@@ -15242,12 +15159,12 @@ group('0.16.12 Dokończenie krajów (D1–D4)', () => {
             const i = getCountryIssuers(country).find(x => !x.state && !x.giant && !x.special);
             const bot = aiCompetitors[0]; i.holders = { player: Math.floor(i.shares * 0.5), [bot.id]: Math.floor(i.shares * 0.05) };
             const botCash = bot ? getCurrencyCash(bot, i.currency) : 0;
-            const held0 = getGdrHeld(i); playerCash = expect === 'tender' ? 1e13 : 1000; delete playerCashByCurrency[i.currency];
+            const held0 = getIssuerHeld(i); playerCash = expect === 'tender' ? 1e13 : 1000; delete playerCashByCurrency[i.currency];
             const r = runForeignTenderOrder(i);
-            if (expect === 'tender') { assertEq(r, 'tender'); assert(getGdrHeld(i) > held0 * 1.3, 'wezwanie podnosi udział funduszu'); assert(playerCash < 1e13, 'zapłacono'); assert((i.holders[bot.id] || 0) < i.shares * 0.05, 'bot sprzedał'); assert(getCurrencyCash(bot, i.currency) > botCash, 'bot dostał gotówkę'); }
-            else if (expect === 'resale') { assertEq(r, 'resale'); assert(i.oversightResale, 'nakaz odsprzedaży'); assertEq(getGdrHeld(i), held0, 'bez zakupu'); }
-            else { assertEq(r, 'tender', 'poziom < 3: wezwanie częściowe'); assert(getGdrHeld(i) >= held0 && playerCash >= 0, 'częściowe wezwanie w granicach gotówki'); }
-            assert(getGdrFree(i) >= -1e-6, 'wolny obrót nieujemny');
+            if (expect === 'tender') { assertEq(r, 'tender'); assert(getIssuerHeld(i) > held0 * 1.3, 'wezwanie podnosi udział funduszu'); assert(playerCash < 1e13, 'zapłacono'); assert((i.holders[bot.id] || 0) < i.shares * 0.05, 'bot sprzedał'); assert(getCurrencyCash(bot, i.currency) > botCash, 'bot dostał gotówkę'); }
+            else if (expect === 'resale') { assertEq(r, 'resale'); assert(i.oversightResale, 'nakaz odsprzedaży'); assertEq(getIssuerHeld(i), held0, 'bez zakupu'); }
+            else { assertEq(r, 'tender', 'poziom < 3: wezwanie częściowe'); assert(getIssuerHeld(i) >= held0 && playerCash >= 0, 'częściowe wezwanie w granicach gotówki'); }
+            assert(getIssuerFree(i) >= -1e-6, 'wolny obrót nieujemny');
         }
         assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
     }));
@@ -15310,13 +15227,13 @@ group('0.16.12 Dokończenie krajów (D1–D4)', () => {
         assertEq(getMarketLabel('GPW'), 'GPW', 'PL: GPW'); assertEq(getMarketDef('GPW').name, 'Giełda Papierów Wartościowych');
         assertEq(getCompanyCountryNote({ symbol: 'CTX', name: 'Cortex' }), 'Polska · PLN', 'PL: Polska · PLN'); assertEq(getHomeCityLabel(), 'Warszawa (GPW)');
         for (const [country, op, name, note, currency] of [['DE', 'DAX', 'Frankfurter Börsenhaus', 'Niemcy · EUR', 'EUR'], ['US', 'WSE', 'Wall Street Exchange', 'USA · USD', 'USD'], ['CZ', 'PX', 'Burza Praha', 'Czechy · CZK', 'CZK']]) {
-            resetGdrState(); initFxState(); resetWorld([mk156('CTX', { price: 10 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' }); setStartCountry(country);
+            resetForeignIssuers(); initFxState(); resetWorld([mk156('CTX', { price: 10 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' }); setStartCountry(country);
             assertEq(getMarketLabel('GPW'), op, `${country}: skrót giełdy macierzystej`); assertEq(getMarketDef('GPW').name, name, `${country}: nazwa giełdy`);
             assertEq(getCompanyCountryNote({ symbol: 'CTX', name: 'Cortex' }), note, `${country}: etykieta spółki uniwersalnej`); assert(getHomeCityLabel().includes(`(${op})`));
             assertEq(getBaseCurrency(), currency); assertEq(localizeCurrencyText('Cena 20 PLN, kapitalizacja 2 mln zł na GPW'), `Cena 20 ${currency}, kapitalizacja 2 mln ${currency} na ${op}`, 'przykład z Akademii: tylko etykieta');
             assertEq(localizeCurrencyText('Odblokuj · 1 000 PLN', true), `Odblokuj · ${formatZl(1000, 0)}`, 'statyczna kwota przeliczona na walutę bazową');
         }
-        resetGdrState(); initFxState(); resetWorld([mk156('CTX', { price: 10 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+        resetForeignIssuers(); initFxState(); resetWorld([mk156('CTX', { price: 10 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
         assertEq(localizeCurrencyText('10 PLN na GPW', true), '10 PLN na GPW', 'PL: tekst bez zmian');
     }));
     test('0.16.12 D4: maile i dziennik pokazują kwoty w walucie bazowej konta (formatZl), nie w literale PLN', () => withSubLinks(() => {
@@ -15552,7 +15469,7 @@ group('0.17 S2 Spółki i koszty wsadu', () => {
         const saved = JSON.parse(buildSaveJson(SAVE_IDB_RAW_LIMIT).json);
         assert(['PES', 'SLS'].every(sym => JSON.stringify(saved.stocks).includes(`"${sym}"`)), 'spółki krajowe w zapisie');
         assert(saved.commodities && saved.commodities.p.oil > 0, 'ceny surowców w zapisie');
-        initFxState(); resetGdrState();
+        initFxState(); resetForeignIssuers();
         for (const c of ['US', 'CZ', 'SE', 'CH', 'CN', 'IN']) joinCountry(c);
         for (const id of ['JDM', 'NGR', 'GTG', 'DOL', 'KJM', 'GLK', 'TBN', 'UOW', 'BHO']) {
             assert(foreignIssuers[id]?.kind === 'share', `${id} na giełdzie kraju`);
@@ -15562,13 +15479,13 @@ group('0.17 S2 Spółki i koszty wsadu', () => {
         const snap = getCountriesSnapshot();
         assert(['JDM', 'TBN', 'BHO'].every(id => snap.issuers[id]), 'spółki zagraniczne w zapisie');
         assertEq([...checkCountryInvariants(), ...checkCommodityInvariants()].length, 0, 'niezmienniki krajów i surowców');
-        resetGdrState(); initFxState();
+        resetForeignIssuers(); initFxState();
     });
 });
 
 group('0.17 S3 Giełda towarowa', () => {
-    const startFund = (cash = 5_000_000) => { resetWorld([mk156('GA', { price: 100 })]); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' }); playerCash = cash; initFxState(); resetGdrState(); macro.quarter = 10; initCommodityState(); skills.optionsMaster.unlockedLevel = 2; };
-    const done = fn => () => { try { return fn(); } finally { resetMarginState(); resetGdrState(); initFxState(); initCommodityState(); skills.optionsMaster.unlockedLevel = 0; } };
+    const startFund = (cash = 5_000_000) => { resetWorld([mk156('GA', { price: 100 })]); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' }); playerCash = cash; initFxState(); resetForeignIssuers(); macro.quarter = 10; initCommodityState(); skills.optionsMaster.unlockedLevel = 2; };
+    const done = fn => () => { try { return fn(); } finally { resetMarginState(); resetForeignIssuers(); initFxState(); initCommodityState(); skills.optionsMaster.unlockedLevel = 0; } };
     test('S3 silnik: reguły rynku (dźwignia z instrumentu, spread, bez kosztu utrzymania), zapadalność z rozliczeniem po cenie z tego dnia, zapis `expires`; forex bez zmian', done(() => {
         startFund();
         let px = 100;
@@ -15749,7 +15666,7 @@ group('0.17 S4 Transport i indeks frachtu', () => {
         assert(getFreightFundamental('sea') / getFreightFundamental('land') > withOil.sea / withOil.land, 'morski najbardziej czuły na popyt');
     }));
     test('S4: zakłócenie podnosi indeks i czas dostawy, po czasie wygasa; „Statek utknął w kanale” obniża kurs EVG o 8%', () => withQ(() => quiet(() => {
-        initFxState(); resetGdrState(); joinCountry('TW');
+        initFxState(); resetForeignIssuers(); joinCountry('TW');
         try {
             const evg0 = foreignIssuers.EVG.price;
             run(4);
@@ -15766,7 +15683,7 @@ group('0.17 S4 Transport i indeks frachtu', () => {
             startFreightEvent('railStrike'); startFreightEvent('volcano');
             assertNear(getFreightDisruption('land'), 1.15, 'strajk +15%', 1e-12);
             assertNear(getFreightDisruption('air'), 1.3, 'pył +30%', 1e-12);
-        } finally { resetGdrState(); initFxState(); }
+        } finally { resetForeignIssuers(); initFxState(); }
     })));
     test('S4: przewoźnik zyskuje przy wysokim indeksie (Ī/Ś8)^0,7, odbiorca traci udział × odchylenie; Logistyka bez frachtu', () => withQ(() => {
         const fr = ensureFreightState();
@@ -15821,7 +15738,7 @@ group('0.17 S4 Transport i indeks frachtu', () => {
         assertEq(JSON.stringify(getCommoditiesSnapshot()), JSON.stringify(snap), 'fracht bez strat po wczytaniu');
         delete snap.fr; applyCommoditiesSnapshot(snap);
         assert(FREIGHT_IDS.every(id => getFreightIndex(id) === 100 && getFreightTrend(id) === 100), 'stary zapis: indeks od 100');
-        initFxState(); resetGdrState();
+        initFxState(); resetForeignIssuers();
         try {
             for (const c of ['DE', 'US', 'FR', 'JP', 'TW', 'CZ', 'CN', 'IN']) joinCountry(c);
             for (const id of ['HKR', 'DHX', 'POP', 'CMA', 'KML', 'EVG']) assert(foreignIssuers[id]?.kind === 'share' && foreignIssuers[id].sectors[0][0] === 'Transport i logistyka' && foreignIssuers[id].desc, `${id}: na giełdzie, transport, opis`);
@@ -15830,7 +15747,7 @@ group('0.17 S4 Transport i indeks frachtu', () => {
             assertEq(foreignIssuers.ABL.sectors[0][0], 'Budowlany', 'ABL zostaje w „Budowlany”');
             assert(['HKR', 'EVG'].every(id => getCountriesSnapshot().issuers[id]), 'spółki zagraniczne w zapisie');
             assertEq([...checkCountryInvariants(), ...checkCommodityInvariants()].length, 0, 'niezmienniki');
-        } finally { resetGdrState(); initFxState(); }
+        } finally { resetForeignIssuers(); initFxState(); }
     });
     test('S4: okno „Rynek” pokazuje indeks frachtu (trzy rodzaje, czas dostawy, zakłócenie słowem)', () => withQ(() => {
         stepCommodities(); startFreightEvent('canal');
@@ -16408,7 +16325,7 @@ group('0.17.3 R0 Osoby, relacje, kontakty', () => {
         assertNear(getRelation(key), 40 * (1 - RELATION_DECAY) ** 2, 'zanik', 1e-9);
         botRelations.values.zero = 0;
         const saved = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
-        assertEq(saved.version, 23, 'wersja 23');
+        assertEq(saved.version, 24, 'wersja 24');
         assert(!('zero' in saved.botRelations.values) && saved.botRelations.values[key] > 0, 'zero poza zapisem, relacja w zapisie');
         delete botRelations.values.zero;
     });
