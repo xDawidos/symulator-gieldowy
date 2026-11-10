@@ -253,3 +253,79 @@ Wymogi wspólne: ciemny motyw i tokeny z `tokens.css`, ikony SVG (bez emoji), PL
 ## Co nie zostało sprawdzone
 
 Receptury i udziały popytu z serii to propozycja projektowa, a nie kalibracja. Czas kroku bilansu nie jest zmierzony. Planu nie sprawdzałem uruchomieniem gry. Przypisania spółek do nowych podsektorów (P1) trzeba sprawdzić na liście spółek przed commitem.
+
+## Polecenie dla czatu kodu
+
+```
+Implementujesz 0.18 „Łańcuchy produkcyjne” w Capital Quest (JS bez frameworka).
+Specyfikacja: plany/plan_0.18_lancuchy_produkcyjne.md. Rejestr dóbr, receptury,
+udziały popytu, model bilansu (5.2), IPO (6) i wydajność (8):
+plany/plan_seria_0.18_towary_ipo_miasta.md. Stan wyjściowy: zmiany-AI po d0f193e.
+
+Zasady:
+- Odpowiadaj po polsku. Pracuj część po części, commit po każdej, tylko swoje pliki.
+- Przed commitem: testy (design/narzedzia/run_tests.mjs) i przebiegi ×200
+  (tests/przebiegi.html, --noui, najwyżej 5 naraz). 0 błędów JS i niezmienników.
+- Każda wersja kończy się raportem plany/raporty/kontrola_0.18.N.md i wierszem
+  w plany/plan_0.13-0.16_mapa.md. Bramka niezaliczona = stop i pytanie do mnie.
+- goods.js i chains.js bez DOM i window (test w czystym kontekście).
+- Zapis: pola opcjonalne, stare zapisy uzupełnia pierwszy kwartał.
+- UI: ciemny motyw, ikony SVG zamiast emoji, PLN, „udział”, „konto prywatne”,
+  kolor nie jest jedynym nośnikiem, bez nowych okien modalnych. Wygląd według
+  makiet w plany/design/makiety (13_lancuch_018.html i kolejne); plików w
+  plany/design nie edytujesz.
+- Decyzje (nowe spółki, strojenia poza celem) zadawaj przez AskUserQuestion
+  z sugerowaną odpowiedzią.
+
+0.18.1 Pilotaż:
+P0 pomiar bazy: sonda PROBE_018 (profil wsadu podsektor × kraj), seria
+   50 × 6,5 roku, 20 × 20 lat, 20 × kraje-stopniowo, krok po kolei;
+   raport raporty/baza_0.18.md. Kod gry bez zmian.
+P1 goods.js (wszystkie dobra, poza pilotażem active: false); nowe podsektory
+   Hutnictwo, Maszyny, Stocznie (STM), Chemia polimerowa, Nawozy, Farmacja,
+   Przetwórstwo spożywcze; najpierw przypisz istniejące spółki, nowych spółek
+   najwyżej 6, listę pokaż mi przed commitem; metals → iron + copper z migracją
+   v23 → v24 (ceny od średniej 8 kw., pozycje i ETC 50/50, nowe wagi ETF);
+   emoji w zdarzeniach surowcowych → SVG. Bramka: marże 0 ± 0,3 pp, GIG ±1 pp.
+P2 chains.js w trybie cichym (liczy, zapisuje, sonda, nic nie zmienia);
+   kalibracja A i B z P0, b = 1 na starcie, zachowanie masy, import do limitu
+   przepustowości, K z δ. Bramka cicha: b w 0,8–1,25 w 90% kw., ceny 0,7–1,4 × P0,
+   bilans ≤ 5% kroku, wynik gry identyczny jak w P1.
+P3 włączenie 3 łańcuchów: factor[podsektor][kraj] zamiast pętli po segmentach
+   dla dóbr pilotażu, niedobór z priorytetem obronności, sprzężenie z
+   kontraktami ±15%, usunięcie skrótu w getCommodityIndustryDemand, wyłącznik
+   CHAINS_ACTIVE. Bramka: marże 0 ± 0,3 pp, GIG 6,5 roku ±1 pp, GIG 20 lat
+   ≤ 12,4%, krok ≤ +15%, zapis ≤ +4%.
+P4 linia supply w crises.js (blokada cieśniny, strajk portowy, strajk w
+   kopalni), etapy jak 0.15.3, zdolność c_j w dół łańcucha, wspólny budżet.
+   Bramka: +3–15% ceny w dół łańcucha, powrót 4–8 kw., linie 1–2 na 20 lat.
+P5 chains_ui.js: Państwo → Łańcuchy, wiersz w karcie spółki, 3 hasła Akademii,
+   ikony z makiety.
+P6 kontrola 0.18.1 i bramka pilotażu (tabela w planie).
+
+0.18.2 Pełny graf: G0 baza; G1 surowce (ziemie rzadkie, siarka, złoto, uran,
+Leśnictwo, kawa jako 9. kontrakt, srebro jako współprodukt); G2 chemia i papier,
+łańcuch miedzi; G3 przemysł lotniczy, sprzęt medyczny, roboty, półprzewodniki;
+G4 prąd jako wsad prawie wszystkich, blok jądrowy w 3 etapach; G5 obronność
+i zdrowie; G6 budownictwo, REIT residential, rynek podwykonawców; G7 usługi
+jako dystrybucja, Mennica z wyłącznikiem MINT_ACTIVE; G8 strojenie GIG 20 lat
+do 8–11% pokrętłami bilansu (jeśli się nie da, pytanie do mnie); G9 kontrola.
+Bramka każdej części: marże 0 ± 0,3 pp, krok ≤ +5%.
+
+0.18.3 Mechaniki: M0 baza; M1 magazyny i zapasy; M2 hierarchia konsumpcji
+(Z/L, herbata wg kraju, klasy); M3 substytucja i R&D; M4 ESG z receptury;
+M5 mapa szlaków; M6 kontrola.
+
+0.18.4 Audyt, oceny i IPO: A0 baza; A1 księgowość B2B, filie banków,
+Lombardex/Limbard, Wrona; A2 audyt i ocena AAA–D z szumem i przekupstwem;
+A3 nowe IPO (audyt, opiekun, dyskonto, subskrypcja, wycofanie, ocena jako
+bramka poziomu); A4 sufity 130/180; A5 kontrola.
+
+0.18.5 Wydajność: W0 profil kwartału i budżet ms/kw.; W1 rysowanie przy ×200;
+W2 LOD spółek (neutralny statystycznie: 40 + 40 gier, ±0,5 pp); W3 Worker dla
+grafu i surowców, jeśli W0 pokaże ≥ 15% kroku; W4 kontrola końcowa 0.18
+(raporty/kontrola_0.18.md).
+
+Zacznij od P0. Po każdej części podaj: commit, wynik testów, wynik bramki
+i co nie zostało sprawdzone.
+```
