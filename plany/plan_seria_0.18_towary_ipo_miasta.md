@@ -201,27 +201,11 @@ Miasta dotykają zapisu (kilkadziesiąt obiektów), czasu kroku (oddziały) i UI
 | po profilu | WebAssembly tylko dla wskazanych gorących pętli | Bez przepisywania całości |
 | ×200 | Ograniczenie renderowania: rysujemy co N-ty krok, panele zamknięte nie liczą widoków | Szybkie do zrobienia; kalendarz „co 2 liczby” (ze zgłoszeń) wynika prawdopodobnie z tej samej kwantyzacji |
 
-## 9. Kolejność wersji (od 0.18; wszystko do 0.17.5 bez zmian)
+## 9. Kolejność wersji (zmieniona 2026-11-10)
 
-| Wersja | Zakres |
-|---|---|
-| 0.18.0 | Wydajność a/b i budżet czasu; poprawki z gry, o ile nie ma ich w 0.17.5 |
-| 0.18.1 | Rejestr sektorów, dóbr (klasy), ustaw i receptur jako dane; graf i bilans (sekcja 5) w trybie cichym (liczy, nic nie zmienia) |
-| 0.18.2 | Surowce: podział kopalin, Leśnictwo, rozdzielenie `metals`, kawa |
-| 0.18.3 | Chemia: guma, baterie, papier, nawozy, farmacja; rafineria bez prądu |
-| 0.18.4 | Przemysł ciężki i motoryzacja: maszyny, stocznie, lotnictwo, sprzęt medyczny; kapitałowe z amortyzacją |
-| 0.18.5 | Rolnictwo i żywność; **bramka pilotażu** (3 łańcuchy) |
-| 0.18.6 | Technologia |
-| 0.18.7 | Obronność |
-| 0.18.8 | Budownictwo i Nieruchomości (dodać typ `residential`) |
-| 0.18.9 | Usługi |
-| 0.18.10 | Finanse (banki, filie, Mennica, Lombardex/Limbard, Wrona, księgowość) |
-| 0.18.11 | Audyt, oceny i nowe IPO (sekcja 6) |
-| 0.19.1 | Społeczeństwo 2, Zdrowie i Nauka |
-| 0.19.2 | Miasta 2 |
-| 0.19.3 | Bramka testowa |
+Podział 0.18.0–0.18.11 z 2026-11-03 **zastępuje** specyfikacja `plan_0.18_lancuchy_produkcyjne.md`: 0.18.1 Pilotaż (rejestr, bilans cichy, 3 łańcuchy, rozdzielenie `metals`), 0.18.2 Pełny graf (grupy sektorów jako części G1–G7, strojenie GIG z bilansem), 0.18.3 Mechaniki (magazyny, konsumpcja, R&D, ESG, mapa szlaków), 0.18.4 Audyt, oceny i IPO (sekcja 6 tego pliku, finanse), 0.18.5 Wydajność (sekcja 8 tego pliku, po pełnym grafie). Cel gry jako osobna wersja po 0.18. Kolejność 0.19.1 Społeczeństwo 2 → 0.19.2 Miasta 2 → 0.19.3 bramka testowa bez zmian.
 
-Sekcje 6 i 7 mogą wejść wcześniej lub później, ale bilans (5) musi być w 0.18.1, bo od niego zależy kalibracja kolejnych grup.
+Sekcje 2–6 i 8 tego pliku zostają źródłem rejestru, receptur, modelu bilansu, IPO i wydajności; plan 0.18 tylko dzieli je na części.
 
 ## 10. Otwarte
 
