@@ -199,10 +199,42 @@ const CRISIS_LINES = {
         victims: { sectors: ['Turystyka', 'Usługi'], banks: false },
         news: { burst: 'Lockdown w wielu krajach: turystyka i usługi stają z dnia na dzień, a giełda gwałtownie traci.', spread: 'Restauracje, hotele i linie lotnicze liczą straty; rośnie popyt na leki, internet i gry.', intervention: 'Bank centralny tnie stopy do minimum, rząd ogłasza programy pomocowe dla turystyki i usług.', bottom: 'Obostrzenia powoli znikają; rynek patrzy już poza epidemię.', recovery: 'Szybkie odbicie w kształcie litery V — poza turystyką, która wraca wolniej.' },
         eligible: regime => !['bear', 'capitulation'].includes(regime.phase)
+    },
+    supply: { // 0.18.1 P4: szósta linia — szok podażowy w łańcuchach (wariant losowany przy starcie; zdolność ogniw: getSupplyShockCapacity)
+        id: 'supply', name: 'Szok podażowy', icon: '', svg: 'szok', year: 2021, recoveryQ: [4, 8], shape: 'U',
+        spark: { macro: null, news: 'Dostawcy ostrzegają: terminy dostaw się wydłużają, a magazyny surowców topnieją.' },
+        variants: {
+            strait: { name: 'Blokada cieśniny', spark: 'Napięcie na głównym szlaku morskim: armatorzy omijają cieśninę, fracht drożeje.', burst: 'Cieśnina zablokowana: statki z rudą, ropą i półproduktami stoją w kolejce, import gwałtownie spada.', commodity: 'embargo', imports: 0.45 },
+            port: { name: 'Strajk portowy', spark: 'Związki w portach zapowiadają strajk generalny, jeśli nie dostaną podwyżek.', burst: 'Strajk w portach: kontenery utknęły na nabrzeżach, fabryki czekają na dostawy z importu.', imports: 0.4, homeOnly: true },
+            mine: { name: 'Strajk w kopalni', spark: 'Górnicy grożą strajkiem: rozmowy o płacach utknęły.', burst: 'Strajk w kopalniach: wydobycie rudy i węgla stoi, huty ograniczają produkcję.', commodity: 'strike', units: { 'Przemysł/Wydobycie': 0.35 } }
+        },
+        lose: [
+            { sector: 'Motoryzacja', premium: -0.20, revenue: -0.05 }, { sector: 'Przemysł', premium: -0.15, revenue: -0.04 },
+            { sector: 'Budowlany', premium: -0.10, revenue: -0.03 }, { sector: 'Transport i logistyka', subsector: 'Morski', premium: -0.15, revenue: -0.06 }
+        ],
+        gain: [{ sector: 'Nieruchomości', subsector: 'Magazyny', premium: 0.15 }, { sector: 'Transport i logistyka', subsector: 'Lądowy', premium: 0.08 }, { sector: 'Przemysł', subsector: 'Wydobycie', premium: 0.12 }],
+        crash: { drop: [-0.04, -0.08], weeks: 2 }, recession: false, inflation: [0.01, 0.02],
+        rate: { kind: 'hike', total: [0.0025, 0.005], quarters: 1 }, state: null,
+        victims: { sectors: ['Motoryzacja', 'Przemysł'], banks: false },
+        news: { burst: 'Łańcuch dostaw pęka: brakuje części i surowców, a ceny półproduktów rosną.', spread: 'Braki idą w dół łańcucha: huty, fabryki maszyn i motoryzacja tną produkcję, kupują drożej z zagranicy.', intervention: 'Rząd uruchamia rezerwy strategiczne i pomaga firmom przestawić dostawy na inne kraje.', bottom: 'Najgorsze za nami: dostawy z innych krajów domykają luki, ale zapasy są puste.', recovery: 'Szlaki i kopalnie wracają do pracy, a firmy odbudowują zapasy.' },
+        eligible: regime => !['bear', 'capitulation'].includes(regime.phase)
     }
 };
 
-const CRISIS_LINE_ORDER = ['banking', 'dotcom', 'oil', 'black', 'pandemic'];
+const CRISIS_LINE_ORDER = ['banking', 'dotcom', 'oil', 'black', 'pandemic']; // 0.18.1 P4 dopisuje 'supply' po pomiarze P2–P3
+const SUPPLY_STAGE_CAPACITY = { spark: 1, burst: 0.75, spread: 0.6, intervention: 0.7, bottom: 0.85, recovery: 1 }; // mnożnik zdolności dotkniętych ogniw (wariant mnoży głębokość)
+
+/** 0.18.1 P4: zdolność ogniw w linii `supply`: { „klucz|kraj”: mnożnik } i import (`import|kraj`); null poza linią. */
+function getSupplyShockCapacity() {
+    const line = crisisLine;
+    if (!line || line.id !== 'supply') return null;
+    const v = CRISIS_LINES.supply.variants[line.variant] || CRISIS_LINES.supply.variants.port, k = SUPPLY_STAGE_CAPACITY[line.stage] ?? 1;
+    const depth = m => 1 - (1 - m) * (1 - k) / (1 - SUPPLY_STAGE_CAPACITY.spread); // w Zarażaniu pełna głębokość wariantu
+    const home = typeof getStartCountry === 'function' ? getStartCountry() : 'PL', out = {};
+    for (const [key, m] of Object.entries(v.units || {})) out[`${key}|${line.country || home}`] = depth(m);
+    if (v.imports) out[`import|${v.homeOnly ? home : '*'}`] = depth(v.imports);
+    return out;
+}
 
 // ---------------------------------------------------------------------------------
 // W1. Silnik linii
@@ -245,6 +277,7 @@ function startCrisisLine(id, options = {}) {
         gigStart: getGigIndexValue(), gigMin: getGigIndexValue(), fundStart: playerFund ? getFundNav() : 0, trustStart: playerFund?.trust ?? 0,
         positionStart: playerProfile?.positionId || null, techShare: 0, rateStart: Number(centralBank?.baseInterestRate) || 0, fundMin: playerFund ? getFundNav() : 0, positiveStages: 0, stagesSeen: 0
     };
+    if (def.variants) { const keys = Object.keys(def.variants); crisisLine.variant = options.variant && def.variants[options.variant] ? options.variant : keys[Math.floor(Math.random() * keys.length)]; } // 0.18.1 P4
     crisisState.lastEventQ = crisisQuarter();
     if (!crisisState.used.includes(id)) crisisState.used.push(id);
     if (typeof noteCrisisForCommodities === 'function') noteCrisisForCommodities(id); // 0.17 S1: ucieczka do złota
@@ -256,10 +289,12 @@ function crisisHeadline(stage) {
     const def = CRISIS_LINES[crisisLine.id];
     const victim = crisisLine.victims.map(symbol => stocks.find(s => s.symbol === symbol)).find(s => s && s.isBankStock)?.name
         || stocks.find(s => s.symbol === crisisLine.victims[0])?.name || 'jeden z dużych banków';
-    const text = (stage === 'spark' ? def.spark.news : def.news[stage])?.replace('{victim}', victim);
+    const variant = def.variants?.[crisisLine.variant]; // 0.18.1 P4: wariant linii `supply` ma własne teksty Zapowiedzi i Wybuchu
+    const text = (stage === 'spark' ? variant?.spark || def.spark.news : variant?.[stage] || def.news[stage])?.replace('{victim}', victim);
     if (!text) return;
-    logEvent(`${def.icon} ${CRISIS_STAGE_NAMES[stage]}: ${text}`, 'macro');
-    if (typeof pushNews === 'function') pushNews(`${def.icon} ${def.name} — ${CRISIS_STAGE_NAMES[stage]}: ${text}`);
+    const icon = def.icon ? `${def.icon} ` : '', name = variant ? `${def.name} (${variant.name.toLowerCase()})` : def.name;
+    logEvent(`${icon}${CRISIS_STAGE_NAMES[stage]}: ${text}`, 'macro');
+    if (typeof pushNews === 'function') pushNews(`${icon}${name} — ${CRISIS_STAGE_NAMES[stage]}: ${text}`);
 }
 
 function enterCrisisStage(stage) {
@@ -288,6 +323,8 @@ function enterCrisisStage(stage) {
                 else marketCrash.theme = def.id;
             }
             if (def.recession) crisisState.recession = line.lens.spread + line.lens.intervention + 1;
+            const variant = def.variants?.[line.variant]; // 0.18.1 P4: szok surowcowy wariantu (embargo albo strajk w kopalniach)
+            if (variant?.commodity && typeof startCommodityEvent === 'function' && !getActiveCommodityEvents().some(ev => ev.id === variant.commodity)) startCommodityEvent(variant.commodity, { silent: true });
             if (def.inflation) macro.shocks.inflation += Array.isArray(def.inflation) ? rangeFloat(def.inflation) : def.inflation;
             pickCrisisVictims(line, def);
             break;
@@ -309,6 +346,7 @@ function enterCrisisStage(stage) {
             break;
     }
     crisisHeadline(stage);
+    if (typeof showCrisisBanner === 'function') showCrisisBanner(line, stage); // 0.18.1 P4 (Z10): niemodalny baner przy starcie i każdym etapie
 }
 
 function createLineShocks(line, def) {
@@ -447,7 +485,7 @@ function startCrisisReactions(line, def) {
         relief: () => crisisSubsidy(['Turystyka', 'Usługi'], 0.03, 'Program pomocowy'), bankRescue: () => rescueDistressedBanks() };
     if (def.state && handlers[def.state]) handlers[def.state]();
     if (typeof addMail === 'function') addMail({
-        sender: 'NBP', subject: `${def.icon} ${def.name}: reakcja państwa i banku centralnego`,
+        sender: 'NBP', subject: `${def.icon ? def.icon + " " : ""}${def.name}: reakcja państwa i banku centralnego`,
         body: `Etap „Interwencja”. Bank centralny ${rate ? (rate.kind === 'hike' ? 'podnosi stopy mimo recesji (walka z inflacją)' : rate.delay ? `po zwłoce ${rate.delay} kw. obniża stopy` : 'obniża stopy') : 'utrzymuje stopy'}; państwo uruchamia pomoc dla dotkniętych sektorów.`,
         importance: 2
     });
@@ -584,12 +622,12 @@ function finishCrisisLine() {
     if (typeof addMail === 'function') {
         const names = [...line.bankrupted, ...line.rescued].map(symbol => symbol).join(', ');
         addMail({
-            sender: 'Redakcja PULS', subject: `${def.icon} Retrospektywa: ${def.name}`,
+            sender: 'Redakcja PULS', subject: `${def.icon ? def.icon + " " : ""}Retrospektywa: ${def.name}`,
             body: `${def.name} dobiegła końca (${formatQuarterDate(line.startQuarter)} – ${formatQuarterDate(crisisQuarter())}). GIG spadł od szczytu o ${(Math.abs(gigDrop) * 100).toFixed(0)}%, a w całej linii zmienił się o ${(gigChange * 100).toFixed(0)}%. Twój fundusz: ${(fundChange * 100).toFixed(0)}% (zaufanie ${Math.round(playerFund?.trust ?? 0)}). Upadłości: ${line.bankrupted.length}${line.rescued.length ? `, ratunki państwa: ${line.rescued.length}` : ''}${names ? ` (${names})` : ''}. Wzór historyczny: ${def.year}. Zobacz hasło Akademii „${def.name}”.`,
             importance: 2
         });
     }
-    logEvent(`${def.icon} ${def.name} dobiegła końca. Rynek wraca do normy.`, 'macro');
+    logEvent(`${def.icon ? def.icon + " " : ""}${def.name} dobiegła końca. Rynek wraca do normy.`, 'macro');
     if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry(`kryzys_${def.id}`);
     checkCrisisAchievements(result, line);
     crisisLine = null;

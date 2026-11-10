@@ -1,5 +1,5 @@
 // =================================================================================
-// 0.17 S1: SUROWCE — rejestr 7 surowców, cena w USD co tydzień, zdarzenia surowcowe, zapis (pole opcjonalne `commodities`)
+// 0.17 S1: SUROWCE — rejestr surowców (0.18.1 P1: 8, metale rozdzielone na żelazo i miedź), cena w USD co tydzień, zdarzenia surowcowe, zapis (pole opcjonalne `commodities`)
 // =================================================================================
 // Ceny są egzogeniczne (rynek światowy): nie zależą od gracza ani botów. Model tygodniowy:
 //   ln X ← ln X + θ_t·(ln M − ln X) + σ/√(rok gry)·ε,  θ_t = 1 − (1 − θ)^(1/WEEKS_PER_QUARTER),  P = X · sezon(tydzień)
@@ -13,7 +13,8 @@ const COMMODITY_DEFS = {
     oil:     { name: 'Ropa', unit: 'baryłka', mean: 75, sigma: 0.35, theta: 0.15, season: [0, 0, 0.03, 0], betaP: 1.0, betaZ: 0.2, band: [0.4, 2.5], mood: true },
     gas:     { name: 'Gaz', unit: 'MMBtu', mean: 3.5, sigma: 0.40, theta: 0.25, season: [0.12, -0.06, -0.12, 0.06], betaP: 0.8, betaZ: 0.1, band: [0.4, 3.0], mood: false },
     coal:    { name: 'Węgiel', unit: 'tona', mean: 120, sigma: 0.30, theta: 0.15, season: [0.06, 0, -0.06, 0], betaP: 0.9, betaZ: 0.1, band: [0.4, 2.5], mood: true },
-    metals:  { name: 'Metale przemysłowe', unit: 'indeks', mean: 100, sigma: 0.25, theta: 0.10, season: null, betaP: 1.3, betaZ: 0.5, band: [0.5, 2.0], mood: true },
+    iron:    { name: 'Ruda żelaza', unit: 'tona', mean: 110, sigma: 0.25, theta: 0.10, season: null, betaP: 1.3, betaZ: 0.5, band: [0.5, 2.0], mood: true },   // 0.18.1 P1: z dawnych „metali”
+    copper:  { name: 'Miedź', unit: 'tona', mean: 9000, sigma: 0.25, theta: 0.10, season: null, betaP: 1.3, betaZ: 0.4, band: [0.5, 2.0], mood: true },
     grain:   { name: 'Zboże', unit: 'buszel', mean: 6, sigma: 0.25, theta: 0.20, season: [0, 0.05, -0.08, 0], betaP: 0.2, betaZ: 0, band: [0.5, 2.0], mood: false },
     uranium: { name: 'Uran', unit: 'funt', mean: 60, sigma: 0.30, theta: 0.08, season: null, betaP: 0.3, betaZ: 0.1, band: [0.4, 2.5], mood: false }
 };
@@ -31,15 +32,15 @@ const COMMODITY_RULES = {
 // Zdarzenia losowane co kwartał (szansa roczna / 4). `shocks`: [surowiec, [min, max]] — przesunięcie celu M (np. 0.3 = +30%).
 const COMMODITY_EVENTS = {
     embargo: { name: 'Embargo i blokada cieśniny', yearly: 0.04, quarters: [2, 4], shocks: [['oil', [0.30, 0.60]], ['gas', [0.20, 0.40]]],
-        text: '⛴️ Embargo i blokada cieśniny: tankowce stoją, ropa i gaz gwałtownie drożeją.' },
-    strike: { name: 'Strajk w kopalniach', yearly: 0.06, quarters: [1, 2], shocks: null, // węgiel albo metale, losowane przy starcie
-        text: '⛏️ Strajk w kopalniach: wydobycie stoi, {name} drożeje.' },
+        text: 'Embargo i blokada cieśniny: tankowce stoją, ropa i gaz gwałtownie drożeją.' }, // 0.18.1 P1 (K5): teksty bez emoji (ikonę daje kategoria wiadomości)
+    strike: { name: 'Strajk w kopalniach', yearly: 0.06, quarters: [1, 2], shocks: null, // węgiel (50%) albo jeden z metali: ruda żelaza lub miedź (po 25%), losowane przy starcie
+        text: 'Strajk w kopalniach: wydobycie stoi, {name} drożeje.' },
     harvest: { name: 'Rekordowe zbiory', yearly: 0.08, quarters: [2, 2], shocks: [['grain', [-0.25, -0.15]]],
-        text: '🌾 Rekordowe zbiory: silosy pełne, zboże tanieje.' },
+        text: 'Rekordowe zbiory: silosy pełne, zboże tanieje.' },
     reactor: { name: 'Awaria reaktora za granicą', yearly: 0.02, quarters: [4, 6], shocks: [['uranium', [-0.30, -0.30]]],
-        text: '☢️ Awaria reaktora za granicą: kraje wstrzymują budowę elektrowni jądrowych, uran tanieje.' },
-    goldFlight: { name: 'Ucieczka do złota', yearly: 0, quarters: [2, 4], shocks: [['gold', [0.10, 0.20]], ['oil', [-0.10, -0.10]], ['metals', [-0.10, -0.10]]], // start linii kryzysu
-        text: '🪙 Ucieczka do złota: inwestorzy szukają bezpiecznej przystani, surowce przemysłowe tanieją.' },
+        text: 'Awaria reaktora za granicą: kraje wstrzymują budowę elektrowni jądrowych, uran tanieje.' },
+    goldFlight: { name: 'Ucieczka do złota', yearly: 0, quarters: [2, 4], shocks: [['gold', [0.10, 0.20]], ['oil', [-0.10, -0.10]], ['iron', [-0.10, -0.10]], ['copper', [-0.10, -0.10]]], // start linii kryzysu
+        text: 'Ucieczka do złota: inwestorzy szukają bezpiecznej przystani, surowce przemysłowe tanieją.' },
     // spięte z istniejącymi szokami makro (core.js MACRO_SHOCK_EVENTS; szok naftowy także jako iskra linii 1973)
     oilShock: { name: 'Szok naftowy', yearly: 0, quarters: [3, 3], shocks: [['oil', [0.40, 0.40]]], text: null },
     drought: { name: 'Susza', yearly: 0, quarters: [2, 2], shocks: [['grain', [0.20, 0.20]]], text: null },
@@ -48,7 +49,8 @@ const COMMODITY_EVENTS = {
 const COMMODITY_MACRO_LINKS = { oil: 'oilShock', drought: 'drought', energyprices: 'energyPrices' };
 const COMMODITY_GOLD_CRISES = ['banking', 'black', 'pandemic'];
 
-let commodityState = null; // { startQ, w, prices, hist, qHist, qSum, qN, events: [{ id, until, shocks: {id: s}, product? }], lastDroughtQ }
+let commodityState = null;
+let commodityMetalsMigration = null; // 0.18.1 P1: wynik migracji „metali” z ostatniego wczytania (pozycje gracza dzieli main.js po wczytaniu forexu) // { startQ, w, prices, hist, qHist, qSum, qN, events: [{ id, until, shocks: {id: s}, product? }], lastDroughtQ }
 
 function commodityQuarterInYear(q = macro.quarter) { return ((q % 4) + 4) % 4 + 1; } // kalendarz gry: formatQuarterDate (campaigns.js)
 
@@ -68,11 +70,12 @@ function ensureCommodityState() { return commodityState || initCommodityState();
 
 function getCommodityPrice(id) { return ensureCommodityState().prices[id]; }
 
-/** Popyt przemysłu: faza cyklu sektora Przemysł kraju startowego (0,85…1,15). */
+/** Popyt przemysłu (0,85…1,15): faza cyklu Przemysłu kraju startowego; z łańcuchami (0.18.1 P3, K6) ważona z aktywnością przemysłu krajów obcych. */
 function getCommodityIndustryDemand() {
-    // shortcut: tylko cykl kraju startowego (kraje dołączone nie mają własnych cykli sektorów); uśrednić, gdy dostaną `sectorCycles`
     const phase = typeof macro === 'object' ? macro?.sectorCycles?.['Przemysł']?.phase : null;
-    return COMMODITY_RULES.cyclePhaseDemand[phase] ?? 1;
+    const home = COMMODITY_RULES.cyclePhaseDemand[phase] ?? 1;
+    const w = typeof getChainIndustryCycle === 'function' ? getChainIndustryCycle(typeof getStartCountry === 'function' ? getStartCountry() : 'PL') : null;
+    return w ? w.homeShare * home + (1 - w.homeShare) * w.foreign : home;
 }
 /** Zbrojenia: średni udział wydatków obronnych / 2,5% (security.js). */
 function getCommodityArmsDemand() { return typeof getGlobalDefenseIndex === 'function' ? getGlobalDefenseIndex() : 1; }
@@ -103,6 +106,7 @@ function getCommodityTarget(id) {
         if (phase === 'bull' || phase === 'euphoria') m *= 1 + COMMODITY_RULES.moodShift;
         else if (phase === 'bear' || phase === 'capitulation') m *= 1 - COMMODITY_RULES.moodShift;
     }
+    if (typeof getChainContractFactor === 'function') m *= getChainContractFactor(id); // 0.18.1 P3: słabe sprzężenie z bilansem świata, ±15%
     return m * getCommodityShock(id);
 }
 /** Widełki ceny: × średnia z inflacją (bez sezonu i szoków). */
@@ -142,7 +146,7 @@ function startCommodityEvent(key, opts = {}) {
     const def = COMMODITY_EVENTS[key], st = ensureCommodityState();
     if (!def) return null;
     let shocks = def.shocks, extra = {};
-    if (key === 'strike') { const product = Math.random() < 0.5 ? 'coal' : 'metals'; shocks = [[product, [0.15, 0.25]]]; extra.product = product; }
+    if (key === 'strike') { const roll = Math.random(), product = roll < 0.5 ? 'coal' : roll < 0.75 ? 'iron' : 'copper'; shocks = [[product, [0.15, 0.25]]]; extra.product = product; }
     const ev = { id: key, until: macro.quarter + rangeIntCommodity(def.quarters), shocks: {}, ...extra };
     for (const [id, [a, b]] of shocks) {
         const s = a + Math.random() * (b - a);
@@ -199,9 +203,56 @@ function getCommoditiesSnapshot() {
     const map = f => Object.fromEntries(COMMODITY_IDS.map(id => [id, f(id)]));
     return { s: st.startQ, w: st.w, p: map(id => st.prices[id]), h: map(id => st.hist[id].map(rs)), q: map(id => st.qHist[id].map(rs)), qs: map(id => r(st.qSum[id] || 0)), qn: st.qN, e: st.events, d: st.lastDroughtQ, r: st.run, f: st.funds, b: st.bots, fr: typeof getFreightSnapshot === 'function' ? getFreightSnapshot() : undefined }; // f, b: S3 (ETC/ETF, kontrakty botów); fr: S4 (fracht)
 }
+/**
+ * 0.18.1 P1: zapis do v24 z „metalami” → żelazo i miedź. Obie ceny startują od średniej 8 kw. starego indeksu (ten sam stosunek do średniej długoterminowej),
+ * historia kwartalna wypełniona tym poziomem (wpływ na spółki od zera), ETC i koszyk po połowie wartości. Pozycje kontraktów dzieli `migrateMetalsPositions`.
+ */
+function migrateMetalsSnapshot(snap) {
+    if (!snap?.p || !(Number(snap.p.metals) > 0) || snap.p.iron) return null;
+    const years = Math.max(0, ((Number(macro?.quarter) || 0) - (Number.isFinite(snap.s) ? snap.s : 0)) / 4), infl = Math.pow(1 + COMMODITY_RULES.inflationYear, years);
+    const q8 = (snap.q?.metals || []).map(Number).filter(v => v > 0).slice(-COMMODITY_RULES.trendQuarters);
+    const rel = (q8.length ? q8.reduce((a, b) => a + b, 0) / q8.length : Number(snap.p.metals)) / (100 * infl);
+    const oldPrice = Number(snap.p.metals), out = { oldPrice, prices: {} };
+    for (const id of ['iron', 'copper']) {
+        const p = COMMODITY_DEFS[id].mean * infl * rel;
+        out.prices[id] = p;
+        snap.p[id] = p; (snap.h ||= {})[id] = [p]; (snap.q ||= {})[id] = Array(COMMODITY_RULES.trendQuarters).fill(p); (snap.qs ||= {})[id] = p * (Number(snap.qn) || 0);
+    }
+    for (const k of ['p', 'h', 'q', 'qs']) if (snap[k]) delete snap[k].metals;
+    if (snap.r) delete snap.r.metals;
+    if (snap.f) {
+        const etcF = Number(snap.f.etcF) || 1, u = Number(snap.f.units?.metals) || 0;
+        if (u > 0) { for (const id of ['iron', 'copper']) snap.f.units[id] = (Number(snap.f.units[id]) || 0) + u * oldPrice / 2 / out.prices[id]; delete snap.f.units.metals; }
+        if (snap.f.bq?.metals > 0) { for (const id of ['iron', 'copper']) snap.f.bq[id] = snap.f.bq.metals * oldPrice / 2 / out.prices[id]; delete snap.f.bq.metals; }
+        void etcF; // czynnik opłaty wspólny dla wszystkich ETC
+    }
+    for (const ev of snap.e || []) {
+        if (ev?.shocks?.metals != null) { ev.shocks.iron = ev.shocks.copper = ev.shocks.metals; delete ev.shocks.metals; }
+        if (ev?.product === 'metals') ev.product = 'iron';
+    }
+    if (snap.b?.pos) snap.b.pos = splitMetalsContracts(snap.b.pos, 'inst', out);
+    return out;
+}
+/** Dzieli pozycje na kontraktach MET-* na dwie: żelazo i miedź, po połowie nominału i depozytu, z wejściem przeliczonym tak, by wynik pozycji się nie zmienił. */
+function splitMetalsContracts(list, key, mig) {
+    const out = [];
+    for (const p of list || []) {
+        const m = /^MET-(R\d+Q[1-4])$/.exec(String(p?.[key] || ''));
+        if (!m) { out.push(p); continue; }
+        for (const id of ['iron', 'copper']) {
+            const half = { ...p, [key]: `${id === 'iron' ? 'IRON' : 'COP'}-${m[1]}`, notional: p.notional / 2, deposit: p.deposit / 2 };
+            if (Number.isFinite(p.spread)) half.spread = p.spread / 2;
+            if (Number.isFinite(p.accrued)) half.accrued = p.accrued / 2;
+            half.entry = p.entry * mig.prices[id] / mig.oldPrice;
+            out.push(half);
+        }
+    }
+    return out;
+}
 function applyCommoditiesSnapshot(snap) {
     initCommodityState(); // stary zapis bez pola: ceny średnie
     if (!snap || typeof snap !== 'object' || !snap.p) return;
+    commodityMetalsMigration = migrateMetalsSnapshot(snap);
     const st = commodityState;
     st.startQ = Number.isFinite(snap.s) ? snap.s : st.startQ;
     st.w = Number(snap.w) || 0; st.qN = Number(snap.qn) || 0; st.lastDroughtQ = Number.isFinite(snap.d) ? snap.d : -99;
@@ -248,7 +299,8 @@ const COMMODITY_ASSIGNMENTS = {
     ZST: { product: { gold: 1 }, input: {} },
     SLS: { product: { grain: 1 }, input: {} },
     KWM: { product: { coal: 1 }, input: {} },
-    MLD: { product: { metals: 1 }, input: {} },
+    MLD: { product: { copper: 1 }, input: {} },             // 0.18.1 P1: metale → miedź / ruda żelaza według profilu spółki
+    HUT: { input: { iron: 0.30, coal: 0.10 } },
     PUR: { product: { uranium: 1 }, input: {} },
     SIK: { input: { gas: 0.15 } },
     MEF: { product: { oil: 0.6 }, lag: 1, input: { oil: 0.6 } },
@@ -261,17 +313,17 @@ const COMMODITY_ASSIGNMENTS = {
     NRG: { product: { oil: 0.5, gas: 0.5 }, input: {} },
     GPR: { product: { gas: 1 }, input: {} },
     WGI: { product: { coal: 1 }, input: {} },
-    TKS: { input: { metals: 0.3, coal: 0.1 } },
-    SSA: { input: { metals: 0.3, coal: 0.1 } },
+    TKS: { input: { iron: 0.3, coal: 0.1 } },
+    SSA: { input: { iron: 0.3, coal: 0.1 } },
     LND: { input: { gas: 0.3 } },
     JDM: { product: { grain: 1 }, input: {} },
     NGR: { product: { gold: 1 }, input: {} },
     GTG: { product: { gas: 0.6, oil: 0.4 }, input: {} },
     DOL: { product: { coal: 1 }, input: {} },
-    KJM: { product: { metals: 1 }, input: {} },
-    GLK: { product: { metals: 0.2, coal: 0.1, oil: 0.1 }, lag: 1, input: { metals: 0.2, coal: 0.1, oil: 0.1 } },
+    KJM: { product: { iron: 1 }, input: {} },
+    GLK: { product: { iron: 0.1, copper: 0.1, coal: 0.1, oil: 0.1 }, lag: 1, input: { iron: 0.1, copper: 0.1, coal: 0.1, oil: 0.1 } },
     TBN: { product: { oil: 0.6 }, lag: 1, input: { oil: 0.6 } },
-    UOW: { product: { metals: 1 }, input: {} },
+    UOW: { product: { iron: 0.5, copper: 0.5 }, input: {} },
     BHO: { product: { grain: 1 }, input: {} },
     PKC: { input: { coal: 0.05 } } // 0.17 S4: kolej, 0.17.2: reszta wsadu to prąd (POWER_INPUT_SYMBOLS)
 };
@@ -279,15 +331,15 @@ const COMMODITY_ASSIGNMENTS = {
 // wsad domyślny: sektor → udziały; podsektor nadpisuje (pusty obiekt = brak wsadu). Rolnictwo: produkt zboże.
 const COMMODITY_SECTOR_INPUTS = {
     'Chemia': { oil: 0.25, gas: 0.10 },
-    'Przemysł': { metals: 0.25, coal: 0.02 },
-    'Motoryzacja': { metals: 0.15, oil: 0.05 },
+    'Przemysł': { iron: 0.15, copper: 0.10, coal: 0.02 },   // 0.18.1 P1: dawne metale 0,25 = żelazo 0,15 + miedź 0,10
+    'Motoryzacja': { iron: 0.10, copper: 0.05, oil: 0.05 },
     'Energia': { coal: 0.35, gas: 0.15 },
     'Transport i logistyka': { oil: 0.20 },
     'Żywność': { grain: 0.20 },
-    'Budowlany': { metals: 0.10 },
-    'Obronność': { metals: 0.15 }
+    'Budowlany': { iron: 0.07, copper: 0.03 },
+    'Obronność': { iron: 0.10, copper: 0.05 }
 };
-const COMMODITY_SUBSECTOR_INPUTS = { 'OZE': {}, 'Energetyka jądrowa': { uranium: 0.20 }, 'Energetyka węglowa': { coal: 0.40 }, 'Energetyka gazowa': { gas: 0.40 }, 'Lotnictwo': { oil: 0.30 }, 'Rolnictwo': {} };
+const COMMODITY_SUBSECTOR_INPUTS = { 'Hutnictwo': { iron: 0.30, coal: 0.10 }, 'OZE': {}, 'Energetyka jądrowa': { uranium: 0.20 }, 'Energetyka węglowa': { coal: 0.40 }, 'Energetyka gazowa': { gas: 0.40 }, 'Lotnictwo': { oil: 0.30 }, 'Rolnictwo': {} };
 const COMMODITY_SUBSECTOR_PRODUCTS = { 'Rolnictwo': { grain: 1 } };
 
 function getCommoditySegments(stock) {
@@ -361,5 +413,6 @@ function getCommodityResultAdj(stock) {
     }
     const freight = typeof getFreightResultAdj === 'function' ? getFreightResultAdj(stock) : { revenueFactor: 1, marginAdj: 0 }; // 0.17 S4: przewoźnicy i koszt transportu
     const power = typeof getPowerResultAdj === 'function' ? getPowerResultAdj(stock) : { revenueFactor: 1, marginAdj: 0 }; // 0.17.2 E2: prąd
-    return { revenueFactor: Math.max(0.2, revenueFactor * freight.revenueFactor * power.revenueFactor), marginAdj: marginAdj + freight.marginAdj + power.marginAdj };
+    const chain = (typeof getChainStockAdj === 'function' ? getChainStockAdj(stock) : null) || { revenueFactor: 1, marginAdj: 0 }; // 0.18.1 P3: łańcuchy (dobra wewnętrzne; surowce z kontraktem zostają po cenie giełdy)
+    return { revenueFactor: Math.max(0.2, revenueFactor * freight.revenueFactor * power.revenueFactor * chain.revenueFactor), marginAdj: marginAdj + freight.marginAdj + power.marginAdj + chain.marginAdj };
 }

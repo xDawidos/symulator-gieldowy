@@ -420,11 +420,10 @@ function maybeBlackout(e) {
 const SECTOR_EMISSIONS = { 'Chemia': 0.7, 'Przemysł': 0.6, 'Motoryzacja': 0.3, 'Budowlany': 0.2, 'Energia': 0.5 };
 // 0.17.1 S5: chemia według profilu spółki (rafinerie i nawozy wysoko, farmacja nisko). Chemia nie ma podsektorów, więc profil z symbolu albo końcówki nazwy.
 const CHEM_EMISSIONS = { refinery: 1.0, fertilizer: 0.9, plastics: 0.6, pharma: 0.2 };
-const CHEM_PROFILE_BY_SYMBOL = { ECL: 'refinery', SIK: 'fertilizer', MEF: 'pharma', KUP: 'pharma' };
+const CHEM_PROFILE_BY_SUBSECTOR = { 'Chemia polimerowa': 'plastics', 'Nawozy': 'fertilizer', 'Farmacja': 'pharma' }; // 0.18.1 P1: profil z podsektora
 function getSegmentEmission(stock, seg) {
     if (seg.sector !== 'Chemia') return SECTOR_EMISSIONS[seg.sector] || 0;
-    const name = String(stock?.name || '');
-    const profile = CHEM_PROFILE_BY_SYMBOL[stock?.symbol] || (/Lab\b/.test(name) ? 'pharma' : /Polymer/.test(name) ? 'plastics' : /Synthesis/.test(name) ? 'fertilizer' : null);
+    const profile = CHEM_PROFILE_BY_SUBSECTOR[seg.subsector] || null;
     return profile ? CHEM_EMISSIONS[profile] : SECTOR_EMISSIONS.Chemia;
 }
 const POLLUTION_RULES = {

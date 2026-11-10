@@ -6,10 +6,10 @@
 // — oczekiwany powrót ceny do średniej jest już w cenie kontraktu (backwardation nad średnią, contango pod), więc
 // „kup nisko i czekaj” nie daje darmowego zysku. Wycena i rozliczenie w walucie bazowej po kursie USD.
 
-const COMMODITY_CODES = { gold: 'GOLD', oil: 'OIL', gas: 'GAS', coal: 'COAL', metals: 'MET', grain: 'GRN', uranium: 'URA' };
+const COMMODITY_CODES = { gold: 'GOLD', oil: 'OIL', gas: 'GAS', coal: 'COAL', iron: 'IRON', copper: 'COP', grain: 'GRN', uranium: 'URA' }; // 0.18.1 P1: MET → IRON + COP
 const COMMODITY_MARKET = {
-    leverage: { gold: 10, oil: 5, metals: 5, grain: 5, gas: 3, coal: 3, uranium: 3 },          // decyzja 11
-    carry: { gold: 0.005, oil: 0.03, gas: 0.02, coal: 0.02, metals: 0.015, grain: 0.05, uranium: 0.01 }, // koszt przechowania rocznie
+    leverage: { gold: 10, oil: 5, iron: 5, copper: 5, grain: 5, gas: 3, coal: 3, uranium: 3 },          // decyzja 11
+    carry: { gold: 0.005, oil: 0.03, gas: 0.02, coal: 0.02, iron: 0.015, copper: 0.015, grain: 0.05, uranium: 0.01 }, // koszt przechowania rocznie
     entrySpread: 0.003,
     series: 4,           // 4 zapadalności naprzód
     minWeeksLeft: 2,     // seria bieżącego kwartału znika z oferty na 2 tygodnie przed końcem
@@ -95,7 +95,7 @@ function rollCommodityContract(posId) {
 // =================================================================================
 // 0.17 S3: ETC (1 surowiec) i ETF „Koszyk Surowców” — bez dźwigni, osobny portfel (nie tablica `etfs`, która trzyma akcje)
 // =================================================================================
-// ETC: cena = cena surowca × czynnik opłaty (−0,4%/rok); koszyk: równe wagi 7 surowców, rebalans co kwartał, −0,6%/rok.
+// ETC: cena = cena surowca × czynnik opłaty (−0,4%/rok); koszyk: równe wagi wszystkich surowców (0.18.1: 8), rebalans co kwartał, −0,6%/rok.
 // Jednostki w `commodityState.funds` (zapis surowców). Wartość wchodzi do aktywów funduszu i NAV; nie liczy się do limitu dźwigni.
 const COMMODITY_FUNDS = { etcFee: 0.004, basketFee: 0.006, spread: 0.002, basketStart: 100 };
 const COMMODITY_BASKET_NAME = 'Koszyk Surowców';
@@ -308,7 +308,7 @@ function getCommodityFundsHtml(prefix) {
     return `<h3 class="mt-3">Surowce: ETC i ETF koszykowy</h3>
         <p class="text-sm text-muted">Bez dźwigni i depozytu: cena podąża za ceną surowca (w USD, przeliczona po kursie), pomniejszona o opłatę roczną. Kwota w polu: kupno za tę kwotę albo sprzedaż jednostek o tej wartości.</p>
         <div class="bank-grid">
-        ${card('basket', 'surowiec-metals', `ETF „${COMMODITY_BASKET_NAME}”`, `7 surowców po równo, rebalans co kwartał, opłata ${commodityPct(COMMODITY_FUNDS.basketFee)}%/rok`)}
+        ${card('basket', 'surowiec-iron', `ETF „${COMMODITY_BASKET_NAME}”`, `${COMMODITY_IDS.length} surowców po równo, rebalans co kwartał, opłata ${commodityPct(COMMODITY_FUNDS.basketFee)}%/rok`)}
         ${COMMODITY_IDS.map(id => card(id, `surowiec-${id}`, `ETC ${COMMODITY_DEFS[id].name}`, `opłata ${commodityPct(COMMODITY_FUNDS.etcFee)}%/rok, spread ${commodityPct(COMMODITY_FUNDS.spread)}%`)).join('')}
         </div>`;
 }

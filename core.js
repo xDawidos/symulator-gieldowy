@@ -1854,7 +1854,7 @@ const SECTORS = {
             'Fintech': { profile: { beta: 1.5, pe: 25 }, delta: { growth: 0.05 }, specialist: true, mechanic: 'knf', weight: 4 } // T2: licencja KNF (waga ×4 w losowaniu — decyzja użytkownika)
         } },
     'Żywność':               { icon: '🍞', profile: { beta: 0.5, rateSens: 0.4, pe: 15, margin: 0.12, growth: 0.03, ps: 1.0, da: 0.03 },
-        subsectors: { 'Rolnictwo': { peopleSubsidy: true }, 'Słodycze': {}, 'Herbata': { profile: { beta: 0.5 } } } },                              // dotacje Ludowców (0.13); Słodycze: 0.16.3 G11
+        subsectors: { 'Rolnictwo': { peopleSubsidy: true }, 'Słodycze': {}, 'Herbata': { profile: { beta: 0.5 } }, 'Przetwórstwo spożywcze': {} } }, // 0.18.1 P1: Przetwórstwo spożywcze                              // dotacje Ludowców (0.13); Słodycze: 0.16.3 G11
     'Rybołówstwo':           { icon: '🐟', profile: { beta: 0.6, rateSens: 0.4, pe: 14, margin: 0.12, growth: 0.02, ps: 1.0, da: 0.05 } }, // 0.16.3 G11: stabilne, popyt mało elastyczny (0,3), koszt pracy 25%
     'Alkohole':              { icon: '🍺', profile: { beta: 0.5, rateSens: 0.4, pe: 17, margin: 0.20, growth: 0.02, ps: 2.0, da: 0.04 }, // 0.16.2 G6a: defensywne, popyt mało elastyczny (0,4)
         subsectors: { 'Piwowarstwo i napoje': {} } },
@@ -1864,9 +1864,11 @@ const SECTORS = {
         niches: { 'TV': { event: 'season' }, 'Rozrywka': { event: 'season' } } },                               // T3: hit albo klapa sezonu
     'Gaming':                { icon: '🎮', profile: { beta: 1.4, rateSens: 1.0, pe: 20, margin: 0.25, growth: 0.07, ps: 3.0, da: 0.06 } },
     'Przemysł':              { icon: '⚙️', profile: { beta: 1.3, rateSens: 0.8, pe: 13, margin: 0.14, growth: 0.03, ps: 1.0, da: 0.05 },
-        subsectors: { 'Robotyka': { delta: { growth: 0.02, margin: 0.02 } }, 'Przemysł ciężki': { profile: { beta: 1.4, da: 0.08 } }, 'Wydobycie': { listedOnly: true }, 'Handel surowcami': { listedOnly: true } } }, // Przemysł ciężki: 0.16.4 G18; Wydobycie, Handel surowcami: 0.17 S2 (tylko przypisane spółki)
+        subsectors: { 'Robotyka': { delta: { growth: 0.02, margin: 0.02 } }, 'Przemysł ciężki': { profile: { beta: 1.4, da: 0.08 } }, 'Wydobycie': { listedOnly: true }, 'Handel surowcami': { listedOnly: true },
+            'Hutnictwo': { profile: { beta: 1.4, da: 0.07 } }, 'Maszyny': {}, 'Stocznie': { profile: { beta: 1.3, da: 0.06 } } } }, // 0.18.1 P1: ogniwa łańcucha metali // Przemysł ciężki: 0.16.4 G18; Wydobycie, Handel surowcami: 0.17 S2 (tylko przypisane spółki)
     'Motoryzacja':           { icon: '🚗', profile: { beta: 1.4, rateSens: 1.0, pe: 12, margin: 0.12, growth: 0.03, ps: 0.8, da: 0.05 } }, // 0.16.2 G6a: cykliczna, koszt pracy 22% przychodów
-    'Chemia':                { icon: '⚗️', profile: { beta: 1.2, rateSens: 0.7, pe: 13, margin: 0.16, growth: 0.03, ps: 1.1, da: 0.05 } },
+    'Chemia':                { icon: '⚗️', profile: { beta: 1.2, rateSens: 0.7, pe: 13, margin: 0.16, growth: 0.03, ps: 1.1, da: 0.05 },
+        subsectors: { 'Chemia polimerowa': {}, 'Nawozy': {}, 'Farmacja': { profile: { beta: 0.9 } } } }, // 0.18.1 P1: ogniwa łańcucha ropy (profil emisji z podsektora, energy.js)
     'Energia':               { icon: '⚡', profile: { beta: 0.8, rateSens: 0.9, pe: 12, margin: 0.25, growth: 0.02, ps: 1.5, da: 0.08 },
         subsectors: {
             'Energetyka jądrowa': { profile: { beta: 0.4, da: 0.14, pe: 14 }, mechanic: 'nuclear' },        // T2: budowa bloku
@@ -2052,7 +2054,7 @@ const SUBSECTOR_START_ASSIGNMENTS = {
     PKC: ['Transport i logistyka', 'Lądowy'],      // PKP Cargo
     TIR: ['Transport i logistyka', 'Lądowy'],      // Tir-Pol Spedycja
     KWM: ['Przemysł', 'Wydobycie'],                // 0.17.3: Kopalnie Węgla
-    STM: ['Przemysł', 'Przemysł ciężki'],          // Stocznia Morska
+    STM: ['Przemysł', 'Stocznie'],                 // Stocznia Morska (0.18.1 P1: dawniej Przemysł ciężki)
     BTX: ['Przemysł', 'Przemysł ciężki'],          // Betonex
     ORT: ['Technologia', 'Telekomunikacja']        // Orzeł Telekom
 };
@@ -2080,6 +2082,27 @@ function applyStartSubsectors() {
         if (seg && !seg.subsector) { seg.subsector = entry[1]; assigned++; }
     }
     if (typeof macro === 'object' && macro) macro.subsectorsAssigned = true;
+    return assigned;
+}
+
+// 0.18.1 P1: ogniwa łańcuchów (Hutnictwo, Maszyny, Stocznie, Chemia polimerowa, Nawozy, Farmacja, Przetwórstwo spożywcze). Raz na świat, także dla zapisu
+// sprzed 0.18.1 (flaga `macro.subsectors018`); nadpisuje podsektor tylko z listy `from` (STM: Przemysł ciężki → Stocznie).
+const SUBSECTOR_ASSIGNMENTS_018 = {
+    ANN: ['Przemysł', 'Maszyny'], STM: ['Przemysł', 'Stocznie', ['Przemysł ciężki']], HUT: ['Przemysł', 'Hutnictwo'], MTP: ['Motoryzacja', null],
+    SIK: ['Chemia', 'Nawozy'], KUP: ['Chemia', 'Farmacja'], MEF: ['Chemia', 'Farmacja'], ECL: ['Chemia', 'Chemia polimerowa'],
+    SUM: ['Żywność', 'Przetwórstwo spożywcze'], FIX: ['Żywność', 'Przetwórstwo spożywcze'], KFX: ['Żywność', 'Przetwórstwo spożywcze']
+};
+function applySubsectors018() {
+    if (typeof macro === 'object' && macro?.subsectors018) return 0;
+    let assigned = 0;
+    for (const stock of stocks) {
+        const entry = SUBSECTOR_ASSIGNMENTS_018[stock.symbol];
+        if (!entry || !entry[1] || stock.isBankrupt || stock.assetType) continue;
+        ensureStockSegments(stock);
+        const seg = stock.segments.find(s => s.sector === entry[0]);
+        if (seg && (!seg.subsector || (entry[2] || []).includes(seg.subsector))) { seg.subsector = entry[1]; assigned++; }
+    }
+    if (typeof macro === 'object' && macro) macro.subsectors018 = true;
     return assigned;
 }
 
@@ -6119,4 +6142,55 @@ function getRulingParty() {
         defenseShare: mix('defenseShare'),
         coalition: true
     };
+}
+
+// =================================================================================
+// 0.18.1 P2: ADAPTER ŁAŃCUCHÓW — zbiera jednostki „podsektor × kraj” ze spółek krajowych i obcych (przychód ostatniego kwartału w PLN,
+// produkcja surowców z profilu surowcowego), woła stepChains (chains.js, czysty moduł) raz na kwartał po raportach.
+// =================================================================================
+const CHAIN_CONTRACT_GOOD = { iron: 'iron_ore', copper: 'copper', coal: 'coal', oil: 'oil', gas: 'gas', grain: 'grain', gold: 'gold', uranium: 'uranium' };
+function getChainUnitKey(sector, subsector) { return subsector ? `${sector}/${subsector}` : sector; }
+function collectChainRows() {
+    const rows = [], home = typeof getStartCountry === 'function' ? getStartCountry() : 'PL';
+    const productsOf = (stock, revenue) => {
+        const prof = typeof getStockCommodityProfile === 'function' ? getStockCommodityProfile(stock) : null, out = {};
+        for (const [id, w] of Object.entries(prof?.product || {})) if (CHAIN_CONTRACT_GOOD[id] && w > 0) out[CHAIN_CONTRACT_GOOD[id]] = revenue * w;
+        return out;
+    };
+    for (const stock of stocks) {
+        if (stock.assetType || stock.isBankrupt) continue;
+        const h = stock.fundamentals?.history?.[stock.fundamentals.history.length - 1];
+        if (!(h?.revenue > 0)) continue;
+        const priority = Boolean(stock.isStateOwned) || getMainSector(stock) === 'Obronność';
+        const products = productsOf(stock, h.revenue);
+        getStockSegments(stock).forEach((seg, n) => rows.push({ key: getChainUnitKey(seg.sector, seg.subsector), country: home, revenue: h.revenue * seg.share, products: n === 0 ? products : {}, priority }));
+    }
+    for (const i of (typeof getForeignIssuerList === 'function' ? getForeignIssuerList() : [])) {
+        const h = i.fundamentals?.history?.[i.fundamentals.history.length - 1];
+        if (i.kind !== 'share' || !(h?.revenue > 0)) continue;
+        const rev = h.revenue * toPln(1, i.currency), products = productsOf(i, rev), priority = Boolean(i.state) || i.sectors[0]?.[0] === 'Obronność';
+        i.sectors.forEach(([sector, share], n) => rows.push({ key: getChainUnitKey(sector, n === 0 ? i.subsector : null), country: i.country, revenue: rev * share, products: n === 0 ? products : {}, priority }));
+    }
+    return rows;
+}
+/** Przepustowość importu kraju (0.17 S5: porty i magistrale kraju startowego; kraje obce 1). */
+function getChainImportCapacity(country) {
+    const home = typeof getStartCountry === 'function' ? getStartCountry() : 'PL', shock = typeof getSupplyShockCapacity === 'function' ? getSupplyShockCapacity() : null;
+    const m = shock ? (shock[`import|${country}`] ?? shock['import|*'] ?? 1) : 1; // P4: blokada cieśniny, strajk portowy
+    if (country !== home || typeof getInfraCapacity !== 'function') return m;
+    return m * (getInfraCapacity('sea') + getInfraCapacity('land')) / 2;
+}
+function processChainsQuarterly() {
+    if (typeof stepChains !== 'function') return null;
+    const shocks = typeof getSupplyShockCapacity === 'function' ? getSupplyShockCapacity() : null; // P4: linia kryzysu `supply`
+    return stepChains(collectChainRows(), { q: macro.quarter, capacity: getChainImportCapacity, shocks });
+}
+/** 0.18.1 P3: czynnik łańcucha dla spółki: suma po segmentach (udział × odchylenie jednostki „podsektor × kraj”). Null w trybie cichym. */
+function getChainStockAdj(stock) {
+    if (typeof CHAINS_ACTIVE === 'undefined' || !CHAINS_ACTIVE || typeof getChainFactor !== 'function' || !stock || stock.assetType) return null;
+    const share = stock.kind === 'share', country = share ? stock.country : (typeof getStartCountry === 'function' ? getStartCountry() : 'PL');
+    const segs = share ? (stock.sectors || []).map(([sector, sh], n) => ({ sector, subsector: n === 0 ? stock.subsector : null, share: sh })) : getStockSegments(stock);
+    let rev = 0, margin = 0;
+    for (const seg of segs) { const f = getChainFactor(getChainUnitKey(seg.sector, seg.subsector), country); rev += seg.share * (f.revenueFactor - 1); margin += seg.share * f.marginAdj; }
+    return { revenueFactor: 1 + rev, marginAdj: margin };
 }

@@ -5733,3 +5733,210 @@ body.dark-mode #stock-table tr.sector-subheader td, #stock-table tr.sector-subhe
   #internet-modal { width: 70vw !important; height: 70vh; max-height: 70vh !important; }
   #internet-modal .net-body { overflow: auto; }
 }
+
+/* 0.18.1 P4 (Z10): baner kryzysu — niemodalny, u góry ekranu; animacja tylko bez prefers-reduced-motion */
+.crisis-banner { position: fixed; top: var(--space-3); left: 50%; transform: translateX(-50%); z-index: 900; width: min(640px, calc(100vw - 32px));
+  display: flex; gap: var(--space-3); align-items: center; padding: var(--space-3); border-radius: var(--radius-md);
+  background: var(--color-bg-raised); border: 1px solid var(--color-border-warn); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45); color: var(--color-text-primary); font-size: var(--text-body-sm-size); }
+.crisis-banner[hidden] { display: none; }
+.crisis-banner-chart { flex: 0 0 64px; height: 32px; }
+.crisis-banner-chart polyline { fill: none; stroke: var(--color-text-down); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.crisis-banner-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.crisis-banner-text strong { color: var(--color-text-warn); display: inline-flex; gap: 6px; align-items: center; }
+.crisis-banner-stage { color: var(--color-text-secondary); }
+.crisis-banner-close { flex: 0 0 auto; }
+@media (prefers-reduced-motion: no-preference) {
+  .crisis-banner.is-anim { animation: crisis-banner-in 0.35s ease-out; }
+  .crisis-banner.is-anim .crisis-banner-chart polyline { stroke-dasharray: 120; stroke-dashoffset: 120; animation: crisis-banner-fall 1.2s ease-in forwards; }
+}
+@keyframes crisis-banner-in { from { opacity: 0; transform: translate(-50%, -12px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@keyframes crisis-banner-fall { to { stroke-dashoffset: 0; } }
+
+/* ===== 0.18 (z plany/design/makiety/018.css, wklejone w P5 0.18.1) ===== */
+/* 0.18: Łańcuchy, bilans dóbr, IPO, szlaki i miasta (projekt: plany/design/13–16_*.md).
+   Blok do przeniesienia na koniec style.css. Tylko istniejące tokeny; status zawsze ikoną, słowem i liczbą. */
+
+/* Status ogniwa / dobra / szlaku: --st-c to kolor akcentu, nigdy jedyny nośnik */
+.st-surplus { --st-c: var(--color-text-up); }
+.st-ok      { --st-c: var(--color-text-secondary); }
+.st-tight   { --st-c: var(--color-text-warn); }
+.st-short   { --st-c: var(--color-text-warn); }
+.st-broken  { --st-c: var(--color-text-down); }
+
+/* Klasa dobra: M P K Z L jako litera w ramce + title z pełną nazwą */
+.gd-cls { display: inline-grid; place-items: center; min-width: 20px; height: 18px; padding: 0 4px; border: 1px solid var(--color-border-default); border-radius: var(--radius-sm); font-family: var(--font-family-mono); font-size: var(--text-caption-size); font-weight: 700; color: var(--color-text-secondary); cursor: help; }
+.gd-cls.is-K { border-color: var(--color-border-accent); color: var(--color-text-accent); }
+.gd-cls.is-L { border-style: double; border-width: 3px; padding: 0 2px; }
+
+/* Łańcuch: kafle ogniw w 6 kolumnach, wyśrodkowane w pionie; krawędzie SVG pod kaflami (rysuje JS po pomiarze kafli) */
+.ch-flow { position: relative; margin-top: var(--space-2); }
+.ch-heads { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); column-gap: var(--space-6); margin: 0 0 var(--space-2); padding: 0; list-style: none; }
+.ch-heads li { display: flex; align-items: center; gap: var(--space-1); font-size: var(--text-body-sm-size); font-weight: 600; color: var(--color-text-secondary); }
+.ch-flow .ch-axis { column-gap: var(--space-6); align-items: stretch; }
+.ch-flow .ch-col { justify-content: center; gap: var(--space-3); }
+.ch-flow .ch-col:not(:last-child)::after { content: none; }
+.ch-flow .ch-col > h5 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); } /* widać .ch-heads; h5 zostaje dla czytnika, na telefonie wraca */
+.ch-flow .ch-node { position: relative; z-index: 1; }
+.ch-edges { position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.ch-edges .g-edge { fill: none; stroke: var(--color-border-strong); }
+.ch-edges .g-edge.is-tight { stroke: color-mix(in srgb, var(--color-text-warn) 70%, transparent); }
+.ch-edges .g-edge.is-broken { stroke: var(--color-text-down); stroke-dasharray: 2 5; }
+
+/* Oś ogniw (6 kolumn), w kolumnie 1–4 kafle */
+.ch-axis { list-style: none; margin: var(--space-2) 0 0; padding: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--space-4); }
+.ch-col { position: relative; display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.ch-col > h5 { margin: 0; display: flex; align-items: center; gap: var(--space-1); font-size: var(--text-body-sm-size); font-weight: 600; color: var(--color-text-secondary); }
+.ch-col:not(:last-child)::after { content: "→"; position: absolute; top: 34px; right: calc(var(--space-4) * -1); width: var(--space-4); text-align: center; color: var(--color-text-muted); font-size: 14px; }
+.ch-node { display: flex; flex-direction: column; gap: 4px; padding: var(--space-2); background: var(--color-bg-raised); border: 1px solid var(--color-border-subtle); border-top: 3px solid var(--st-c, var(--color-border-default)); border-radius: var(--radius-md); font-size: var(--text-caption-size); text-align: left; color: var(--color-text-primary); cursor: pointer; }
+.ch-node:hover, .ch-node:focus-visible { border-color: var(--color-border-strong); border-top-color: var(--st-c); }
+.ch-node.is-selected { background: var(--color-bg-accent-soft); border-color: var(--color-border-accent); border-top-color: var(--st-c); }
+.ch-node-top { display: flex; align-items: center; gap: var(--space-1); font-size: var(--text-body-sm-size); font-weight: 600; min-width: 0; }
+.ch-node-top strong { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; line-height: 1.25; }
+.ch-node .badge { align-self: flex-start; }
+.ch-node .limit-meter { max-width: none; margin: 2px 0; }
+.ch-node small { color: var(--color-text-muted); }
+.ch-num { font-family: var(--font-family-mono); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* Panel szczegółów wybranego ogniwa (pod osią lub grafem) */
+.ch-detail { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-3); }
+.ch-legend { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); margin: var(--space-2) 0 0; padding: 0; list-style: none; font-size: var(--text-caption-size); color: var(--color-text-secondary); }
+.ch-legend li { display: inline-flex; align-items: center; gap: 4px; }
+.ch-legend .ln { display: inline-block; width: 22px; height: 0; border-top: 2px solid var(--color-border-strong); }
+.ch-legend .ln.is-tight { border-top-color: var(--color-text-warn); }
+.ch-legend .ln.is-broken { border-top: 2px dotted var(--color-text-down); }
+.ch-gainers { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+.ch-gainers ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: var(--text-body-sm-size); }
+.ch-gainers li { display: flex; justify-content: space-between; gap: var(--space-2); }
+
+@media (max-width: 860px) {
+  .ch-axis, .ch-flow .ch-axis { grid-template-columns: minmax(0, 1fr); gap: var(--space-5); }
+  .ch-heads, .ch-edges { display: none; } /* jedna kolumna: krawędzi nie rysujemy, kolejność niesie strzałka ↓ */
+  .ch-flow .ch-col > h5 { position: static; width: auto; height: auto; clip-path: none; }
+  .ch-flow .ch-col:not(:last-child)::after { content: "↓"; }
+  .ch-col:not(:last-child)::after { content: "↓"; top: auto; bottom: calc(var(--space-5) * -1); right: auto; left: 50%; width: auto; }
+  .ch-col { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .ch-col > h5 { grid-column: 1 / -1; }
+  .ch-detail, .ch-gainers { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Bilans dóbr: widok „Dobra” w zakładce Łańcuchy (projekt 14) */
+.gd-view-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin-top: var(--space-3); }
+.gd-view-bar .speed-btn { font-family: inherit; font-size: var(--text-body-sm-size); }
+.gd-view-bar select { min-height: 30px; }
+.gd-table { width: 100%; border-collapse: collapse; font-size: var(--text-body-sm-size); }
+.gd-table th { padding: var(--space-2); text-align: left; font-weight: 600; color: var(--color-text-muted); border-bottom: 1px solid var(--color-border-default); white-space: nowrap; }
+.gd-table td { padding: var(--space-2); border-bottom: 1px solid var(--color-border-subtle); vertical-align: middle; }
+.gd-table .num { text-align: right; font-family: var(--font-family-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.gd-table tr.gd-group td { padding-top: var(--space-4); background: var(--color-bg-base); border-bottom: 1px solid var(--color-border-default); font-weight: 600; color: var(--color-text-secondary); }
+.gd-table tr.gd-group small { margin-left: var(--space-2); font-weight: 400; color: var(--color-text-muted); }
+.gd-table tr.gd-row { cursor: pointer; }
+.gd-table tr.gd-row:hover td { background: var(--color-bg-hover); }
+.gd-table tr.gd-row:focus-visible { outline: 2px solid var(--color-focus); outline-offset: -2px; }
+.gd-table tr.gd-row[aria-expanded="true"] td { background: var(--color-bg-accent-soft); }
+.gd-name { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.gd-name small { color: var(--color-text-muted); font-size: var(--text-caption-size); }
+.gd-sd { display: grid; gap: 2px; min-width: 110px; }
+.gd-sd > span { display: block; height: 5px; border-radius: 2px; background: var(--color-text-secondary); width: calc(var(--w) * 1%); }
+.gd-sd > span.is-d { background: transparent; border: 1px solid var(--color-text-secondary); height: 5px; }
+.gd-sd small { font-family: var(--font-family-mono); font-size: var(--text-caption-size); color: var(--color-text-muted); }
+.gd-table .limit-meter { margin: 2px 0 0; max-width: 90px; }
+.gd-detail > td { padding: var(--space-3) var(--space-2) var(--space-4); background: var(--color-bg-sunken); }
+.gd-detail-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: var(--space-3); }
+.gd-chart { display: block; width: 100%; height: auto; }
+.gd-chart .ax { stroke: var(--color-border-default); }
+.gd-chart .base { stroke: var(--color-text-muted); stroke-dasharray: 3 3; }
+.gd-chart .bar-up { fill: color-mix(in srgb, var(--color-text-up) 55%, transparent); }
+.gd-chart .bar-down { fill: color-mix(in srgb, var(--color-text-down) 60%, transparent); }
+.gd-chart .price { fill: none; stroke: var(--color-text-accent); stroke-width: 2; }
+.gd-chart text { fill: var(--color-text-muted); font-size: 11px; font-family: var(--font-family-mono); }
+.gd-chart text.pr { fill: var(--color-text-accent); }
+.gd-chart-key { display: flex; flex-wrap: wrap; gap: var(--space-3); margin: var(--space-1) 0 0; padding: 0; list-style: none; font-size: var(--text-caption-size); color: var(--color-text-secondary); }
+.gd-chart-key i { display: inline-block; width: 14px; height: 8px; margin-right: 4px; vertical-align: middle; }
+.gd-shares { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: var(--text-body-sm-size); }
+.gd-shares li { display: grid; grid-template-columns: minmax(0, 1fr) 44px; align-items: center; gap: 2px var(--space-2); }
+.gd-shares .limit-meter { grid-column: 1 / -1; max-width: none; margin: 0; }
+.gd-fleet { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: var(--space-2); }
+
+@media (max-width: 860px) {
+  .gd-detail-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .gd-table .gd-hide-sm { display: none; } /* telefon: dobro, status, cena; reszta w rozwinięciu */
+  .gd-table { table-layout: fixed; }
+  .gd-table th:first-child { width: 38%; }
+  .gd-table th.num { width: 52px; }
+  .gd-table td { padding: var(--space-2) var(--space-1); }
+  .gd-name { flex-wrap: wrap; gap: 2px var(--space-2); }
+  .gd-detail > td { padding: var(--space-2) 0; }
+}
+
+/* Ocena kredytowa AAA–D (projekt 15): litery + słowo klasy, kolor tylko wspiera */
+.cr-badge { display: inline-flex; align-items: baseline; gap: 6px; padding: 1px 8px; border: 1px solid var(--cr-c, var(--color-border-default)); border-radius: var(--radius-sm); font-size: var(--text-caption-size); color: var(--color-text-secondary); white-space: nowrap; }
+.cr-badge b { font-family: var(--font-family-mono); font-size: var(--text-body-sm-size); font-weight: 700; color: var(--cr-c, var(--color-text-primary)); }
+.cr-badge.is-inv { --cr-c: var(--color-text-up); }
+.cr-badge.is-mid { --cr-c: var(--color-text-secondary); }
+.cr-badge.is-spec { --cr-c: var(--color-text-warn); }
+.cr-badge.is-bad { --cr-c: var(--color-text-down); }
+.cr-badge.is-none { border-style: dashed; }
+.cc-kpi .cr-badge, .cc-kpi .cr-badge b { text-transform: none; letter-spacing: 0; } /* .cc-kpi span daje wersaliki etykiety */
+.cc-kpi .cr-badge { font-weight: 400; color: var(--color-text-secondary); }
+
+/* Debiuty (IPO) na stronie Startupy */
+.ipo-list { display: grid; gap: var(--space-3); }
+.ipo-card { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(220px, .9fr); gap: var(--space-3) var(--space-4); padding: var(--space-3) var(--space-4); background: var(--color-bg-raised); border: 1px solid var(--color-border-subtle); border-left: 3px solid var(--ipo-c, var(--color-border-default)); border-radius: var(--radius-md); font-size: var(--text-body-sm-size); }
+.ipo-card.is-open { --ipo-c: var(--color-border-accent); }
+.ipo-card.is-pulled { --ipo-c: var(--color-text-down); }
+.ipo-card.is-done { --ipo-c: var(--color-text-up); }
+.ipo-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); }
+.ipo-head h4 { margin: 0; font-size: var(--text-body-size); }
+.ipo-facts { margin: var(--space-2) 0 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px var(--space-3); }
+.ipo-facts dt { color: var(--color-text-muted); }
+.ipo-facts dd { margin: 0; }
+.ipo-demand .limit-meter { max-width: none; }
+.ipo-demand strong { font-family: var(--font-family-mono); font-size: var(--text-num-strong-size); }
+.ipo-form { display: flex; flex-direction: column; gap: var(--space-2); }
+.ipo-form label { display: grid; gap: 2px; color: var(--color-text-muted); }
+.ipo-form input { width: 100%; }
+.ipo-form .btn-row { margin: 0; }
+.req-table th[scope="row"] { font-weight: 600; text-align: left; white-space: nowrap; }
+
+@media (max-width: 860px) {
+  .ipo-card { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Szlaki i miasta: schematyczna mapa SVG (projekt 16). Status szlaku: styl linii + słowo, nie sam kolor */
+.rt-wrap { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-3); margin-top: var(--space-3); }
+.rt-map-box { overflow-x: auto; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); background: var(--color-bg-sunken); }
+.rt-map { display: block; width: 100%; min-width: 620px; height: auto; font-family: inherit; }
+.rt-map .grid { fill: var(--color-border-subtle); }
+.rt-map .region { fill: var(--color-text-muted); font-size: 12px; opacity: .7; }
+.rt-map .rt { fill: none; stroke: var(--color-text-secondary); stroke-width: 2; opacity: .75; }
+.rt-map .rt.is-hamp { stroke: var(--color-text-warn); stroke-dasharray: 7 5; opacity: 1; }
+.rt-map .rt.is-stop { stroke: var(--color-text-down); stroke-dasharray: 2 5; stroke-width: 2.4; opacity: 1; }
+.rt-map .rt-mark circle { fill: var(--color-bg-raised); stroke: var(--color-border-default); }
+.rt-map .rt-mark.is-hamp circle { stroke: var(--color-text-warn); }
+.rt-map .rt-mark.is-stop circle { stroke: var(--color-text-down); }
+.rt-map .rt-mark use { color: var(--color-text-secondary); }
+.rt-map .rt-mark text { fill: var(--color-text-primary); font-size: 11px; font-weight: 600; paint-order: stroke; stroke: var(--color-bg-sunken); stroke-width: 3px; }
+.rt-map .rt-mark.is-stop text { fill: var(--color-text-down); }
+.rt-map .rt-mark.is-hamp text { fill: var(--color-text-warn); }
+.rt-map .ct { cursor: pointer; outline: none; }
+.rt-map .ct > circle { fill: var(--color-bg-raised); stroke: var(--color-border-strong); stroke-width: 1.5; }
+.rt-map .ct:hover > circle, .rt-map .ct:focus-visible > circle { stroke: var(--color-text-primary); }
+.rt-map .ct.is-open > circle { fill: color-mix(in srgb, var(--color-text-accent) 10%, var(--color-bg-sunken)); stroke: var(--color-border-accent); stroke-dasharray: 4 3; }
+.rt-map .ct > text { fill: var(--color-text-primary); font-size: 12px; font-weight: 600; text-anchor: middle; pointer-events: none; }
+.rt-map.has-open .ct:not(.is-open), .rt-map.has-open .rt-layer { opacity: .35; }
+.rt-map .city { cursor: pointer; outline: none; }
+.rt-map .city circle { fill: var(--color-text-secondary); stroke: var(--color-bg-sunken); stroke-width: 2; }
+.rt-map .city.is-selected circle { fill: var(--color-text-accent); stroke: var(--color-text-primary); }
+.rt-map .city:focus-visible circle { stroke: var(--color-focus); stroke-width: 3; }
+.rt-map .city text { fill: var(--color-text-primary); font-size: 11px; paint-order: stroke; stroke: var(--color-bg-sunken); stroke-width: 3px; pointer-events: none; }
+.rt-side { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: var(--space-3); align-items: start; min-width: 0; }
+.rt-side .bank-card { margin: 0; }
+.rt-status { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; white-space: nowrap; }
+.rt-status.is-ok { color: var(--color-text-secondary); }
+.rt-status.is-hamp { color: var(--color-text-warn); }
+.rt-status.is-stop { color: var(--color-text-down); }
+.rt-legend .ln.is-hamp { border-top: 2px dashed var(--color-text-warn); }
+.rt-legend .ln.is-stop { border-top: 2px dotted var(--color-text-down); }
+

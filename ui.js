@@ -335,6 +335,16 @@ const UI_ICON_PATHS = {
     'surowiec-gas': 'M12 3c1 4 6 6 6 12a6 6 0 0 1-12 0c0-3 2-4 3-7 1 1 2 2 2 3 1-2 1-5 1-8zM12 21a2.5 2.5 0 0 1-2.5-2.5c0-1.5 1.5-2 2.5-4 1 2 2.5 2.5 2.5 4A2.5 2.5 0 0 1 12 21z',
     'surowiec-coal': 'M4 15l3-7 6-3 6 4 2 7-5 4H8zM7 8l4 5 2-8M11 13l-3 7M11 13l8-4',
     'surowiec-metals': 'M5 5h14v3h-5v8h5v3H5v-3h5V8H5z',
+    // 0.18.1 P1/P5: ikony łańcuchów z makiety design/makiety/018_ikony.svg
+    'surowiec-iron': 'M4 17l4-8h8l4 8zM4 17h16v3H4zM9 9l1-4h4l1 4',
+    'surowiec-copper': 'M12 3a4 4 0 0 1 4 4v2h2l1 12H5L6 9h2V7a4 4 0 0 1 4-4zM9 14h6',
+    'surowiec-coffee': 'M12 3c4 0 7 4 7 9s-3 9-7 9-7-4-7-9 3-9 7-9zM12 4c-2 3-2 6 0 8s2 5 0 8',
+    huta: 'M3 21h18M5 21V11h6v10M11 21v-6h8v6M7 11V5h2v6M14 12c0-1.5 1.5-1.5 1.5-3M17.5 12c0-1.5 1.5-1.5 1.5-3',
+    szok: 'M9 15l-2 2a3 3 0 0 1-4-4l3-3a3 3 0 0 1 4 0M15 9l2-2a3 3 0 0 1 4 4l-3 3a3 3 0 0 1-4 0M8 3v3M3 8h3M16 21v-3M21 16h-3',
+    szlak: 'M5 21a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM19 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM6.5 17.5C10 14 8 9 12 8s5-2 5.5-3',
+    audyt: 'M13 21H6V3h8l4 4v5M14 3v4h4M9 9h3M9 13h4M17 21l-1.6-1.6M15 20a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+    debiut: 'M12 3v2M6 9a6 6 0 0 1 12 0v5l2 3H4l2-3zM10 20a2 2 0 0 0 4 0M3 5l2 2M21 5l-2 2',
+    magistrala: 'M3 12h18M6 8v8M12 8v8M18 8v8M3 6h18M3 18h18',
     'surowiec-grain': 'M12 21V8M12 8c-2-1-2-3 0-5 2 2 2 4 0 5zM12 13c-1-3-4-3-6-3 0 3 3 4 6 3zM12 13c1-3 4-3 6-3 0 3-3 4-6 3zM12 18c-1-3-4-3-6-3 0 3 3 4 6 3zM12 18c1-3 4-3 6-3 0 3-3 4-6 3z',
     'surowiec-uranium': 'M12 10.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM9.8 8.3 7 3.5A10 10 0 0 0 2 12h5.5a4.5 4.5 0 0 1 2.3-3.7zM14.2 8.3 17 3.5a10 10 0 0 1 5 8.5h-5.5a4.5 4.5 0 0 0-2.3-3.7zM9.8 15.7 7 20.5a10 10 0 0 0 10 0l-2.8-4.8a4.5 4.5 0 0 1-4.4 0z',
     'transport-sea': 'M2 15h20l-2.5 6h-15zM5 15v-4h6v4M11 15V8h5v7M12 5h3M16 15v-3h4v3',
@@ -4372,7 +4382,7 @@ function renderCompanyCard() {
     else if (companyCardView.tab === 'workforce' && !foreign) body.innerHTML = renderCompanyCardWorkforce(stock);
     else if (companyCardView.tab === 'group' && foreign && hasForeignGroup(stock.foreignSource)) body.innerHTML = renderForeignCardGroup(stock);
     else if (companyCardView.tab === 'group' && hasGroupCard(stock)) body.innerHTML = renderCompanyCardGroup(stock);
-    else body.innerHTML = renderCompanyCardOverview(stock);
+    else body.innerHTML = renderCompanyCardOverview(stock) + (typeof renderStockChainTiles === 'function' ? renderStockChainTiles(stock) : ''); // 0.18.1 P5: wiersz łańcucha (tylko ogniwa)
 }
 
 function renderCompanyCardOverview(stock) {
@@ -7478,6 +7488,7 @@ function checkWorldInvariants() {
     if (typeof checkMarginInvariants === 'function') problems.push(...checkMarginInvariants()); // 0.16.4 G21
     if (typeof checkCommodityInvariants === 'function') problems.push(...checkCommodityInvariants()); // 0.17 S1
     if (typeof checkForeignIssuerInvariants === 'function') problems.push(...checkForeignIssuerInvariants()); // 0.16.1 G3
+    if (typeof checkChainInvariants === 'function') problems.push(...checkChainInvariants()); // 0.18.1 P2: ceny i zapasy łańcuchów
     if (typeof checkHiddenCashInvariants === 'function') problems.push(...checkHiddenCashInvariants()); // 0.16.6 S1
     if (typeof checkCountryInvariants === 'function') problems.push(...checkCountryInvariants()); // 0.16.2 G5
     for (const bond of allBonds) finite(bond.faceValue, `obligacja ${bond.id}`);
@@ -8374,6 +8385,10 @@ function updateStateModalContent() {
     if (!body) return;
     if (stateTab === 'energy') {
         body.innerHTML = renderEnergyPanel();
+    } else if (stateTab === 'chains' && typeof renderChainsPanel === 'function') { // 0.18.1 P5: Państwo → Łańcuchy
+        body.innerHTML = renderChainsPanel();
+        if (typeof unlockAcademyEntry === 'function') ['lancuchWartosci', 'bilansDobra'].forEach(id => unlockAcademyEntry(id));
+        if (typeof drawChainEdges === 'function') requestAnimationFrame(drawChainEdges);
     } else if (stateTab === 'overview') {
         body.innerHTML = `
             <div class="bank-grid">
@@ -9474,3 +9489,33 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     window.addEventListener('scroll', updateCompactTopbar, { passive: true });
     window.addEventListener('resize', updateCompactTopbar, { passive: true });
 }
+
+// =================================================================================
+// 0.18.1 P4 (Z10): BANER KRYZYSU — niemodalny, u góry ekranu, przy starcie linii i każdym etapie (wszystkie 6 linii).
+// Animacja spadającego wykresu tylko bez prefers-reduced-motion (CSS). Czeka na zgodność z makietą (ekran 22 listy designu).
+// =================================================================================
+const CRISIS_BANNER_HINTS = {
+    banking: 'Banki, finanse i nieruchomości tanieją, a kredyt drożeje. Bronią się Żywność i Medycyna.',
+    dotcom: 'Technologia, Gaming i Media tracą najmocniej. Energia, Żywność i dobra konsumpcyjne trzymają się lepiej.',
+    oil: 'Drogie paliwo uderza w transport, turystykę i chemię. Zyskuje Energia, rośnie inflacja.',
+    black: 'Cały rynek gwałtownie spada i długo się podnosi. Gotówka daje czas na zakupy po dnie.',
+    pandemic: 'Turystyka, usługi i lotnictwo stoją. Zyskują Medycyna, Technologia, Gaming i magazyny.',
+    supply: 'Fabryki zależne od dostaw tracą (motoryzacja, przemysł), drożeją półprodukty. Zyskują magazyny i dostawcy z innych krajów.'
+};
+function showCrisisBanner(line, stage) {
+    if (typeof document === 'undefined' || !line || !CRISIS_LINES[line.id]) return null;
+    if (line.id === 'supply' && typeof unlockAcademyEntry === 'function') unlockAcademyEntry('efektByka');
+    const def = CRISIS_LINES[line.id], variant = def.variants?.[line.variant];
+    let el = document.getElementById('crisis-banner');
+    if (!el) { el = document.createElement('div'); el.id = 'crisis-banner'; el.className = 'crisis-banner'; el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite'); document.body.appendChild(el); }
+    const idx = CRISIS_STAGES.indexOf(stage);
+    el.dataset.line = line.id; el.dataset.stage = stage; el.hidden = false;
+    el.innerHTML = `<svg class="crisis-banner-chart" viewBox="0 0 64 32" aria-hidden="true"><polyline points="2,6 14,9 22,7 32,16 40,14 50,25 62,28"/></svg>
+        <div class="crisis-banner-text"><strong>${uiIcon(def.svg || 'alert', 16)} ${escapeHtml(def.name)}${variant ? `: ${escapeHtml(variant.name.toLowerCase())}` : ''}</strong>
+        <span class="crisis-banner-stage">Etap ${idx + 1} z ${CRISIS_STAGES.length}: ${escapeHtml(CRISIS_STAGE_NAMES[stage] || stage)}</span>
+        <span class="crisis-banner-hint">Co to znaczy dla Ciebie: ${escapeHtml(CRISIS_BANNER_HINTS[line.id] || '')}</span></div>
+        <button type="button" class="btn-ghost-icon crisis-banner-close" aria-label="Zamknij baner kryzysu" onclick="closeCrisisBanner()">${uiIcon('zamknij', 16)}</button>`;
+    el.classList.remove('is-anim'); void el.offsetWidth; el.classList.add('is-anim'); // animacja od nowa przy każdym etapie
+    return el;
+}
+function closeCrisisBanner() { const el = document.getElementById('crisis-banner'); if (el) el.hidden = true; }

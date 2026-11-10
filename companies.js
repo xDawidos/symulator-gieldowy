@@ -527,11 +527,11 @@ const SUBSECTOR_ACTIVITY = {
     'Energetyka jądrowa': 'rozwija energetykę jądrową', 'Energetyka węglowa': 'wytwarza prąd z węgla', 'Energetyka gazowa': 'wytwarza prąd z gazu', 'OZE': 'wytwarza prąd ze źródeł odnawialnych', 'Rafinerie': 'przerabia ropę na paliwa', 'Gaz': 'dostarcza gaz firmom i domom',
     'Logistyka': 'organizuje przewozy i magazyny', 'Lotnictwo': 'przewozi ludzi i ładunki samolotami', 'Morski': 'przewozi ładunki morzem', 'Lądowy': 'przewozi ładunki koleją i drogami',
     'Biotechnologia': 'rozwija nowe terapie w laboratoriach', 'Sprzęt medyczny': 'produkuje sprzęt dla lekarzy i pacjentów', 'Półprzewodniki': 'projektuje i produkuje układy scalone',
-    'Sztuczna inteligencja': 'rozwija sztuczną inteligencję', 'Magazyny': 'buduje i wynajmuje magazyny', 'Drony': 'buduje drony', 'Telekomunikacja': 'prowadzi sieci telefoniczne i internetowe'
+    'Sztuczna inteligencja': 'rozwija sztuczną inteligencję', 'Hutnictwo': 'wytapia stal z rudy żelaza i węgla', 'Maszyny': 'produkuje maszyny dla fabryk', 'Stocznie': 'buduje statki', 'Chemia polimerowa': 'wytwarza tworzywa i gumę z półproduktów ropy', 'Nawozy': 'produkuje nawozy z gazu i siarki', 'Farmacja': 'wytwarza substancje do leków', 'Przetwórstwo spożywcze': 'przetwarza zboże i produkty rolne na żywność', 'Magazyny': 'buduje i wynajmuje magazyny', 'Drony': 'buduje drony', 'Telekomunikacja': 'prowadzi sieci telefoniczne i internetowe'
 };
 const COMMODITY_WORDS = { // dopełniacz; mianownik z czasownikiem
     gold: ['złota', 'złoto drożeje'], oil: ['ropy', 'ropa drożeje'], gas: ['gazu', 'gaz drożeje'], coal: ['węgla', 'węgiel drożeje'],
-    metals: ['metali', 'metale drożeją'], grain: ['zboża', 'zboże drożeje'], uranium: ['uranu', 'uran drożeje']
+    iron: ['rudy żelaza', 'ruda żelaza drożeje'], copper: ['miedzi', 'miedź drożeje'], grain: ['zboża', 'zboże drożeje'], uranium: ['uranu', 'uran drożeje']
 };
 const DESCRIPTION_RULES = { calmVol: 0.8, wildVol: 1.3, minInput: 0.15, minProduct: 0.3, noDebt: 0.02, highDebt: 0.33 };
 
@@ -1588,6 +1588,22 @@ const initialStocks = [
         name: 'Annesco', price: 298.00, volatilityFactor: 1.2, symbol: 'ANN', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Przemysł'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
+        dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
+        lastQuarterValue: 0, estimatedDividend: 0, bankAccountId: null, // <-- DODAJ TO
+    cash: 0 
+    },
+    { // 0.18.1 P1: nowa spółka (ogniwo łańcucha bez producenta w PL)
+        name: 'Hutpol', price: 180.00, volatilityFactor: 1.2, symbol: 'HUT', exchange: 'SILVER', totalShares: 60000, maxShares: 60000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
+    quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
+  lineHistory: [], playerTransactions: [], sector: ['Przemysł'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
+        dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
+        lastQuarterValue: 0, estimatedDividend: 0, bankAccountId: null, // <-- DODAJ TO
+    cash: 0 
+    },
+    { // 0.18.1 P1: nowa spółka (ogniwo łańcucha bez producenta w PL)
+        name: 'Motopol', price: 430.00, volatilityFactor: 1.2, symbol: 'MTP', exchange: 'GOLD', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
+    quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
+  lineHistory: [], playerTransactions: [], sector: ['Motoryzacja'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
         lastQuarterValue: 0, estimatedDividend: 0, bankAccountId: null, // <-- DODAJ TO
     cash: 0 
@@ -13348,7 +13364,7 @@ function creepSubsidiaryStake(child, parent) {
 
 // 0.16.11 K0: pochodzenie spółki startowej (decyzje użytkownika, plany/lista_firm_startowych.md). PL = tylko przy starcie z Polski,
 // UNI = w każdym kraju startowym, DE/US = firma tego kraju (przy innym starcie istnieje tylko jako zagraniczna z countries_data.js). Nie zapisujemy.
-const PL_ORIGIN_SYMBOLS = ['PES', 'NAG', 'ZST', 'SLS', 'GRT', 'CFL', 'PKC', 'TIR', 'WZM', 'PIX', 'SUM', 'WIP', 'FIX', 'DRH', 'BAL', 'LEK', 'DPB', 'WPY', 'KRO', 'PLX', 'BTX', 'ANN', 'SIK', 'KRA', 'STM', 'SKP', 'BOR', 'BEW', 'ORT', 'ENG', 'TRN', 'PUR', 'NOC', 'GIEB', 'UnG', 'PZB', 'ORZD', 'HUSA', 'BPIG', 'MAJB'];
+const PL_ORIGIN_SYMBOLS = ['HUT', 'MTP', 'PES', 'NAG', 'ZST', 'SLS', 'GRT', 'CFL', 'PKC', 'TIR', 'WZM', 'PIX', 'SUM', 'WIP', 'FIX', 'DRH', 'BAL', 'LEK', 'DPB', 'WPY', 'KRO', 'PLX', 'BTX', 'ANN', 'SIK', 'KRA', 'STM', 'SKP', 'BOR', 'BEW', 'ORT', 'ENG', 'TRN', 'PUR', 'NOC', 'GIEB', 'UnG', 'PZB', 'ORZD', 'HUSA', 'BPIG', 'MAJB'];
 const COMPANY_ORIGIN_OVERRIDES = { WiS: 'DE', DMPC: 'US', CBK: 'DE', SPK: 'DE', VBK: 'DE', IBK: 'DE', DGH: 'DE' }; // + banki startowe kraju (COUNTRY_BANK_DEFS) // firmy z countries_data.js: krajowe tylko przy starcie ze swojego kraju
 function getCompanyOrigin(stock) {
     if (!stock) return 'UNI';

@@ -29,8 +29,8 @@ const LEGACY_SAVE_KEYS = ['gra_inwestycyjna_dawid_save_v2', 'gra_inwestycyjna_da
 // v13: społeczeństwo i rynek pracy (society, stock.workforce, trzecia partia). Starsze zapisy: kraj od zera,
 // zatrudnienie według giełdy, polityka według cech prezesa, związki tylko w spółkach państwowych (30%).
 // v16: waluty i kantor (kursy, gotówka w walutach), kwity depozytowe GDR. Zapis v15 migruje: kursy startowe, bez walut i GDR.
-const SAVE_FORMAT_VERSION = 24; // 0.18.0 R2: bez kwitów depozytowych (klucz `giants` zamiast `gdr`); v23 0.17.2: society.energy, society.greens, stock.power, deposit, energyOrder, ecoCut, esg, nuclearUnits, oversight.energy (pola opcjonalne, stare zapisy uzupełnia pierwszy kwartał)
-const SUPPORTED_SAVE_VERSIONS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24];
+const SAVE_FORMAT_VERSION = 25; // 0.18.1 P1: metale → żelazo i miedź (migracja ceny, ETC, koszyka i pozycji), ogniwa łańcuchów; v24 0.18.0 R2: bez kwitów depozytowych (klucz `giants` zamiast `gdr`); v23 0.17.2: society.energy, society.greens, stock.power, deposit, energyOrder, ecoCut, esg, nuclearUnits, oversight.energy (pola opcjonalne, stare zapisy uzupełnia pierwszy kwartał)
+const SUPPORTED_SAVE_VERSIONS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25];
 
 let lastSaveReport = null;
 let saveDisabledUntilReload = false;
@@ -234,6 +234,7 @@ function buildSaveSnapshot({ compact = 0 } = {}) {
         currencies: typeof getCurrencySnapshot === 'function' ? getCurrencySnapshot() : undefined, // 0.16.1 G2: kursy, gotówka w walutach (v16)
         forex: typeof getForexSnapshot === 'function' ? getForexSnapshot() : undefined, // 0.16.4 G21: pozycje z depozytem (pole opcjonalne v16)
         commodities: typeof getCommoditiesSnapshot === 'function' ? getCommoditiesSnapshot() : undefined, // 0.17 S1: ceny surowców (pole opcjonalne)
+        chains: typeof getChainsSnapshot === 'function' ? getChainsSnapshot() : undefined, // 0.18.1 P2: bilans łańcuchów (pole opcjonalne; stary zapis: stan buduje pierwszy kwartał)
         antitrustOffice, antitrustLog, // 0.15.6 E5: poziom urzędu antymonopolowego i interwencje (pola opcjonalne)
         subcontractLog, subcontractorDeals, subcontractorAcquisitionCount, // 0.15.5 B2–B3: okno zleceń podwykonawców, przejęcia pionowe (pola opcjonalne)
         activeTenders: activeTenders.filter(tender => ['open', 'closed', 'awarded'].includes(tender.status)).map(serializeTenderForSave), // zakończone przetargi nie trafiają do zapisu
@@ -640,6 +641,14 @@ function applySaveSnapshot(snapshot) {
     if (typeof applyCurrencySnapshot === 'function') applyCurrencySnapshot(snapshot.currencies); // 0.16.1 G2: v15 → kursy startowe, bez walut
     if (typeof applyForexSnapshot === 'function') applyForexSnapshot(snapshot.forex); // 0.16.4 G21
     if (typeof applyCommoditiesSnapshot === 'function') applyCommoditiesSnapshot(snapshot.commodities); // 0.17 S1: stary zapis → ceny średnie
+    if (typeof applyChainsSnapshot === 'function') applyChainsSnapshot(snapshot.chains); // 0.18.1 P2
+    if (typeof commodityMetalsMigration === 'object' && commodityMetalsMigration && typeof splitMetalsContracts === 'function') { // 0.18.1 P1: pozycje gracza na MET-* → IRON + COP po połowie
+        const before = marginPositions.length;
+        const seen = new Set();
+        marginPositions = splitMetalsContracts(marginPositions, 'instrument', commodityMetalsMigration).map(p => seen.has(p.id) ? { ...p, id: marginNextId++ } : (seen.add(p.id), p)); // druga połowa dostaje nowe id
+        if (marginPositions.length > before) report.warnings.push('Migracja v25: pozycje na „metalach” podzielone po połowie na rudę żelaza i miedź.');
+        commodityMetalsMigration = null;
+    }
     if (snapshot.antitrustOffice && typeof snapshot.antitrustOffice === 'object') Object.assign(antitrustOffice, snapshot.antitrustOffice); // 0.15.6 E5: poziom urzędu (dawniej nie zapisywany)
     antitrustLog = Array.isArray(snapshot.antitrustLog) ? snapshot.antitrustLog.filter(e => e && typeof e.symbol === 'string') : [];
     constructionAwardLog = Array.isArray(snapshot.constructionAwardLog) ? snapshot.constructionAwardLog.filter(e => e && typeof e.sym === 'string' && Number.isFinite(e.q)) : []; // 0.15.5 B1
@@ -748,6 +757,7 @@ function applySaveSnapshot(snapshot) {
     ensureScandals();
     ensureMacroState();
     const startSubsectors = applyStartSubsectors(); // 0.14 T2: zapis sprzed T2 — podsektory z tabeli startowej raz
+    if (typeof applySubsectors018 === 'function') applySubsectors018(); // 0.18.1 P1: ogniwa łańcuchów (zapis sprzed v25)
     if (startSubsectors) report.warnings.push(`Podsektory ${startSubsectors} spółek startowych (migracja 0.14 T2).`);
     // v13: kraj i zatrudnienie (starsze zapisy: kraj od zera, populacja miasta bez zmian).
     society = snapshot.society && typeof snapshot.society === 'object' ? snapshot.society : createSocietyState();
@@ -1504,6 +1514,7 @@ function runQuarterlyTick() {
         processWorkforceQuarter(); // 0.13: zatrudnienie, zadowolenie, związki i strajki przed raportami (workforce.js)
         processFinancialReports(); // zawiera koszty R&D, wynik kontraktów, pozycje okresu i dywidendy
         if (typeof processCommoditiesQuarterly === 'function') processCommoditiesQuarterly(); // 0.17 S1: średnia kwartalna surowców (po raportach spółek), zdarzenia
+        if (typeof processChainsQuarterly === 'function') processChainsQuarterly(); // 0.18.1 P2: bilans łańcuchów (po raportach krajowych i obcych)
         updateInfluence();
         updateCeoTenureAndAge(); // Zmieniona nazwa, ale to samo
         updateAnalyticalProperties();
@@ -2062,6 +2073,7 @@ function createNewWorld() {
     marketStabilityProject = createMarketStabilityProject();
     ensureAllStockSegments(); // 0.14 T1a: sektory z rejestru i segmenty (przed ETF-ami i zatrudnieniem)
     applyStartSubsectors(); // 0.14 T2: podsektory spółek startowych (tabela)
+    if (typeof applySubsectors018 === 'function') applySubsectors018(); // 0.18.1 P1
     startPoolLedgerFromFacts(); // 0.14.1 R0: księga puli inwestycyjnej od startu gry
     migrateResearchInstituteValuation(); // 0.14.2 P1: instytuty wyceniane z zysków od startu
     usedCompanyNames = stocks.map(stock => stock.name); dejwCorpUsed = stocks.some(stock => /^DejwCorp/.test(stock.name)); // 0.14.2 P4
