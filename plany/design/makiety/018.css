@@ -148,3 +148,40 @@
 @media (max-width: 860px) {
   .ipo-card { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Szlaki i miasta: schematyczna mapa SVG (projekt 16). Status szlaku: styl linii + słowo, nie sam kolor */
+.rt-wrap { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-3); margin-top: var(--space-3); }
+.rt-map-box { overflow-x: auto; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); background: var(--color-bg-sunken); }
+.rt-map { display: block; width: 100%; min-width: 620px; height: auto; font-family: inherit; }
+.rt-map .grid { fill: var(--color-border-subtle); }
+.rt-map .region { fill: var(--color-text-muted); font-size: 12px; opacity: .7; }
+.rt-map .rt { fill: none; stroke: var(--color-text-secondary); stroke-width: 2; opacity: .75; }
+.rt-map .rt.is-hamp { stroke: var(--color-text-warn); stroke-dasharray: 7 5; opacity: 1; }
+.rt-map .rt.is-stop { stroke: var(--color-text-down); stroke-dasharray: 2 5; stroke-width: 2.4; opacity: 1; }
+.rt-map .rt-mark circle { fill: var(--color-bg-raised); stroke: var(--color-border-default); }
+.rt-map .rt-mark.is-hamp circle { stroke: var(--color-text-warn); }
+.rt-map .rt-mark.is-stop circle { stroke: var(--color-text-down); }
+.rt-map .rt-mark use { color: var(--color-text-secondary); }
+.rt-map .rt-mark text { fill: var(--color-text-primary); font-size: 11px; font-weight: 600; paint-order: stroke; stroke: var(--color-bg-sunken); stroke-width: 3px; }
+.rt-map .rt-mark.is-stop text { fill: var(--color-text-down); }
+.rt-map .rt-mark.is-hamp text { fill: var(--color-text-warn); }
+.rt-map .ct { cursor: pointer; outline: none; }
+.rt-map .ct > circle { fill: var(--color-bg-raised); stroke: var(--color-border-strong); stroke-width: 1.5; }
+.rt-map .ct:hover > circle, .rt-map .ct:focus-visible > circle { stroke: var(--color-text-primary); }
+.rt-map .ct.is-open > circle { fill: color-mix(in srgb, var(--color-text-accent) 10%, var(--color-bg-sunken)); stroke: var(--color-border-accent); stroke-dasharray: 4 3; }
+.rt-map .ct > text { fill: var(--color-text-primary); font-size: 12px; font-weight: 600; text-anchor: middle; pointer-events: none; }
+.rt-map.has-open .ct:not(.is-open), .rt-map.has-open .rt-layer { opacity: .35; }
+.rt-map .city { cursor: pointer; outline: none; }
+.rt-map .city circle { fill: var(--color-text-secondary); stroke: var(--color-bg-sunken); stroke-width: 2; }
+.rt-map .city.is-selected circle { fill: var(--color-text-accent); stroke: var(--color-text-primary); }
+.rt-map .city:focus-visible circle { stroke: var(--color-focus); stroke-width: 3; }
+.rt-map .city text { fill: var(--color-text-primary); font-size: 11px; paint-order: stroke; stroke: var(--color-bg-sunken); stroke-width: 3px; pointer-events: none; }
+.rt-side { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: var(--space-3); align-items: start; min-width: 0; }
+.rt-side .bank-card { margin: 0; }
+.rt-status { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; white-space: nowrap; }
+.rt-status.is-ok { color: var(--color-text-secondary); }
+.rt-status.is-hamp { color: var(--color-text-warn); }
+.rt-status.is-stop { color: var(--color-text-down); }
+.rt-legend .ln.is-hamp { border-top: 2px dashed var(--color-text-warn); }
+.rt-legend .ln.is-stop { border-top: 2px dotted var(--color-text-down); }
+

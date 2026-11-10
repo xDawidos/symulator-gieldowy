@@ -1,0 +1,161 @@
+<!doctype html><html lang="pl"><head><meta charset="utf-8"><title>Makieta UI 0.18 — Szlaki i miasta</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../../../tokens.css"><link rel="stylesheet" href="../../../style.css"><link rel="stylesheet" href="018.css">
+<style>
+/* Tylko rama makiety, do gry nie idzie */
+html, body { overflow: auto !important; height: auto !important; }
+body { display: block !important; padding: 24px !important; }
+.demo { max-width: 1180px; margin: 0 auto 32px; padding: 24px; background: var(--color-bg-base); border: 1px solid var(--color-border-subtle); border-radius: 6px; }
+.demo-title { margin: 0 0 4px; font-size: 20px; }
+.demo-sub { margin: 0 0 16px; color: var(--color-text-muted); font-size: 13px; max-width: 75ch; }
+.demo-h { margin: 20px 0 8px; font-size: 13px; color: var(--color-text-muted); font-weight: 600; }
+@media (max-width: 640px) { body { padding: 8px !important; } .demo { padding: 12px; } }
+</style></head><body class="dark-mode">
+<svg style="display:none" id="ic-defs"></svg><svg style="display:none" id="ic-defs-018"></svg>
+
+<section class="demo"><h2 class="demo-title">1. Państwo → Łańcuchy → Szlaki</h2>
+<p class="demo-sub">Trzeci widok przełącznika. Schematyczna mapa: kraje to koła w przybliżonych miejscach, linie to szlaki (morskie łukiem, lotnicze wyższym łukiem, lądowe prosto). Na środku linii jest ikona transportu, a przy szlaku utrudnionym lub wstrzymanym także słowo. Kliknięcie kraju rozwija jego miasta (małe kropki), kliknięcie miasta pokazuje jego dane w trzech kartach pod mapą. Stan na makiecie: rozwinięta Polska, wybrany Gdańsk. Makieta jest klikalna.</p>
+<nav class="bank-tabs" role="tablist">
+  <button class="bank-tab-btn">Przegląd</button><button class="bank-tab-btn">Makro</button><button class="bank-tab-btn">Kraj</button><button class="bank-tab-btn">Energia</button><button class="bank-tab-btn active" aria-selected="true">Łańcuchy</button><button class="bank-tab-btn">Rynki</button><button class="bank-tab-btn">Nadzór</button>
+</nav>
+<div class="gd-view-bar">
+  <div class="speed-segmented" role="radiogroup" aria-label="Widok"><button class="speed-btn" role="radio" aria-checked="false">Łańcuchy</button><button class="speed-btn" role="radio" aria-checked="false">Dobra</button><button class="speed-btn active" role="radio" aria-checked="true">Szlaki</button></div>
+  <div class="sector-chips" role="group" aria-label="Transport">
+    <button class="sector-chip active" aria-pressed="true">Wszystkie</button>
+    <button class="sector-chip" aria-pressed="false"><i data-ic="transport-sea"></i> Morskie</button>
+    <button class="sector-chip" aria-pressed="false"><i data-ic="transport-air"></i> Lotnicze</button>
+    <button class="sector-chip" aria-pressed="false"><i data-ic="transport-land"></i> Lądowe</button>
+  </div>
+</div>
+<div class="bank-ticker mt-3">
+  <div class="bank-ticker-item"><span>Szlaki aktywne</span><strong>17 z 21</strong></div>
+  <div class="bank-ticker-item"><span>Utrudnione</span><strong class="text-warn">3</strong><small class="text-muted">sztorm, kolejki w porcie</small></div>
+  <div class="bank-ticker-item"><span>Wstrzymane</span><strong class="text-down">1</strong><small class="text-muted">blokada cieśniny</small></div>
+</div>
+<div class="rt-wrap">
+  <div>
+    <div class="rt-map-box"><svg class="rt-map" id="map" viewBox="0 0 1000 370" role="group" aria-label="Mapa szlaków handlowych"></svg></div>
+    <ul class="ch-legend rt-legend"><li><span class="ln"></span> aktywny</li><li><span class="ln is-hamp"></span> utrudniony</li><li><span class="ln is-stop"></span> wstrzymany</li><li>koło: kraj, kliknij, żeby zobaczyć miasta</li></ul>
+  </div>
+  <aside class="rt-side" id="side" aria-live="polite"></aside>
+</div>
+
+<h3 class="bank-section-title mt-3">Lista szlaków</h3>
+<p class="text-sm text-muted">Ta sama treść co na mapie: dla czytnika i telefonu. Domyślnie najpierw wstrzymane, potem utrudnione.</p>
+<div style="overflow-x:auto"><table class="asset-mini-table w-full"><thead><tr><th>Szlak</th><th>Transport</th><th>Stan</th><th class="text-right">Przepustowość</th><th>Powód</th></tr></thead><tbody id="routes"></tbody></table></div>
+</section>
+
+<section class="demo"><h2 class="demo-title">2. Stany</h2>
+<h3 class="demo-h">Kraj rozwinięty, bez wybranego miasta (karta pod mapą)</h3>
+<div class="rt-side" id="side-country" style="max-width:420px"></div>
+<h3 class="demo-h">Puste i szczególne</h3>
+<div class="bank-card">
+  <p class="notice-inline"><i data-ic="info" data-s="14"></i><span>Kliknij kraj na mapie, żeby zobaczyć jego miasta i szlaki.</span></p>
+  <p class="notice-inline"><i data-ic="klodka" data-s="14"></i><span>Miasta za granicą pokażą dane, gdy masz tam spółkę albo oddział.</span></p>
+  <p class="notice-inline"><i data-ic="ok" data-s="14"></i><span>Wszystkie szlaki są aktywne.</span></p>
+</div>
+</section>
+
+<script>
+// Dane przykładowe. Pozycje krajów są schematyczne (jak plan metra), nie geograficzne. W grze: kraje z countries_data.js, szlaki z grafu (krawędź: kraj–kraj, transport, przepustowość, stan), miasta z 0.19.2.
+const COUNTRIES = { US: ['USA', 140, 210], FR: ['Francja', 405, 245], CH: ['Szwajcaria', 455, 300], DE: ['Niemcy', 470, 200], CZ: ['Czechy', 540, 245], PL: ['Polska', 580, 175], SE: ['Szwecja', 510, 85], IN: ['Indie', 735, 330], CN: ['Chiny', 805, 215], TW: ['Tajwan', 880, 300], JP: ['Japonia', 925, 165] };
+const R = 22, ROPEN = 78;
+const MODE = { sea: ['transport-sea', 'morski', 0.28], air: ['transport-air', 'lotniczy', 0.45], land: ['transport-land', 'lądowy', 0] };
+const STW = { ok: 'aktywny', hamp: 'utrudniony', stop: 'wstrzymany' };
+// [z, do, transport, stan, przepustowość wykorzystana %, powód]
+const ROUTES = [
+  ['CN', 'DE', 'sea', 'stop', 0, 'blokada cieśniny, 3. kw.'], ['IN', 'DE', 'sea', 'hamp', 96, 'objazd po blokadzie, +3 tyg.'],
+  ['PL', 'SE', 'sea', 'hamp', 88, 'sztorm na Bałtyku'], ['CN', 'PL', 'land', 'hamp', 99, 'kolej: kolejki na granicy'],
+  ['US', 'FR', 'sea', 'ok', 71], ['US', 'DE', 'air', 'ok', 64], ['US', 'JP', 'sea', 'ok', 58], ['TW', 'US', 'sea', 'ok', 77], ['JP', 'US', 'air', 'ok', 52],
+  ['PL', 'DE', 'land', 'ok', 83], ['DE', 'CZ', 'land', 'ok', 61], ['DE', 'FR', 'land', 'ok', 66], ['FR', 'CH', 'land', 'ok', 40], ['CH', 'DE', 'land', 'ok', 44], ['PL', 'CZ', 'land', 'ok', 57],
+  ['SE', 'DE', 'sea', 'ok', 69], ['CN', 'JP', 'sea', 'ok', 74], ['CN', 'TW', 'sea', 'ok', 81], ['IN', 'CN', 'sea', 'ok', 62], ['US', 'PL', 'air', 'ok', 35], ['DE', 'JP', 'air', 'ok', 48]
+];
+// Miasta Polski: [nazwa, dx, dy względem środka kraju]
+const CITIES = { PL: [['Gdańsk', -8, -52], ['Warszawa', 30, -6], ['Poznań', -42, -14], ['Wrocław', -38, 28], ['Katowice', 4, 46], ['Kraków', 34, 40]] };
+let open = 'PL', city = 'Gdańsk';
+
+const pl = (n, d = 0) => n.toLocaleString('pl-PL', { minimumFractionDigits: d, maximumFractionDigits: d });
+const fac = (ic, name, v, note) => `<li${v < 50 ? ' class="is-warn"' : ''}><i data-ic="${ic}"></i><span>${name}</span><b class="en-num">${v}</b><span class="limit-meter${v < 50 ? ' is-warn' : ''}" role="img" aria-label="${name} ${v} na 100" style="--v:${v}"><i></i></span>${note ? `<small>${note}</small>` : ''}</li>`;
+
+function routeSvg([a, b, mode, st]) {
+  const [, x1, y1] = COUNTRIES[a], [, x2, y2] = COUNTRIES[b], [ic, , bend] = MODE[mode];
+  const mx = (x1 + x2) / 2, my = (y1 + y2) / 2, len = Math.hypot(x2 - x1, y2 - y1) || 1;
+  let nx = -(y2 - y1) / len, ny = (x2 - x1) / len; if (ny > 0) { nx = -nx; ny = -ny; } // łuk zawsze ku górze mapy
+  const off = Math.min(len * bend, 70), cx = mx + nx * off, cy = my + ny * off; // łuk najwyżej 70 px, żeby nie wychodził poza mapę
+  const px = 0.25 * x1 + 0.5 * cx + 0.25 * x2, py = 0.25 * y1 + 0.5 * cy + 0.25 * y2; // środek krzywej
+  const cls = st === 'ok' ? '' : ` is-${st}`;
+  return { path: `<path class="rt${cls}" d="M${x1} ${y1} Q${cx} ${cy} ${x2} ${y2}"/>`,
+    mark: `<g class="rt-mark${cls}"><circle cx="${px}" cy="${py}" r="10"/><use href="#ic-${ic}" x="${px - 7}" y="${py - 7}" width="14" height="14"/>${st === 'ok' ? '' : `<text x="${px + 14}" y="${py + 4}">${st === 'stop' ? '× ' : ''}${STW[st]}</text>`}</g>` };
+}
+function renderMap() {
+  const svg = document.getElementById('map');
+  let g = '';
+  for (let x = 20; x < 1000; x += 28) for (let y = 20; y < 370; y += 28) g += `<circle class="grid" cx="${x}" cy="${y}" r="1"/>`;
+  const regions = `<text class="region" x="60" y="120">Ameryka Północna</text><text class="region" x="300" y="345">Europa</text><text class="region" x="700" y="360">Azja</text>`;
+  const rs = ROUTES.map(routeSvg);
+  const cts = Object.entries(COUNTRIES).map(([id, [name, x, y]]) => {
+    const isOpen = id === open, r = isOpen ? ROPEN : R;
+    const cities = isOpen && CITIES[id] ? CITIES[id].map(([cn, dx, dy]) => `<g class="city${cn === city ? ' is-selected' : ''}" tabindex="0" role="button" aria-label="Miasto ${cn}" aria-pressed="${cn === city}" data-city="${cn}"><circle cx="${x + dx}" cy="${y + dy}" r="${cn === city ? 7 : 5.5}"/><text x="${x + dx + 9}" y="${y + dy + 4}">${cn}</text></g>`).join('') : '';
+    const n = ROUTES.filter(r => r[0] === id || r[1] === id), bad = n.filter(r => r[3] !== 'ok').length;
+    return `<g class="ct${isOpen ? ' is-open' : ''}" tabindex="0" role="button" aria-expanded="${isOpen}" aria-label="${name}: ${n.length} szlaków${bad ? `, ${bad} z problemem` : ''}" data-ct="${id}"><circle cx="${x}" cy="${y}" r="${r}"/><text x="${x}" y="${isOpen ? y + r + 16 : y + 4}">${isOpen ? name : id}</text></g>${cities}`;
+  }).join('');
+  svg.classList.toggle('has-open', !!open);
+  requestAnimationFrame(() => { const box = svg.parentElement; if (open && box.scrollWidth > box.clientWidth) box.scrollLeft = COUNTRIES[open][1] / 1000 * svg.clientWidth - box.clientWidth / 2; }); // telefon: rozwinięty kraj na środek
+  svg.innerHTML = g + regions + `<g class="rt-layer">${rs.map(r => r.path).join('')}${rs.map(r => r.mark).join('')}</g>` + cts;
+}
+function countryPanel(id) {
+  const [name] = COUNTRIES[id], list = ROUTES.filter(r => r[0] === id || r[1] === id);
+  return `<article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon"><i data-ic="kraj" data-s="20"></i></span><div><h4>${name}</h4><span class="bank-card-type">${list.length} szlaków, 6 miast</span></div></header>
+    <ul class="en-rows">${list.map(([a, b, m, st, cap, why]) => `<li><i data-ic="${MODE[m][0]}"></i><span>${COUNTRIES[a === id ? b : a][0]}<small>${why || MODE[m][1] + ', przepustowość ' + cap + '%'}</small></span><span class="rt-status is-${st}">${st === 'ok' ? '' : '<i data-ic="alert" data-s="12"></i>'}${STW[st]}</span></li>`).join('')}</ul>
+    <p class="text-sm text-muted">Kliknij kropkę miasta, żeby zobaczyć jego dane.</p></article>`;
+}
+function cityPanel() { // Gdańsk: przykład; w grze dane miasta z 0.19.2
+  return `<article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon"><i data-ic="miasto" data-s="20"></i></span><div><h4>${city}</h4><span class="bank-card-type">Polska, port morski</span></div></header>
+    <div class="cc-kpis">
+      <div class="cc-kpi"><span>Ludność</span><strong>470 tys.</strong><em class="text-muted">klasa średnia 34%</em></div>
+      <div class="cc-kpi"><span>Zadowolenie</span><strong>61/100</strong><em class="text-muted">przeciętne</em></div>
+      <div class="cc-kpi"><span>Podatek lokalny</span><strong>1,8%</strong><em class="text-muted">budżet 2,4 mln PLN</em></div>
+    </div>
+    <h5 class="bank-section-title">Infrastruktura</h5>
+    <ul class="en-factors">${fac('transport-land', 'Drogi', 72)}${fac('magistrala', 'Kolej', 58)}${fac('prad', 'Energia', 66)}${fac('serwer', 'Łącza', 44, 'Poniżej 50: spółki technologiczne płacą więcej za pracę.')}</ul>
+  </article>
+  <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon"><i data-ic="grupa" data-s="20"></i></span><div><h4>Pojemność i życie</h4><span class="bank-card-type">${city}</span></div></header>
+    <p class="text-sm">Zajęte <b class="ch-num">92%</b>. Powyżej 100% rosną płace i podatki, rośnie zanieczyszczenie, spada zadowolenie.</p>
+    <span class="limit-meter is-warn en-wide" role="img" aria-label="Pojemność zajęta w 92%, kreska na 100%" style="--v:83;--limit:91"><i></i><b></b></span>
+    <h5 class="bank-section-title mt-3">W mieście</h5>
+    <ul class="en-rows">
+      <li><i data-ic="akademia"></i><span>Politechnika Gdańska<small>uczelnia miasta, poziom 3</small></span><span></span></li>
+      <li><i data-ic="koszyk"></i><span>2 galerie handlowe<small>Bałtyk REIT (giełda), Galeria Miejska (miasto)</small></span><span></span></li>
+      <li><i data-ic="emisje"></i><span>Zanieczyszczenie 48/100<small>umiarkowane, ▲ +2 w roku</small></span><span></span></li>
+    </ul>
+  </article>
+  <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon"><i data-ic="firma" data-s="20"></i></span><div><h4>Oddziały spółek</h4><span class="bank-card-type">3 spółki, 1 950 osób</span></div></header>
+    <ul class="en-rows">
+      <li><i data-ic="transport-sea"></i><span>Stocznia Północ (STP)<small>siedziba, 1 200 osób</small></span><span class="badge badge--accent">Twoja</span></li>
+      <li><i data-ic="fabryka"></i><span>Ferrum Tech (FRT)<small>oddział, 300 osób</small></span><span></span></li>
+      <li><i data-ic="transport-land"></i><span>Port Logistyka (PLG)<small>terminal, 450 osób</small></span><span></span></li>
+    </ul>
+    <div class="btn-row"><button class="btn-secondary"><i data-ic="miasto" data-s="14"></i> Otwórz okno Miasto</button></div></article>`;
+}
+function renderSide() { document.getElementById('side').innerHTML = city ? cityPanel() : open ? countryPanel(open) : '<p class="notice-inline"><span>Kliknij kraj na mapie, żeby zobaczyć jego miasta i szlaki.</span></p>'; icons(); }
+function renderRoutes() {
+  const order = { stop: 0, hamp: 1, ok: 2 };
+  document.getElementById('routes').innerHTML = [...ROUTES].sort((a, b) => order[a[3]] - order[b[3]]).map(([a, b, m, st, cap, why]) =>
+    `<tr><td>${COUNTRIES[a][0]} – ${COUNTRIES[b][0]}</td><td><span class="cm-name"><i data-ic="${MODE[m][0]}"></i> ${MODE[m][1]}</span></td><td><span class="rt-status is-${st}">${st === 'ok' ? '' : `<i data-ic="${st === 'stop' ? 'blokada' : 'alert'}" data-s="12"></i>`}${STW[st]}</span></td><td class="text-right">${st === 'stop' ? '—' : cap + '%'}</td><td class="text-sm">${why || ''}</td></tr>`).join('');
+}
+document.getElementById('map').addEventListener('click', e => {
+  const c = e.target.closest('.city'), k = e.target.closest('.ct');
+  if (c) { city = c.dataset.city; } else if (k) { open = open === k.dataset.ct ? null : k.dataset.ct; city = null; } else return;
+  renderMap(); renderSide();
+});
+document.getElementById('map').addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.closest('.ct, .city')) { e.preventDefault(); e.target.dispatchEvent(new MouseEvent('click', { bubbles: true })); } });
+
+function icons() { if (!document.querySelector('#ic-sprite-loaded')) return; document.querySelectorAll('i[data-ic]').forEach(el => { const s = el.dataset.s || 16; el.outerHTML = `<svg class="ic" width="${s}" height="${s}" viewBox="0 0 24 24" aria-hidden="true"><use href="#ic-${el.dataset.ic}"/></svg>`; }); }
+renderMap(); renderRoutes(); renderSide();
+document.getElementById('side-country').innerHTML = countryPanel('PL');
+Promise.all(['../../../img/ikony/sprite.svg', '018_ikony.svg'].map(u => fetch(u).then(r => r.text()))).then(([a, b]) => {
+  document.getElementById('ic-defs').outerHTML = a; document.getElementById('ic-defs-018').outerHTML = b.replace('<svg ', '<svg id="ic-sprite-loaded" ');
+  icons();
+});
+</script>
+</body></html>
