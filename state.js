@@ -652,6 +652,7 @@ function runStatePensionProgram() {
     const grants = [];
     for (const [index, fund] of winners.entries()) {
         const base = Math.min(governmentTreasury * 0.004, 20000) * (1 - index * 0.25);
+        if (!(base >= 100)) continue; // 0.17.1: przy długu państwa kwota wychodziła ujemna i zabierała gotówkę funduszom zarządców
         if (fund.kind === 'player') {
             const amount = Math.min(base, getFundAssets() * 0.15);
             if (amount < 100) continue;

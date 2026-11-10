@@ -5054,7 +5054,7 @@ function applyRateSurprise(surprise) {
 }
 
 function publishRateDecision(change, expected, note = '') {
-    const rate = (centralBank.baseInterestRate * 100).toFixed(2);
+    const rate = formatNumberPl(centralBank.baseInterestRate * 100, 2); // 0.17.1 U6: przecinek dziesiętny
     const verb = change > 0 ? 'podnosi' : change < 0 ? 'obniża' : 'utrzymuje';
     const surprise = Math.abs(change - expected) >= 0.001 ? ' To niespodzianka dla rynku!' : ' Decyzja zgodna z oczekiwaniami.';
     const body = `Bank Centralny ${verb} stopę referencyjną ${change ? 'do' : 'na poziomie'} ${rate}% (${describeRateChange(change)}; oczekiwano: ${describeRateChange(expected)}).${surprise}${note} `
@@ -5403,7 +5403,8 @@ const PARTY_PROGRAMS = {
     people: { moves: [['minWage', 1], ['benefits', 1], ['housing', 1], ['tenderThreshold', 1], ['infrastructure', 1], ['climatePolicy', -1], ['energyPolicy', 1, 'set']], education: 'medium', deficit: 'cit' }
 };
 // Preferencje wyborcze klas: [Ludowcy, Blok Państwowy, Koalicja Rynkowa].
-const CLASS_VOTE = { poor: [35, 25, 10, 30], lowerMid: [30, 30, 25, 15], mid: [18, 32, 42, 8], upperMid: [10, 28, 57, 5], rich: [5, 20, 72, 3], veryRich: [5, 15, 78, 2] };
+const CLASS_VOTE = { poor: [35, 25, 10, 30], lowerMid: [30, 30, 25, 15], mid: [24, 36, 32, 8], upperMid: [14, 35, 46, 5], // 0.17.1 S3: klasa średnia i wyższa średnia mniej za Koalicją Rynkową (struktura klas prawie stała, przewaga z wag 5–6 pp → ok. 3 pp)
+    rich: [5, 20, 72, 3], veryRich: [5, 15, 78, 2] };
 const PARTY_IDS = ['people', 'state', 'market', 'social']; // czwarte miejsce: Socjaldemokraci albo Zieloni (syncFourthParty)
 // 0.17.2 E3: Zieloni. Wagi zamiast kolumny Socjaldemokratów, szansa na start gry, zamiana na wyborach przy wysokim zanieczyszczeniu.
 const GREEN_VOTE = { poor: 14, lowerMid: 14, mid: 14, upperMid: 10, rich: 5, veryRich: 4 };
@@ -5425,7 +5426,9 @@ const COALITION_THRESHOLD = 0.40;
 // Socjaldemokraci (decyzja użytkownika): sami nie wygrywają — są koalicjantem lewicy i rosną w kryzysie.
 const SOCIAL_COALITION_MIN = 10;     // % poparcia, od którego Ludowcy / Blok Państwowy wolą ich jako koalicjanta
 const SOCIAL_CRISIS_BONUS = 6;       // pp przy złej koniunkturze
-const ELECTION_FATIGUE = 5;          // pp na każdą kadencję u władzy
+const ELECTION_FATIGUE_FIRST = 0;    // pp po pierwszej kadencji (0.17.1 S3: kara tylko za długie rządy)
+const ELECTION_FATIGUE = 6;          // pp za każdą kolejną kadencję u władzy (0.17.1 S3: łatwiejsza pierwsza reelekcja, droższe długie rządy; wcześniej 5 × kadencje)
+const getElectionFatigue = terms => ELECTION_FATIGUE_FIRST + ELECTION_FATIGUE * (Math.max(1, Number(terms) || 1) - 1);
 const ELECTION_BAD_TIMES = 10;       // pp przy złej koniunkturze
 const PROTEST_TO_PEOPLE = 0.75;      // część odpływu od rządzących, która trafia do Ludowców
 const DEFICIT_BOND_QUARTERS = 4;
@@ -6068,7 +6071,7 @@ function computePartySupport(withNoise = true) {
     // Zmęczenie władzą rośnie z każdą kadencją; zła koniunktura (recesja, inflacja, bezrobocie) szkodzi rządzącym,
     // a głosy protestu zbierają głównie Ludowcy.
     const badTimes = economyCycle.phase === 'recession' || macro.inflation > 0.05 || macro.unemployment > 0.09;
-    const penalty = ELECTION_FATIGUE * Math.max(1, Number(election.terms) || 1) + (badTimes ? ELECTION_BAD_TIMES : 0);
+    const penalty = getElectionFatigue(election.terms) + (badTimes ? ELECTION_BAD_TIMES : 0);
     if (support[ruling] !== undefined) {
         support[ruling] -= penalty;
         const others = PARTY_IDS.filter(id => id !== ruling);

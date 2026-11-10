@@ -5223,7 +5223,7 @@ group('0.13.1 B5: stabilność funduszu', () => {
         simulateFund(0, 4, 1);
         const def = CLIENT_TYPES.miser;
         const client = { satisfaction: 0.5 };
-        const parts = getClientSatisfactionDrift(client, def, { excess: 0, trust: 50, maxDrawdown: 0, lastRankBad: false, ethicsIssue: null });
+        const parts = getClientSatisfactionDrift(client, def, { excess: -CLIENT_EXCESS_TOLERANCE, trust: 50, maxDrawdown: 0, lastRankBad: false, ethicsIssue: null });
         assert(Math.abs(Object.values(parts).reduce((a, b) => a + b, 0)) < 1e-9, `dryf przy GIG i standardowej opłacie: ${JSON.stringify(parts)}`);
         const low = getClientSatisfactionDrift({ satisfaction: 0.2 }, def, { excess: 0, trust: 20, maxDrawdown: 0, lastRankBad: false, ethicsIssue: null });
         assert(Object.values(low).reduce((a, b) => a + b, 0) > 0, 'niskie zaufanie samo nie spycha zadowolenia w dół od 0,2');
@@ -6306,6 +6306,79 @@ group('Przegląd 2026-11-08', () => {
             assert(!page.includes('fund-pawn-section') && !page.includes('fund-clients-list'), 'prawa kolumna bez lombardu i klientów');
             assert(!page.includes('onclick="openDebtCollectorPanel()"') && !page.includes('onclick="openPawnShopPanel()" class="btn-secondary btn-sm"'), 'bez przycisków pod zobowiązaniami');
         } finally { closeInternet(); isIntroActive = intro; isGamePaused = paused; Object.assign(internetState, state); }
+    });
+    test('0.17.1: umorzenie bez gotówki zostawia klienta z resztką, JU klientów = JU funduszu', () => {
+        resetWorld([makeCompany('AAA')]); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        const client = playerFund.clients[0], liq = forceLiquidation;
+        forceLiquidation = () => 0;
+        try {
+            playerCash = getFundNav() * (client.units - 0.3);
+            redeemClientUnits(client, client.units);
+            const sum = playerFund.clients.reduce((a, c) => a + c.units, 0);
+            assert(Math.abs(sum - playerFund.units) < 1e-6, `JU klientów ${sum} = JU funduszu ${playerFund.units}`);
+            assert(playerFund.clients.includes(client) || client.units < 1e-6, 'klient znika tylko bez udziałów');
+        } finally { forceLiquidation = liq; }
+    });
+    test('0.17.1: poziom GIG przechodzi przez zapis; stary zapis bierze poziom z tygodni okresu funduszu', () => {
+        resetWorld([makeCompany('AAA'), makeCompany('BBB')]); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        const gig = marketIndexes.find(i => i.id === 'GIG'), keep = gig.value;
+        try {
+            gig.value = 2874;
+            const snap = JSON.parse(JSON.stringify(buildSaveSnapshot()));
+            assertEq(snap.indexes.find(i => i.id === 'GIG').value, 2874, 'w zapisie');
+            gig.value = 0;
+            restoreIndexLevels(snap.indexes);
+            assertEq(gig.value, 2874, 'po wczytaniu');
+            updateMarketIndexes();
+            assert(Math.abs(gig.value / 2874 - 1) < 0.2, 'łańcuch idzie dalej od zapisanego poziomu');
+            gig.value = 0; playerFund.current.weeklyBenchmarks = [1500, 1600];
+            restoreIndexLevels(undefined);
+            assertEq(gig.value, 1600, 'stary zapis');
+        } finally { gig.value = keep; }
+    });
+    test('0.17.1: Program Emerytalny przy długu państwa nie zabiera gotówki funduszom', () => {
+        resetWorld([makeCompany('AAA'), makeCompany('BBB')]); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        const keep = governmentTreasury;
+        try {
+            governmentTreasury = -5e7;
+            const cash = corporation.managers.map(m => m.fund.cash);
+            assertEq(runStatePensionProgram().length, 0, 'bez grantów');
+            corporation.managers.forEach((m, i) => assertEq(m.fund.cash, cash[i], `gotówka ${m.name}`));
+            assertEq(governmentTreasury, -5e7, 'budżet bez zmian');
+        } finally { governmentTreasury = keep; }
+    });
+    test('0.17.1 S1: okres zaczęty przy GIG = 0 bierze start z pierwszego poziomu GIG i NAV z tej chwili', () => {
+        resetWorld([makeCompany('AAA'), makeCompany('BBB')]); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        const gig = marketIndexes.find(i => i.id === 'GIG'), keep = gig.value;
+        try {
+            gig.value = 0; beginFundPeriod();
+            assert(!fillMissingPeriodStart(playerFund.current, 12), 'GIG nadal 0: bez zmian');
+            gig.value = 2500;
+            assert(fillMissingPeriodStart(playerFund.current, 12), 'uzupełnione');
+            assertEq(playerFund.current.startBenchmark, 2500, 'start GIG');
+            assertEq(playerFund.current.startNav, 12, 'start NAV');
+            assert(!fillMissingPeriodStart(playerFund.current, 15), 'drugi raz bez zmian');
+            assertEq(playerFund.current.startNav, 12, 'NAV zostaje');
+            const bot = { startNav: 1, startBenchmark: 0, peakNav: 1, maxDrawdown: 0, weeklyNavs: [1] };
+            assert(fillMissingPeriodStart(bot, 1.1) && bot.startBenchmark === 2500 && !('peakBenchmark' in bot), 'fundusz zarządcy');
+        } finally { gig.value = keep; }
+    });
+    test('0.17.1 S3/S4/S5: kara za kadencje 0 + 6 za każdą kolejną; norma emisji rośnie od 6,5 roku, elastyczność gaśnie 3,3 → 2,2; chemia według profilu', () => {
+        assertEq(getPollutionElasticity(0), 3.3, 'start');
+        assertEq(getPollutionElasticity(26), 3.3, '6,5 roku');
+        assert(Math.abs(getPollutionElasticity(53) - 2.75) < 1e-9, 'w połowie');
+        assertEq(getPollutionElasticity(200), 2.2, 'po 20 latach');
+        assertEq(getPollutionNormFactor(26), 1, 'norma bez zmian do 6,5 roku');
+        assert(Math.abs(getPollutionNormFactor(30) - 1.015) < 1e-9, 'rok później +1,5%');
+        assertEq(getElectionFatigue(1), 0, 'kara po 1 kadencji');
+        assertEq(getElectionFatigue(3), 12, 'kara po 3 kadencjach');
+        const seg = { sector: 'Chemia', share: 1 };
+        assertEq(getSegmentEmission({ symbol: 'ECL', name: 'EcoLube' }, seg), 1, 'rafineria');
+        assertEq(getSegmentEmission({ symbol: 'KUP', name: 'KrzeUraFos4' }, seg), 0.2, 'KUP: farmacja');
+        assertEq(getSegmentEmission({ symbol: 'XYZ', name: 'Nova Lab' }, seg), 0.2, 'końcówka Lab');
+        assertEq(getSegmentEmission({ symbol: 'XYZ', name: 'Orbis Synthesis' }, seg), 0.9, 'końcówka Synthesis');
+        assertEq(getSegmentEmission({ symbol: 'XYZ', name: 'Chemix' }, seg), 0.7, 'domyślnie');
+        assertEq(getSegmentEmission({ symbol: 'ECL' }, { sector: 'Przemysł', share: 1 }), 0.6, 'inny sektor bez zmian');
     });
     test('Bank Bank i biernik giełd', () => {
         assertEq(getBankLabel({ name: 'Bank Powszechny' }), 'Bank Powszechny', 'bez podwójnego słowa');
@@ -12780,11 +12853,11 @@ group('0.16.1', () => {
     test('G6: punkt odniesienia zależy od typu klienta — emeryt patrzy na zysk w ostatnim czasie, instytucja na SIG20, reszta na GIG', () => {
         const ctx = { excess: -0.05, excessSig: 0.03, recentReturn: 0.06 };
         assertNear(getClientExcess(CLIENT_TYPES.senior, ctx), 0.06 - CLIENT_ABS_HURDLE, 'emeryt: zysk absolutny, GIG go nie obchodzi', 1e-12);
-        assertNear(getClientExcess(CLIENT_TYPES.institution, ctx), 0.03, 'instytucja: SIG20', 1e-12);
-        assertNear(getClientExcess(CLIENT_TYPES.brave, ctx), -0.05, 'odważny: GIG', 1e-12);
+        assertNear(getClientExcess(CLIENT_TYPES.institution, ctx), 0.03 + CLIENT_EXCESS_TOLERANCE, 'instytucja: SIG20 (z tolerancją 0.17.1)', 1e-12);
+        assertNear(getClientExcess(CLIENT_TYPES.brave, ctx), -0.05 + CLIENT_EXCESS_TOLERANCE, 'odważny: GIG (z tolerancją 0.17.1)', 1e-12);
         const loss = { excess: 0.05, excessSig: 0.05, recentReturn: -0.02 };
         assert(getClientExcess(CLIENT_TYPES.senior, loss) < 0, 'emeryt ze stratą jest niezadowolony mimo lepszego wyniku niż GIG');
-        assertNear(getClientExcess(CLIENT_TYPES.institution, { excess: 0.02 }), 0.02, 'bez SIG20 spada do GIG', 1e-12);
+        assertNear(getClientExcess(CLIENT_TYPES.institution, { excess: 0.02 }), 0.02 + CLIENT_EXCESS_TOLERANCE, 'bez SIG20 spada do GIG', 1e-12);
         assert(Object.keys(CLIENT_BENCHMARK).every(k => CLIENT_TYPES[k]), 'wszystkie typy w mapie istnieją');
     });
 

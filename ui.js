@@ -3958,7 +3958,7 @@ function enqueueTickerNews(entry) {
 
 /** Wpis na pasek newsów (klik otwiera kartę spółki). Nie przebudowuje przewijanego pasa. */
 function pushNews(text, symbol = null) {
-    if (!text) return;
+    if (!text || (typeof isIntroActive === 'function' && isIntroActive())) return; // 0.17.1 U8: w trakcie scenki startowej bez paska wiadomości
     const stock = symbol ? stocks.find(s => s.symbol === symbol) : (typeof findMentionedStock === 'function' ? findMentionedStock(String(text)) : null);
     const entry = { text: String(text), symbol: stock?.symbol || null };
     newsLog.unshift(entry);

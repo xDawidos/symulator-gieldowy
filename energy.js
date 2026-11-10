@@ -418,8 +418,17 @@ function maybeBlackout(e) {
 // E4: Urząd Energii i Ekologii. E5: zanieczyszczenia, opłata, limity, zdarzenia
 // ---------------------------------------------------------------------------------
 const SECTOR_EMISSIONS = { 'Chemia': 0.7, 'Przemysł': 0.6, 'Motoryzacja': 0.3, 'Budowlany': 0.2, 'Energia': 0.5 };
+// 0.17.1 S5: chemia według profilu spółki (rafinerie i nawozy wysoko, farmacja nisko). Chemia nie ma podsektorów, więc profil z symbolu albo końcówki nazwy.
+const CHEM_EMISSIONS = { refinery: 1.0, fertilizer: 0.9, plastics: 0.6, pharma: 0.2 };
+const CHEM_PROFILE_BY_SYMBOL = { ECL: 'refinery', SIK: 'fertilizer', MEF: 'pharma', KUP: 'pharma' };
+function getSegmentEmission(stock, seg) {
+    if (seg.sector !== 'Chemia') return SECTOR_EMISSIONS[seg.sector] || 0;
+    const name = String(stock?.name || '');
+    const profile = CHEM_PROFILE_BY_SYMBOL[stock?.symbol] || (/Lab\b/.test(name) ? 'pharma' : /Polymer/.test(name) ? 'plastics' : /Synthesis/.test(name) ? 'fertilizer' : null);
+    return profile ? CHEM_EMISSIONS[profile] : SECTOR_EMISSIONS.Chemia;
+}
 const POLLUTION_RULES = {
-    start: 40, keep: 0.9, elasticity: 3.3, powerShare: 0.4, healthyLevel: 40, populationLoss: 0.0002, productionFrom: 80, productionCut: 0.02
+    start: 40, keep: 0.9, elasticity: 3.3, elasticityLate: 2.2, fadeFrom: 26, fadeTo: 80, normGrowth: 0.015, powerShare: 0.4, healthyLevel: 40, populationLoss: 0.0002, productionFrom: 80, productionCut: 0.02
 };
 const CLIMATE_FEES = [0, 0.003, 0.007, 0.012, 0.018];   // opłata: część przychodu przy emisyjności 1 (decyzja użytkownika, pkt 8)
 const ENERGY_OFFICE_RULES = {
@@ -453,7 +462,7 @@ function getStockEmissionFactor(stock) {
     if (cached !== undefined) return cached;
     const factor = getStockSegments(stock).reduce((sum, seg) => {
         const power = seg.sector === 'Energia' && stock.power && !ENERGY_NO_POWER_SUBSECTORS.includes(seg.subsector);
-        return sum + (power ? ENERGY_TYPES[stock.power.type].emission : SECTOR_EMISSIONS[seg.sector] || 0) * seg.share;
+        return sum + (power ? ENERGY_TYPES[stock.power.type].emission : getSegmentEmission(stock, seg)) * seg.share;
     }, 0) * (1 - getStockEcoCut(stock));
     emissionCache.map.set(stock, factor);
     return factor;
@@ -464,7 +473,7 @@ function getStockEmissions(stock) {
     const e = society.energy, cut = 1 - getStockEcoCut(stock);
     if (!stock || stock.assetType || stock.isBankStock) return 0;
     const powerShare = stock.power ? getPowerSegment(stock)?.share || 0 : 0;
-    const rest = getStockSegments(stock).reduce((sum, seg) => sum + (seg.sector === 'Energia' && powerShare > 0 && !ENERGY_NO_POWER_SUBSECTORS.includes(seg.subsector) ? 0 : (SECTOR_EMISSIONS[seg.sector] || 0) * seg.share), 0);
+    const rest = getStockSegments(stock).reduce((sum, seg) => sum + (seg.sector === 'Energia' && powerShare > 0 && !ENERGY_NO_POWER_SUBSECTORS.includes(seg.subsector) ? 0 : getSegmentEmission(stock, seg) * seg.share), 0);
     // przychody niosą tylko INFLATION_PASS_THROUGH inflacji (0.15 H1a), więc produkcję liczymy deflatorem z tym samym udziałem
     const other = getStockRevenue(stock) / Math.pow(Number(society.priceLevel) || 1, typeof INFLATION_PASS_THROUGH === 'number' ? INFLATION_PASS_THROUGH : 1) * rest * cut;
     return other + (powerShare > 0 && e ? getPowerGenerationEmissions(stock, e) * cut : 0);
@@ -492,6 +501,16 @@ function getPollutionProductionCut(e = society.energy) {
     return Math.max(0, (Number(e?.pollution) || 0) - POLLUTION_RULES.productionFrom) / (100 - POLLUTION_RULES.productionFrom) * POLLUTION_RULES.productionCut;
 }
 
+/** 0.17.1 S4: od 6,5 roku norma rośnie o 1,5% rocznie (technologia), a elastyczność gaśnie do 20 lat (3,3 → 2,2).
+ * Emisje przemysłu rosną z realnym przychodem (+40–70% przez 20 lat), więc przy stałej normie z 1. kwartału zanieczyszczenie dochodziło do 100. */
+function getPollutionNormFactor(quarter = getEnergyQuarter()) {
+    const r = POLLUTION_RULES;
+    return Math.pow(1 + r.normGrowth, Math.max(0, quarter - r.fadeFrom) / 4);
+}
+function getPollutionElasticity(quarter = getEnergyQuarter()) {
+    const r = POLLUTION_RULES, t = clampValue((quarter - r.fadeFrom) / (r.fadeTo - r.fadeFrom), 0, 1);
+    return r.elasticity + (r.elasticityLate - r.elasticity) * t;
+}
 /** Wskaźnik P = 0,9 × P + 0,1 × cel, cel = 40 × (emisje / emisje pierwszego kwartału)^elastyczność. */
 function processPollution(e) {
     if (!(e.powerScale > 0)) { // energetyka daje na starcie POLLUTION_RULES.powerShare emisji kraju
@@ -508,7 +527,7 @@ function processPollution(e) {
     e.emissions = Math.round(emissions);
     e.pollutionLast = e.pollution;
     // cel: start × (emisje / norma)^elastyczność; +10% emisji to ok. +15 pkt (decyzja użytkownika: przez grę do ok. 55)
-    const target = Math.min(100, POLLUTION_RULES.start * Math.pow(Math.max(0, emissions / e.norm), POLLUTION_RULES.elasticity));
+    const target = Math.min(100, POLLUTION_RULES.start * Math.pow(Math.max(0, emissions / (e.norm * getPollutionNormFactor())), getPollutionElasticity()));
     e.pollution = +clampValue(POLLUTION_RULES.keep * e.pollution + (1 - POLLUTION_RULES.keep) * target, 0, 100).toFixed(2);
     if (e.pollution > POLLUTION_RULES.healthyLevel) society.population = Math.round(society.population * (1 - (e.pollution - POLLUTION_RULES.healthyLevel) / 60 * POLLUTION_RULES.populationLoss));
     return e.pollution;

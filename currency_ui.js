@@ -225,7 +225,7 @@ function showGiantEventWindow(result) {
     if (result.kind === 'gdr') {
         body.innerHTML = `<p><strong>${escapeHtml(result.giantName)}</strong> (${escapeHtml(COUNTRY_NAMES[result.country] || result.country)}) wchodzi na naszą giełdę jako kwity depozytowe <strong>${escapeHtml(result.symbol)}</strong>.</p>
             <dl class="bank-card-rates"><div><dt>Cena w ${result.currency}</dt><dd>${formatNumberPl(result.priceForeign, 2)}</dd></div><div><dt>Cena kwitu w PLN</dt><dd>${formatZl(result.pricePln, 2)}</dd></div><div><dt>Spread depozytowy</dt><dd>${formatNumberPl(GDR_RULES.depositSpread * 100, 1)}%</dd></div></dl>
-            <p class="text-sm">Kupisz je w oknie Kantor → Obce. Pamiętaj: wynik kwitu to zmiana ceny akcji <em>i</em> kursu ${result.currency}.</p>`;
+            <p class="text-sm">Kupisz je w Internecie: Kantory24 → Obce (kwity GDR). Pamiętaj: wynik kwitu to zmiana ceny akcji <em>i</em> kursu ${result.currency}.</p>`;
     } else {
         body.innerHTML = `<p><strong>${escapeHtml(result.giantName)}</strong> przejmuje <strong>${escapeHtml(result.name)}</strong> (${escapeHtml(result.symbol)}).</p>
             <dl class="bank-card-rates"><div><dt>Cena wykupu</dt><dd>${formatZl(result.offer, 2)}</dd></div><div><dt>Premia do kursu</dt><dd>${formatNumberPl(result.premium * 100, 0)}%</dd></div><div><dt>Wypłacono akcjonariuszom</dt><dd>${formatZl(result.paid, 0)}</dd></div></dl>

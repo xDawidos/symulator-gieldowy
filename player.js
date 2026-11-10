@@ -304,7 +304,7 @@ function buyStock(symbol, quantity) {
     }
     if (typeof isTradingBlocked === 'function' && isTradingBlocked('player')) { showToast('Blokada handlu nałożona przez organy ścigania.', 'error'); return; }
     if (!canAccessExchange(stockToBuy.exchange, stockToBuy)) {
-        showToast(`Twoje stanowisko nie daje dostępu do ${typeof isEntryMarketStock === 'function' && isEntryMarketStock(stockToBuy) ? `rynku ${getMarketLabel(getStockMarket(stockToBuy))}` : `giełdy ${exchanges[stockToBuy.exchange]?.name || stockToBuy.exchange}`}. Awans otworzy kolejne giełdy.`, 'warning');
+        showToast(`Twoje stanowisko nie daje dostępu do ${typeof isEntryMarketStock === 'function' && isEntryMarketStock(stockToBuy) ? `rynku ${getMarketDef(getStockMarket(stockToBuy))?.name || getMarketLabel(getStockMarket(stockToBuy))}` : `giełdy ${exchanges[stockToBuy.exchange]?.name || stockToBuy.exchange}`}. Awans otworzy kolejne giełdy.`, 'warning');
         return;
     }
     if (stockToBuy.isTradeLocked) {
@@ -1702,13 +1702,16 @@ function getSig20Value() {
  */
 const CLIENT_BENCHMARK = { senior: 'abs', careful: 'abs', fearful: 'abs', miser: 'abs', officer: 'abs', institution: 'sig20', investor: 'sig20', rich: 'sig20' };
 const CLIENT_ABS_HURDLE = 0.015; // „ma zysk”: wynik okresu ponad ok. 1,5% (inflacja i lokata w skali okresu)
+// 0.17.1 S1: wynik ≈ indeks ma być neutralny. Fundusz jak GIG zostaje za nim o opłatę i gotówkę płynności (ok. 1,4 pp na okres),
+// a przy pogoni za wynikiem 1,5 taka luka spychała zadowolenie pod próg 0,35, więc klienci odchodzili od funduszu równego GIG.
+const CLIENT_EXCESS_TOLERANCE = 0.015;
 
 /** Nadwyżka wyniku funduszu nad punktem odniesienia danego typu klienta (do `performance` w zadowoleniu). */
 function getClientExcess(def, ctx) {
     const bench = CLIENT_BENCHMARK[def.key] || 'gig';
     if (bench === 'abs' && Number.isFinite(ctx.recentReturn)) return ctx.recentReturn - CLIENT_ABS_HURDLE;
-    if (bench === 'sig20' && Number.isFinite(ctx.excessSig)) return ctx.excessSig;
-    return ctx.excess;
+    if (bench === 'sig20' && Number.isFinite(ctx.excessSig)) return ctx.excessSig + CLIENT_EXCESS_TOLERANCE;
+    return ctx.excess + CLIENT_EXCESS_TOLERANCE;
 }
 
 function getBenchmarkValue() {
@@ -1886,6 +1889,19 @@ function updateFund(deltaMs) {
     if (current.elapsedMs >= FUND_PERIOD_MS) closeFundPeriod();
 }
 
+/** 0.17.1 S1: GIG ma wartość dopiero po pierwszym przeliczeniu indeksów. Okres zaczęty przy GIG = 0 bierze start z pierwszego poziomu, a NAV z tej samej chwili
+ * (wcześniej cały pierwszy okres porównywał wynik funduszu z zerem: nadwyżka ±20% i ucieczka klientów przez bramkę). */
+function fillMissingPeriodStart(period, nav) {
+    if (!period || period.startBenchmark > 0) return false;
+    const gig = getBenchmarkValue();
+    if (!(gig > 0)) return false;
+    period.startBenchmark = gig;
+    if ('peakBenchmark' in period) period.peakBenchmark = gig;
+    if ('startSig20' in period && !(period.startSig20 > 0)) period.startSig20 = getSig20Value();
+    period.startNav = period.peakNav = nav;
+    return true;
+}
+
 function getPeriodReturn(startValue, endValue) {
     return startValue > 0 ? endValue / startValue - 1 : 0;
 }
@@ -2059,6 +2075,7 @@ function processFundWeekly() {
     if (typeof stepForeignIssuers === 'function') stepForeignIssuers(); // 0.16.1 G3: ceny obcych gigantów (GDR)
     if (typeof stepCountries === 'function') stepCountries(); // 0.16.2 G5: rynki zagraniczne (countries.js)
 
+    fillMissingPeriodStart(playerFund.current, getFundNav());
     // Zaufanie zmienia się stopniowo (25% drogi do celu na tydzień).
     const target = computeTrustTarget();
     playerFund.trust += (target - playerFund.trust) * 0.25;
@@ -2152,7 +2169,7 @@ function redeemClientUnits(client, units) {
     const gain = Math.max(0, (nav - client.avgCost) * paidUnits);
     const tax = gain * CLIENT_GAINS_TAX;
 
-    if (client.units < 0.5) {
+    if (client.units < 1e-6) { // 0.17.1: przy częściowej wypłacie (brak gotówki) klient zostaje z resztką; wcześniej znikał razem z nią i JU klientów ≠ JU funduszu
         playerFund.clients = playerFund.clients.filter(item => item.id !== client.id);
         logEvent(`👋 ${client.name} (${(CLIENT_TYPES[client.type] || CLIENT_TYPES.careful).label}) wycofuje wszystkie środki: ${formatZl(paid, 2)} (podatek klienta ${formatZl(tax, 2)}).`, 'review');
     } else {
@@ -2829,6 +2846,7 @@ function processCorporationWeekly() {
 
         // Zaufanie i przepływy klientów (uproszczony model klientów botów).
         const nav = getBotFundNav(fund);
+        fillMissingPeriodStart(fund.current, nav);
         const excess = getPeriodReturn(fund.current.startNav, nav) - getPeriodReturn(fund.current.startBenchmark, getBenchmarkValue());
         fund.trust = Math.max(0, Math.min(100, fund.trust + (50 + excess * 400 - fund.trust) * 0.25));
         const flow = getBotFundAssets(fund) * (fund.trust - 50) / 50 * 0.01;
