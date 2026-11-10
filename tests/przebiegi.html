@@ -1355,6 +1355,42 @@ const PROBE_0156 = `(function () {
     const origFinish = s.finish; s.finish = function () { const r = origFinish.apply(this, arguments); r.p0156 = T.finish(); return r; };
 })();`;
 
+// 0.18.1 P0/P2: PROBE_018 — profil wsadu podsektor × kraj (przychód, EBITDA, udział wsadu surowców) na koniec gry i bilans łańcuchów co kwartał (chains.js). Wynik: pole p018.
+const PROBE_018 = `(function () {
+    const s = window.__sim, T = s.p018 = { q: [], ms: [] };
+    const unitRows = () => {
+        const out = {};
+        const add = (key, c, rev, ebitda, inp) => { const k = key + '|' + c, u = out[k] || (out[k] = [0, 0, 0, 0]); u[0] += rev; u[1] += ebitda; u[2] += inp * rev; u[3]++; };
+        for (const st of stocks) {
+            if (st.assetType || st.isBankrupt) continue;
+            const h = st.fundamentals?.history?.at(-1); if (!h || !(h.revenue > 0)) continue;
+            const prof = typeof getStockCommodityProfile === 'function' ? getStockCommodityProfile(st) : { input: {} }, inp = Object.values(prof.input || {}).reduce((a, b) => a + b, 0);
+            for (const seg of (typeof getStockSegments === 'function' ? getStockSegments(st) : [])) add(seg.subsector ? seg.sector + '/' + seg.subsector : seg.sector, typeof getStartCountry === 'function' ? getStartCountry() : 'PL', h.revenue * seg.share, h.ebitda * seg.share, inp);
+        }
+        for (const i of (typeof getForeignIssuerList === 'function' ? getForeignIssuerList() : [])) {
+            const h = i.fundamentals?.history?.at(-1); if (i.kind !== 'share' || !h || !(h.revenue > 0)) continue;
+            const r = toPln(1, i.currency), prof = typeof getStockCommodityProfile === 'function' ? getStockCommodityProfile(i) : { input: {} }, inp = Object.values(prof.input || {}).reduce((a, b) => a + b, 0);
+            i.sectors.forEach(([sec, sh], n) => add(n === 0 && i.subsector ? sec + '/' + i.subsector : sec, i.country, h.revenue * r * sh, h.ebitda * r * sh, inp));
+        }
+        return Object.fromEntries(Object.entries(out).map(([k, u]) => [k, { rev: Math.round(u[0]), margin: u[0] > 0 ? +(u[1] / u[0]).toFixed(4) : null, input: u[0] > 0 ? +(u[2] / u[0]).toFixed(4) : 0, n: u[3] }]));
+    };
+    if (typeof stepChains === 'function') {
+        const o = stepChains;
+        stepChains = function () {
+            const r = o.apply(this, arguments), st = chainState;
+            if (st?.cal) {
+                const row = { q: macro.quarter, g: {} };
+                for (const [gid, g] of Object.entries(st.g)) row.g[gid] = { bw: +g.bw.toFixed(4), b: Array.from(g.b).map(v => +v.toFixed(3)), P: Array.from(g.P).map(v => +v.toFixed(3)) };
+                row.c = st.cal.countries; T.q.push(row); T.ms.push(+st.ms.toFixed(2));
+            }
+            return r;
+        };
+    }
+    let first = null;
+    const origSample = s.sample; s.sample = function () { const r = origSample.apply(this, arguments); if (!first && macro.quarter >= (s.startQ ?? 0) + 1) { const u = unitRows(); if (Object.keys(u).length) first = u; } return r; };
+    const origFinish = s.finish; s.finish = function () { const r = origFinish.apply(this, arguments); r.p018 = { start: first, end: unitRows(), chains: T.q, chainMs: T.ms }; return r; };
+})();`;
+
 // 0.17 S0b: łączna kapitalizacja rynku (PLN; GPW i spółki krajów dołączonych) i udział spółek krajowych w przejęciach D3. Wynik: pole s017.
 const PROBE_017 = `(function () {
     const s = window.__sim, T = s.s017 = { d3: { n: 0, domAcq: 0, domTgt: 0 } };
@@ -1486,6 +1522,7 @@ async function oneRun(index) {
     w.eval(PROBE_0155);
     w.eval(PROBE_0156);
     w.eval(PROBE_017);
+    w.eval(PROBE_018);
     const quarterMs = 300000 / SPEED;
     const startQ = w.eval('macro.quarter');
     w.eval('__sim.sample()');
