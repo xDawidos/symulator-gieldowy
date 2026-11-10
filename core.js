@@ -6162,28 +6162,37 @@ function collectChainRows() {
         const h = stock.fundamentals?.history?.[stock.fundamentals.history.length - 1];
         if (!(h?.revenue > 0)) continue;
         const priority = Boolean(stock.isStateOwned) || getMainSector(stock) === 'Obronność';
-        const products = productsOf(stock, h.revenue);
-        getStockSegments(stock).forEach((seg, n) => rows.push({ key: getChainUnitKey(seg.sector, seg.subsector), country: home, revenue: h.revenue * seg.share, products: n === 0 ? products : {}, priority }));
+        const products = productsOf(stock, h.revenue), prev = stock.fundamentals.history[stock.fundamentals.history.length - 2]?.revenue || 0;
+        getStockSegments(stock).forEach((seg, n) => rows.push({ key: getChainUnitKey(seg.sector, seg.subsector), country: home, revenue: h.revenue * seg.share, prev: prev * seg.share, products: n === 0 ? products : {}, priority }));
     }
     for (const i of (typeof getForeignIssuerList === 'function' ? getForeignIssuerList() : [])) {
         const h = i.fundamentals?.history?.[i.fundamentals.history.length - 1];
         if (i.kind !== 'share' || !(h?.revenue > 0)) continue;
-        const rev = h.revenue * toPln(1, i.currency), products = productsOf(i, rev), priority = Boolean(i.state) || i.sectors[0]?.[0] === 'Obronność';
-        i.sectors.forEach(([sector, share], n) => rows.push({ key: getChainUnitKey(sector, n === 0 ? i.subsector : null), country: i.country, revenue: rev * share, products: n === 0 ? products : {}, priority }));
+        const fx = toPln(1, i.currency), rev = h.revenue * fx, prev = (i.fundamentals.history[i.fundamentals.history.length - 2]?.revenue || 0) * fx, products = productsOf(i, rev), priority = Boolean(i.state) || i.sectors[0]?.[0] === 'Obronność';
+        i.sectors.forEach(([sector, share], n) => rows.push({ key: getChainUnitKey(sector, n === 0 ? i.subsector : null), country: i.country, revenue: rev * share, prev: prev * share, products: n === 0 ? products : {}, priority }));
     }
     return rows;
 }
 /** Przepustowość importu kraju (0.17 S5: porty i magistrale kraju startowego; kraje obce 1). */
 function getChainImportCapacity(country) {
-    const home = typeof getStartCountry === 'function' ? getStartCountry() : 'PL', shock = typeof getSupplyShockCapacity === 'function' ? getSupplyShockCapacity() : null;
+    const home = typeof getStartCountry === 'function' ? getStartCountry() : 'PL', shock = getChainShocks();
     const m = shock ? (shock[`import|${country}`] ?? shock['import|*'] ?? 1) : 1; // P4: blokada cieśniny, strajk portowy
     if (country !== home || typeof getInfraCapacity !== 'function') return m;
     return m * (getInfraCapacity('sea') + getInfraCapacity('land')) / 2;
 }
+/** Szoki zdolności ogniw: linia kryzysu `supply` (P4) i zdarzenia surowcowe 0.17 (strajk w kopalniach w kraju startowym, embargo na szlaku). */
+function getChainShocks() {
+    const home = typeof getStartCountry === 'function' ? getStartCountry() : 'PL', out = { ...(typeof getSupplyShockCapacity === 'function' ? getSupplyShockCapacity() || {} : {}) };
+    const mul = (k, m) => { out[k] = (out[k] ?? 1) * m; };
+    for (const ev of (typeof getActiveCommodityEvents === 'function' && commodityState ? getActiveCommodityEvents() : [])) {
+        if (ev.id === 'strike') mul(`Przemysł/Wydobycie|${home}`, 0.85);
+        if (ev.id === 'embargo') { mul('Energia/Rafinerie|*', 0.9); mul('import|*', 0.8); }
+    }
+    return Object.keys(out).length ? out : null;
+}
 function processChainsQuarterly() {
     if (typeof stepChains !== 'function') return null;
-    const shocks = typeof getSupplyShockCapacity === 'function' ? getSupplyShockCapacity() : null; // P4: linia kryzysu `supply`
-    return stepChains(collectChainRows(), { q: macro.quarter, capacity: getChainImportCapacity, shocks });
+    return stepChains(collectChainRows(), { q: macro.quarter, capacity: getChainImportCapacity, shocks: getChainShocks() });
 }
 /** 0.18.1 P3: czynnik łańcucha dla spółki: suma po segmentach (udział × odchylenie jednostki „podsektor × kraj”). Null w trybie cichym. */
 function getChainStockAdj(stock) {

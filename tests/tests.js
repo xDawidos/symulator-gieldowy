@@ -17228,8 +17228,8 @@ group('0.18.1 P2 Bilans łańcuchów (tryb cichy)', () => {
 
     test('zachowanie masy: S + import − eksport − obsłużony popyt − Δzapas − nadmiar = 0; widełki ceny 0,5–2,0 przy skrajnym szoku; niedobór stali po spadku huty', () => {
         const m = pure(); const r = rows(); m.stepChains(r, { q: 1 });
-        let prev = m.snapshotChainStocks(); r[1].revenue = 120; m.stepChains(r, { q: 2 });
-        assert(m.checkChainMass(prev) < 1e-5, `masa (huta −40%): ${m.checkChainMass(prev)}`);
+        let prev = m.snapshotChainStocks(); m.stepChains(r, { q: 2, shocks: { 'Przemysł/Hutnictwo|PL': 0.6 / 1.15 } });
+        assert(m.checkChainMass(prev) < 1e-5, `masa (huta −40% zdolności): ${m.checkChainMass(prev)}`);
         const steel = m.st().g.steel, pl = m.st().cal.countries.indexOf('PL');
         assert(steel.b[pl] < 1 || steel.b[m.st().cal.countries.indexOf('DE')] < 1, 'stali brakuje');
         for (let q = 3; q < 30; q++) { prev = m.snapshotChainStocks(); m.stepChains(r, { q, shocks: { 'Przemysł/Hutnictwo|PL': 0.01, 'Przemysł/Hutnictwo|DE': 0.01 } }); assert(m.checkChainMass(prev) < 1e-5, `masa w kw. ${q}`); }
@@ -17238,15 +17238,25 @@ group('0.18.1 P2 Bilans łańcuchów (tryb cichy)', () => {
     });
 
     test('tryb cichy: czynnik spółki neutralny; zapis i wczytanie zachowują ceny, zapasy i 40 kw. historii', () => {
-        const m = pure(); const r = rows(); m.stepChains(r, { q: 1 }); r[1].revenue = 150; m.stepChains(r, { q: 2 });
+        const m = pure(); const r = rows(); m.stepChains(r, { q: 1 }); m.stepChains(r, { q: 2, shocks: { 'Przemysł/Hutnictwo|*': 0.6 / 1.15 } });
         const f = m.getChainFactor('Motoryzacja', 'PL'); assert(f.revenueFactor === 1 && f.marginAdj === 0, 'tryb cichy');
-        m.set(true); const on = m.getChainFactor('Przemysł/Maszyny', 'DE'); assert(on.marginAdj < 0 && on.revenueFactor < 1, `włączony: importer stali (DE) płaci więcej i ma niedobór (${on.marginAdj}, ${on.revenueFactor})`); m.set(false); // kraj huty najpierw zaspokaja siebie
+        m.set(true); const on = m.getChainFactor('Przemysł/Maszyny', 'DE'); assert(on.marginAdj < 0 && on.revenueFactor < 1, `włączony: odbiorca stali płaci więcej i ma niedobór (${on.marginAdj}, ${on.revenueFactor})`); m.set(false);
         const snap = JSON.parse(JSON.stringify(m.getChainsSnapshot()));
         const steelP = m.st().g.steel.P[0];
         m.applyChainsSnapshot(snap); m.stepChains(r, { q: 3 });
         assert(Math.abs(m.st().g.steel.P[0] - steelP) < 0.2, 'cena po wczytaniu ciągła');
         for (let q = 4; q < 60; q++) m.stepChains(r, { q });
         assert(Object.values(m.st().hist.steel).every(a => a.length <= 40), 'historia ≤ 40 kw.');
+    });
+
+    test('czas: bilans z 10 krajami (ok. 300 jednostek) liczy się w ułamku kroku (≤ 5% z ok. 1300 ms/kw.)', () => {
+        const countries = ['PL', 'DE', 'US', 'CZ', 'SE', 'CH', 'FR', 'JP', 'CN', 'IN'], keys = [...new Set([...Object.keys(CHAIN_RECIPES), 'Usługi', 'Technologia', 'Przemysł/Wydobycie', 'Żywność/Rolnictwo', 'Energia/Rafinerie', 'Energia/Gaz'])];
+        const big = []; countries.forEach((c, ci) => keys.forEach((k, ki) => big.push({ key: k, country: c, revenue: 100 + ((ci * 31 + ki * 17) % 97), products: k === 'Przemysł/Wydobycie' ? { iron_ore: 50, coal: 40 } : k === 'Energia/Rafinerie' ? { oil: 60 } : k === 'Energia/Gaz' ? { gas: 80 } : k === 'Żywność/Rolnictwo' ? { grain: 70 } : {} })));
+        resetChainState(); stepChains(big, { q: 1 });
+        const t0 = performance.now(); for (let q = 2; q < 22; q++) { big[q % big.length].revenue *= 1.05; stepChains(big, { q }); }
+        const ms = (performance.now() - t0) / 20;
+        assert(ms < 65, `bilans ${ms.toFixed(2)} ms/kw.`);
+        resetChainState();
     });
 
     test('gra: adapter zbiera jednostki podsektor × kraj ze spółek krajowych i obcych, a pierwszy kwartał daje b = 1', () => {
@@ -17262,5 +17272,65 @@ group('0.18.1 P2 Bilans łańcuchów (tryb cichy)', () => {
             for (const [gid, s] of Object.entries(chainState.g)) for (const b of s.b) assert(Math.abs(b - 1) <= 0.01, `${gid}: ${b}`);
             assertEq(checkChainInvariants().length, 0, 'niezmienniki');
         } finally { resetForeignIssuers(); initFxState(); resetChainState(); }
+    });
+});
+
+group('0.18.1 P3 Łańcuchy włączone', () => {
+    const rows = () => [
+        { key: 'Przemysł/Wydobycie', country: 'PL', revenue: 100, products: { iron_ore: 60, coal: 40 } }, { key: 'Przemysł/Hutnictwo', country: 'PL', revenue: 200 },
+        { key: 'Motoryzacja', country: 'PL', revenue: 300 }, { key: 'Przemysł/Maszyny', country: 'PL', revenue: 150 }, { key: 'Usługi', country: 'PL', revenue: 500 }
+    ];
+    const withActive = fn => { const saved = CHAINS_ACTIVE; CHAINS_ACTIVE = true; try { return fn(); } finally { CHAINS_ACTIVE = saved; resetChainState(); } };
+
+    test('czynnik na starcie neutralny (przychód 1, marża 0); niedobór stali −20%: motoryzacja traci marżę i przychód, huta zyskuje cenowo', () => withActive(() => {
+        const r = rows(); resetChainState(); stepChains(r, { q: 1 });
+        for (const key of ['Motoryzacja', 'Przemysł/Hutnictwo', 'Przemysł/Maszyny']) { const f = getChainFactor(key, 'PL'); assertNear(f.revenueFactor, 1, `${key}: przychód`, 1e-6); assertNear(f.marginAdj, 0, `${key}: marża`, 1e-6); }
+        stepChains(r, { q: 2, shocks: { 'Przemysł/Hutnictwo|PL': 0.8 / CHAIN_RULES.capSlack } }); stepChains(r, { q: 3, shocks: { 'Przemysł/Hutnictwo|PL': 0.8 / CHAIN_RULES.capSlack } });
+        const auto = getChainFactor('Motoryzacja', 'PL'), huta = getChainFactor('Przemysł/Hutnictwo', 'PL');
+        assert(auto.marginAdj < 0 && auto.revenueFactor < 1, `motoryzacja: marża ${auto.marginAdj}, przychód ${auto.revenueFactor}`);
+        assert(huta.revenueFactor > 1, `huta: przychód × ${huta.revenueFactor}`);
+        const stock = { symbol: 'MTX', sector: ['Motoryzacja'], segments: [{ sector: 'Motoryzacja', subsector: null, share: 1 }] };
+        assertNear(getChainStockAdj(stock).marginAdj, auto.marginAdj, 'spółka czyta czynnik swojej jednostki', 1e-9);
+    }));
+
+    test('sprzężenie z kontraktem w widełkach ±15%; tryb cichy nie zmienia celu kontraktu', () => withActive(() => {
+        const r = rows(); resetChainState(); stepChains(r, { q: 1 });
+        for (let q = 2; q < 12; q++) stepChains(r, { q, shocks: { 'Przemysł/Wydobycie|PL': 0.05 } });
+        const f = getChainContractFactor('iron');
+        assert(f >= 0.85 - 1e-9 && f <= 1.15 + 1e-9, `czynnik ${f}`);
+        CHAINS_ACTIVE = false; assertEq(getChainContractFactor('iron'), 1, 'tryb cichy');
+    }));
+});
+
+group('0.18.1 P4 Szok podażowy i baner kryzysu', () => {
+    test('linia supply: wariant losowany, zdolność ogniw spada w Wybuchu i Zarażaniu i wraca w Odbiciu; strajk w kopalni tnie wydobycie kraju startowego', () => {
+        resetWorld([makeCompany('AAA')]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' }); resetCrises(); initCommodityState();
+        try {
+            assert(CRISIS_LINES.supply && CRISIS_LINES.supply.svg === 'szok' && !CRISIS_LINES.supply.icon, 'linia supply z ikoną SVG, bez emoji');
+            startCrisisLine('supply', { forced: true, skipSpark: true, variant: 'mine' });
+            assertEq(crisisLine.variant, 'mine', 'wariant');
+            const home = getStartCountry(), k = `Przemysł/Wydobycie|${home}`;
+            const burst = getSupplyShockCapacity()[k];
+            enterCrisisStage('spread'); const spread = getSupplyShockCapacity()[k];
+            enterCrisisStage('recovery'); const rec = getSupplyShockCapacity()[k];
+            assert(burst < 1 && spread < burst && rec === 1, `zdolność ${burst} → ${spread} → ${rec}`);
+            assert(getActiveCommodityEvents().some(ev => ev.id === 'strike'), 'strajk w kopalniach na giełdzie towarowej');
+            crisisLine = null; startCrisisLine('supply', { forced: true, skipSpark: true, variant: 'port' });
+            assert(getSupplyShockCapacity()[`import|${home}`] < 1 && getChainImportCapacity(home) < 1, 'strajk portowy: import kraju startowego');
+        } finally { resetCrises(); }
+    });
+
+    test('baner kryzysu: niemodalny, pokazuje nazwę, etap i „co to znaczy dla Ciebie” przy starcie i każdym etapie; można zamknąć', () => {
+        resetWorld([makeCompany('AAA')]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' }); resetCrises();
+        try {
+            startCrisisLine('supply', { forced: true, skipSpark: true, variant: 'strait' });
+            const el = document.getElementById('crisis-banner');
+            assert(el && !el.hidden && el.getAttribute('role') === 'status', 'baner widoczny, rola status');
+            assert(/Szok podażowy/.test(el.textContent) && /Wybuch/.test(el.textContent) && /Co to znaczy dla Ciebie/.test(el.textContent), el.textContent);
+            assert(!/\p{Extended_Pictographic}/u.test(el.textContent), 'bez emoji');
+            enterCrisisStage('spread'); assert(/Zarażanie/.test(el.textContent) && el.dataset.stage === 'spread', 'nowy etap');
+            closeCrisisBanner(); assert(el.hidden, 'zamknięty');
+            for (const id of Object.keys(CRISIS_LINES)) assert(CRISIS_BANNER_HINTS[id], `podpowiedź dla linii ${id}`);
+        } finally { resetCrises(); document.getElementById('crisis-banner')?.remove(); }
     });
 });

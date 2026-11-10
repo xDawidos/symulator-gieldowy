@@ -253,7 +253,7 @@ PRESETS['kampanie'] = PRESETS['fundusz-gig'] + `(function () {
         locked: typeof getLockedFundUnits === 'function' ? Math.round(getLockedFundUnits()) : null, units: Math.round(playerFund.units), trust: Math.round(playerFund.trust) });
 })();`;
 // 0.15.3 W0/W7: wymuszona linia kryzysu (scenariusz startowy, start w kw. 5–16) — pomiar każdej linii osobno.
-for (const id of ['banking', 'dotcom', 'oil', 'black', 'pandemic']) PRESETS['kryzys-' + id] = PRESETS['fundusz-gig'] + `setCrisisScenario('${id}');`;
+for (const id of ['banking', 'dotcom', 'oil', 'black', 'pandemic', 'supply']) PRESETS['kryzys-' + id] = PRESETS['fundusz-gig'] + `setCrisisScenario('${id}');`;
 // 0.16.2: kraje DE, US, CZ otwarte od startu (lotnisko wymuszone, bez biletów gracza); kontrola rozmiaru zapisu, czasu kroku i korelacji.
 PRESETS['kraje'] = `(function () {
         airportState.forced = true;
@@ -454,7 +454,7 @@ PRESETS['forex-towary'] = PRESETS['kontrakty'] + `(function () {
 // Kryzys: kolejna linia kryzysu na grę (5 linii po kolei), 2 kraje do zarażania, szok podażowy (embargo) w 3. roku.
 PRESETS['kryzys'] = PRESETS['fundusz-gig'] + `(function () {
     const err = e => (window.__presetErrors = window.__presetErrors || []).push('kryzys: ' + e);
-    const lines = ['banking', 'dotcom', 'oil', 'black', 'pandemic'], line = lines[(parent.__kryzysRun = (parent.__kryzysRun || 0) + 1) % lines.length];
+    const lines = ['banking', 'dotcom', 'oil', 'black', 'pandemic', 'supply'], line = lines[(parent.__kryzysRun = (parent.__kryzysRun || 0) + 1) % lines.length];
     const T = window.__t171 = { line, embargo: false, gig: [] };
     try { setCrisisScenario(line); for (const c of ['DE', 'CZ']) if (!isCountryJoined(c)) joinCountry(c, 'preset'); } catch (e) { err(e); }
     const orig = advanceMacroQuarter;
@@ -1381,14 +1381,19 @@ const PROBE_018 = `(function () {
             if (st?.cal) {
                 const row = { q: macro.quarter, g: {} };
                 for (const [gid, g] of Object.entries(st.g)) row.g[gid] = { bw: +g.bw.toFixed(4), b: Array.from(g.b).map(v => +v.toFixed(3)), P: Array.from(g.P).map(v => +v.toFixed(3)) };
-                row.c = st.cal.countries; T.q.push(row); T.ms.push(+st.ms.toFixed(2));
+                row.c = st.cal.countries; row.cl = typeof crisisLine === 'object' && crisisLine ? crisisLine.id + ':' + crisisLine.stage + (crisisLine.variant ? ':' + crisisLine.variant : '') : null; T.q.push(row); T.ms.push(+st.ms.toFixed(2));
             }
             return r;
         };
     }
+    // P4: zyskujące sektory linii kryzysu wobec GIG (od Wybuchu do końca linii): kapitalizacja spółek z segmentem głównym w sektorze/podsektorze
+    T.gainRes = [];
+    const snapGain = id => Object.fromEntries((CRISIS_LINES[id]?.gain || []).map(it => [it.subsector ? it.sector + '/' + it.subsector : it.sector, stocks.filter(x => !x.assetType && !x.isBankrupt && getMainSector(x) === it.sector && (!it.subsector || getMainSubsector(x) === it.subsector)).reduce((a, x) => a + x.price * x.totalShares, 0)]));
+    if (typeof enterCrisisStage === 'function') { const o = enterCrisisStage; enterCrisisStage = function (stage) { const r = o.apply(this, arguments); if (stage === 'burst' && crisisLine) T.gain = { id: crisisLine.id, gig: getGigIndexValue(), p: snapGain(crisisLine.id) }; return r; }; }
+    if (typeof finishCrisisLine === 'function') { const o = finishCrisisLine; finishCrisisLine = function () { const id = crisisLine?.id, g = T.gain; const r = o.apply(this, arguments); if (g && g.id === id) { const now = snapGain(id); T.gainRes.push({ id, gig: +(getGigIndexValue() / g.gig - 1).toFixed(4), sec: Object.fromEntries(Object.entries(now).map(([k, v]) => [k, g.p[k] > 0 ? +(v / g.p[k] - 1).toFixed(4) : null])) }); } return r; }; }
     let first = null;
     const origSample = s.sample; s.sample = function () { const r = origSample.apply(this, arguments); if (!first && macro.quarter >= (s.startQ ?? 0) + 1) { const u = unitRows(); if (Object.keys(u).length) first = u; } return r; };
-    const origFinish = s.finish; s.finish = function () { const r = origFinish.apply(this, arguments); r.p018 = { start: first, end: unitRows(), chains: T.q, chainMs: T.ms }; return r; };
+    const origFinish = s.finish; s.finish = function () { const r = origFinish.apply(this, arguments); r.p018 = { start: first, end: unitRows(), chains: T.q, chainMs: T.ms, gain: T.gainRes }; return r; };
 })();`;
 
 // 0.17 S0b: łączna kapitalizacja rynku (PLN; GPW i spółki krajów dołączonych) i udział spółek krajowych w przejęciach D3. Wynik: pole s017.
