@@ -136,7 +136,8 @@ function stepChains(rows, opts = {}) {
         const trend = st.xTrend[id] ?? xi;
         tr[ui] = trend * (1 - R.trendW) + xi * R.trendW;
         dx[ui] = xi - (st.xPrev[id] ?? xi);
-        cap[ui] = (opts.shocks?.[id] ?? opts.shocks?.[`${cal.unitKey[ui]}|*`] ?? 1) * Math.max(xi, trend) * R.capSlack;
+        const inputShort = st.factor?.[id]?.short || 0; // P4: niedobór wsadu w poprzednim kwartale ogranicza zdolność ogniwa (skutek idzie w dół łańcucha z opóźnieniem)
+        cap[ui] = (opts.shocks?.[id] ?? opts.shocks?.[`${cal.unitKey[ui]}|*`] ?? 1) * (1 - inputShort) * Math.max(xi, trend) * R.capSlack;
         actCountry[cal.unitCountry[ui]] += xi * base; actTrend[cal.unitCountry[ui]] += tr[ui] * base; wCountry[cal.unitCountry[ui]] += base;
     }
     for (let ci = 0; ci < C; ci++) { actCountry[ci] = wCountry[ci] > 0 ? actCountry[ci] / wCountry[ci] : 1; actTrend[ci] = wCountry[ci] > 0 ? actTrend[ci] / wCountry[ci] : 1; }
@@ -174,7 +175,7 @@ function stepChains(rows, opts = {}) {
             pos[ci] = s.S[ci] + release - f * s.D[ci]; // nadwyżka ponad udział kraju w pokryciu świata
             if (pos[ci] > 0) surplus += pos[ci];
             else {
-                const baseShare = s.D0[ci] > 0 ? Math.max(0, 1 - s.S0[ci] / s.D0[ci]) : 0, limit = (baseShare + R.importHeadroom) * s.D[ci] * (opts.capacity ? opts.capacity(cal.countries[ci]) : 1); // udział importu jak na starcie + zapas przepustowości
+                const baseShare = s.D0[ci] > 0 ? Math.max(0, 1 - s.S0[ci] / s.D0[ci]) : 0, capM = opts.capacity ? opts.capacity(cal.countries[ci]) : 1, limit = s.D[ci] * (baseShare * capM + R.importHeadroom * Math.max(0, Math.min(capM, 2 * capM - 1))); // udział importu jak na starcie + zapas przepustowości; szok portów tnie oba
                 want[ci] = Math.min(-pos[ci], limit); deficit += want[ci];
             }
         }

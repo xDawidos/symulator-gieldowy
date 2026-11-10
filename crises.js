@@ -204,15 +204,15 @@ const CRISIS_LINES = {
         id: 'supply', name: 'Szok podażowy', icon: '', svg: 'szok', year: 2021, recoveryQ: [4, 8], shape: 'U',
         spark: { macro: null, news: 'Dostawcy ostrzegają: terminy dostaw się wydłużają, a magazyny surowców topnieją.' },
         variants: {
-            strait: { name: 'Blokada cieśniny', spark: 'Napięcie na głównym szlaku morskim: armatorzy omijają cieśninę, fracht drożeje.', burst: 'Cieśnina zablokowana: statki z rudą, ropą i półproduktami stoją w kolejce, import gwałtownie spada.', commodity: 'embargo', imports: 0.45 },
-            port: { name: 'Strajk portowy', spark: 'Związki w portach zapowiadają strajk generalny, jeśli nie dostaną podwyżek.', burst: 'Strajk w portach: kontenery utknęły na nabrzeżach, fabryki czekają na dostawy z importu.', imports: 0.4, homeOnly: true },
-            mine: { name: 'Strajk w kopalni', spark: 'Górnicy grożą strajkiem: rozmowy o płacach utknęły.', burst: 'Strajk w kopalniach: wydobycie rudy i węgla stoi, huty ograniczają produkcję.', commodity: 'strike', units: { 'Przemysł/Wydobycie': 0.35 } }
+            strait: { name: 'Blokada cieśniny', spark: 'Napięcie na głównym szlaku morskim: armatorzy omijają cieśninę, fracht drożeje.', burst: 'Cieśnina zablokowana: statki z rudą, ropą i półproduktami stoją w kolejce, import gwałtownie spada.', commodity: 'embargo', imports: 0.75 },
+            port: { name: 'Strajk portowy', spark: 'Związki w portach zapowiadają strajk generalny, jeśli nie dostaną podwyżek.', burst: 'Strajk w portach: kontenery utknęły na nabrzeżach, fabryki czekają na dostawy z importu.', imports: 0.6, homeOnly: true },
+            mine: { name: 'Strajk w kopalni', spark: 'Górnicy grożą strajkiem: rozmowy o płacach utknęły.', burst: 'Strajk w kopalniach: wydobycie rudy i węgla stoi, huty ograniczają produkcję.', commodity: 'strike', units: { 'Przemysł/Wydobycie': 0.4, 'Przemysł/Hutnictwo': 0.7 } }
         },
         lose: [
             { sector: 'Motoryzacja', premium: -0.20, revenue: -0.05 }, { sector: 'Przemysł', premium: -0.15, revenue: -0.04 },
             { sector: 'Budowlany', premium: -0.10, revenue: -0.03 }, { sector: 'Transport i logistyka', subsector: 'Morski', premium: -0.15, revenue: -0.06 }
         ],
-        gain: [{ sector: 'Nieruchomości', subsector: 'Magazyny', premium: 0.15 }, { sector: 'Transport i logistyka', subsector: 'Lądowy', premium: 0.08 }, { sector: 'Przemysł', subsector: 'Wydobycie', premium: 0.12 }],
+        gain: [{ sector: 'Nieruchomości', subsector: 'Magazyny', premium: 0.20 }, { sector: 'Transport i logistyka', subsector: 'Lądowy', premium: 0.12 }, { sector: 'Przemysł', subsector: 'Wydobycie', premium: 0.15 }],
         crash: { drop: [-0.04, -0.08], weeks: 2 }, recession: false, inflation: [0.01, 0.02],
         rate: { kind: 'hike', total: [0.0025, 0.005], quarters: 1 }, state: null,
         victims: { sectors: ['Motoryzacja', 'Przemysł'], banks: false },
@@ -221,9 +221,16 @@ const CRISIS_LINES = {
     }
 };
 
-const CRISIS_LINE_ORDER = ['banking', 'dotcom', 'oil', 'black', 'pandemic']; // 0.18.1 P4 dopisuje 'supply' po pomiarze P2–P3
+const CRISIS_LINE_ORDER = ['banking', 'dotcom', 'oil', 'black', 'pandemic', 'supply']; // 0.18.1 P4: szósta linia, wspólny budżet częstości (CRISIS_BASE_CHANCE bez zmian)
 const SUPPLY_STAGE_CAPACITY = { spark: 1, burst: 0.75, spread: 0.6, intervention: 0.7, bottom: 0.85, recovery: 1 }; // mnożnik zdolności dotkniętych ogniw (wariant mnoży głębokość)
 
+/** Kraj z największą podażą dobra w łańcuchach (bez stanu: kraj startowy). */
+function getTopChainProducer(gid) {
+    const s = typeof chainState === 'object' ? chainState?.g?.[gid] : null, cs = chainState?.cal?.countries;
+    if (!s || !cs) return typeof getStartCountry === 'function' ? getStartCountry() : 'PL';
+    let best = 0; for (let i = 1; i < cs.length; i++) if (s.S[i] > s.S[best]) best = i;
+    return cs[best];
+}
 /** 0.18.1 P4: zdolność ogniw w linii `supply`: { „klucz|kraj”: mnożnik } i import (`import|kraj`); null poza linią. */
 function getSupplyShockCapacity() {
     const line = crisisLine;
@@ -278,6 +285,7 @@ function startCrisisLine(id, options = {}) {
         positionStart: playerProfile?.positionId || null, techShare: 0, rateStart: Number(centralBank?.baseInterestRate) || 0, fundMin: playerFund ? getFundNav() : 0, positiveStages: 0, stagesSeen: 0
     };
     if (def.variants) { const keys = Object.keys(def.variants); crisisLine.variant = options.variant && def.variants[options.variant] ? options.variant : keys[Math.floor(Math.random() * keys.length)]; } // 0.18.1 P4
+    if (crisisLine.variant === 'mine') crisisLine.country = getTopChainProducer('iron_ore'); // strajk w kraju z największym wydobyciem rudy
     crisisState.lastEventQ = crisisQuarter();
     if (!crisisState.used.includes(id)) crisisState.used.push(id);
     if (typeof noteCrisisForCommodities === 'function') noteCrisisForCommodities(id); // 0.17 S1: ucieczka do złota
