@@ -17239,7 +17239,7 @@ group('0.18.1 P2 Bilans łańcuchów (tryb cichy)', () => {
 
     test('tryb cichy: czynnik spółki neutralny; zapis i wczytanie zachowują ceny, zapasy i 40 kw. historii', () => {
         const m = pure(); const r = rows(); m.stepChains(r, { q: 1 }); m.stepChains(r, { q: 2, shocks: { 'Przemysł/Hutnictwo|*': 0.6 / 1.15 } });
-        const f = m.getChainFactor('Motoryzacja', 'PL'); assert(f.revenueFactor === 1 && f.marginAdj === 0, 'tryb cichy');
+        m.set(false); const f = m.getChainFactor('Motoryzacja', 'PL'); assert(f.revenueFactor === 1 && f.marginAdj === 0, 'tryb cichy');
         m.set(true); const on = m.getChainFactor('Przemysł/Maszyny', 'DE'); assert(on.marginAdj < 0 && on.revenueFactor < 1, `włączony: odbiorca stali płaci więcej i ma niedobór (${on.marginAdj}, ${on.revenueFactor})`); m.set(false);
         const snap = JSON.parse(JSON.stringify(m.getChainsSnapshot()));
         const steelP = m.st().g.steel.P[0];

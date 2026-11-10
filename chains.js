@@ -33,7 +33,7 @@ const CHAIN_RULES = {
     priorityShortage: 0.3,    // obronność i państwo: niedobór działa w 30%
     outputSplit: { 'Energia/Rafinerie': { fuel: 0.7, chem: 0.3 }, 'Motoryzacja': { cars: 0.7, trucks: 0.3 } }
 };
-let CHAINS_ACTIVE = false;   // P3: true włącza wpływ na spółki (P2: tryb cichy)
+let CHAINS_ACTIVE = true;    // 0.18.1 P3: wpływ na spółki włączony (false = tryb cichy z P2, do porównań)
 
 let chainState = null;       // stan (zapis: pole opcjonalne `chains`)
 
@@ -222,7 +222,7 @@ function computeChainFactors(st, units) {
             const share = recipe?.[gid] || 0;
             if (share > 0) {
                 margin -= share * (P - 1) * (1 - R.costPass);
-                short += share * Math.max(0, 1 - s.b[ci]) * R.shortagePass * (u?.priority ? R.priorityShortage : 1);
+                if (good.cls !== 'K') short += share * Math.max(0, 1 - s.b[ci]) * R.shortagePass * (u?.priority ? R.priorityShortage : 1); // P3: brak dobra K przesuwa inwestycję (tylko cena), nie tnie bieżącej produkcji
             }
         });
         out[cal.units[ui]] = { rev, margin, short };
