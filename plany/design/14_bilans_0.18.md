@@ -7,16 +7,17 @@ Markup makiety powstaje z tablicy `GOODS` (jeden wiersz to jedno dobro na wybran
 ## Decyzje użytkownika (2026-11-10)
 1. **Miejsce:** Państwo → Łańcuchy, przełącznik **„Łańcuchy / Dobra”** (`.speed-segmented`). Bez osobnej zakładki.
 2. **Układ:** tabela pogrupowana po klasie M, P, K, Z, L. Nagłówek grupy ma literę klasy i liczbę dóbr w niedoborze.
-3. **Rozwinięcie wiersza** (pod wierszem, bez okna): wykres ceny i bilansu z 40 kw.; producenci i odbiorcy (udziały); dla dóbr K flota i amortyzacja. Sprzęgnięcia z giełdą nie pokazujemy.
+3. **Bez podpisów** przy herbacie, srebrze i miedzi (współprodukt i klasa wg kraju widać w rozwinięciu i w grupie). Karta udziałów ma tytuł „Udziały w kraju”, podpis „kto robi, kto bierze”.
+4. **Rozwinięcie wiersza** (pod wierszem, bez okna): wykres ceny i bilansu z 40 kw.; producenci i odbiorcy (udziały); dla dóbr K flota i amortyzacja. Sprzęgnięcia z giełdą nie pokazujemy.
 
 ## Co pokazuje
 | Element | Dane | Markup / komponent |
 |---|---|---|
 | Pasek widoku | przełącznik widoku; filtr: wszystkie, niedobór i gorzej, z kontraktem (z licznikami); rynek: Świat albo kraj | `.gd-view-bar`, `.speed-segmented`, `.sector-chips`, `<select>` |
 | Pasek liczb | dobra w niedoborze (najgorsze), indeks cen wewnętrznych (start = 100), import w kwartale w PLN | `.bank-ticker` |
-| Wiersz dobra | ikona, nazwa, uwaga (współprodukt, klasa wg kraju), „kontrakt”; status i pokrycie; podaż (z importem) i popyt jako dwa paski z liczbami; zapas w kw. (kreska = cel 0,5); cena wewnętrzna (indeks 50–200); zmiana w kwartale ▲▼; import jako % podaży | `tr.gd-row` (`tabindex="0"`, `aria-expanded`, `aria-label`), `badge`, `.gd-sd`, `limit-meter`, `badge--info` „kontrakt” |
+| Wiersz dobra | ikona, nazwa, „kontrakt”; uwaga pod nazwą tylko przy dobrach z dopiskiem typu „GW, bez zapasu”; status i pokrycie; podaż (z importem) i popyt jako dwa paski z liczbami; zapas w kw. (kreska = cel 0,5); cena wewnętrzna (indeks 50–200); zmiana w kwartale ▲▼; import jako % podaży | `tr.gd-row` (`tabindex="0"`, `aria-expanded`, `aria-label`), `badge`, `.gd-sd`, `limit-meter`, `badge--info` „kontrakt” |
 | Wykres 40 kw. | słupki bilansu wokół b = 1 (w górę: nadwyżka, w dół: niedobór), linia ceny ze skalą z prawej, legenda słowami | `svg.gd-chart` + `.gd-chart-key`, `role="img"` z opisem trendu w `aria-label` |
-| Producenci i odbiorcy | spółki i import z udziałem; odbiorcy z tabeli sekcji 4; priorytet obronności przy niedoborze; „Pokaż w łańcuchu” | `.gd-shares` z `limit-meter`, `btn-secondary` |
+| Udziały w kraju (podpis: kto robi, kto bierze) | spółki i import z udziałem; odbiorcy z tabeli sekcji 4; priorytet obronności przy niedoborze; „Pokaż w łańcuchu” | `.gd-shares` z `limit-meter`, `btn-secondary` |
 | Flota (tylko K) | zasób kraju i średni wiek, zużycie δ na kw., zakupy wobec potrzeby, popyt: odtworzenie albo rozbudowa; ostrzeżenie, gdy zakupy < zużycia | `.gd-fleet` z `.cc-kpi`, `.gd-shares`, `notice-inline.is-warn` |
 
 **Zasady danych:** status liczy się z `b = (podaż krajowa + import) / popyt`. Ropa w Polsce jest więc „Równowaga” przy 85% importu. Gdyby liczyć bez importu, wyszłoby błędnie „Przerwane”. Kolor zmiany ceny: wzrost kosztu jest `text-down` (strata dla odbiorców), spadek jest `text-up`. Dobra bez zapasu (prąd) mają „bez zapasu”. Kawy nie ma w tabeli, bo ma tylko kontrakt. Herbata siedzi w grupie według kraju (w Polsce L).

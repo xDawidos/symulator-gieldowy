@@ -57,12 +57,12 @@ const CLS = { M: 'Materiał', P: 'Półprodukt', K: 'Dobro kapitałowe', Z: 'Dob
 // [id, nazwa, klasa, ikona, S (podaż razem z importem), D, zapas kw., cena, zmiana kw. %, import jako % podaży, kontrakt, uwaga]
 const GOODS = [
   ['ore', 'Ruda żelaza', 'M', 'surowiec-iron', 2.2, 2.82, 0.1, 118, 9, 31, true],
-  ['copper', 'Miedź', 'M', 'surowiec-copper', 1.0, 0.97, 0.5, 98, -1, 0, true, 'srebro jako współprodukt'],
-  ['silver', 'Srebro', 'M', 'moneta', 0.12, 0.13, 0.4, 104, 2, 8, false, 'współprodukt miedzi'],
+  ['copper', 'Miedź', 'M', 'surowiec-copper', 1.0, 0.97, 0.5, 98, -1, 0, true],
+  ['silver', 'Srebro', 'M', 'moneta', 0.12, 0.13, 0.4, 104, 2, 8, false],
   ['coal', 'Węgiel', 'M', 'surowiec-coal', 5.1, 5.05, 0.6, 101, 0, 0, true],
   ['oil', 'Ropa', 'M', 'surowiec-oil', 2.62, 2.6, 0.5, 100, 0, 85, true],
   ['grain', 'Zboże', 'M', 'surowiec-grain', 9.4, 8.6, 0.7, 94, -3, 0, true],
-  ['tea', 'Herbata', 'L', 'lisc', 0.02, 0.02, 0.3, 102, 1, 100, false, 'luksus poza Azją'],
+  ['tea', 'Herbata', 'L', 'lisc', 0.02, 0.02, 0.3, 102, 1, 100, false],
   ['steel', 'Stal', 'P', 'huta', 1.8, 2.05, 0.3, 109, 5, 12, false],
   ['fuel', 'Paliwa', 'P', 'surowiec-oil', 2.3, 2.35, 0.4, 101, 1, 4, false],
   ['rubber', 'Guma', 'P', 'paczka', 0.31, 0.3, 0.5, 99, 0, 0, false],
@@ -98,7 +98,7 @@ const shares = rows => `<ul class="gd-shares">${rows.map(([n, v]) => `<li><span>
 const detailSteel = `<div class="gd-detail-grid">
   <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon"><i data-ic="wykres" data-s="20"></i></span><div><h4>Cena i bilans, 40 kw.</h4><span class="bank-card-type">Stal, Polska</span></div></header>${chart(1)}
     <p class="text-sm">Bilans <b class="ch-num">0,88</b> od 8 kw. spada. Cena <b class="ch-num">109</b>, ▲ +5% w kwartale.</p></article>
-  <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon"><i data-ic="huta" data-s="20"></i></span><div><h4>Kto robi, kto bierze</h4><span class="bank-card-type">udziały w kraju</span></div></header>
+  <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon"><i data-ic="huta" data-s="20"></i></span><div><h4>Udziały w kraju</h4><span class="bank-card-type">kto robi, kto bierze</span></div></header>
     <h5 class="bank-section-title">Producenci</h5>${shares([['Huta Katowice (HKT)', 46], ['Stalprofil (SPF)', 31], ['Import: Niemcy, Chiny', 12], ['Pozostali', 11]])}
     <h5 class="bank-section-title mt-3">Odbiorcy</h5>${shares([['Motoryzacja', 25], ['Maszyny', 25], ['Budownictwo', 20], ['Stocznie', 12], ['Obronność', 8], ['Inne', 10]])}
     <p class="text-xs text-muted mt-3">Przy niedoborze obronność i państwo dostają całość, reszta dostaje po równo 88% potrzeby.</p>
