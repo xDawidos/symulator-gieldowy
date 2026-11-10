@@ -157,7 +157,7 @@ function renderLinkedStockRow(tbody, i, previous = {}) {
     if (!allowed) act.innerHTML = `<span class="row-state" role="img" aria-label="Brak dostępu do tej giełdy — awans otworzy kolejne" title="Brak dostępu do tej giełdy — awans otworzy kolejne">${uiIcon('klodka', 16)}</span>`;
     else if (i.tradeHalted) act.innerHTML = `<span class="row-state tone-down" role="img" aria-label="Handel wstrzymany" title="Handel wstrzymany">${uiIcon('blokada', 16)}</span>`;
     else act.innerHTML = `<button type="button" class="btn-ghost-icon drawer-toggle-btn" data-symbol="${sym}" title="Kup, sprzedaj, wykres" aria-label="Handel: ${escapeHtml(i.name)}" aria-expanded="${openStockDrawerSymbol === sym}" onclick="event.stopPropagation(); toggleStockDrawer('${sym}')">${uiIcon('chevron-down', 16)}</button>`;
-    row.addEventListener('click', e => { if (!e.target.closest('button') && !e.target.closest('input') && allowed && !i.tradeHalted) toggleStockDrawer(sym); });
+    row.addEventListener('click', e => { if (!e.target.closest('button') && !e.target.closest('input')) toggleStockDrawer(sym); }); // 0.18.0 R1 (Z3): szuflada z wykresem jak u krajowych, także bez dostępu (handel zablokowany w szufladzie)
     return row;
 }
 

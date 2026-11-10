@@ -6238,40 +6238,40 @@ group('0.17.2 E10: widoki', () => {
     });
 });
 
-group('Przegląd 2026-11-08', () => {
-    test('nazwy i tickery: stary zapis dostaje nowe nazwy i symbole, odwołania po symbolu zostają', () => {
-        const old = { version: 22, stocks: [{ symbol: 'BKINV2', name: 'Galeria Bankowa' }, { symbol: 'QBF', name: 'Quick Buissness Finance' }, { symbol: 'WRN', name: 'WRONA' }],
-            playerPortfolio: { BKINV2: { shares: 10 }, BKCORP2: { shares: 3 }, QBF: { shares: 5 } }, history: [{ symbol: 'BKCORP2', text: 'kupno' }],
-            playerProfile: { tied: { promises: [{ goal: { symbol: 'BKINV2' } }] } }, mailbox: { tied: [{ symbol: 'BKCORP2', text: 'post' }] } };
-        const s = migrateLegacyBankSymbols(old);
-        assertEq(s.stocks[0].symbol, 'GBK', 'ticker banku');
-        assertEq(s.stocks[1].name, 'Quick Business Finance', 'nazwa');
-        assertEq(s.stocks[2].name, 'Wrona', 'bez wersalików');
-        assert(s.playerPortfolio.GBK.shares === 10 && s.playerPortfolio.KRUP.shares === 3 && s.playerPortfolio.QBF.shares === 5, 'portfel');
-        assertEq(s.history[0].symbol, 'KRUP', 'historia');
-        assertEq(s.playerProfile.tied.promises[0].goal.symbol, 'GBK', 'obietnica');
-        assertEq(s.mailbox.tied[0].symbol, 'KRUP', 'Tied');
-        assertEq(migrateLegacyBankSymbols({ stocks: [{ symbol: 'QBF', name: 'Quick Business Finance' }] }).stocks[0].name, 'Quick Business Finance', 'nowy zapis bez zmian');
-        for (const name of Object.keys(LEGACY_COMPANY_NAMES)) assert(!initialStocks.some(s => s.name === name) && !(typeof commercialBanks !== 'undefined' && commercialBanks.some(b => b.name === name)), `bez starej nazwy: ${name}`);
-    });
-    test('Pomiń pisanie: kończy pisanie szefa bez trybu debug, zatrzymuje się na pytaniu o fundusz', () => {
-        const flow = introFlow;
-        let calls = 0;
-        const step = { cancel() {}, cb() { calls++; introFlow.pending = calls < 3 ? step : null; if (calls === 2) introFlow.awaitingFund = true; } };
-        try {
-            introFlow = { pending: step, awaitingFund: false };
-            assertEq(introSkipTyping(), 2, 'dwa kroki pisania');
-            assert(introFlow.awaitingFund && introFlow.pending, 'czeka na nazwę funduszu');
-        } finally { introFlow = flow; }
-    });
-    test('globus: nazwa tylko przy wybranym kraju', () => {
-        const pin = document.createElement('div');
-        pin.dataset.country = 'DE';
-        markGlobePin(pin, 'PL');
-        assert(!pin.classList.contains('is-selected'), 'inny kraj bez nazwy');
-        markGlobePin(pin, 'DE');
-        assert(pin.classList.contains('is-selected'), 'wybrany z nazwą');
-    });
+group('Przegląd 2026-11-08', () => {
+    test('nazwy i tickery: stary zapis dostaje nowe nazwy i symbole, odwołania po symbolu zostają', () => {
+        const old = { version: 22, stocks: [{ symbol: 'BKINV2', name: 'Galeria Bankowa' }, { symbol: 'QBF', name: 'Quick Buissness Finance' }, { symbol: 'WRN', name: 'WRONA' }],
+            playerPortfolio: { BKINV2: { shares: 10 }, BKCORP2: { shares: 3 }, QBF: { shares: 5 } }, history: [{ symbol: 'BKCORP2', text: 'kupno' }],
+            playerProfile: { tied: { promises: [{ goal: { symbol: 'BKINV2' } }] } }, mailbox: { tied: [{ symbol: 'BKCORP2', text: 'post' }] } };
+        const s = migrateLegacyBankSymbols(old);
+        assertEq(s.stocks[0].symbol, 'GBK', 'ticker banku');
+        assertEq(s.stocks[1].name, 'Quick Business Finance', 'nazwa');
+        assertEq(s.stocks[2].name, 'Wrona', 'bez wersalików');
+        assert(s.playerPortfolio.GBK.shares === 10 && s.playerPortfolio.KRUP.shares === 3 && s.playerPortfolio.QBF.shares === 5, 'portfel');
+        assertEq(s.history[0].symbol, 'KRUP', 'historia');
+        assertEq(s.playerProfile.tied.promises[0].goal.symbol, 'GBK', 'obietnica');
+        assertEq(s.mailbox.tied[0].symbol, 'KRUP', 'Tied');
+        assertEq(migrateLegacyBankSymbols({ stocks: [{ symbol: 'QBF', name: 'Quick Business Finance' }] }).stocks[0].name, 'Quick Business Finance', 'nowy zapis bez zmian');
+        for (const name of Object.keys(LEGACY_COMPANY_NAMES)) assert(!initialStocks.some(s => s.name === name) && !(typeof commercialBanks !== 'undefined' && commercialBanks.some(b => b.name === name)), `bez starej nazwy: ${name}`);
+    });
+    test('Pomiń pisanie: kończy pisanie szefa bez trybu debug, zatrzymuje się na pytaniu o fundusz', () => {
+        const flow = introFlow;
+        let calls = 0;
+        const step = { cancel() {}, cb() { calls++; introFlow.pending = calls < 3 ? step : null; if (calls === 2) introFlow.awaitingFund = true; } };
+        try {
+            introFlow = { pending: step, awaitingFund: false };
+            assertEq(introSkipTyping(), 2, 'dwa kroki pisania');
+            assert(introFlow.awaitingFund && introFlow.pending, 'czeka na nazwę funduszu');
+        } finally { introFlow = flow; }
+    });
+    test('globus: nazwa tylko przy wybranym kraju', () => {
+        const pin = document.createElement('div');
+        pin.dataset.country = 'DE';
+        markGlobePin(pin, 'PL');
+        assert(!pin.classList.contains('is-selected'), 'inny kraj bez nazwy');
+        markGlobePin(pin, 'DE');
+        assert(pin.classList.contains('is-selected'), 'wybrany z nazwą');
+    });
     test('Internet: otwarcie pauzuje, przejścia stron nie ruszają pauzy, zamknięcie przywraca stan sprzed otwarcia', () => {
         const paused = isGamePaused, state = { ...internetState }, intro = isIntroActive;
         isIntroActive = () => false;
@@ -6319,23 +6319,23 @@ group('Przegląd 2026-11-08', () => {
             assert(playerFund.clients.includes(client) || client.units < 1e-6, 'klient znika tylko bez udziałów');
         } finally { forceLiquidation = liq; }
     });
-    test('0.17.1: poziom GIG przechodzi przez zapis; stary zapis bierze poziom z tygodni okresu funduszu', () => {
-        resetWorld([makeCompany('AAA'), makeCompany('BBB')]); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
-        const gig = marketIndexes.find(i => i.id === 'GIG'), keep = gig.value;
-        try {
-            gig.value = 2874;
-            const snap = JSON.parse(JSON.stringify(buildSaveSnapshot()));
-            assertEq(snap.indexes.find(i => i.id === 'GIG').value, 2874, 'w zapisie');
-            gig.value = 0;
-            restoreIndexLevels(snap.indexes);
-            assertEq(gig.value, 2874, 'po wczytaniu');
-            updateMarketIndexes();
-            assert(Math.abs(gig.value / 2874 - 1) < 0.2, 'łańcuch idzie dalej od zapisanego poziomu');
-            gig.value = 0; playerFund.current.weeklyBenchmarks = [1500, 1600];
-            restoreIndexLevels(undefined);
-            assertEq(gig.value, 1600, 'stary zapis');
-        } finally { gig.value = keep; }
-    });
+    test('0.17.1: poziom GIG przechodzi przez zapis; stary zapis bierze poziom z tygodni okresu funduszu', () => {
+        resetWorld([makeCompany('AAA'), makeCompany('BBB')]); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        const gig = marketIndexes.find(i => i.id === 'GIG'), keep = gig.value;
+        try {
+            gig.value = 2874;
+            const snap = JSON.parse(JSON.stringify(buildSaveSnapshot()));
+            assertEq(snap.indexes.find(i => i.id === 'GIG').value, 2874, 'w zapisie');
+            gig.value = 0;
+            restoreIndexLevels(snap.indexes);
+            assertEq(gig.value, 2874, 'po wczytaniu');
+            updateMarketIndexes();
+            assert(Math.abs(gig.value / 2874 - 1) < 0.2, 'łańcuch idzie dalej od zapisanego poziomu');
+            gig.value = 0; playerFund.current.weeklyBenchmarks = [1500, 1600];
+            restoreIndexLevels(undefined);
+            assertEq(gig.value, 1600, 'stary zapis');
+        } finally { gig.value = keep; }
+    });
     test('0.17.1: Program Emerytalny przy długu państwa nie zabiera gotówki funduszom', () => {
         resetWorld([makeCompany('AAA'), makeCompany('BBB')]); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
         const keep = governmentTreasury;
@@ -6380,14 +6380,14 @@ group('Przegląd 2026-11-08', () => {
         assertEq(getSegmentEmission({ symbol: 'XYZ', name: 'Chemix' }, seg), 0.7, 'domyślnie');
         assertEq(getSegmentEmission({ symbol: 'ECL' }, { sector: 'Przemysł', share: 1 }), 0.6, 'inny sektor bez zmian');
     });
-    test('Bank Bank i biernik giełd', () => {
-        assertEq(getBankLabel({ name: 'Bank Powszechny' }), 'Bank Powszechny', 'bez podwójnego słowa');
-        assertEq(getBankLabel({ name: 'Galeria Bankowa' }), 'Bank Galeria Bankowa', 'z przedrostkiem');
-        assertEq(getExchangeAcc('EMERALD'), 'Giełdę Szmaragdową', 'biernik');
-        for (const key of Object.keys(exchanges)) assert(exchanges[key].nameAcc || !exchanges[key].name.startsWith('Giełda'), `biernik ${key}`);
-    });
-});
-
+    test('Bank Bank i biernik giełd', () => {
+        assertEq(getBankLabel({ name: 'Bank Powszechny' }), 'Bank Powszechny', 'bez podwójnego słowa');
+        assertEq(getBankLabel({ name: 'Galeria Bankowa' }), 'Bank Galeria Bankowa', 'z przedrostkiem');
+        assertEq(getExchangeAcc('EMERALD'), 'Giełdę Szmaragdową', 'biernik');
+        for (const key of Object.keys(exchanges)) assert(exchanges[key].nameAcc || !exchanges[key].name.startsWith('Giełda'), `biernik ${key}`);
+    });
+});
+
 group('0.14 T3: rozszerzenie o nowy segment', () => {
     function firm(symbol, sectors = ['Technologia'], opts = {}) {
         const s = makeCompany(symbol, { sector: sectors, cash: opts.cash ?? 2_000_000 });
@@ -14752,6 +14752,20 @@ group('0.16.9 Lombard w Internecie, rynek połączony na giełdzie', () => {
         assertEq(getGdrHeld(de), before + 10, 'kupno z listy głównej tą samą funkcją co w Kantorze');
         assert(!/asset-mini-table/.test(renderMarketsTab()) && /głównej liście akcji/.test(renderMarketsTab()), 'Kantory24: bez listy akcji kraju połączonego');
         countryState.DE.link = null; assert(/asset-mini-table/.test(renderMarketsTab()), 'kraj z biletem nadal ma listę w Kantorze');
+    }));
+
+    test('0.18.0 R1 (Z3): spółkę obcą bez dostępu do poziomu da się otworzyć w szufladzie i na wykresie jak krajową; Kup jest zablokowane', () => withLinkedTable(body => {
+        const savedAccess = playerAccessLevel; playerAccessLevel = 0;
+        try {
+            displayStocks();
+            const i = getCountryIssuers('DE').find(x => getForeignTier(x).level > 0), sym = getShareSymbol(i);
+            body.querySelector(`tr.foreign-row[data-symbol="${sym}"] .stock-name`).click();
+            const dr = document.getElementById(`drawer-${sym}`);
+            assert(dr, 'szuflada otwarta kliknięciem w wiersz');
+            assert(dr.querySelector('.btn-buy').disabled && /Brak dostępu/.test(dr.textContent), 'Kup zablokowane z powodem');
+            assert([...dr.querySelectorAll('.drawer-tool')].some(b => /Wykres/.test(b.textContent)), 'przycisk wykresu');
+            closeOpenStockDrawer();
+        } finally { playerAccessLevel = savedAccess; }
     }));
 
     test('0.16.9 W3: spółki krajów połączonych leżą w grupach poziomów naszych giełd (poziom z ceny/kapitalizacji), „Kraj ▲/▼”, „tylko moje” i sortowanie kursu porządkują wiersze w grupie sektora', () => withLinkedTable(body => {

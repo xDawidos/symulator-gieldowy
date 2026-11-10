@@ -622,18 +622,20 @@ function renderStockDrawer(symbol) {
     td.colSpan = cols;
     td.style.padding = '0';
     if (foreignIssuer) {
-      const fid = foreignIssuer.id;
+      const fid = foreignIssuer.id, tier = getForeignTier(foreignIssuer);
+      const blocked = foreignIssuer.tradeHalted ? 'Handel wstrzymany' : tier.level > playerAccessLevel ? `Brak dostępu do poziomu: ${tier.label}` : ''; // 0.18.0 R1 (Z3): wykres i akcjonariat zawsze, handel tylko z dostępem
+      const dis = blocked ? ` disabled title="${escapeHtml(blocked)}"` : '';
       td.innerHTML = `<div class="stock-drawer-inner"><div class="stock-drawer-actions">
         <div class="stock-drawer-actions-row"><div class="qty-input-wrapper"><input type="number" min="1" step="1" id="mkt-qty-${fid}" value="100" aria-label="Liczba akcji ${escapeHtml(foreignIssuer.name)}" data-linked-qty></div></div>
         <div class="stock-drawer-actions-row">
-          <button class="btn-buy" onclick="marketsUiTrade('${fid}','buy')">Kup</button>
-          <button class="btn-sell" onclick="marketsUiTrade('${fid}','sell')">Sprzedaj</button>
+          <button class="btn-buy" onclick="marketsUiTrade('${fid}','buy')"${dis}>Kup</button>
+          <button class="btn-sell" onclick="marketsUiTrade('${fid}','sell')"${foreignIssuer.tradeHalted ? dis : ''}>Sprzedaj</button>
           <span class="drawer-tools">
             <button class="drawer-tool" title="Wykres ceny" onclick="showPriceHistoryModal('${symbol}')">${uiIcon('wykres', 16)}<span>Wykres</span></button>
             <button class="drawer-tool" title="Akcjonariat — kto ma jaki % akcji" onclick="openCompanyReport('${symbol}')">${uiIcon('akcjonariat', 16)}<span>Akcjonariat</span></button>
           </span>
         </div>
-        <div class="stock-drawer-impact text-xs">Kupno: najpierw gotówka w ${foreignIssuer.currency}, reszta przez kantor; prowizja ${formatNumberPl(getCountryCommission(foreignIssuer.country) * 100, 2)}%. Kurs ${formatNumberPl(foreignIssuer.price, 2)} ${foreignIssuer.currency}.</div>
+        <div class="stock-drawer-impact text-xs">${blocked ? `<strong>${escapeHtml(blocked)}.</strong> ` : ''}Kupno: najpierw gotówka w ${foreignIssuer.currency}, reszta przez kantor; prowizja ${formatNumberPl(getCountryCommission(foreignIssuer.country) * 100, 2)}%. Kurs ${formatNumberPl(foreignIssuer.price, 2)} ${foreignIssuer.currency}.</div>
       </div></div>`;
       dr.appendChild(td); row.after(dr);
       return;
