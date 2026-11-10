@@ -63,3 +63,54 @@
   .ch-col > h5 { grid-column: 1 / -1; }
   .ch-detail, .ch-gainers { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Bilans dóbr: widok „Dobra” w zakładce Łańcuchy (projekt 14) */
+.gd-view-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin-top: var(--space-3); }
+.gd-view-bar .speed-btn { font-family: inherit; font-size: var(--text-body-sm-size); }
+.gd-view-bar select { min-height: 30px; }
+.gd-table { width: 100%; border-collapse: collapse; font-size: var(--text-body-sm-size); }
+.gd-table th { padding: var(--space-2); text-align: left; font-weight: 600; color: var(--color-text-muted); border-bottom: 1px solid var(--color-border-default); white-space: nowrap; }
+.gd-table td { padding: var(--space-2); border-bottom: 1px solid var(--color-border-subtle); vertical-align: middle; }
+.gd-table .num { text-align: right; font-family: var(--font-family-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.gd-table tr.gd-group td { padding-top: var(--space-4); background: var(--color-bg-base); border-bottom: 1px solid var(--color-border-default); font-weight: 600; color: var(--color-text-secondary); }
+.gd-table tr.gd-group small { margin-left: var(--space-2); font-weight: 400; color: var(--color-text-muted); }
+.gd-table tr.gd-row { cursor: pointer; }
+.gd-table tr.gd-row:hover td { background: var(--color-bg-hover); }
+.gd-table tr.gd-row:focus-visible { outline: 2px solid var(--color-focus); outline-offset: -2px; }
+.gd-table tr.gd-row[aria-expanded="true"] td { background: var(--color-bg-accent-soft); }
+.gd-name { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.gd-name small { color: var(--color-text-muted); font-size: var(--text-caption-size); }
+.gd-sd { display: grid; gap: 2px; min-width: 110px; }
+.gd-sd > span { display: block; height: 5px; border-radius: 2px; background: var(--color-text-secondary); width: calc(var(--w) * 1%); }
+.gd-sd > span.is-d { background: transparent; border: 1px solid var(--color-text-secondary); height: 5px; }
+.gd-sd small { font-family: var(--font-family-mono); font-size: var(--text-caption-size); color: var(--color-text-muted); }
+.gd-table .limit-meter { margin: 2px 0 0; max-width: 90px; }
+.gd-detail > td { padding: var(--space-3) var(--space-2) var(--space-4); background: var(--color-bg-sunken); }
+.gd-detail-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: var(--space-3); }
+.gd-chart { display: block; width: 100%; height: auto; }
+.gd-chart .ax { stroke: var(--color-border-default); }
+.gd-chart .base { stroke: var(--color-text-muted); stroke-dasharray: 3 3; }
+.gd-chart .bar-up { fill: color-mix(in srgb, var(--color-text-up) 55%, transparent); }
+.gd-chart .bar-down { fill: color-mix(in srgb, var(--color-text-down) 60%, transparent); }
+.gd-chart .price { fill: none; stroke: var(--color-text-accent); stroke-width: 2; }
+.gd-chart text { fill: var(--color-text-muted); font-size: 11px; font-family: var(--font-family-mono); }
+.gd-chart text.pr { fill: var(--color-text-accent); }
+.gd-chart-key { display: flex; flex-wrap: wrap; gap: var(--space-3); margin: var(--space-1) 0 0; padding: 0; list-style: none; font-size: var(--text-caption-size); color: var(--color-text-secondary); }
+.gd-chart-key i { display: inline-block; width: 14px; height: 8px; margin-right: 4px; vertical-align: middle; }
+.gd-shares { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: var(--text-body-sm-size); }
+.gd-shares li { display: grid; grid-template-columns: minmax(0, 1fr) 44px; align-items: center; gap: 2px var(--space-2); }
+.gd-shares .limit-meter { grid-column: 1 / -1; max-width: none; margin: 0; }
+.gd-fleet { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: var(--space-2); }
+
+@media (max-width: 860px) {
+  .gd-detail-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .gd-table .gd-hide-sm { display: none; } /* telefon: dobro, status, cena; reszta w rozwinięciu */
+  .gd-table { table-layout: fixed; }
+  .gd-table th:first-child { width: 38%; }
+  .gd-table th.num { width: 52px; }
+  .gd-table td { padding: var(--space-2) var(--space-1); }
+  .gd-name { flex-wrap: wrap; gap: 2px var(--space-2); }
+  .gd-detail > td { padding: var(--space-2) 0; }
+}

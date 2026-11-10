@@ -1,0 +1,142 @@
+<!doctype html><html lang="pl"><head><meta charset="utf-8"><title>Makieta UI 0.18 — Bilans dóbr</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../../../tokens.css"><link rel="stylesheet" href="../../../style.css"><link rel="stylesheet" href="018.css">
+<style>
+/* Tylko rama makiety, do gry nie idzie */
+html, body { overflow: auto !important; height: auto !important; }
+body { display: block !important; padding: 24px !important; }
+.demo { max-width: 1180px; margin: 0 auto 32px; padding: 24px; background: var(--color-bg-base); border: 1px solid var(--color-border-subtle); border-radius: 6px; }
+.demo-title { margin: 0 0 4px; font-size: 20px; }
+.demo-sub { margin: 0 0 16px; color: var(--color-text-muted); font-size: 13px; max-width: 75ch; }
+.demo-h { margin: 20px 0 8px; font-size: 13px; color: var(--color-text-muted); font-weight: 600; }
+@media (max-width: 640px) { body { padding: 8px !important; } .demo { padding: 12px; } }
+</style></head><body class="dark-mode">
+<svg style="display:none" id="ic-defs"></svg><svg style="display:none" id="ic-defs-018"></svg>
+
+<section class="demo"><h2 class="demo-title">1. Państwo → Łańcuchy → Dobra</h2>
+<p class="demo-sub">Przełącznik „Łańcuchy / Dobra” nad wyborem łańcucha. Tabela wszystkich dóbr z bilansu, pogrupowana po klasie jak sektory na liście spółek. Wiersz rozwija szczegóły pod sobą (bez nowego okna). „Pokaż w łańcuchu” wraca do widoku Łańcuchy z zaznaczonym ogniwem. Rozwinięta jest Stal, a w grupie K Statki, żeby było widać flotę.</p>
+<nav class="bank-tabs" role="tablist">
+  <button class="bank-tab-btn">Przegląd</button><button class="bank-tab-btn">Makro</button><button class="bank-tab-btn">Kraj</button><button class="bank-tab-btn">Energia</button><button class="bank-tab-btn active" aria-selected="true">Łańcuchy</button><button class="bank-tab-btn">Rynki</button><button class="bank-tab-btn">Nadzór</button>
+</nav>
+<div class="gd-view-bar">
+  <div class="speed-segmented" role="radiogroup" aria-label="Widok"><button class="speed-btn" role="radio" aria-checked="false">Łańcuchy</button><button class="speed-btn active" role="radio" aria-checked="true">Dobra</button></div>
+  <div class="sector-chips" role="group" aria-label="Filtr">
+    <button class="sector-chip active" aria-pressed="true">Wszystkie <small>31</small></button>
+    <button class="sector-chip" aria-pressed="false"><i data-ic="alert"></i> Niedobór i gorzej <small>4</small></button>
+    <button class="sector-chip" aria-pressed="false">Z kontraktem <small>9</small></button>
+  </div>
+  <label class="text-sm">Rynek <select><option>Świat</option><option selected>Polska</option><option>Niemcy</option><option>Chiny</option></select></label>
+</div>
+<div class="bank-ticker mt-3">
+  <div class="bank-ticker-item"><span>Dobra w niedoborze</span><strong>4 z 31</strong><small class="text-muted">najgorzej: ruda żelaza 78%</small></div>
+  <div class="bank-ticker-item"><span>Indeks cen wewnętrznych</span><strong class="text-down">▲ 104,2</strong><small class="text-muted">start = 100</small></div>
+  <div class="bank-ticker-item"><span>Import w kwartale</span><strong>3 860 000 PLN</strong><small class="text-muted">fracht, cła od 0.20</small></div>
+</div>
+<div style="overflow-x:auto" class="mt-3"><table class="gd-table" id="gd-table" aria-label="Bilans dóbr, Polska">
+  <thead><tr><th>Dobro</th><th>Stan</th><th class="gd-hide-sm">Podaż (z importem) i popyt</th><th class="gd-hide-sm">Zapas</th><th class="num">Cena</th><th class="num gd-hide-sm">Kwartał</th><th class="num gd-hide-sm" title="Część podaży z importu">Import</th></tr></thead>
+  <tbody id="gd-body"></tbody>
+</table></div>
+<p class="text-xs text-muted mt-3">Cena wewnętrzna jako indeks (start = 100), widełki 50–200. Kawa ma tylko kontrakt na giełdzie towarowej i nie ma jej w bilansie. Herbata ma klasę zależną od kraju: zwykła w Azji, luksusowa poza Azją.</p>
+</section>
+
+<section class="demo"><h2 class="demo-title">2. Stany puste i szczególne</h2>
+<div class="bank-card">
+  <p class="notice-inline"><i data-ic="info" data-s="14"></i><span>Dane pojawią się po pierwszym kwartale gry.</span></p>
+  <p class="notice-inline"><i data-ic="ok" data-s="14"></i><span>Żadne dobro nie ma teraz niedoboru.</span> <button class="btn-secondary">Pokaż wszystkie</button></p>
+  <p class="notice-inline"><i data-ic="info" data-s="14"></i><span>Historia ma dopiero 6 kwartałów. Wykres pokaże do 40.</span></p>
+  <p class="notice-inline"><i data-ic="info" data-s="14"></i><span>Srebro powstaje przy wydobyciu miedzi: podaż rośnie i spada razem z nią.</span></p>
+</div>
+</section>
+
+<script>
+// Dane przykładowe. W grze: rejestr dóbr (klasa, kontrakt) + stan bilansu (S, D, zapas, P, historia 40 kw.) dla wybranego rynku.
+const ST = { surplus: ['Nadwyżka', 'up', 'faza-hossa'], ok: ['Równowaga', 'neutral', 'waga'], tight: ['Napięte', 'warn', 'alert'], short: ['Niedobór', 'warn', 'alert'], broken: ['Przerwane', 'down', 'blokada'] };
+const statusOf = b => b >= 1.05 ? 'surplus' : b >= 0.95 ? 'ok' : b >= 0.85 ? 'tight' : b >= 0.6 ? 'short' : 'broken';
+const GROUPS = { M: 'Materiały', P: 'Półprodukty', K: 'Dobra kapitałowe', Z: 'Końcowe zwykłe', L: 'Końcowe luksusowe' };
+const CLS = { M: 'Materiał', P: 'Półprodukt', K: 'Dobro kapitałowe', Z: 'Dobro końcowe zwykłe', L: 'Dobro końcowe luksusowe' };
+// [id, nazwa, klasa, ikona, S (podaż razem z importem), D, zapas kw., cena, zmiana kw. %, import jako % podaży, kontrakt, uwaga]
+const GOODS = [
+  ['ore', 'Ruda żelaza', 'M', 'surowiec-iron', 2.2, 2.82, 0.1, 118, 9, 31, true],
+  ['copper', 'Miedź', 'M', 'surowiec-copper', 1.0, 0.97, 0.5, 98, -1, 0, true, 'srebro jako współprodukt'],
+  ['silver', 'Srebro', 'M', 'moneta', 0.12, 0.13, 0.4, 104, 2, 8, false, 'współprodukt miedzi'],
+  ['coal', 'Węgiel', 'M', 'surowiec-coal', 5.1, 5.05, 0.6, 101, 0, 0, true],
+  ['oil', 'Ropa', 'M', 'surowiec-oil', 2.62, 2.6, 0.5, 100, 0, 85, true],
+  ['grain', 'Zboże', 'M', 'surowiec-grain', 9.4, 8.6, 0.7, 94, -3, 0, true],
+  ['tea', 'Herbata', 'L', 'lisc', 0.02, 0.02, 0.3, 102, 1, 100, false, 'luksus poza Azją'],
+  ['steel', 'Stal', 'P', 'huta', 1.8, 2.05, 0.3, 109, 5, 12, false],
+  ['fuel', 'Paliwa', 'P', 'surowiec-oil', 2.3, 2.35, 0.4, 101, 1, 4, false],
+  ['rubber', 'Guma', 'P', 'paczka', 0.31, 0.3, 0.5, 99, 0, 0, false],
+  ['power', 'Prąd', 'P', 'prad', 41.2, 39.8, null, 97, -1, 0, false, 'GW, bez zapasu'],
+  ['mach', 'Maszyny', 'K', 'fabryka', 0.94, 1.0, 0.4, 106, 3, 18, false],
+  ['ships', 'Statki', 'K', 'transport-sea', 0.83, 1.0, 0.2, 108, 4, 22, false],
+  ['planes', 'Samoloty cywilne', 'K', 'transport-air', 0.97, 1.0, 0.5, 102, 1, 64, false],
+  ['food', 'Żywność', 'Z', 'sektor-zywnosc', 10.2, 9.9, 0.5, 98, -1, 3, false],
+  ['cars', 'Samochody osobowe', 'Z', 'transport-land', 0.91, 1.0, 0.4, 107, 3, 20, false],
+  ['yachts', 'Jachty', 'L', 'transport-sea', 0.74, 1.0, 0.1, 112, 6, 40, false],
+  ['luxcars', 'Pojazdy luksusowe', 'L', 'korona', 0.81, 1.0, 0.3, 109, 4, 55, false]
+];
+const OPEN = { steel: 'detail', ships: 'fleet' };
+const pl = (n, d = 0) => n.toLocaleString('pl-PL', { minimumFractionDigits: d, maximumFractionDigits: d });
+const sign = v => v > 0 ? `▲ +${pl(v)}` : v < 0 ? `▼ −${pl(-v)}` : '■ 0';
+
+function chart(seed) { // 40 kw.: słupki bilansu wokół b = 1 i linia ceny; w grze z historii dobra
+  const W = 640, H = 170, P = 30, n = 40, bw = (W - P - 60) / n, mid = 80;
+  let svg = `<line class="ax" x1="${P}" y1="10" x2="${P}" y2="150"/><line class="base" x1="${P}" y1="${mid}" x2="${W}" y2="${mid}"/><text x="0" y="${mid - 36}">1,1</text><text x="0" y="${mid + 4}">1,0</text><text x="0" y="${mid + 44}">0,9</text><text class="pr" x="${W - 2}" y="14" text-anchor="end">cena 200</text><text class="pr" x="${W - 2}" y="${150 - 50 / 150 * 140 - 4}" text-anchor="end">100</text>`;
+  let pts = [], b, price = 100; 
+  for (let i = 0; i < n; i++) {
+    b = i < 32 ? 1 + Math.sin(i * 0.7 + seed) * 0.03 : 1 - (i - 31) * 0.016;
+    price = Math.max(50, Math.min(200, price * Math.pow(b, -0.5) * (1 + Math.sin(i + seed) * 0.003)));
+    const h = Math.abs(b - 1) * 400, x = P + 3 + i * bw;
+    svg += `<rect class="${b >= 1 ? 'bar-up' : 'bar-down'}" x="${x}" y="${b >= 1 ? mid - h : mid}" width="${bw - 2}" height="${Math.max(1, h)}"/>`;
+    pts.push(`${x + bw / 2},${150 - (price - 50) / 150 * 140}`);
+  }
+  svg += `<polyline class="price" points="${pts.join(' ')}"/><text x="${P}" y="168">−40 kw.</text><text x="${P + 3 + n * bw}" y="168" text-anchor="end">teraz</text>`;
+  return `<svg class="gd-chart" viewBox="0 0 ${W} 172" role="img" aria-label="Ostatnie 40 kwartałów: bilans przez 32 kwartały około 1,0, od 8 kwartałów spada do 0,88; cena rośnie do 109">${svg}</svg>
+  <ul class="gd-chart-key"><li><i style="background:color-mix(in srgb,var(--color-text-up) 55%,transparent)"></i>nadwyżka (słupek w górę)</li><li><i style="background:color-mix(in srgb,var(--color-text-down) 60%,transparent)"></i>niedobór (słupek w dół)</li><li><i style="height:2px;background:var(--color-text-accent)"></i>cena wewnętrzna (skala z prawej)</li></ul>`;
+}
+const shares = rows => `<ul class="gd-shares">${rows.map(([n, v]) => `<li><span>${n}</span><b class="ch-num" style="text-align:right">${v}%</b><span class="limit-meter" style="--v:${v}" aria-hidden="true"><i></i></span></li>`).join('')}</ul>`;
+const detailSteel = `<div class="gd-detail-grid">
+  <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon"><i data-ic="wykres" data-s="20"></i></span><div><h4>Cena i bilans, 40 kw.</h4><span class="bank-card-type">Stal, Polska</span></div></header>${chart(1)}
+    <p class="text-sm">Bilans <b class="ch-num">0,88</b> od 8 kw. spada. Cena <b class="ch-num">109</b>, ▲ +5% w kwartale.</p></article>
+  <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon"><i data-ic="huta" data-s="20"></i></span><div><h4>Kto robi, kto bierze</h4><span class="bank-card-type">udziały w kraju</span></div></header>
+    <h5 class="bank-section-title">Producenci</h5>${shares([['Huta Katowice (HKT)', 46], ['Stalprofil (SPF)', 31], ['Import: Niemcy, Chiny', 12], ['Pozostali', 11]])}
+    <h5 class="bank-section-title mt-3">Odbiorcy</h5>${shares([['Motoryzacja', 25], ['Maszyny', 25], ['Budownictwo', 20], ['Stocznie', 12], ['Obronność', 8], ['Inne', 10]])}
+    <p class="text-xs text-muted mt-3">Przy niedoborze obronność i państwo dostają całość, reszta dostaje po równo 88% potrzeby.</p>
+    <div class="btn-row"><button class="btn-secondary"><i data-ic="lancuch" data-s="14"></i> Pokaż w łańcuchu</button></div></article>
+</div>`;
+const detailShips = `<div class="gd-detail-grid">
+  <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon"><i data-ic="wykres" data-s="20"></i></span><div><h4>Cena i bilans, 40 kw.</h4><span class="bank-card-type">Statki, Polska</span></div></header>${chart(3)}</article>
+  <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon"><i data-ic="transport-sea" data-s="20"></i></span><div><h4>Flota i zużycie</h4><span class="bank-card-type">dobro kapitałowe: kupowane i amortyzowane, nie zjadane</span></div></header>
+    <div class="gd-fleet">
+      <div class="cc-kpi"><span>Flota kraju</span><strong>412 statków</strong><em class="text-muted">średni wiek 14 lat</em></div>
+      <div class="cc-kpi"><span>Zużycie</span><strong>1% / kw.</strong><em class="text-muted">ok. 4 statki</em></div>
+      <div class="cc-kpi st-short"><span>Zakupy w kw.</span><strong>3,3</strong><em class="text-warn">▼ potrzeba 4,0</em></div>
+    </div>
+    <h5 class="bank-section-title mt-3">Popyt w kwartale</h5>${shares([['Odtworzenie zużytych', 64], ['Rozbudowa floty spółek', 36]])}
+    <p class="notice-inline is-warn mt-3"><i data-ic="alert" data-s="14"></i><span>Zakupy niższe niż zużycie od 3 kw.: przepustowość frachtu morskiego spada o ok. 0,5% na kwartał.</span></p></article>
+</div>`;
+
+function row(g) {
+  const [id, name, cls, ic, S, D, stock, price, dq, imp, contract, note] = g, b = S / D, k = statusOf(b), [w, badge, sic] = ST[k], max = Math.max(S, D);
+  const open = OPEN[id];
+  return `<tr class="gd-row st-${k}" tabindex="0" aria-expanded="${!!open}" aria-label="${name}: ${w}, pokrycie ${pl(Math.round(b * 100))}%">
+    <td><span class="gd-name"><i data-ic="${ic}"></i><span><strong>${name}</strong>${note ? `<br><small>${note}</small>` : ''}</span>${contract ? '<span class="badge badge--info" title="Ma kontrakt na giełdzie towarowej">kontrakt</span>' : ''}</span></td>
+    <td><span class="badge badge--${badge}"><i data-ic="${sic}" data-s="12"></i> ${w}</span> <b class="ch-num">${pl(Math.round(b * 100))}%</b></td>
+    <td class="gd-hide-sm"><span class="gd-sd" title="Podaż ${pl(S, 2)}, popyt ${pl(D, 2)}"><span style="--w:${S / max * 100}"></span><span class="is-d" style="--w:${D / max * 100}"></span><small>podaż ${pl(S, 2)}, popyt ${pl(D, 2)}</small></span></td>
+    <td class="gd-hide-sm">${stock == null ? '<small class="text-muted">bez zapasu</small>' : `<span class="ch-num">${pl(stock, 1)} kw.</span><span class="limit-meter${stock < 0.5 ? ' is-warn' : ''}" style="--v:${Math.min(100, stock * 100)};--limit:50" aria-hidden="true"><i></i><b></b></span>`}</td>
+    <td class="num">${pl(price)}</td>
+    <td class="num gd-hide-sm ${dq > 0 ? 'text-down' : dq < 0 ? 'text-up' : ''}">${sign(dq)}%</td>
+    <td class="num gd-hide-sm">${imp ? pl(imp) + '%' : '—'}</td></tr>` +
+    (open ? `<tr class="gd-detail"><td colspan="7">${open === 'fleet' ? detailShips : detailSteel}</td></tr>` : '');
+}
+document.getElementById('gd-body').innerHTML = Object.keys(GROUPS).map(c => {
+  const list = GOODS.filter(g => g[2] === c), bad = list.filter(g => g[4] / g[5] < 0.85).length;
+  return `<tr class="gd-group"><td colspan="7"><span class="gd-cls${c === 'K' || c === 'L' ? ' is-' + c : ''}" title="${CLS[c]}">${c}</span> ${GROUPS[c]}<small>${list.length} dóbr${bad ? `, ${bad} w niedoborze` : ''}</small></td></tr>` + list.map(row).join('');
+}).join('');
+
+Promise.all(['../../../img/ikony/sprite.svg', '018_ikony.svg'].map(u => fetch(u).then(r => r.text()))).then(([a, b]) => {
+  document.getElementById('ic-defs').outerHTML = a; document.getElementById('ic-defs-018').outerHTML = b;
+  document.querySelectorAll('i[data-ic]').forEach(el => { const s = el.dataset.s || 16; el.outerHTML = `<svg class="ic" width="${s}" height="${s}" viewBox="0 0 24 24" aria-hidden="true"><use href="#ic-${el.dataset.ic}"/></svg>`; });
+});
+</script>
+</body></html>
