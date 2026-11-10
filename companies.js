@@ -527,11 +527,11 @@ const SUBSECTOR_ACTIVITY = {
     'Energetyka jądrowa': 'rozwija energetykę jądrową', 'Energetyka węglowa': 'wytwarza prąd z węgla', 'Energetyka gazowa': 'wytwarza prąd z gazu', 'OZE': 'wytwarza prąd ze źródeł odnawialnych', 'Rafinerie': 'przerabia ropę na paliwa', 'Gaz': 'dostarcza gaz firmom i domom',
     'Logistyka': 'organizuje przewozy i magazyny', 'Lotnictwo': 'przewozi ludzi i ładunki samolotami', 'Morski': 'przewozi ładunki morzem', 'Lądowy': 'przewozi ładunki koleją i drogami',
     'Biotechnologia': 'rozwija nowe terapie w laboratoriach', 'Sprzęt medyczny': 'produkuje sprzęt dla lekarzy i pacjentów', 'Półprzewodniki': 'projektuje i produkuje układy scalone',
-    'Sztuczna inteligencja': 'rozwija sztuczną inteligencję', 'Hutnictwo': 'wytapia stal z rudy żelaza i węgla', 'Maszyny': 'produkuje maszyny dla fabryk', 'Stocznie': 'buduje statki', 'Chemia polimerowa': 'wytwarza tworzywa i gumę z półproduktów ropy', 'Nawozy': 'produkuje nawozy z gazu i siarki', 'Farmacja': 'wytwarza substancje do leków', 'Przetwórstwo spożywcze': 'przetwarza zboże i produkty rolne na żywność', 'Magazyny': 'buduje i wynajmuje magazyny', 'Drony': 'buduje drony', 'Telekomunikacja': 'prowadzi sieci telefoniczne i internetowe'
+    'Sztuczna inteligencja': 'rozwija sztuczną inteligencję', 'Hutnictwo': 'wytapia stal z rudy żelaza i węgla', 'Maszyny': 'produkuje maszyny dla fabryk', 'Stocznie': 'buduje statki', 'Chemia polimerowa': 'wytwarza tworzywa i gumę z półproduktów ropy', 'Nawozy': 'produkuje nawozy z gazu i siarki', 'Farmacja': 'wytwarza substancje do leków', 'Przetwórstwo spożywcze': 'przetwarza zboże i produkty rolne na żywność', 'Leśnictwo': 'prowadzi wyręb i tartaki', 'Papiernie': 'produkuje papier i opakowania', 'Przemysł lotniczy': 'buduje samoloty', 'Baterie': 'produkuje ogniwa i baterie', 'Magazyny': 'buduje i wynajmuje magazyny', 'Drony': 'buduje drony', 'Telekomunikacja': 'prowadzi sieci telefoniczne i internetowe'
 };
 const COMMODITY_WORDS = { // dopełniacz; mianownik z czasownikiem
     gold: ['złota', 'złoto drożeje'], oil: ['ropy', 'ropa drożeje'], gas: ['gazu', 'gaz drożeje'], coal: ['węgla', 'węgiel drożeje'],
-    iron: ['rudy żelaza', 'ruda żelaza drożeje'], copper: ['miedzi', 'miedź drożeje'], grain: ['zboża', 'zboże drożeje'], uranium: ['uranu', 'uran drożeje']
+    iron: ['rudy żelaza', 'ruda żelaza drożeje'], copper: ['miedzi', 'miedź drożeje'], coffee: ['kawy', 'kawa drożeje'], grain: ['zboża', 'zboże drożeje'], uranium: ['uranu', 'uran drożeje']
 };
 const DESCRIPTION_RULES = { calmVol: 0.8, wildVol: 1.3, minInput: 0.15, minProduct: 0.3, noDebt: 0.02, highDebt: 0.33 };
 
@@ -1604,6 +1604,22 @@ const initialStocks = [
         name: 'Motopol', price: 430.00, volatilityFactor: 1.2, symbol: 'MTP', exchange: 'GOLD', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Motoryzacja'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
+        dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
+        lastQuarterValue: 0, estimatedDividend: 0, bankAccountId: null, // <-- DODAJ TO
+    cash: 0 
+    },
+    { // 0.18.2 G1–G2: nowa spółka (ogniwo łańcucha bez producenta w PL)
+        name: 'Drzewpol', price: 64.00, volatilityFactor: 1.2, symbol: 'DRZ', exchange: 'BRONZE', totalShares: 80000, maxShares: 80000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
+    quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
+  lineHistory: [], playerTransactions: [], sector: ['Przemysł'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
+        dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
+        lastQuarterValue: 0, estimatedDividend: 0, bankAccountId: null, // <-- DODAJ TO
+    cash: 0 
+    },
+    { // 0.18.2 G1–G2: nowa spółka (ogniwo łańcucha bez producenta w PL)
+        name: 'Ogniwa Polskie', price: 240.00, volatilityFactor: 1.2, symbol: 'OGP', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
+    quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
+  lineHistory: [], playerTransactions: [], sector: ['Chemia'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
         lastQuarterValue: 0, estimatedDividend: 0, bankAccountId: null, // <-- DODAJ TO
     cash: 0 
@@ -11281,6 +11297,8 @@ const NUCLEAR_STATE_CONTRACT = 0.02;       // kontrakt z państwem: 2% przychod�
 // Decyzja 12: państwowy program jądrowy — spółka państwowa buduje bez własnej gotówki (Skarb Państwa finansuje raty),
 // a szansa startu zależy od partii rządzącej (mnożnik dotacji: Blok Państwowy 1,5, Ludowcy 1,3, Koalicja Rynkowa 0,7).
 const NUCLEAR_STATE_START_CHANCE = 0.035;
+// 0.18.2 G4: blok w 3 etapach — badania (2–4 kw., 5% kosztu) → konsorcjum do 3 firm (partnerzy z Energii i Budowlanego, po 15–25%) → budowa i uruchomienie.
+const NUCLEAR_RESEARCH_QUARTERS = [2, 4], NUCLEAR_RESEARCH_COST = 0.05, NUCLEAR_PARTNER_SHARE = [0.15, 0.25], NUCLEAR_MAX_MEMBERS = 3;
 
 /** Szansa startu budowy w kwartale: spółka państwowa — według partii (bez warunku gotówki), prywatna — 4% przy gotówce. */
 function getNuclearStartChance(stock) {
@@ -11295,18 +11313,40 @@ function getNuclearStartChance(stock) {
 function startNuclearBlock(stock, quarter = getSubsectorQuarter()) {
     const revenue = Math.max(1000, Number(stock.fundamentals?.revenue) || 1000);
     const quarters = getRandomIntInRange(...NUCLEAR_BUILD_QUARTERS);
-    stock.nuclearBlock = { stage: 'construction', startedQuarter: quarter, dueQuarter: quarter + quarters, cost: Math.round(revenue * NUCLEAR_COST_REVENUE_QUARTERS), spent: 0, quarters, delays: 0, stateFunded: Boolean(stock.isStateOwned) };
+    stock.nuclearBlock = { stage: 'research', researchDue: quarter + getRandomIntInRange(...NUCLEAR_RESEARCH_QUARTERS), members: [{ symbol: stock.symbol, share: 1 }], startedQuarter: quarter, dueQuarter: quarter + quarters, cost: Math.round(revenue * NUCLEAR_COST_REVENUE_QUARTERS), spent: 0, quarters, delays: 0, stateFunded: Boolean(stock.isStateOwned) };
     noteSubsectorStat('nuclearBlocks');
-    logEvent(`☢️ ${stock.name} rozpoczyna budowę bloku jądrowego (ok. ${quarters} kw., koszt ${formatZl(stock.nuclearBlock.cost, 0)}). Przychód dopiero po zgodzie urzędu.`, 'company');
-    if (typeof addChartEvent === 'function') addChartEvent(stock, '☢️', 'Start budowy bloku jądrowego');
+    const research = Math.round(stock.nuclearBlock.cost * NUCLEAR_RESEARCH_COST);
+    ensureCompanyCash(stock, research, 'Kredyt na badania bloku jądrowego'); adjustCompanyCash(stock, -research); stock.nuclearBlock.spent += research; // badania lokalizacji i projektu
+    logEvent(`☢️ ${stock.name} zaczyna badania pod blok jądrowy (etap 1 z 3; potem konsorcjum i budowa ok. ${quarters} kw., koszt ${formatZl(stock.nuclearBlock.cost, 0)}).`, 'company');
+    if (typeof addChartEvent === 'function') addChartEvent(stock, '☢️', 'Badania pod blok jądrowy');
     return stock.nuclearBlock;
 }
+
+/** 0.18.2 G4: koniec badań → konsorcjum (do 2 partnerów z Energii lub Budowlanego z gotówką na swoją część) → budowa. */
+function formNuclearConsortium(stock, quarter = getSubsectorQuarter()) {
+    const block = stock.nuclearBlock;
+    const pool = stocks.filter(s => s !== stock && !s.assetType && !s.isBankrupt && ['Energia', 'Budowlany'].includes(getMainSector(s)) && (Number(s.cash) || 0) > block.cost * 0.15).sort((a, b) => (b.cash || 0) - (a.cash || 0));
+    block.members = [{ symbol: stock.symbol, share: 1 }];
+    for (const partner of pool.slice(0, NUCLEAR_MAX_MEMBERS - 1)) { if (Math.random() < 0.5) continue; const share = Math.round(getRandomInRange(...NUCLEAR_PARTNER_SHARE) * 100) / 100; block.members[0].share -= share; block.members.push({ symbol: partner.symbol, share }); }
+    block.stage = 'construction'; block.dueQuarter = quarter + block.quarters;
+    const names = block.members.slice(1).map(m => stocks.find(s => s.symbol === m.symbol)?.name).filter(Boolean);
+    logEvent(`☢️ ${stock.name}: konsorcjum bloku jądrowego (etap 2 z 3)${names.length ? ` z udziałem: ${names.join(', ')}` : ' bez partnerów'}; budowa ok. ${block.quarters} kw.`, 'company');
+    return block.members;
+}
+/** Partnerzy konsorcjum (bez lidera) jako spółki z udziałem. */
+function getNuclearPartners(block) { return (block?.members || []).slice(1).map(m => ({ stock: stocks.find(s => s.symbol === m.symbol && !s.isBankrupt), share: m.share })).filter(m => m.stock); }
 
 /** Kwartał budowy: koszt z gotówki (gotówka → majątek trwały, kapitał bez zmian; brak gotówki = kredyt ratunkowy). */
 function payNuclearInstallment(stock) {
     const block = stock.nuclearBlock;
-    const installment = Math.min(block.cost - block.spent, Math.ceil(block.cost / block.quarters));
+    let installment = Math.min(block.cost - block.spent, Math.ceil(block.cost / block.quarters));
     if (!(installment > 0)) return 0;
+    for (const { stock: partner, share } of getNuclearPartners(block)) { // 0.18.2 G4: część raty płaci partner konsorcjum
+        const part = Math.round(installment * share);
+        ensureCompanyCash(partner, part, 'Kredyt na udział w bloku jądrowym'); adjustCompanyCash(partner, -part); // aktywa bez zmian: gotówka zamienia się w budowę w toku
+        if (typeof coverNegativeCash === 'function') coverNegativeCash(partner);
+        block.spent += part; installment -= part;
+    }
     // Decyzja 12: rata spółki państwowej ze Skarbu Państwa (dokapitalizowanie: aktywa i kapitał rosną, gotówka spółki bez zmian).
     if (block.stateFunded && typeof governmentTreasury !== 'undefined' && governmentTreasury >= installment) {
         governmentTreasury -= installment;
@@ -11363,9 +11403,11 @@ function payNuclearStateContract(stock) {
     const amount = Math.round((Number(stock.fundamentals?.revenue) || 0) * NUCLEAR_STATE_CONTRACT * factor);
     if (!(amount > 0) || typeof governmentTreasury === 'undefined' || governmentTreasury < amount) return 0;
     governmentTreasury -= amount;
-    adjustCompanyCash(stock, amount);
-    adjustBalanceSheet(stock, { assets: amount, retainedEarnings: amount });
-    if (typeof recordPayment === 'function') recordPayment('external:skarb-panstwa', stock, amount, 'Kontrakt z państwem (blok jądrowy)');
+    let own = amount;
+    for (const { stock: partner, share } of getNuclearPartners(stock.nuclearBlock)) { const part = Math.round(amount * share); own -= part; adjustCompanyCash(partner, part); adjustBalanceSheet(partner, { assets: part, retainedEarnings: part }); if (typeof recordPayment === 'function') recordPayment('external:skarb-panstwa', partner, part, 'Kontrakt z państwem (udział w bloku jądrowym)'); } // 0.18.2 G4
+    adjustCompanyCash(stock, own);
+    adjustBalanceSheet(stock, { assets: own, retainedEarnings: own });
+    if (typeof recordPayment === 'function') recordPayment('external:skarb-panstwa', stock, own, 'Kontrakt z państwem (blok jądrowy)');
     return amount;
 }
 
@@ -11377,7 +11419,9 @@ function processNuclearBlocks(quarter = getSubsectorQuarter()) {
             if (Math.random() < getNuclearStartChance(stock)) startNuclearBlock(stock, quarter);
             continue;
         }
-        if (block.stage === 'construction') {
+        if (block.stage === 'research') {
+            if ((block.researchDue ?? quarter) <= quarter) formNuclearConsortium(stock, quarter); // 0.18.2 G4: etap 1 → 2
+        } else if (block.stage === 'construction') {
             payNuclearInstallment(stock);
             if (block.dueQuarter <= quarter) reviewNuclearBlock(stock, Math.random(), quarter);
         } else if (block.stage === 'approval') {
@@ -13364,7 +13408,7 @@ function creepSubsidiaryStake(child, parent) {
 
 // 0.16.11 K0: pochodzenie spółki startowej (decyzje użytkownika, plany/lista_firm_startowych.md). PL = tylko przy starcie z Polski,
 // UNI = w każdym kraju startowym, DE/US = firma tego kraju (przy innym starcie istnieje tylko jako zagraniczna z countries_data.js). Nie zapisujemy.
-const PL_ORIGIN_SYMBOLS = ['HUT', 'MTP', 'PES', 'NAG', 'ZST', 'SLS', 'GRT', 'CFL', 'PKC', 'TIR', 'WZM', 'PIX', 'SUM', 'WIP', 'FIX', 'DRH', 'BAL', 'LEK', 'DPB', 'WPY', 'KRO', 'PLX', 'BTX', 'ANN', 'SIK', 'KRA', 'STM', 'SKP', 'BOR', 'BEW', 'ORT', 'ENG', 'TRN', 'PUR', 'NOC', 'GIEB', 'UnG', 'PZB', 'ORZD', 'HUSA', 'BPIG', 'MAJB'];
+const PL_ORIGIN_SYMBOLS = ['HUT', 'MTP', 'DRZ', 'OGP', 'PES', 'NAG', 'ZST', 'SLS', 'GRT', 'CFL', 'PKC', 'TIR', 'WZM', 'PIX', 'SUM', 'WIP', 'FIX', 'DRH', 'BAL', 'LEK', 'DPB', 'WPY', 'KRO', 'PLX', 'BTX', 'ANN', 'SIK', 'KRA', 'STM', 'SKP', 'BOR', 'BEW', 'ORT', 'ENG', 'TRN', 'PUR', 'NOC', 'GIEB', 'UnG', 'PZB', 'ORZD', 'HUSA', 'BPIG', 'MAJB'];
 const COMPANY_ORIGIN_OVERRIDES = { WiS: 'DE', DMPC: 'US', CBK: 'DE', SPK: 'DE', VBK: 'DE', IBK: 'DE', DGH: 'DE' }; // + banki startowe kraju (COUNTRY_BANK_DEFS) // firmy z countries_data.js: krajowe tylko przy starcie ze swojego kraju
 function getCompanyOrigin(stock) {
     if (!stock) return 'UNI';

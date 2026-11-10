@@ -29,8 +29,8 @@ const LEGACY_SAVE_KEYS = ['gra_inwestycyjna_dawid_save_v2', 'gra_inwestycyjna_da
 // v13: społeczeństwo i rynek pracy (society, stock.workforce, trzecia partia). Starsze zapisy: kraj od zera,
 // zatrudnienie według giełdy, polityka według cech prezesa, związki tylko w spółkach państwowych (30%).
 // v16: waluty i kantor (kursy, gotówka w walutach), kwity depozytowe GDR. Zapis v15 migruje: kursy startowe, bez walut i GDR.
-const SAVE_FORMAT_VERSION = 25; // 0.18.1 P1: metale → żelazo i miedź (migracja ceny, ETC, koszyka i pozycji), ogniwa łańcuchów; v24 0.18.0 R2: bez kwitów depozytowych (klucz `giants` zamiast `gdr`); v23 0.17.2: society.energy, society.greens, stock.power, deposit, energyOrder, ecoCut, esg, nuclearUnits, oversight.energy (pola opcjonalne, stare zapisy uzupełnia pierwszy kwartał)
-const SUPPORTED_SAVE_VERSIONS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25];
+const SAVE_FORMAT_VERSION = 26; // 0.18.2 G1: kawa (9. kontrakt; stary zapis: cena średnia), nowe ogniwa i dobra łańcuchów; v25 0.18.1 P1: metale → żelazo i miedź (migracja ceny, ETC, koszyka i pozycji), ogniwa łańcuchów; v24 0.18.0 R2: bez kwitów depozytowych (klucz `giants` zamiast `gdr`); v23 0.17.2: society.energy, society.greens, stock.power, deposit, energyOrder, ecoCut, esg, nuclearUnits, oversight.energy (pola opcjonalne, stare zapisy uzupełnia pierwszy kwartał)
+const SUPPORTED_SAVE_VERSIONS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26];
 
 let lastSaveReport = null;
 let saveDisabledUntilReload = false;

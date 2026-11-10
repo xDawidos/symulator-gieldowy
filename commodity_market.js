@@ -6,10 +6,10 @@
 // — oczekiwany powrót ceny do średniej jest już w cenie kontraktu (backwardation nad średnią, contango pod), więc
 // „kup nisko i czekaj” nie daje darmowego zysku. Wycena i rozliczenie w walucie bazowej po kursie USD.
 
-const COMMODITY_CODES = { gold: 'GOLD', oil: 'OIL', gas: 'GAS', coal: 'COAL', iron: 'IRON', copper: 'COP', grain: 'GRN', uranium: 'URA' }; // 0.18.1 P1: MET → IRON + COP
+const COMMODITY_CODES = { gold: 'GOLD', oil: 'OIL', gas: 'GAS', coal: 'COAL', iron: 'IRON', copper: 'COP', coffee: 'COF', grain: 'GRN', uranium: 'URA' }; // 0.18.1 P1: MET → IRON + COP
 const COMMODITY_MARKET = {
-    leverage: { gold: 10, oil: 5, iron: 5, copper: 5, grain: 5, gas: 3, coal: 3, uranium: 3 },          // decyzja 11
-    carry: { gold: 0.005, oil: 0.03, gas: 0.02, coal: 0.02, iron: 0.015, copper: 0.015, grain: 0.05, uranium: 0.01 }, // koszt przechowania rocznie
+    leverage: { gold: 10, oil: 5, iron: 5, copper: 5, coffee: 5, grain: 5, gas: 3, coal: 3, uranium: 3 },          // decyzja 11
+    carry: { gold: 0.005, oil: 0.03, gas: 0.02, coal: 0.02, iron: 0.015, copper: 0.015, coffee: 0.04, grain: 0.05, uranium: 0.01 }, // koszt przechowania rocznie
     entrySpread: 0.003,
     series: 4,           // 4 zapadalności naprzód
     minWeeksLeft: 2,     // seria bieżącego kwartału znika z oferty na 2 tygodnie przed końcem

@@ -67,7 +67,9 @@ function getEnergyBuildRows() {
         const block = stock.nuclearBlock;
         if (block && block.stage !== 'operating') {
             const done = block.quarters - Math.max(0, block.dueQuarter - quarter), wait = block.stage === 'approval';
-            rows.push({ type: 'nuclear', title: `${stock.name}, blok ${(Number(stock.nuclearUnits) || 0) + 1}`, text: wait ? 'czeka na zgodę UEiE' : `budowa, kw. ${Math.max(0, done)} z ${block.quarters}`, progress: wait ? 100 : done / block.quarters * 100, badge: wait ? 'Czeka na zgodę' : 'Budowa', tone: wait ? 'warn' : 'accent' });
+            if (block.stage === 'research') { rows.push({ type: 'nuclear', title: `${stock.name}, blok ${(Number(stock.nuclearUnits) || 0) + 1}`, text: `etap 1 z 3: badania, do kw. ${block.researchDue}`, progress: 10, badge: 'warn' }); continue; } // 0.18.2 G4
+            const partners = typeof getNuclearPartners === 'function' ? getNuclearPartners(block).map(m => `${m.stock.name} ${Math.round(m.share * 100)}%`).join(', ') : '';
+            rows.push({ type: 'nuclear', title: `${stock.name}, blok ${(Number(stock.nuclearUnits) || 0) + 1}${partners ? ` (konsorcjum: ${partners})` : ''}`, text: wait ? 'etap 3 z 3: czeka na zgodę UEiE' : `budowa, kw. ${Math.max(0, done)} z ${block.quarters}`, progress: wait ? 100 : done / block.quarters * 100, badge: wait ? 'Czeka na zgodę' : 'Budowa', tone: wait ? 'warn' : 'accent' });
         }
     }
     for (const project of society.infra?.projects || []) {

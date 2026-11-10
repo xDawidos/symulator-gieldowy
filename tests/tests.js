@@ -5683,7 +5683,9 @@ group('0.14 T2: Energetyka jądrowa — budowa bloku', () => {
     test('budowa 8–16 kw. z gotówki, potem zgoda regulatora i stabilny przychód', () => {
         const s = nuclear();
         const block = startNuclearBlock(s, 0);
-        assert(block.quarters >= 8 && block.quarters <= 16 && block.stage === 'construction', JSON.stringify(block));
+        assert(block.quarters >= 8 && block.quarters <= 16 && block.stage === 'research' && block.researchDue >= 2 && block.researchDue <= 4, '0.18.2 G4: etap 1 — badania');
+        formNuclearConsortium(s, block.researchDue);
+        assert(block.stage === 'construction' && block.members.length >= 1 && block.members.length <= 3 && Math.abs(block.members.reduce((a, m) => a + m.share, 0) - 1) < 1e-9, 'etap 2 — konsorcjum do 3 firm, udziały sumują się do 1');
         const cash0 = s.cash, equity0 = s.balanceSheet.assets - s.balanceSheet.liabilities;
         payNuclearInstallment(s);
         assert(s.cash < cash0 && Math.abs((s.balanceSheet.assets - s.balanceSheet.liabilities) - equity0) < 1e-6, 'gotówka → budowa, kapitał bez zmian');
@@ -6149,7 +6151,7 @@ group('0.17.2 E10: Akademia i zapis', () => {
         }
     });
     test('zapis: wersja 23, stara wersja dalej obsługiwana, stary zapis dostaje energię w pierwszym kwartale', () => {
-        assertEq(SAVE_FORMAT_VERSION, 25, 'wersja');
+        assertEq(SAVE_FORMAT_VERSION, 26, 'wersja');
         assert(SUPPORTED_SAVE_VERSIONS.includes(22), 'stare zapisy');
         resetWorld([makeCompany('AAA')]);
         delete society.energy;
@@ -12446,7 +12448,7 @@ group('0.16.1', () => {
         const origin = sym => getCompanyOrigin(initialStocks.find(s => s.symbol === sym) || { symbol: sym }); // banki startowe powstają przy starcie gry
         for (const sym of ['WZM', 'BPIG', 'MAJB', 'GIEB', 'UnG', 'KRA', 'DRH']) assertEq(origin(sym), 'PL', `${sym}: PL`);
         for (const sym of ['KFX', 'KWM', 'MLD', 'LIN', 'GROM', 'KUP', 'CZB', 'BLP', 'SPR', 'RPK', 'GPW']) assertEq(origin(sym), 'UNI', `${sym}: UNI`);
-        assertEq(PL_ORIGIN_SYMBOLS.length, 42, '42 firmy PL (0.17 S2: +PES, NAG, ZST, SLS; S4: +GRT, CFL, PKC, TIR; 0.18.1: +HUT, MTP)');
+        assertEq(PL_ORIGIN_SYMBOLS.length, 44, '44 firmy PL (0.17 S2: +PES, NAG, ZST, SLS; S4: +GRT, CFL, PKC, TIR; 0.18.1: +HUT, MTP; 0.18.2: +DRZ, OGP)');
         assert(!initialStocks.some(s => ['WiS', 'DMPC'].includes(s.symbol)), 'WiS i DMPC nie są firmami polskimi');
         assertEq(getCompanyOrigin({ symbol: 'WiS' }), 'DE', 'WiS = DE'); assertEq(getCompanyOrigin({ symbol: 'DMPC' }), 'US', 'DMPC = US');
         assert(COUNTRY_DEFS.DE.companies.some(c => c.id === 'WiS') && COUNTRY_DEFS.US.companies.some(c => c.id === 'DMPC'), 'są w danych krajów');
@@ -14529,7 +14531,7 @@ group('0.16.7 Pełne spółki zagraniczne', () => {
         for (const row of Object.values(snap.issuers)) delete row.c; // zapis v17
         resetForeignIssuers(); applyCountriesSnapshot(snap); const c = foreignIssuers.YA1; assert(c.balanceSheet && c.cash > 0 && !c.fundamentals, 'v17: model z ceny, fundamenty przy pierwszym raporcie');
         quarter(); assert(foreignIssuers.YA1.fundamentals, 'po kwartale są fundamenty'); assertEq(checkWorldInvariants().join(' ; '), '', 'niezmienniki po migracji');
-        assertEq(SAVE_FORMAT_VERSION, 25, 'wersja zapisu'); assert(SUPPORTED_SAVE_VERSIONS.includes(17), 'v17 nadal wczytywany');
+        assertEq(SAVE_FORMAT_VERSION, 26, 'wersja zapisu'); assert(SUPPORTED_SAVE_VERSIONS.includes(17), 'v17 nadal wczytywany');
     }));
 
     test('F2: prezes po 65. roku odchodzi (nowa osoba, cecha kraju z definicji)', () => withYY(() => {
@@ -15029,7 +15031,7 @@ group('0.16.9 W1 Gotówka w wielu walutach', () => {
         assert(basis > 0 && snap.basis.CHF === basis, 'basis w zapisie');
         applyCurrencySnapshot(snap); assertNear(playerFxBasis.CHF, basis, 'odtworzony kurs nabycia', 1e-12);
         delete snap.basis; fxRates.CHF = fxRates.CHF; applyCurrencySnapshot(snap); assertNear(playerFxBasis.CHF, fxRates.CHF, 'v19: kurs nabycia = bieżący', 1e-12);
-        assertEq(SAVE_FORMAT_VERSION, 25); assert(SUPPORTED_SAVE_VERSIONS.includes(19) && SUPPORTED_SAVE_VERSIONS.includes(20) && SUPPORTED_SAVE_VERSIONS.includes(21), 'v19, v20 i v21 obsługiwane');
+        assertEq(SAVE_FORMAT_VERSION, 26); assert(SUPPORTED_SAVE_VERSIONS.includes(19) && SUPPORTED_SAVE_VERSIONS.includes(20) && SUPPORTED_SAVE_VERSIONS.includes(21), 'v19, v20 i v21 obsługiwane');
         assertEq(checkCurrencyInvariants().length, 0);
         initFxState();
     });
@@ -17143,10 +17145,10 @@ group('0.18.1 P1 Rejestr dóbr, podsektory, żelazo i miedź', () => {
 
     test('rejestr spójny: każde dobro ma producenta i odbiorców (udziały 1), receptury i łańcuchy wskazują istniejące dobra; pilotaż ma 16 aktywnych dóbr', () => {
         assertEq(JSON.stringify(checkGoodsRegistry()), '[]', 'problemy rejestru');
-        assertEq(getActiveGoods().length, 16, 'dobra pilotażu');
-        assert(GOOD_BY_ID.copper.contract === 'copper' && !GOOD_BY_ID.copper.active, 'miedź: kontrakt teraz, łańcuch w 0.18.2');
+        for (const id of ['iron_ore', 'copper', 'coal', 'oil', 'gas', 'grain', 'steel', 'fuel', 'chem', 'rubber', 'fertilizer', 'machines', 'ships', 'trucks', 'cars', 'food', 'beer']) assert(GOOD_BY_ID[id].active, `${id}: aktywne`);
+        assert(GOOD_BY_ID.copper.contract === 'copper', 'miedź z kontraktem (łańcuch od 0.18.2)');
         for (const g of getActiveGoods()) assert(Object.keys(g.use).length >= 1 && g.producers.length >= 1, `${g.id}: producent i odbiorca`);
-        assert(GOODS.filter(g => !g.active).length >= 15, 'dobra 0.18.2+ wpisane jako nieaktywne');
+        assert(GOODS.length >= 34, 'rejestr pełny (część nieaktywna do kolejnych części)');
     });
 
     test('podsektory pilotażu przypisane: STM Stocznie (z Przemysłu ciężkiego), ANN Maszyny, HUT Hutnictwo, SIK Nawozy, KUP i MEF Farmacja, SUM Przetwórstwo spożywcze; zagraniczne z danych kraju', () => {
@@ -17162,7 +17164,7 @@ group('0.18.1 P1 Rejestr dóbr, podsektory, żelazo i miedź', () => {
     });
 
     test('metale rozdzielone: 8 surowców (żelazo, miedź), przypisania według profilu spółki, strajk losuje węgiel albo jeden z metali', () => {
-        assert(!COMMODITY_DEFS.metals && COMMODITY_DEFS.iron && COMMODITY_DEFS.copper && COMMODITY_IDS.length === 8, '8 surowców');
+        assert(!COMMODITY_DEFS.metals && COMMODITY_DEFS.iron && COMMODITY_DEFS.copper && COMMODITY_IDS.length === 9 && COMMODITY_DEFS.coffee, '9 surowców (0.18.2: kawa)');
         assertEq(Object.keys(COMMODITY_ASSIGNMENTS.MLD.product).join(), 'copper'); assertEq(Object.keys(COMMODITY_ASSIGNMENTS.KJM.product).join(), 'iron');
         assert(COMMODITY_ASSIGNMENTS.TKS.input.iron > 0 && !COMMODITY_ASSIGNMENTS.TKS.input.metals, 'huta: ruda żelaza');
         for (const [k, v] of Object.entries(COMMODITY_SECTOR_INPUTS)) assert(!('metals' in v), `${k}: bez metali`);
@@ -17356,5 +17358,44 @@ group('0.18.1 P5 Interfejs łańcuchów i Akademia', () => {
             assertEq(renderStockChainTiles(bank), '', 'bank bez wiersza');
             for (const id of ['lancuchWartosci', 'efektByka', 'bilansDobra']) { const e = ACADEMY_ENTRIES[id]; assert(e && e.text.length > 100 && e.quiz.length === 3 && typeof e.example() === 'string', id); }
         } finally { resetForeignIssuers(); initFxState(); resetChainState(); chainsView = { chain: 'metals', good: null, country: null }; }
+    });
+});
+
+group('0.18.2 Pełny graf', () => {
+    test('G1–G3: rejestr spójny; nowe ogniwa przypisane (SRE ziemie rzadkie, DMPC papiernia, ABS i LAE przemysł lotniczy, Drzewpol, Ogniwa Polskie); kawa to 9. kontrakt bez producenta', () => {
+        assertEq(JSON.stringify(checkGoodsRegistry()), '[]', 'rejestr');
+        for (const id of ['copper', 'silver', 'gold', 'rare_earths', 'sulfur', 'uranium', 'wood', 'lumber', 'paper', 'batteries', 'chips', 'planes', 'robots', 'med_equipment', 'drugs', 'power']) assert(GOOD_BY_ID[id].active, `${id} aktywne`);
+        assertEq(COUNTRY_DEFS.CN.companies.find(c => c.id === 'SRE').subsector, 'Wydobycie'); assertEq(CHAIN_COMPANY_PRODUCTS.SRE.rare_earths, 1);
+        assertEq(COUNTRY_DEFS.US.companies.find(c => c.id === 'DMPC').subsector, 'Papiernie');
+        assert(['ABS', 'LAE'].every(id => Object.values(COUNTRY_DEFS).some(d => d.companies.find(c => c.id === id)?.subsector === 'Przemysł lotniczy')), 'lotnictwo: najwyżej 3 duże spółki');
+        assert(initialStocks.some(s => s.symbol === 'DRZ') && initialStocks.some(s => s.symbol === 'OGP'), 'nowe spółki PL');
+        assert(COMMODITY_DEFS.coffee && COMMODITY_CODES.coffee === 'COF' && !GOODS.some(g => g.contract === 'coffee'), 'kawa bez ogniwa');
+        assert(GOOD_BY_ID.power.external, 'prąd: koszt liczy energy.js');
+    });
+    test('G1: srebro to współprodukt miedzi, siarka współprodukt ropy (adapter)', () => {
+        resetWorld(JSON.parse(JSON.stringify(initialStocks))); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+        const mld = stocks.find(s => s.symbol === 'MLD'); mld.fundamentals = mld.fundamentals || initializeFundamentals(mld); mld.fundamentals.history.push({ revenue: 1000, ebitda: 100, netIncome: 50, eps: 1 });
+        const row = collectChainRows().find(r => r.products?.copper > 0);
+        assert(row && Math.abs(row.products.silver - row.products.copper * CHAIN_COPRODUCTS.silver[1]) < 1e-9, 'srebro z miedzi');
+    });
+    test('G4: blok jądrowy w 3 etapach (badania → konsorcjum do 3 firm → budowa); partner płaci swoją część raty', () => {
+        resetWorld([Object.assign(makeCompany('NUK', { sector: ['Energia'] }), { cash: 5e6 }), Object.assign(makeCompany('BUD', { sector: ['Budowlany'] }), { cash: 5e7 })]);
+        startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+        const s = stocks[0], p = stocks[1]; s.fundamentals = s.fundamentals || initializeFundamentals(s);
+        const block = withSeededRandom(3, () => startNuclearBlock(s, 0));
+        assertEq(block.stage, 'research', 'badania');
+        withSeededRandom(1, () => { for (let k = 0; k < 20 && block.members.length < 2; k++) formNuclearConsortium(s, block.researchDue); });
+        assertEq(block.stage, 'construction', 'budowa');
+        if (block.members.length > 1) { const cash0 = p.cash; payNuclearInstallment(s); assert(p.cash < cash0, 'partner płaci'); }
+        assert(block.members.length <= NUCLEAR_MAX_MEMBERS, 'najwyżej 3 firmy');
+    });
+    test('G6: REIT zdrowie traci w recesji i pandemii (Z11), jest typ mieszkaniowy', () => {
+        assert(REIT_TYPES.health.recession <= -0.03 && REIT_TYPES.health.pandemic < 0, 'zdrowie bez przewagi w kryzysie');
+        assert(REIT_TYPES.residential && REIT_TYPES.residential.build.includes('residential_complex'), 'mieszkania');
+    });
+    test('G7: Mennica tylko z wyłącznikiem MINT_ACTIVE; handel kupuje dobra końcowe', () => {
+        assert(!MINT_ACTIVE && !GOOD_BY_ID.cash.active, 'domyślnie wyłączona');
+        MINT_ACTIVE = true; try { assert(GOOD_BY_ID.cash.active && CHAINS.mint.active, 'włączona'); } finally { MINT_ACTIVE = false; }
+        assert(GOOD_BY_ID.food.use['Usługi'] > 0 && CHAIN_RECIPES['Usługi'].food > 0, 'dystrybucja');
     });
 });

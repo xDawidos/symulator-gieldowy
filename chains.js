@@ -31,7 +31,7 @@ const CHAIN_RULES = {
     costPass: 0.3,            // odbiorca przerzuca 30% wzrostu kosztu wsadu na ceny
     shortagePass: 0.6,        // niedobór obniża aktywność odbiorcy o (1 − b) × udział wsadu × 0,6
     priorityShortage: 0.3,    // obronność i państwo: niedobór działa w 30%
-    outputSplit: { 'Energia/Rafinerie': { fuel: 0.7, chem: 0.3 }, 'Motoryzacja': { cars: 0.7, trucks: 0.3 } }
+    outputSplit: { 'Mennica': { cash: 1 }, 'Energia/Rafinerie': { fuel: 0.7, chem: 0.3 }, 'Motoryzacja': { cars: 0.7, trucks: 0.3 }, 'Przemysł/Leśnictwo': { wood: 0.6, lumber: 0.4 } }
 };
 let CHAINS_ACTIVE = true;    // 0.18.1 P3: wpływ na spółki włączony (false = tryb cichy z P2, do porównań)
 
@@ -65,7 +65,7 @@ function chainGroupOf(good, unitKey) {
 
 /** Udział produkcji dobra w przychodzie jednostki (dobra bez kontraktu: z listy producentów; z kontraktem: z profilu surowcowego spółek). */
 function chainOutputWeight(good, unit) {
-    if (good.contract) return unit.revenue > 0 ? (unit.products[good.id] || 0) / unit.revenue : 0;
+    if (good.contract || unit.products[good.id] > 0) return unit.revenue > 0 ? (unit.products[good.id] || 0) / unit.revenue : 0; // kontrakt, produkt spółki albo współprodukt
     const key = good.producers.includes(unit.key) ? unit.key : null; // producent bez podsektora („Motoryzacja”) to tylko spółki bez podsektora
     if (!key) return 0;
     const split = CHAIN_RULES.outputSplit[key];
@@ -216,7 +216,7 @@ function computeChainFactors(st, units) {
         const recipeKey = matchChainKey(CHAIN_RECIPES, key), recipe = recipeKey ? CHAIN_RECIPES[recipeKey] : null;
         cal.goods.forEach((gid, gi) => {
             const good = GOOD_BY_ID[gid], s = st.g[gid];
-            if (!s || good.contract) return;
+            if (!s || good.contract || good.external) return; // kontrakt: giełda towarowa; prąd: energy.js
             const P = s.P[ci];
             const w = cal.B[gi * U + ui] / Math.max(1e-9, st.base[cal.units[ui]]);
             if (w > 0) rev += w * (Math.pow(P, R.productExp) - 1);

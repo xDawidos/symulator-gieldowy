@@ -1395,8 +1395,11 @@ const PROBE_018 = `(function () {
     if (typeof enterCrisisStage === 'function') { const o2 = enterCrisisStage; enterCrisisStage = function (stage) { const id = crisisLine?.id, g = T.gain; if (stage === 'intervention' && g && g.id === id && !g.done) { g.done = true; T.gainRes.push({ id, at: 'intervention', gig: +(getGigIndexValue() / g.gig - 1).toFixed(4), sec: { all: g.p.all > 0 ? +(snapGain(id, g.syms).all / g.p.all - 1).toFixed(4) : null } }); } return o2.apply(this, arguments); }; }
     if (typeof finishCrisisLine === 'function') { const o = finishCrisisLine; finishCrisisLine = function () { const id = crisisLine?.id, g = T.gain; const r = o.apply(this, arguments); if (false && g && g.id === id) { const now = snapGain(id, g.syms); T.gainRes.push({ id, gig: +(getGigIndexValue() / g.gig - 1).toFixed(4), sec: Object.fromEntries(Object.entries(now).map(([k, v]) => [k, g.p[k] > 0 ? +(v / g.p[k] - 1).toFixed(4) : null])) }); } return r; }; }
     let first = null;
-    const origSample = s.sample; s.sample = function () { const r = origSample.apply(this, arguments); if (!first && macro.quarter >= (s.startQ ?? 0) + 1) { const u = unitRows(); if (Object.keys(u).length) first = u; } return r; };
-    const origFinish = s.finish; s.finish = function () { const r = origFinish.apply(this, arguments); r.p018 = { start: first, end: unitRows(), chains: T.q, chainMs: T.ms, gain: T.gainRes }; return r; };
+    // G6 (Z11): wynik REIT-ów (kurs × dywidenda kwartalna, indeks łańcuchowy) według typu portfela
+    T.reit = {}; let reitQ = -1;
+    const sampleReits = () => { if (macro.quarter === reitQ) return; reitQ = macro.quarter; for (const x of stocks.filter(y => y.assetType === 'REIT' && !y.isBankrupt)) { const e = T.reit[x.symbol] || (T.reit[x.symbol] = { type: x.reit?.type || '?', idx: 1, p: x.price, n: 0 }); if (e.p > 0 && x.price > 0) { e.idx *= x.price / e.p * (1 + (typeof getTrailingDividendYield === 'function' ? getTrailingDividendYield(x) : 0) / 4); e.n++; } e.p = x.price; } };
+    const origSample = s.sample; s.sample = function () { sampleReits(); const r = origSample.apply(this, arguments); if (!first && macro.quarter >= (s.startQ ?? 0) + 1) { const u = unitRows(); if (Object.keys(u).length) first = u; } return r; };
+    const origFinish = s.finish; s.finish = function () { const r = origFinish.apply(this, arguments); r.p018 = { start: first, end: unitRows(), chains: T.q, chainMs: T.ms, gain: T.gainRes, reit: Object.fromEntries(Object.entries(T.reit).map(([k, e]) => [k, { type: e.type, cagr: e.n > 3 ? +(Math.pow(e.idx, 4 / e.n) - 1).toFixed(4) : null }])) }; return r; };
 })();`;
 
 // 0.17 S0b: łączna kapitalizacja rynku (PLN; GPW i spółki krajów dołączonych) i udział spółek krajowych w przejęciach D3. Wynik: pole s017.

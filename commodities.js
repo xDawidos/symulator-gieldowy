@@ -15,6 +15,7 @@ const COMMODITY_DEFS = {
     coal:    { name: 'Węgiel', unit: 'tona', mean: 120, sigma: 0.30, theta: 0.15, season: [0.06, 0, -0.06, 0], betaP: 0.9, betaZ: 0.1, band: [0.4, 2.5], mood: true },
     iron:    { name: 'Ruda żelaza', unit: 'tona', mean: 110, sigma: 0.25, theta: 0.10, season: null, betaP: 1.3, betaZ: 0.5, band: [0.5, 2.0], mood: true },   // 0.18.1 P1: z dawnych „metali”
     copper:  { name: 'Miedź', unit: 'tona', mean: 9000, sigma: 0.25, theta: 0.10, season: null, betaP: 1.3, betaZ: 0.4, band: [0.5, 2.0], mood: true },
+    coffee:  { name: 'Kawa', unit: 'funt', mean: 2.0, sigma: 0.30, theta: 0.15, season: [0.04, 0, -0.04, 0], betaP: 0.2, betaZ: 0, band: [0.4, 2.5], mood: false }, // 0.18.2 G1: 9. kontrakt (bez producenta i odbiorcy)
     grain:   { name: 'Zboże', unit: 'buszel', mean: 6, sigma: 0.25, theta: 0.20, season: [0, 0.05, -0.08, 0], betaP: 0.2, betaZ: 0, band: [0.5, 2.0], mood: false },
     uranium: { name: 'Uran', unit: 'funt', mean: 60, sigma: 0.30, theta: 0.08, season: null, betaP: 0.3, betaZ: 0.1, band: [0.4, 2.5], mood: false }
 };

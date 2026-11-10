@@ -1865,10 +1865,11 @@ const SECTORS = {
     'Gaming':                { icon: '🎮', profile: { beta: 1.4, rateSens: 1.0, pe: 20, margin: 0.25, growth: 0.07, ps: 3.0, da: 0.06 } },
     'Przemysł':              { icon: '⚙️', profile: { beta: 1.3, rateSens: 0.8, pe: 13, margin: 0.14, growth: 0.03, ps: 1.0, da: 0.05 },
         subsectors: { 'Robotyka': { delta: { growth: 0.02, margin: 0.02 } }, 'Przemysł ciężki': { profile: { beta: 1.4, da: 0.08 } }, 'Wydobycie': { listedOnly: true }, 'Handel surowcami': { listedOnly: true },
-            'Hutnictwo': { profile: { beta: 1.4, da: 0.07 } }, 'Maszyny': {}, 'Stocznie': { profile: { beta: 1.3, da: 0.06 } } } }, // 0.18.1 P1: ogniwa łańcucha metali // Przemysł ciężki: 0.16.4 G18; Wydobycie, Handel surowcami: 0.17 S2 (tylko przypisane spółki)
+            'Hutnictwo': { profile: { beta: 1.4, da: 0.07 } }, 'Maszyny': {}, 'Stocznie': { profile: { beta: 1.3, da: 0.06 } }, // 0.18.1 P1: ogniwa łańcucha metali
+            'Leśnictwo': { profile: { beta: 0.9 } }, 'Papiernie': {}, 'Przemysł lotniczy': { profile: { beta: 1.4 } } } }, // 0.18.2 G1–G3 // Przemysł ciężki: 0.16.4 G18; Wydobycie, Handel surowcami: 0.17 S2 (tylko przypisane spółki)
     'Motoryzacja':           { icon: '🚗', profile: { beta: 1.4, rateSens: 1.0, pe: 12, margin: 0.12, growth: 0.03, ps: 0.8, da: 0.05 } }, // 0.16.2 G6a: cykliczna, koszt pracy 22% przychodów
     'Chemia':                { icon: '⚗️', profile: { beta: 1.2, rateSens: 0.7, pe: 13, margin: 0.16, growth: 0.03, ps: 1.1, da: 0.05 },
-        subsectors: { 'Chemia polimerowa': {}, 'Nawozy': {}, 'Farmacja': { profile: { beta: 0.9 } } } }, // 0.18.1 P1: ogniwa łańcucha ropy (profil emisji z podsektora, energy.js)
+        subsectors: { 'Chemia polimerowa': {}, 'Nawozy': {}, 'Farmacja': { profile: { beta: 0.9 } }, 'Baterie': { profile: { beta: 1.4 } } } }, // 0.18.2 G2: Baterie // 0.18.1 P1: ogniwa łańcucha ropy (profil emisji z podsektora, energy.js)
     'Energia':               { icon: '⚡', profile: { beta: 0.8, rateSens: 0.9, pe: 12, margin: 0.25, growth: 0.02, ps: 1.5, da: 0.08 },
         subsectors: {
             'Energetyka jądrowa': { profile: { beta: 0.4, da: 0.14, pe: 14 }, mechanic: 'nuclear' },        // T2: budowa bloku
@@ -2090,7 +2091,8 @@ function applyStartSubsectors() {
 const SUBSECTOR_ASSIGNMENTS_018 = {
     ANN: ['Przemysł', 'Maszyny'], STM: ['Przemysł', 'Stocznie', ['Przemysł ciężki']], HUT: ['Przemysł', 'Hutnictwo'], MTP: ['Motoryzacja', null],
     SIK: ['Chemia', 'Nawozy'], KUP: ['Chemia', 'Farmacja'], MEF: ['Chemia', 'Farmacja'], ECL: ['Chemia', 'Chemia polimerowa'],
-    SUM: ['Żywność', 'Przetwórstwo spożywcze'], FIX: ['Żywność', 'Przetwórstwo spożywcze'], KFX: ['Żywność', 'Przetwórstwo spożywcze']
+    SUM: ['Żywność', 'Przetwórstwo spożywcze'], FIX: ['Żywność', 'Przetwórstwo spożywcze'], KFX: ['Żywność', 'Przetwórstwo spożywcze'],
+    DRZ: ['Przemysł', 'Leśnictwo'], OGP: ['Chemia', 'Baterie'] // 0.18.2 G1–G2: nowe spółki (ogniwa bez producenta w PL)
 };
 function applySubsectors018() {
     if (typeof macro === 'object' && macro?.subsectors018) return 0;
@@ -6155,6 +6157,8 @@ function collectChainRows() {
     const productsOf = (stock, revenue) => {
         const prof = typeof getStockCommodityProfile === 'function' ? getStockCommodityProfile(stock) : null, out = {};
         for (const [id, w] of Object.entries(prof?.product || {})) if (CHAIN_CONTRACT_GOOD[id] && w > 0) out[CHAIN_CONTRACT_GOOD[id]] = revenue * w;
+        for (const [g, w] of Object.entries(typeof CHAIN_COMPANY_PRODUCTS === 'object' ? CHAIN_COMPANY_PRODUCTS[stock.kind === 'share' ? stock.id : stock.symbol] || {} : {})) out[g] = (out[g] || 0) + revenue * w; // 0.18.2 G1
+        for (const [g, [parent, w]] of Object.entries(typeof CHAIN_COPRODUCTS === 'object' ? CHAIN_COPRODUCTS : {})) if (out[parent] > 0) out[g] = (out[g] || 0) + out[parent] * w; // srebro z miedzi, siarka z ropy
         return out;
     };
     for (const stock of stocks) {
@@ -6170,6 +6174,10 @@ function collectChainRows() {
         if (i.kind !== 'share' || !(h?.revenue > 0)) continue;
         const fx = toPln(1, i.currency), rev = h.revenue * fx, prev = (i.fundamentals.history[i.fundamentals.history.length - 2]?.revenue || 0) * fx, products = productsOf(i, rev), priority = Boolean(i.state) || i.sectors[0]?.[0] === 'Obronność';
         i.sectors.forEach(([sector, share], n) => rows.push({ key: getChainUnitKey(sector, n === 0 ? i.subsector : null), country: i.country, revenue: rev * share, prev: prev * share, products: n === 0 ? products : {}, priority }));
+    }
+    if (typeof MINT_ACTIVE !== 'undefined' && MINT_ACTIVE) { // 0.18.2 G7: Mennica państwowa (bez akcji) — skala: 2% przychodu banków kraju startowego
+        const banks = rows.filter(r => r.country === home && r.key.startsWith('Bankowość')).reduce((a, r) => a + r.revenue, 0), prevBanks = rows.filter(r => r.country === home && r.key.startsWith('Bankowość')).reduce((a, r) => a + (r.prev || 0), 0);
+        if (banks > 0) rows.push({ key: 'Mennica', country: home, revenue: banks * 0.02, prev: prevBanks * 0.02, products: {}, priority: true });
     }
     return rows;
 }

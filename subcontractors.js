@@ -420,7 +420,8 @@ function processSubcontractorsQuarterly() {
     // Powstawanie: startupy rzemieślnicze w specjalnościach poniżej maksimum; poniżej minimum zawsze.
     for (const specialty of Object.keys(SUBCONTRACTOR_SPECIALTIES)) {
         const count = getSubcontractorsBySpecialty(specialty).length;
-        if (count < rules.minPerSpecialty || (count < rules.maxPerSpecialty && Math.random() < rules.startupChance)) {
+        const busy = count ? getSubcontractorsBySpecialty(specialty).filter(s => s.busyProjectId).length / count : 0; // 0.18.2 G6: obłożenie specjalności przyciąga nowe firmy
+        if (count < rules.minPerSpecialty || (count < rules.maxPerSpecialty && Math.random() < rules.startupChance * (1 + 2 * busy))) {
             const spec = createSubcontractor(specialty);
             if (count >= rules.minPerSpecialty) logEvent(`🏗️ Nowa firma podwykonawcza: ${spec.name} (${SUBCONTRACTOR_SPECIALTIES[specialty]}).`, 'company');
         }

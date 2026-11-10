@@ -25,7 +25,8 @@ const REIT_TYPES = {
     office:      { label: 'Biura',      rentYield: 0.075, build: ['office_building', 'financial_tower'],                                      recession: -0.06, pandemic: -0.14, expansion: 0.02 },
     retail:      { label: 'Handel',     rentYield: 0.085, build: ['shopping_center'],                                                          recession: -0.07, pandemic: -0.16, expansion: 0.02 },
     warehouse:   { label: 'Magazyny',   rentYield: 0.070, build: ['warehouse', 'distribution_center'],                                         recession: 0.00,  pandemic: 0.03,  expansion: 0.03 },
-    health:      { label: 'Zdrowie',    rentYield: 0.065, build: ['hospital'],                                                                 recession: -0.01, pandemic: 0.01,  expansion: 0.00 },
+    health:      { label: 'Zdrowie',    rentYield: 0.060, build: ['hospital'],                                                                 recession: -0.04, pandemic: -0.04, expansion: 0.01 }, // 0.18.2 G6 (Z11): był najmocniejszy w grze (−0,01 w recesji, zysk w pandemii); szpitale też tracą najemców przy cięciach i odwołanych zabiegach
+    residential: { label: 'Mieszkania', rentYield: 0.060, build: ['residential_complex'],                                                     recession: -0.03, pandemic: -0.01, expansion: 0.02 }, // 0.18.2 G6 (K7): najem mieszkań
     hospitality: { label: 'Hotele',     rentYield: 0.080, build: ['hotel_chain', 'resort'],                                                    recession: -0.08, pandemic: -0.22, expansion: 0.02 }
 };
 const REIT_PROFILES = { GRET: 'mixed', UOR: 'office', HOR: 'health', REJS: 'hospitality' };
