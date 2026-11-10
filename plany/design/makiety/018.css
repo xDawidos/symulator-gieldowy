@@ -8,9 +8,15 @@
 .st-short   { --st-c: var(--color-text-warn); }
 .st-broken  { --st-c: var(--color-text-down); }
 
+/* R4: bursztyn = „to jest Twoje”. Pasek domyślnie neutralny, bursztyn tylko z .is-mine (Twoja pozycja, Twój zapis).
+   Reguła globalna: po dopisaniu do style.css przejrzeć obecne paski gry i dodać .is-mine tam, gdzie pokazują coś gracza. */
+.limit-meter > i { background: var(--color-text-secondary); }
+.limit-meter.is-mine > i { background: var(--color-text-accent); }
+.limit-meter.is-warn > i { background: var(--color-text-warn); }
+
 /* Klasa dobra: M P K Z L jako litera w ramce + title z pełną nazwą */
 .gd-cls { display: inline-grid; place-items: center; min-width: 20px; height: 18px; padding: 0 4px; border: 1px solid var(--color-border-default); border-radius: var(--radius-sm); font-family: var(--font-family-mono); font-size: var(--text-caption-size); font-weight: 700; color: var(--color-text-secondary); cursor: help; }
-.gd-cls.is-K { border-color: var(--color-border-accent); color: var(--color-text-accent); }
+.gd-cls.is-K { border-color: var(--color-border-strong); color: var(--color-text-primary); }
 .gd-cls.is-L { border-style: double; border-width: 3px; padding: 0 2px; }
 
 /* Łańcuch: kafle ogniw w 6 kolumnach, wyśrodkowane w pionie; krawędzie SVG pod kaflami (rysuje JS po pomiarze kafli) */
@@ -92,9 +98,9 @@
 .gd-chart .base { stroke: var(--color-text-muted); stroke-dasharray: 3 3; }
 .gd-chart .bar-up { fill: color-mix(in srgb, var(--color-text-up) 55%, transparent); }
 .gd-chart .bar-down { fill: color-mix(in srgb, var(--color-text-down) 60%, transparent); }
-.gd-chart .price { fill: none; stroke: var(--color-text-accent); stroke-width: 2; }
+.gd-chart .price { fill: none; stroke: var(--color-text-primary); stroke-width: 2; }
 .gd-chart text { fill: var(--color-text-muted); font-size: 11px; font-family: var(--font-family-mono); }
-.gd-chart text.pr { fill: var(--color-text-accent); }
+.gd-chart text.pr { fill: var(--color-text-primary); }
 .gd-chart-key { display: flex; flex-wrap: wrap; gap: var(--space-3); margin: var(--space-1) 0 0; padding: 0; list-style: none; font-size: var(--text-caption-size); color: var(--color-text-secondary); }
 .gd-chart-key i { display: inline-block; width: 14px; height: 8px; margin-right: 4px; vertical-align: middle; }
 .gd-shares { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: var(--text-body-sm-size); }
@@ -129,7 +135,7 @@
 /* Debiuty (IPO) na stronie Startupy */
 .ipo-list { display: grid; gap: var(--space-3); }
 .ipo-card { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(220px, .9fr); gap: var(--space-3) var(--space-4); padding: var(--space-3) var(--space-4); background: var(--color-bg-raised); border: 1px solid var(--color-border-subtle); border-left: 3px solid var(--ipo-c, var(--color-border-default)); border-radius: var(--radius-md); font-size: var(--text-body-sm-size); }
-.ipo-card.is-open { --ipo-c: var(--color-border-accent); }
+.ipo-card.is-open { --ipo-c: var(--color-text-info); }
 .ipo-card.is-pulled { --ipo-c: var(--color-text-down); }
 .ipo-card.is-done { --ipo-c: var(--color-text-up); }
 .ipo-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); }

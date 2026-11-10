@@ -11,7 +11,7 @@ Makieta jest statyczna, każdy stan ma osobny przykład. Liczby, nazwy spółek,
 ## Co pokazuje
 | Element | Dane | Markup / komponent |
 |---|---|---|
-| Giełda towarowa | „Metale” znikają, wchodzą Ruda żelaza i Miedź (`badge--accent` „nowy”), Kawa jako 8. kontrakt; nowa kolumna „Bilans w grze”: wpływ bilansu dobra na cel ceny (▲ niedobór +X%, ▼ nadwyżka −X%, ■ równowaga, „tylko kontrakt”) | istniejąca tabela 0.17 (`asset-mini-table`, `.cm-name`), ikony `surowiec-iron`, `surowiec-copper`, `surowiec-coffee` |
+| Giełda towarowa | „Metale” znikają, wchodzą Ruda żelaza i Miedź (`badge--info` „nowy”), Kawa jako 8. kontrakt; nowa kolumna „Bilans w grze”: wpływ bilansu dobra na cel ceny (▲ niedobór +X%, ▼ nadwyżka −X%, ■ równowaga, „tylko kontrakt”) | istniejąca tabela 0.17 (`asset-mini-table`, `.cm-name`), ikony `surowiec-iron`, `surowiec-copper`, `surowiec-coffee` |
 | Migracja metali | jednorazowa notka po wczytaniu starego zapisu: pozycje na metale zamknięte po cenie z dnia zmiany, wynik na koncie prywatnym | `notice-inline` |
 | ETF koszykowy | 8 surowców, kawa poza koszykiem | `.bank-card` |
 | Karta debiutu | nazwa, symbol, stan (zapisy otwarte, wycofany, na giełdzie); sektor i pochodzenie; rynek docelowy i poziom startowy; ocena i audytor; opiekun (reputacja 1–5, prowizja); cena emisyjna, wycena, dyskonto; wielkość oferty; zapisy jako krotność oferty | `.ipo-card.is-open / .is-pulled / .is-done`, `.ipo-facts` (`dl`), `limit-meter` |
