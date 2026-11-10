@@ -13,7 +13,7 @@ Kod: `zmiany-AI` po c76b303 (0.18.0) + sonda `PROBE_018` w `tests/przebiegi.html
 | Linie kryzysu | 0,06 na 6,5 roku | — | — |
 | Format zapisu | v24 | | |
 
-Czas kroku po kolei z UI: zob. „Pomiar czasu” niżej.
+Czas kroku po kolei z UI: **1392 ms/kw.** (zob. „Pomiar czasu”).
 
 **GIG 20 lat:** 12,81% (SE 0,37), czyli w szumie wobec 12,44% z kontroli 0.17.1 T6 i powyżej celu 8–11%. To punkt odniesienia dla bramki P3 („nie gorszy niż 12,4%” czytam jako: nie gorszy niż baza w granicach błędu, D11) i dla strojenia G8.
 
@@ -36,4 +36,4 @@ Udział jednostki w przychodzie wszystkich spółek gry (PLN), marża EBITDA wa�
 
 ## Pomiar czasu
 
-Do uzupełnienia w P1 (pierwsza próba nie wystartowała: konflikt portów z równoległą serią).
+6 gier × 6,5 roku po kolei, z rysowaniem interfejsu (×200, bez innych serii w tle): **1392 ms/kw.** (SE 23; gry 1325–1487), zapis 2,42 mln znaków. To punkt odniesienia dla budżetu czasu w 0.18.1 (≤ +15%) i 0.18.2 (≤ +25%).
