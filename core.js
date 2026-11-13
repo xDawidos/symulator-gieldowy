@@ -4279,13 +4279,10 @@ function updateMarketIndexes() {
 
     // 1. Spółki giełdowe aktywne
     const activeStocks = stocks.filter(stock => !stock.assetType && !stock.isBankrupt && !stock.tradeHalted && stock.price > 0);
-    const stocksWithMarketCap = activeStocks.map(stock => ({
-        ...stock,
-        marketCap: stock.price * (stock.totalShares || 1)
-    }));
-
-    // 2. Posortuj spółki od największej do najmniejszej pod względem kapitalizacji
-    stocksWithMarketCap.sort((a, b) => b.marketCap - a.marketCap);
+    // 2. Posortuj spółki od największej do najmniejszej pod względem kapitalizacji.
+    // 0.18.5 W2: bez kopii spółek ({...stock} co tick kopiowało całe historie; 19% czasu kroku w profilu W0) — wagi czytają tylko symbol, kurs i liczbę akcji.
+    const capOf = stock => stock.price * (stock.totalShares || 1);
+    const stocksWithMarketCap = activeStocks.sort((a, b) => capOf(b) - capOf(a));
 
     // 3–4. SIG20 (20 największych), SIG40 i BSIG80 (jeśli uruchomione), ważone kapitalizacją. 0.15.4 P4: indeksy łańcuchowe jak GIG — zmiana liczby
     // akcji (split, konsolidacja) ani zmiana składu czołówki nie robi skoku; start jak dawniej: średnia cen ważona kapitalizacją.
