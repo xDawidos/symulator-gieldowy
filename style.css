@@ -6025,3 +6025,20 @@ body.dark-mode #stock-table tr.sector-subheader td, #stock-table tr.sector-subhe
    ================================================================================= */
 :root { --font-family-cond: 'IBM Plex Sans Condensed', var(--font-family-sans); }
 .panel h2, .sidebar-title, .exchange-name, #stock-table tr.market-header h4, .cc-symbol, .sector-donut-title { font-family: var(--font-family-cond); }
+
+/* Makieta 18 cz. 2: nagłówek giełdy jako płytka (krawędź 3 px w kolorze metalu, reguła wejścia, liczba spółek) i szyna wzdłuż wierszy */
+.t-junk, #stock-table tr.stock-row[data-level="JUNK"] { --tier: var(--exchange-junk); }
+.t-bronze, #stock-table tr.stock-row[data-level="BRONZE"] { --tier: var(--exchange-bronze); }
+.t-silver, #stock-table tr.stock-row[data-level="SILVER"] { --tier: var(--exchange-silver); }
+.t-gold, #stock-table tr.stock-row[data-level="GOLD"] { --tier: var(--exchange-gold); }
+.t-platinum, #stock-table tr.stock-row[data-level="PLATINUM"] { --tier: var(--exchange-platinum); }
+.t-ruby, #stock-table tr.stock-row[data-level="RUBY"] { --tier: var(--exchange-ruby); }
+.t-emerald, #stock-table tr.stock-row[data-level="EMERALD"] { --tier: var(--exchange-emerald); }
+.t-diamond, #stock-table tr.stock-row[data-level="DIAMOND"] { --tier: var(--exchange-diamond); }
+body.dark-mode #stock-table tr.ms-ex:not(.market-header) td, #stock-table tr.ms-ex:not(.market-header) td { position: sticky; top: calc(var(--size-ticker) + var(--size-topbar) + 34px); /* pod paskiem i nagłówkiem kolumn (34 px) */ z-index: 2; padding: 0 !important; background: var(--ink-850) !important; }
+#stock-table tr.ms-ex .ex-plate { align-items: baseline; gap: 12px; padding: 10px 12px; border-left: 3px solid var(--tier) !important; }
+#stock-table tr.ms-ex .ex-name { font-size: 15px; font-weight: 600; letter-spacing: 0; color: var(--tier); }
+#stock-table tr.ms-ex .ex-rule { font-size: 12px; color: var(--color-text-secondary); }
+#stock-table tr.ms-ex .ex-count { margin-left: auto; font-size: 12px; }
+#stock-table tr.ms-ex .exchange-chevron { margin-left: 8px; align-self: center; }
+#stock-table tr.stock-row[data-level] > td:first-child { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--tier, transparent) 35%, transparent); }

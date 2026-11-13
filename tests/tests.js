@@ -17501,6 +17501,23 @@ group('0.18.4 Audyt, oceny, IPO, sufity', () => {
 });
 
 group('0.18.5 Wydajność', () => {
+    test('makieta 18 cz. 2: reguła wejścia giełdy (kurs, ocena), klasa t-* płytki z poziomu giełdy', () => {
+        assertEq(getExchangeRuleText('JUNK'), 'kurs do 20 PLN', 'Śmieciowa');
+        assertEq(getExchangeRuleText('BRONZE'), 'kurs 20–75 PLN', 'Brązowa');
+        assertEq(getExchangeRuleText('GOLD'), 'kurs 400–800 PLN, ocena BBB', 'Złota z bramką oceny');
+        assertEq(getExchangeRuleText('PLATINUM'), 'kurs od 800 PLN, ocena A', 'Platynowa');
+        assert(getExchangeRuleText('RUBY').includes('ranking'), 'elitarne z rankingu');
+        const c = makeCompany('AAA'); c.segments = [{ sector: 'Technologia', subsector: null, share: 1 }]; c.sector = getSectorsFromSegments(c.segments); c.exchange = 'GOLD'; c.price = 500; resetWorld([c]);
+        const table = document.createElement('table'), body = document.createElement('tbody'); body.id = 'stock-table-body'; table.appendChild(body); document.body.appendChild(table);
+        const saved = { filter: sectorFilterState, level: currentMarketLevel, owned: ownedOnlyFilter, fav: favoritesOnlyFilter, market: selectedMarketOperator };
+        try {
+            sectorFilterState = { sector: 'all', subsector: null, secondary: false, type: 'all' }; currentMarketLevel = 'ALL'; ownedOnlyFilter = false; favoritesOnlyFilter = false; selectedMarketOperator = 'GPW';
+            displayStocks();
+            const live = document.getElementById('stock-table-body'), head = live.querySelector('tr.ms-ex');
+            assert(head && head.classList.contains('t-gold') && head.textContent.includes('ocena BBB'), `płytka Złotej: ${head?.className}`);
+            assertEq(live.querySelector('tr[data-symbol="AAA"]').dataset.level, 'GOLD', 'wiersz niesie poziom (szyna z CSS)');
+        } finally { sectorFilterState = saved.filter; currentMarketLevel = saved.level; ownedOnlyFilter = saved.owned; favoritesOnlyFilter = saved.fav; selectedMarketOperator = saved.market; table.remove(); }
+    });
     test('makieta 18 cz. 1: zero wersalików poza skórkami Internetu i umowy, Plex Sans Condensed w @import', async () => {
         const css = await (await fetch('../style.css', { cache: 'no-store' })).text();
         const bad = [...css.matchAll(/([^{}]+)\{[^}]*text-transform:\s*uppercase/g)].map(m => m[1].trim()).filter(sel => !/^\.(net|intro|tied)-/.test(sel));

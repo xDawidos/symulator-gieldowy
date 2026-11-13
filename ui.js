@@ -1785,6 +1785,16 @@ function displayCash() {
 const STOCK_TABLE_COLS = 6; // 0.14.1 R6: bez kolumny „Sektor”
 
 /** Jeden wiersz tabeli spółek (nazwa, znaczniki, kurs, zmiana, dostępność, akcje gracza, przyciski handlu). */
+/** Makieta 18: reguła wejścia na giełdę w nagłówku listy („kurs 400–800 PLN, ocena BBB”). */
+function getExchangeRuleText(key) {
+    const ex = exchanges[key];
+    if (!ex) return '';
+    if (ex.rankBased) return 'miejsce w rankingu wartości';
+    const gate = typeof GATE_BY_TIER === 'object' ? GATE_BY_TIER[key] : null;
+    const price = ex.minPrice <= 0 ? `kurs do ${formatNumberPl(ex.maxPrice, 0)} PLN` : ex.maxPrice === Infinity ? `kurs od ${formatNumberPl(ex.minPrice, 0)} PLN` : `kurs ${formatNumberPl(ex.minPrice, 0)}–${formatNumberPl(ex.maxPrice, 0)} PLN`;
+    return gate ? `${price}, ocena ${gate}` : price;
+}
+
 function renderStockTableRow(stock, isSubsidiary, parentSymbol, stockTableBody, childrenByParent, hasAnalystSkill, previousInputValues) {
     const exchangeData = exchanges[stock.exchange];
     const hasAccess = exchangeData ? exchangeData.level <= playerAccessLevel : false;
@@ -2313,13 +2323,13 @@ function displayStocks(previousInputValues = {}) {
 
     if (stocksOnThisExchange.length > 0) {
       const headerRow = stockTableBody.insertRow();
-      headerRow.className = 'exchange-header';
+      headerRow.className = `exchange-header ms-ex t-${EXCHANGE_TOKEN[exchangeKey] || 'junk'}`; // makieta 18 cz. 2: płytka w kolorze metalu
       headerRow.onclick = () => toggleExchangeVisibility(exchangeKey);
       const headerCell = headerRow.insertCell();
       headerCell.colSpan = STOCK_TABLE_COLS;
       const collapsedEx = Boolean(exchangeCollapseState[exchangeKey]);
       // 0.14.5: kwadrat w kolorze rangi + nazwa bez emoji + liczba spółek; przycisk dla klawiatury
-      headerCell.innerHTML = `<h4 class="my-1 exchange-title"><button type="button" class="exchange-toggle" aria-expanded="${!collapsedEx}" onclick="event.stopPropagation(); toggleExchangeVisibility('${exchangeKey}')">${exchangeDot(exchangeKey)}<span class="exchange-name">${escapeHtml(stripEmoji(exchange.name))}</span><span class="exchange-meta">· ${stocksOnThisExchange.length} ${stocksOnThisExchange.length === 1 ? 'spółka' : stocksOnThisExchange.length % 10 >= 2 && stocksOnThisExchange.length % 10 <= 4 && (stocksOnThisExchange.length % 100 < 12 || stocksOnThisExchange.length % 100 > 14) ? 'spółki' : 'spółek'}</span>${uiIcon(collapsedEx ? 'chevron-right' : 'chevron-down', 16, 'exchange-chevron')}</button></h4>`;
+      headerCell.innerHTML = `<h4 class="my-1 exchange-title"><button type="button" class="exchange-toggle ex-plate" aria-expanded="${!collapsedEx}" onclick="event.stopPropagation(); toggleExchangeVisibility('${exchangeKey}')"><span class="exchange-name ex-name">${escapeHtml(stripEmoji(exchange.name))}</span><span class="ex-rule">${getExchangeRuleText(exchangeKey)}</span><span class="exchange-meta ex-count">${stocksOnThisExchange.length} ${stocksOnThisExchange.length === 1 ? 'spółka' : stocksOnThisExchange.length % 10 >= 2 && stocksOnThisExchange.length % 10 <= 4 && (stocksOnThisExchange.length % 100 < 12 || stocksOnThisExchange.length % 100 > 14) ? 'spółki' : 'spółek'}</span>${uiIcon(collapsedEx ? 'chevron-right' : 'chevron-down', 16, 'exchange-chevron')}</button></h4>`;
     }
 
     const sectorCounts = new Map();
