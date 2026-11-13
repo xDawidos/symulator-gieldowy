@@ -17482,6 +17482,10 @@ group('0.18.4 Audyt, oceny, IPO, sufity', () => {
         assert(meetsRatingGate(s, 'GOLD') && meetsRatingGate(s, 'PLATINUM'), 'bramka'); s.rating.grade = 'BB'; assert(!meetsRatingGate(s, 'GOLD'), 'BB nie wchodzi na Złotą');
         s.rating = { grade: 'A', q: 10, until: 14, auditor: 'aud5', bribed: true }; const p0 = s.price;
         revealBribedRating(s); assert(s.rating.revealed && ratingState.banned.aud5 > 10, 'licencja'); assert(s.marketBehavior || s.price <= p0 || true, 'efekt kursu zlecony');
+        const poor = stocks[1]; poor.cash = 0; poor.rating = { grade: 'A', q: 10, until: 14, auditor: 'aud4', bribed: true }; const neg = [];
+        const adj0 = adjustCompanyCash; adjustCompanyCash = (st, d, ...r) => { const out = adj0(st, d, ...r); if (st.cash < 0) neg.push(st.cash); return out; };
+        try { revealBribedRating(poor); } finally { adjustCompanyCash = adj0; }
+        assertEq(neg.length, 0, 'kara bez ujemnej gotówki (najpierw kredyt)');
         const t = stocks[1]; t.price = 500; t.exchange = 'SILVER'; delete t.rating; reviewCompanyPlacements();
         assert(t.exchange === 'SILVER' && t.awaitingAudit, 'bez oceny zostaje na Srebrnej do audytu');
     });

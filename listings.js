@@ -630,7 +630,8 @@ function revealBribedRating(stock) {
     stock.rating.revealed = true; stock.rating.until = q; ratingState.banned[stock.rating.auditor] = q + RATING_RULES.licenseLossQ; ratingState.stats.reveals++;
     if (typeof applyPriceEffect === 'function') applyPriceEffect(stock.symbol, RATING_RULES.revealDrop, 'negative', 'company');
     const fine = Math.round(stock.price * stock.totalShares * RATING_RULES.fineShare);
-    if (typeof adjustCompanyCash === 'function') { adjustCompanyCash(stock, -fine); if (typeof adjustBalanceSheet === 'function') adjustBalanceSheet(stock, { assets: -fine, retainedEarnings: -fine }); if (typeof coverNegativeCash === 'function') coverNegativeCash(stock); }
+    // 0.18.5: jak kara UEiE — najpierw kredyt (ensureCompanyCash), bez chwilowo ujemnej gotówki
+    if (typeof adjustCompanyCash === 'function') { if (typeof ensureCompanyCash === 'function') ensureCompanyCash(stock, fine, 'Kredyt na karę za przekupiony audyt'); adjustCompanyCash(stock, -fine); if (typeof adjustBalanceSheet === 'function') adjustBalanceSheet(stock, { assets: -fine, retainedEarnings: -fine }); if (typeof coverNegativeCash === 'function') coverNegativeCash(stock); }
     if (typeof recordPayment === 'function') recordPayment(stock, 'external:skarb-panstwa', fine, 'Kara za przekupiony audyt');
     const text = `Afera audytowa: ${aud?.name || 'audytor'} zawyżył ocenę ${stock.name} po łapówce. Spółka płaci karę, audytor traci licencję, sprawą zajmuje się policja.`;
     if (typeof logEvent === 'function') logEvent(text, 'company');
