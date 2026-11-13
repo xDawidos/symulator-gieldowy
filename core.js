@@ -94,18 +94,18 @@ function getRandomElement(arr) {
 function togglePauseGame() {
     if (typeof isIntroActive === 'function' && isIntroActive()) return; // 0.16.10: zegar stoi do końca scenki startowej
     isGamePaused = !isGamePaused;
-    const pauseButton = document.getElementById('pause-game-btn');
-    if (pauseButton) {
-        if (isGamePaused) {
-            pauseButton.textContent = 'Wznów';
-            pauseButton.classList.add('is-paused');
-            console.log('--- GRA ZAPAUZOWANA ---');
-        } else {
-            pauseButton.textContent = 'Pauza';
-            pauseButton.classList.remove('is-paused');
-            console.log('--- GRA WZNOWIONA ---');
-        }
-    }
+    if (!isGamePaused) sessionEverRun = true;
+    updateSessionControls();
+}
+
+/** Makieta 18 (R5): stan sesji słowem i przycisk „Rozpocznij grę” (przed pierwszym tygodniem), potem „Wznów” albo „Wstrzymaj”. */
+let sessionEverRun = false;
+function updateSessionControls() {
+    const cal = typeof getGameCalendar === 'function' ? getGameCalendar() : { absQuarter: 1, week: 1 };
+    const atStart = !sessionEverRun && cal.absQuarter === 0 && cal.week === 1;
+    const btn = document.getElementById('pause-game-btn'), state = document.getElementById('session-state');
+    if (btn) { btn.textContent = isGamePaused ? (atStart ? 'Rozpocznij grę' : 'Wznów') : 'Wstrzymaj'; btn.classList.toggle('is-paused', isGamePaused); }
+    if (state) { state.classList.toggle('is-on', !isGamePaused); state.lastElementChild.textContent = isGamePaused ? 'Sesja wstrzymana' : 'Sesja trwa'; }
 }
 
 function togglePriceSort() {

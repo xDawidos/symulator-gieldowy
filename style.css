@@ -6058,3 +6058,15 @@ body.dark-mode #stock-table tr.ms-ex:not(.market-header) td, #stock-table tr.ms-
 }
 body.dark-mode .owned-badge, .owned-badge { background: transparent; color: var(--amber-400); font-family: var(--font-family-mono); font-weight: 600; } /* R4: bursztyn = Twoje */
 @media (max-width: 640px) { .ms-spark { display: none; } }
+
+/* Makieta 18 cz. 4: pasek sesji (stan słowem + kropka) i trzy liczby; bursztyn tylko dla gotówki funduszu */
+.ms-state { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--color-text-secondary); white-space: nowrap; }
+.ms-state i { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-500); }
+.ms-state.is-on i { background: var(--green-400); }
+.topbar-kpi { min-width: 112px; }
+.topbar-kpi-group { gap: 28px; }
+.topbar-kpi.is-mine .topbar-kpi-val { color: var(--amber-400); }
+#pause-game-btn.is-paused { background-color: var(--amber-400); color: var(--ink-900); }
+#pause-game-btn { white-space: nowrap; }
+.topbar-kpi[hidden] { display: none !important; }
+@media (max-width: 640px) { .ms-state span { display: none; } }

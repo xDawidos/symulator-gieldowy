@@ -1784,11 +1784,7 @@ function initializeGame() {
     if (typeof updateTopbarKPIs === 'function') updateTopbarKPIs();
     document.querySelector('.topbar-kpi-group')?.classList.remove('is-loading'); // przegląd 2026-11-08 pkt 6
 
-    const pauseButton = document.getElementById('pause-game-btn');
-    if (isGamePaused && pauseButton) {
-        pauseButton.textContent = 'Wznów';
-        pauseButton.classList.add('is-paused');
-    }
+    if (typeof updateSessionControls === 'function') updateSessionControls(); // makieta 18 (R5)
 
     updateInterestRates();
 

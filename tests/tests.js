@@ -17501,6 +17501,18 @@ group('0.18.4 Audyt, oceny, IPO, sufity', () => {
 });
 
 group('0.18.5 Wydajność', () => {
+    test('makieta 18 cz. 4: przycisk sesji „Rozpocznij grę” → „Wstrzymaj” → „Wznów”, stan słowem', () => {
+        const btn = document.createElement('button'), st = document.createElement('span'); btn.id = 'pause-game-btn'; st.id = 'session-state'; st.innerHTML = '<i></i><span></span>';
+        document.body.append(btn, st);
+        const saved = { paused: isGamePaused, ran: sessionEverRun, q: macro.quarter };
+        try {
+            macro.quarter = 0; isGamePaused = true; sessionEverRun = false; updateSessionControls();
+            const live = () => document.getElementById('pause-game-btn'), state = () => document.getElementById('session-state');
+            assertEq(live().textContent, 'Rozpocznij grę', 'start');
+            togglePauseGame(); assertEq(live().textContent, 'Wstrzymaj', 'w trakcie'); assert(state().classList.contains('is-on') && state().textContent.includes('Sesja trwa'), 'stan: trwa');
+            togglePauseGame(); assertEq(live().textContent, 'Wznów', 'po wstrzymaniu'); assert(state().textContent.includes('Sesja wstrzymana'), 'stan: wstrzymana');
+        } finally { isGamePaused = saved.paused; sessionEverRun = saved.ran; macro.quarter = saved.q; btn.remove(); st.remove(); }
+    });
     test('makieta 18 cz. 3: „—” przed pierwszą sesją, wykres 7 sesji, podświetlenie tylko przy zmianie i bez ruchu przy reduced-motion', async () => {
         const c = makeCompany('FLX'); c.segments = [{ sector: 'Technologia', subsector: null, share: 1 }]; c.sector = getSectorsFromSegments(c.segments); c.weeklyCloses = [];
         resetWorld([c]);
