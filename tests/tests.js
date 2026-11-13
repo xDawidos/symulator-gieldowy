@@ -17501,6 +17501,14 @@ group('0.18.4 Audyt, oceny, IPO, sufity', () => {
 });
 
 group('0.18.5 Wydajność', () => {
+    test('makieta 18 cz. 1: zero wersalików poza skórkami Internetu i umowy, Plex Sans Condensed w @import', async () => {
+        const css = await (await fetch('../style.css', { cache: 'no-store' })).text();
+        const bad = [...css.matchAll(/([^{}]+)\{[^}]*text-transform:\s*uppercase/g)].map(m => m[1].trim()).filter(sel => !/^\.(net|intro|tied)-/.test(sel));
+        assertEq(bad.join(' | '), '', 'reguły z wersalikami');
+        assert(css.includes('IBM+Plex+Sans+Condensed'), 'fonta Condensed');
+        const html = await (await fetch('../index.html', { cache: 'no-store' })).text();
+        assert(!/text-transform:\s*uppercase/.test(html), 'index.html bez wersalików');
+    });
     test('W1: przy ×200 interfejs rysuje się najwyżej co 200 ms, przy ×1 przy każdym kroku', () => {
         lastUiDrawAt = -Infinity;
         assert(shouldDrawUi(1000, 200) && !shouldDrawUi(1100, 200) && shouldDrawUi(1201, 200), '×200: co 200 ms');
