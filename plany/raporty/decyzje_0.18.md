@@ -83,6 +83,9 @@ Czat realizujący podejmuje decyzje sam, zgodnie z planem `plan_0.18_lancuchy_pr
 | D51 | W0 | Profil kwartału z podglądu gry (×200, z UI, 24 kw., zegar `performance.now` na funkcjach kroku): `runStockTick` 76% (co tick: `updateStockPrices` 13%, `updateMarketIndexes` 19%, `runAllAi` 6%, rysowanie tabeli 7%), kwartał 10%, tydzień 1%; **łańcuchy 0,2%, surowce 0,1%**. Pełny profil z serii (sonda `p018.prof`, z UI i `--noui`) w kontroli W4 | Pomiar w tych samych warunkach przed i po poprawce |
 | D52 | W2 | LOD spółek w formie ze specyfikacji (małe i zagraniczne co kwartał) **pominięty**: praca tygodniowa spółek to ok. 1% kroku, więc zysk < 1% przy ryzyku zmiany statystyki (seria 40 + 40 gier). Zamiast tego W2a: indeksy SIG bez kopii spółek co tick (`{...stock}` z całą historią), `updateMarketIndexes` 19% → 5,5% kroku, wynik identyczny (5bf80eb) | Gorący punkt był w pracy co tick, nie w tygodniowej |
 | D53 | W3 | Worker dla grafu i surowców **pominięty**: łańcuchy i surowce razem < 1% kroku (próg z planu: ≥ 15%). `chains.js` zostaje czystym modułem gotowym do Workera | Warunek z planu niespełniony |
+| D55 | W4 | REIT zdrowie po D46: CAGR 20 lat −0,6% → +1,0%, nadal najsłabszy typ (pozostałe 5,4–6,9%). Dalej nie stroję: Z11 wymaga straty w kryzysie, a resztę różnicy daje koszt budowy szpitali. Do listy U8 | Najbliższy wariant, który zachowuje Z11 |
+| D56 | W4 | Pierwsza partia W4 dała marże −0,67 pp wobec M6. Bisekcja (bez sondy W0 i bez poprawki REIT po −0,12 i −0,15 pp; W2a z identycznym wynikiem indeksów) i seria W4b na kodzie końcowym (−0,11 pp wobec P0) wskazują losowanie. Bramka końcowa liczona na W4b, łącznie 100 gier −0,34 pp (SE 0,15) | Szum serii 25–50 gier ma SE 0,15–0,22 pp |
+| D57 | W4 | Poprawka A2: kara za przekupiony audyt najpierw przez kredyt (`ensureCompanyCash`), jak kara UEiE; w W4 dawała chwilowo ujemną gotówkę (4 przypadki), w W4b 0 (c7cdc02) | Niezmiennik „bez ujemnej gotówki” |
 
 ## Część UI: makieta 18 (ekran główny)
 
@@ -103,4 +106,5 @@ Zbiorczo na koniec 0.18 (pytanie z opcjami po W4). Do tego czasu obowiązuje rek
 | U4 | Zyskujące sektory w linii `supply` poniżej celu (D25) | a) zostawić; b) mocniejsza premia cenowa dla producentów spoza strefy szoku | a) — średnio +6,6 pp jest w celu, tylko rozrzut duży |
 | U5 | Zapisy gracza w IPO z redukcją (D44) | a) nowy ekran według makiety 18 listy designu w kolejnej wersji; b) pominąć | a) |
 | U7 | Zanieczyszczenie po 20 latach 72–73 wobec celu 55–65 (już w bazie G9; ESG z M4 neutralne, +1) | a) zostawić, cel przesunąć na 65–75; b) strojenie energii 0.17.2 (szybsze OZE, mocniejsze kary) w osobnej części; c) stroić teraz | b) — dotyczy balansu energii, nie łańcuchów |
+| U8 | REIT zdrowie: CAGR 20 lat 1,0% wobec 5,4–6,9% pozostałych typów (D55) | a) zostawić; b) łagodniejsza strata w kryzysie (recesja −0,01, pandemia 0) i tańsze szpitale; c) wyższy najem 8% | b) z krótką serią, osobno od 0.18 |
 | U6 | Pozostałe okna (Bank, Firma, Internet) w ramie `.wn` z makiety 19; z makiety 18: pasek telefonu w 1 wierszu i szersza kolumna nazwy (D50) | a) przenieść w 0.18.5 jako część UI; b) osobna wersja UI | b) — 0.18.5 to wydajność |
