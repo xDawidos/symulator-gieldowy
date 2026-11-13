@@ -8488,7 +8488,7 @@ group('0.15 Poprawki i Program Policyjny: Windykator, raporty, rynki i Policja',
 
         // Sprawdź nagłówek rynku oraz wysuwany drawer
         const headerTitle = document.querySelector('.market-header-title');
-        assert(headerTitle && headerTitle.textContent.includes('GPW — GIEŁDA PAPIERÓW WARTOŚCIOWYCH'), 'nagłówek wyświetla GPW — GIEŁDA PAPIERÓW WARTOŚCIOWYCH');
+        assert(headerTitle && headerTitle.textContent.includes('GPW — Giełda Papierów Wartościowych'), 'nagłówek wyświetla GPW — Giełda Papierów Wartościowych (makieta 18: bez wersalików)');
 
         const drawer = document.getElementById('market-selector-drawer');
         assert(drawer, 'istnieje rozsuwany drawer wyboru giełdy');
