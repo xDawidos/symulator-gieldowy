@@ -75,6 +75,14 @@ Czat realizujący podejmuje decyzje sam, zgodnie z planem `plan_0.18_lancuchy_pr
 | D44 | A3 | IPO: audyt przy debiucie, opiekun emisji = losowy bank inwestycyjny (prowizja 3–7% od ok. ¼ kapitału, czyli części oferowanej), dyskonto 10% − 1,5 pp na stopień ponad BBB (+4 pp w bessie, widełki 5–15%), „pop” +3–12% w hossie i euforii; w bessie startup z szansą sukcesu < 60% wycofuje emisję z prawdopodobieństwem 50% (czeka w kolejce). **Bez zapisów gracza z redukcją** (osobny ekran, makieta 18 listy designu) | Zapis gracza to nowy przepływ UI i pieniędzy; zostawiam na część UI |
 | D45 | A4 | Sufity 130 i 180; próg miękki 100 → 120, wymuszone wycofanie od 115 → 135, pełne wydzielenia do 110 → 130 (te same odstępy co dawniej). Historia liczby spółek co kwartał (120 kw. w zapisie), wykres i CSV w Państwo → Rynki | Plan A4 |
 
+## 0.18.5
+
+| # | Część | Decyzja | Uzasadnienie |
+|---|---|---|---|
+| D51 | W0 | Profil kwartału z podglądu gry (×200, z UI, 24 kw., zegar `performance.now` na funkcjach kroku): `runStockTick` 76% (co tick: `updateStockPrices` 13%, `updateMarketIndexes` 19%, `runAllAi` 6%, rysowanie tabeli 7%), kwartał 10%, tydzień 1%; **łańcuchy 0,2%, surowce 0,1%**. Pełny profil z serii (sonda `p018.prof`, z UI i `--noui`) w kontroli W4 | Pomiar w tych samych warunkach przed i po poprawce |
+| D52 | W2 | LOD spółek w formie ze specyfikacji (małe i zagraniczne co kwartał) **pominięty**: praca tygodniowa spółek to ok. 1% kroku, więc zysk < 1% przy ryzyku zmiany statystyki (seria 40 + 40 gier). Zamiast tego W2a: indeksy SIG bez kopii spółek co tick (`{...stock}` z całą historią), `updateMarketIndexes` 19% → 5,5% kroku, wynik identyczny (5bf80eb) | Gorący punkt był w pracy co tick, nie w tygodniowej |
+| D53 | W3 | Worker dla grafu i surowców **pominięty**: łańcuchy i surowce razem < 1% kroku (próg z planu: ≥ 15%). `chains.js` zostaje czystym modułem gotowym do Workera | Warunek z planu niespełniony |
+
 ## Część UI: makieta 18 (ekran główny)
 
 | # | Część | Decyzja | Uzasadnienie |
