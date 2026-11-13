@@ -17390,7 +17390,7 @@ group('0.18.2 Pełny graf', () => {
         assert(block.members.length <= NUCLEAR_MAX_MEMBERS, 'najwyżej 3 firmy');
     });
     test('G6: REIT zdrowie traci w recesji i pandemii (Z11), jest typ mieszkaniowy', () => {
-        assert(REIT_TYPES.health.recession <= -0.03 && REIT_TYPES.health.pandemic < 0, 'zdrowie bez przewagi w kryzysie');
+        assert(REIT_TYPES.health.recession < 0 && REIT_TYPES.health.pandemic < 0, 'zdrowie bez przewagi w kryzysie');
         assert(REIT_TYPES.residential && REIT_TYPES.residential.build.includes('residential_complex'), 'mieszkania');
     });
     test('G7: Mennica tylko z wyłącznikiem MINT_ACTIVE; handel kupuje dobra końcowe', () => {

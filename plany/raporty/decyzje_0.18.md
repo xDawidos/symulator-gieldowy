@@ -50,6 +50,9 @@ Czat realizujący podejmuje decyzje sam, zgodnie z planem `plan_0.18_lancuchy_pr
 | D32 | G7 | Handel (Usługi) kupuje 25% dóbr końcowych (dystrybucja), receptura Usług: żywność, auta, piwo, leki. Mennica jako jednostka bez akcji (2% przychodu banków), dobro „gotówka” i łańcuch tylko przy `MINT_ACTIVE`; **domyślnie wyłączona** (eksperyment) | Plan G7; seria z włączoną i wyłączoną — zob. kontrola 0.18.2 |
 | D33 | P6 | Linie kryzysu 0,75 na 20 lat (cel 1–2) — tyle samo w bazie P0, więc nie skutek 0.18.1. Próba: `CRISIS_BASE_CHANCE` 0,015 → 0,021 dała 0,70 (20 gier × 20 lat), czyli pokrętło nie działa; częstość ogranicza 12 kw. spokoju, wymagana faza rynku i krachy. Zostawiam 0,015, sprawa do osobnej diagnozy (lista „Do decyzji użytkownika”, pkt U2) | Strojenie warunków spokoju zmienia całą dynamikę kryzysów, to nie część pilotażu |
 | D34 | design | Makiety 18 (ekran główny) i 19 (rama okna i szyna zakładek Państwa) zaakceptowane przez użytkownika w trakcie 0.18 (notatka designu). Wdrożenie jako osobna część UI **przed kolejnymi zakładkami Państwa**: wstawiam ją jako pierwszą część 0.18.3 (przed M5 mapą szlaków, która dodaje widok w Państwie), z commitem; 0.18.2 nie dodaje nowych zakładek Państwa | Prośba czatu designu: makieta 19 przed L4 |
+| D46 | G9 | REIT `health` po D31 najsłabszy: CAGR −0,6%/rok przez 20 lat (mixed 7,9%, office 7,2%, hospitality 5,2%). Poprawka: najem 6,0% → 7,0%, recesja −0,04 → −0,02, pandemia −0,04 → −0,01. Zdrowie dalej traci w kryzysie (Z11), ale nie odstaje od reszty | Najbliższy wariant Z11 w przedziale typów; zmiana REIT-ów nie rusza marż spółek ani GIG (REIT-y poza indeksem). Sprawdzenie w serii M6 (`p018.reit`) |
+| D47 | G9 | Mennica zostaje **wyłączona** (`MINT_ACTIVE = false`). Seria z włączoną: GIG −0,03 pp (OK), ale średnia marż −0,47 pp (SE 0,25), poza ±0,3 pp | Eksperyment nie przechodzi bramki marż; do decyzji użytkownika (U3), czy go stroić |
+| D48 | G8 | GIG 20 lat 12,56% (SE 0,37) wobec celu 8–11%. Łańcuchy z założenia mają średnią zero (graf to odchylenie), więc nie obniżą GIG; obniżenie wymaga zmiany balansu poza 0.18 (dryf wycen, dywidendy, wzrost PKB) | Duża zmiana balansu → do decyzji użytkownika (U1) |
 
 ## 0.18.3
 
@@ -71,3 +74,16 @@ Czat realizujący podejmuje decyzje sam, zgodnie z planem `plan_0.18_lancuchy_pr
 | D43 | A2 | Ocena z kondycji, marży EBITDA i zadłużenia (9 stopni D…AAA), szum ±1 (Wielka Trójka 10–12%, małe 30–35%), przekupstwo tylko u małych (3% × (1 + korupcja/50), +2 stopnie), ujawnienie 25%/kw.: −15% kursu, kara 2% kapitalizacji, audytor bez licencji 8 kw., wpis o śledztwie. Publiczne tylko ≥ A. Bramka awansu: Złota ≥ BBB, Platynowa ≥ A; bez oceny spółka zostaje i zamawia audyt na następny kwartał. Elitarne (ranking) bez bramki oceny | Elitarne to osobny mechanizm rankingowy (finance.js); bramka dla nich wymagałaby zmiany rankingu |
 | D44 | A3 | IPO: audyt przy debiucie, opiekun emisji = losowy bank inwestycyjny (prowizja 3–7% od ok. ¼ kapitału, czyli części oferowanej), dyskonto 10% − 1,5 pp na stopień ponad BBB (+4 pp w bessie, widełki 5–15%), „pop” +3–12% w hossie i euforii; w bessie startup z szansą sukcesu < 60% wycofuje emisję z prawdopodobieństwem 50% (czeka w kolejce). **Bez zapisów gracza z redukcją** (osobny ekran, makieta 18 listy designu) | Zapis gracza to nowy przepływ UI i pieniędzy; zostawiam na część UI |
 | D45 | A4 | Sufity 130 i 180; próg miękki 100 → 120, wymuszone wycofanie od 115 → 135, pełne wydzielenia do 110 → 130 (te same odstępy co dawniej). Historia liczby spółek co kwartał (120 kw. w zapisie), wykres i CSV w Państwo → Rynki | Plan A4 |
+
+## Do decyzji użytkownika
+
+Zbiorczo na koniec 0.18 (pytanie z opcjami po W4). Do tego czasu obowiązuje rekomendacja.
+
+| # | Sprawa | Opcje | Rekomendacja |
+|---|---|---|---|
+| U1 | GIG przez 20 lat 12,6% wobec celu 8–11% (D48) | a) zostawić, cel przesunąć na 10–13%; b) osobna wersja balansu (dryf wycen i dywidendy) po 0.18; c) stroić teraz w 0.18.5 | b) — zmiana dotyka wszystkich spółek, lepiej z własną bazą i bramką |
+| U2 | Linie kryzysu 0,75 na 20 lat wobec celu 1–2 (D33) | a) zostawić; b) skrócić okres spokoju 12 → 8 kw. i złagodzić wymóg fazy rynku; c) cel obniżyć do 0,5–1,5 | b) w osobnej części z serią kryzysową |
+| U3 | Mennica (D47): marże −0,47 pp | a) zostawić wyłączoną; b) stroić (udział 2% → 1%) i ponownie zmierzyć; c) usunąć kod | a) — mała wartość dla gry, kod czeka wyłączony |
+| U4 | Zyskujące sektory w linii `supply` poniżej celu (D25) | a) zostawić; b) mocniejsza premia cenowa dla producentów spoza strefy szoku | a) — średnio +6,6 pp jest w celu, tylko rozrzut duży |
+| U5 | Zapisy gracza w IPO z redukcją (D44) | a) nowy ekran według makiety 18 listy designu w kolejnej wersji; b) pominąć | a) |
+| U6 | Pozostałe okna (Bank, Firma, Internet) w ramie `.wn` z makiety 19 | a) przenieść w 0.18.5 jako część UI; b) osobna wersja UI | b) — 0.18.5 to wydajność |
