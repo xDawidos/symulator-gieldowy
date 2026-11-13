@@ -2249,7 +2249,7 @@ function displayStocks(previousInputValues = {}) {
     cell.colSpan = STOCK_TABLE_COLS;
     
     const currDef = (typeof getMarketDef === 'function' ? getMarketDef(selectedMarketOperator) : null) || { name: selectedMarketOperator, short: selectedMarketOperator };
-    const currTitle = `${escapeHtml(currDef.short || selectedMarketOperator)} — ${escapeHtml((currDef.name || selectedMarketOperator).toUpperCase())}`; // 0.16.12 D4: giełda macierzysta z danych kraju startowego
+    const currTitle = `${escapeHtml(currDef.short || selectedMarketOperator)} — ${escapeHtml(currDef.name || selectedMarketOperator)}`; // 0.16.12 D4: giełda macierzysta z danych kraju startowego
 
     const marketCards = activeMarkets.map(m => {
         const def = (typeof getMarketDef === 'function' ? getMarketDef(m.id) : null) || { name: m.id, short: m.id };
@@ -7788,6 +7788,8 @@ function updateMailBadge() {
     const unread = getUnreadMailCount('inbox');
     badge.textContent = unread > 99 ? '99+' : String(unread);
     badge.hidden = unread === 0;
+    const tabBadge = document.querySelector('#ms-tabbar [data-tab="mail"] .nav-badge'); // makieta 18: plakietka Poczty w dolnej nawigacji
+    if (tabBadge) { tabBadge.textContent = badge.textContent; tabBadge.hidden = badge.hidden; }
     const tuBadge = document.querySelector('#open-teamedup-btn .nav-badge');
     if (tuBadge) { const n = getTeamedUnread(); tuBadge.textContent = n > 99 ? '99+' : String(n); tuBadge.hidden = n === 0; }
 }
@@ -9565,8 +9567,29 @@ function toggleMarketFilters(force) {
 }
 function scrollToMyFund() {
     toggleMarketFilters(false);
+    if (window.matchMedia?.('(max-width: 640px)').matches) { toggleFundDrawer(true); return; }
     document.getElementById('portfolio')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
+
+/** Makieta 18 (R8): dolna nawigacja na telefonie — Rynek, Fundusz (szuflada), Poczta, Menu (boczne menu gry). */
+function toggleFundDrawer(force) {
+    const open = typeof force === 'boolean' ? force : !document.body.classList.contains('fund-drawer-open');
+    document.body.classList.toggle('fund-drawer-open', open);
+    const bar = document.getElementById('ms-tabbar');
+    bar?.querySelector('[data-tab="fund"]')?.setAttribute('aria-expanded', String(open));
+    bar?.querySelectorAll('button[data-tab]').forEach(b => b.toggleAttribute('aria-current', b.dataset.tab === (open ? 'fund' : 'market')));
+    bar?.querySelector('[aria-current]')?.setAttribute('aria-current', 'page');
+    return open;
+}
+function selectTabbar(tab) {
+    if (tab === 'fund') { toggleFundDrawer(); return; }
+    toggleFundDrawer(false);
+    if (tab === 'market') window.scrollTo({ top: 0, behavior: 'smooth' });
+    else if (tab === 'mail' && typeof openMailbox === 'function') openMailbox();
+    else if (tab === 'menu') document.body.classList.toggle('sidebar-open');
+}
+function initTabbarIcons() { document.querySelectorAll('#ms-tabbar [data-ic]').forEach(el => { el.outerHTML = uiIcon(el.dataset.ic, 20); }); }
+if (typeof document !== 'undefined') { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initTabbarIcons); else initTabbarIcons(); }
 
 // Przegląd 2026-11-08 pkt 7: zwijany nagłówek na telefonie (≤ 640 px) po przewinięciu o 40 px; zostaje sama gotówka (CSS .topbar.is-compact)
 if (typeof window !== 'undefined' && typeof document !== 'undefined') {

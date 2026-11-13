@@ -409,10 +409,9 @@
     </h2>
     <div id="market-content"><!-- 0.14.2 P8: zwijany rynek akcji -->
 
-    <!-- Przegląd 2026-11-08 pkt 8–9: na telefonie filtry w przycisku, skrót do funduszu -->
+    <!-- Przegląd 2026-11-08 pkt 8–9: na telefonie filtry w przycisku; fundusz w dolnej nawigacji (makieta 18) -->
     <div class="market-mobile-bar btn-row">
       <button type="button" class="btn-secondary btn-sm" id="market-filters-btn" aria-controls="market-filters" aria-expanded="false" onclick="toggleMarketFilters()">Filtry (0)</button>
-      <button type="button" class="btn-secondary btn-sm" onclick="scrollToMyFund()">Mój fundusz</button>
     </div>
     <div class="market-filters" id="market-filters">
     <!-- Chipy sektorów -->
@@ -496,7 +495,8 @@
         </section>
 
         <aside class="dashboard-sidebar">
-            <div id="portfolio" class="panel">
+            <div id="portfolio" class="panel" aria-label="Fundusz">
+    <div class="ms-grip" aria-hidden="true"></div>
     <h2 id="fund-panel-title">Mój fundusz</h2>
 
     <!-- Przełącznik konta handlu -->
@@ -1674,5 +1674,12 @@
 <script src="save_store.js"></script>
 <script src="main.js"></script>
 
+<!-- Makieta 18 (R8): dolna nawigacja na telefonie (≤ 640 px); „Fundusz” otwiera szufladę z księgą -->
+<nav class="ms-tabbar" id="ms-tabbar" aria-label="Nawigacja dolna">
+  <button type="button" data-tab="market" aria-current="page" onclick="selectTabbar('market')"><span data-ic="rynek"></span>Rynek</button>
+  <button type="button" data-tab="fund" aria-expanded="false" aria-controls="portfolio" onclick="selectTabbar('fund')"><span data-ic="teczka"></span>Fundusz</button>
+  <button type="button" data-tab="mail" onclick="selectTabbar('mail')"><span data-ic="poczta"></span>Poczta<span class="nav-badge" hidden>0</span></button>
+  <button type="button" data-tab="menu" aria-controls="app-sidebar" onclick="selectTabbar('menu')"><span data-ic="menu"></span>Menu</button>
+</nav>
 </body>
 </html>

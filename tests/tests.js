@@ -17501,6 +17501,20 @@ group('0.18.4 Audyt, oceny, IPO, sufity', () => {
 });
 
 group('0.18.5 Wydajność', () => {
+    test('makieta 18 cz. 6: dolna nawigacja — „Fundusz” otwiera i zamyka szufladę, „Rynek” ją zamyka; bez przycisku „Mój fundusz”', async () => {
+        const bar = document.createElement('nav'); bar.id = 'ms-tabbar';
+        bar.innerHTML = ['market', 'fund', 'mail', 'menu'].map(t => `<button data-tab="${t}"></button>`).join('');
+        document.body.appendChild(bar);
+        try {
+            const live = document.getElementById('ms-tabbar');
+            selectTabbar('fund');
+            assert(document.body.classList.contains('fund-drawer-open') && live.querySelector('[data-tab="fund"]').getAttribute('aria-current') === 'page', 'szuflada otwarta');
+            selectTabbar('market');
+            assert(!document.body.classList.contains('fund-drawer-open') && live.querySelector('[data-tab="market"]').getAttribute('aria-current') === 'page', 'szuflada zamknięta');
+        } finally { document.body.classList.remove('fund-drawer-open'); bar.remove(); }
+        const html = await (await fetch('../index.html', { cache: 'no-store' })).text();
+        assert(!html.includes('>Mój fundusz</button>') && html.includes('id="ms-tabbar"'), 'przycisk „Mój fundusz” usunięty, jest dolna nawigacja');
+    });
     test('makieta 18 cz. 5: księga funduszu — wynik wobec GIG w pp od startu, przed pierwszą sesją komunikat', () => {
         resetWorld([makeCompany('AAA')]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
         assert(playerFund.startGig > 0, 'GIG ze startu zapamiętany');
