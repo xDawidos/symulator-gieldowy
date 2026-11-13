@@ -102,4 +102,5 @@ Zbiorczo na koniec 0.18 (pytanie z opcjami po W4). Do tego czasu obowiązuje rek
 | U3 | Mennica (D47): marże −0,47 pp | a) zostawić wyłączoną; b) stroić (udział 2% → 1%) i ponownie zmierzyć; c) usunąć kod | a) — mała wartość dla gry, kod czeka wyłączony |
 | U4 | Zyskujące sektory w linii `supply` poniżej celu (D25) | a) zostawić; b) mocniejsza premia cenowa dla producentów spoza strefy szoku | a) — średnio +6,6 pp jest w celu, tylko rozrzut duży |
 | U5 | Zapisy gracza w IPO z redukcją (D44) | a) nowy ekran według makiety 18 listy designu w kolejnej wersji; b) pominąć | a) |
+| U7 | Zanieczyszczenie po 20 latach 72–73 wobec celu 55–65 (już w bazie G9; ESG z M4 neutralne, +1) | a) zostawić, cel przesunąć na 65–75; b) strojenie energii 0.17.2 (szybsze OZE, mocniejsze kary) w osobnej części; c) stroić teraz | b) — dotyczy balansu energii, nie łańcuchów |
 | U6 | Pozostałe okna (Bank, Firma, Internet) w ramie `.wn` z makiety 19; z makiety 18: pasek telefonu w 1 wierszu i szersza kolumna nazwy (D50) | a) przenieść w 0.18.5 jako część UI; b) osobna wersja UI | b) — 0.18.5 to wydajność |
