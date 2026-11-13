@@ -11,7 +11,7 @@ Zastępuje szkic z 2026-10-25. Decyzje z rozmowy 2026-11-10 są w sekcji „Decy
 | Miara | Wartość (kontrola 0.17.1, T6) |
 |---|---|
 | Testy | 1062/1062 |
-| GIG 6,5 roku / 20 lat | 11,01% / 12,44% (cel 20 lat 8–11%) |
+| GIG 6,5 roku / 20 lat | 11,01% / 12,44% (cel 20 lat 8–11%; od 2026-11-13 10–13%, U1) |
 | Średnia odchyłek marż sektorów | −0,15 pp |
 | Zapis (6,5 roku / 10 krajów) | 2,43 mln / 2,59 mln znaków |
 | Czas kroku (po kolei, z UI, 6 gier) | 2339 ms/kw., rozrzut 1323–3957 |
@@ -177,7 +177,7 @@ Pozostałe łańcuchy z serii (sekcja 3, pkt 4–10) po grupach sektorów. Każd
 | **G5** | **Obronność i zdrowie:** drony, amunicja (siarka), pojazdy bojowe, rakiety (konsumują samoloty, uproszczenie), farmacja → szpitale, sprzęt medyczny | `companies.js`, `core.js` (`society.defense`) |
 | **G6** | **Budownictwo, nieruchomości i podwykonawcy:** stal, cement i tarcica dla Budowlanego, REIT typu `residential` (K7), strojenie REIT `health` (Z11: dziś najmocniejszy w grze; recesja i pandemia, zwrot z najmu; cel: wynik REIT-ów w jednym przedziale ±3 pp/rok), rynek podwykonawców: powstawanie nowych, specjalności, geolodzy i energetyczni z 0.17.2 | `reits.js`, `subcontractors.js`, `companies.js` (projekty budowlane) |
 | **G7** | **Usługi, dystrybucja i Mennica:** handel i usługi jako ogniwo dystrybucji dóbr końcowych (bez galerii, które wejdą z miastami w 0.19.2), Mennica (papier, maszyny, złoto, srebro, miedź → gotówka) z wyłącznikiem `MINT_ACTIVE` | `companies.js`, `finance.js` (gotówka w bankach), `chains.js` |
-| **G8** | **Strojenie GIG razem z bilansem** (decyzja 2026-11-10): seria 20 × 20 lat. Pokrętła: `ε`, sprzężenie z kontraktami, koszt importu, tempo amortyzacji K. Cel: GIG 20 lat 8–11% przy marżach 0 ± 0,3 pp. Jeśli bilans nie wystarczy, decyzja użytkownika przed 0.18.3 | `chains.js` (stałe), raport strojenia |
+| **G8** | **Strojenie GIG razem z bilansem** (decyzja 2026-11-10): seria 20 × 20 lat. Pokrętła: `ε`, sprzężenie z kontraktami, koszt importu, tempo amortyzacji K. Cel: GIG 20 lat 8–11% (od 2026-11-13: 10–13%, U1) przy marżach 0 ± 0,3 pp. Jeśli bilans nie wystarczy, decyzja użytkownika przed 0.18.3 | `chains.js` (stałe), raport strojenia |
 | **G9** | Kontrola 0.18.2, `raporty/kontrola_0.18.2.md` | — |
 
 **Bramka 0.18.2:** marże 0 ± 0,3 pp, GIG 6,5 roku ±1 pp względem G0, GIG 20 lat według G8, czas kroku ≤ +25% i zapis ≤ +8% względem P0 (bazy 0.18.1), 0 błędów. Mennica: seria z włączoną i wyłączoną, różnica GIG ≤ 0,5 pp, inaczej zostaje wyłączona.
@@ -292,7 +292,7 @@ Wymogi wspólne: ciemny motyw i tokeny z `tokens.css`, ikony SVG (bez emoji), PL
 7. Cel gry jako osobna wersja po 0.18.
 8. Nowe podsektory w pilotażu z przypisaniem istniejących spółek, najwyżej 6 nowych.
 9. 0.18.2 i 0.18.3 to dwie osobne wersje (łańcuchy i mechaniki).
-10. Mennica w 0.18.2 z wyłącznikiem.
+10. Mennica w 0.18.2 z wyłącznikiem. 2026-11-13 (U3): zostaje wyłączona.
 11. Łańcuchy w oknie Państwa (zakładka „Łańcuchy”).
 12. Do 0.18 wchodzą też: ESG (M4), rynek podwykonawców (G6), finanse z serii (A1), usługi jako ogniwo dystrybucji (G7).
 13. Zgłoszenia z gry z 2026-11-10 rozkładamy tematycznie po wersjach. Nowa 0.18.0 „Porządki przed grafem” obejmuje wspólny kod spółek polskich i obcych przed grafem.
@@ -377,7 +377,7 @@ G4 prąd jako wsad prawie wszystkich, blok jądrowy w 3 etapach; G5 obronność
 i zdrowie; G6 budownictwo, REIT residential, strojenie REIT health (najmocniejszy
 w grze), rynek podwykonawców; G7 usługi
 jako dystrybucja, Mennica z wyłącznikiem MINT_ACTIVE; G8 strojenie GIG 20 lat
-do 8–11% pokrętłami bilansu (jeśli się nie da, pytanie do mnie); G9 kontrola.
+do 10–13% (U1, 2026-11-13) pokrętłami bilansu (jeśli się nie da, pytanie do mnie); G9 kontrola.
 Bramka każdej części: marże 0 ± 0,3 pp, krok ≤ +5%.
 
 0.18.3 Mechaniki: M0 baza; M1 magazyny i zapasy; M2 hierarchia konsumpcji

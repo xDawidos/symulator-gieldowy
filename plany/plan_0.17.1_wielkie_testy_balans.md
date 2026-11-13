@@ -58,7 +58,7 @@ Kolejność: T0 → T1 → … → T7. **Commit po każdej części.** Zmiany w 
 | Miara | Cel |
 |---|---|
 | Niezmienniki, ujemna gotówka, wyjątki JS, pieniądze znikąd | 0 we wszystkich seriach |
-| GIG (20 lat) | mediana 8–11%/rok |
+| GIG (20 lat) | mediana 8–11%/rok (od 2026-11-13: 10–13%, U1) |
 | Średnia premia rynku (20 lat) | −3…+3% |
 | Fundusz = GIG | udziały ±3%/rok, zaufanie 45–55 |
 | Pewny zysk (kantor, forex, kontrakty) | ≤ lokata + 4–6 pp/rok dla strategii mechanicznych |

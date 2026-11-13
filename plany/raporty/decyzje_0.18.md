@@ -98,13 +98,13 @@ Czat realizujący podejmuje decyzje sam, zgodnie z planem `plan_0.18_lancuchy_pr
 
 Zbiorczo na koniec 0.18 (pytanie z opcjami po W4). Do tego czasu obowiązuje rekomendacja.
 
-| # | Sprawa | Opcje | Rekomendacja |
-|---|---|---|---|
-| U1 | GIG przez 20 lat 12,6% wobec celu 8–11% (D48) | a) zostawić, cel przesunąć na 10–13%; b) osobna wersja balansu (dryf wycen i dywidendy) po 0.18; c) stroić teraz w 0.18.5 | b) — zmiana dotyka wszystkich spółek, lepiej z własną bazą i bramką |
-| U2 | Linie kryzysu 0,75 na 20 lat wobec celu 1–2 (D33) | a) zostawić; b) skrócić okres spokoju 12 → 8 kw. i złagodzić wymóg fazy rynku; c) cel obniżyć do 0,5–1,5 | b) w osobnej części z serią kryzysową |
-| U3 | Mennica (D47): marże −0,47 pp | a) zostawić wyłączoną; b) stroić (udział 2% → 1%) i ponownie zmierzyć; c) usunąć kod | a) — mała wartość dla gry, kod czeka wyłączony |
-| U4 | Zyskujące sektory w linii `supply` poniżej celu (D25) | a) zostawić; b) mocniejsza premia cenowa dla producentów spoza strefy szoku | a) — średnio +6,6 pp jest w celu, tylko rozrzut duży |
-| U5 | Zapisy gracza w IPO z redukcją (D44) | a) nowy ekran według makiety 18 listy designu w kolejnej wersji; b) pominąć | a) |
-| U7 | Zanieczyszczenie po 20 latach 72–73 wobec celu 55–65 (już w bazie G9; ESG z M4 neutralne, +1) | a) zostawić, cel przesunąć na 65–75; b) strojenie energii 0.17.2 (szybsze OZE, mocniejsze kary) w osobnej części; c) stroić teraz | b) — dotyczy balansu energii, nie łańcuchów |
-| U8 | REIT zdrowie: CAGR 20 lat 1,0% wobec 5,4–6,9% pozostałych typów (D55) | a) zostawić; b) łagodniejsza strata w kryzysie (recesja −0,01, pandemia 0) i tańsze szpitale; c) wyższy najem 8% | b) z krótką serią, osobno od 0.18 |
-| U6 | Pozostałe okna (Bank, Firma, Internet) w ramie `.wn` z makiety 19; z makiety 18: pasek telefonu w 1 wierszu i szersza kolumna nazwy (D50) | a) przenieść w 0.18.5 jako część UI; b) osobna wersja UI | b) — 0.18.5 to wydajność |
+| # | Sprawa | Opcje | Rekomendacja | Decyzja użytkownika (2026-11-13) |
+|---|---|---|---|---|
+| U1 | GIG przez 20 lat 12,6% wobec celu 8–11% (D48) | a) zostawić, cel przesunąć na 10–13%; b) osobna wersja balansu (dryf wycen i dywidendy) po 0.18; c) stroić teraz w 0.18.5 | b) — zmiana dotyka wszystkich spółek, lepiej z własną bazą i bramką | **a) zostawić; cel GIG 20 lat zmieniony na 10–13%** we wszystkich planach na przyszłość (raporty historyczne zostają przy starym celu) |
+| U2 | Linie kryzysu 0,75 na 20 lat wobec celu 1–2 (D33) | a) zostawić; b) skrócić okres spokoju 12 → 8 kw. i złagodzić wymóg fazy rynku; c) cel obniżyć do 0,5–1,5 | b) w osobnej części z serią kryzysową | **b) z okresem spokoju 12 → 10 kw.** (nie 8) i łagodniejszym wymogiem fazy; w 0.18.6 (O4) z serią kryzysową |
+| U3 | Mennica (D47): marże −0,47 pp | a) zostawić wyłączoną; b) stroić (udział 2% → 1%) i ponownie zmierzyć; c) usunąć kod | a) — mała wartość dla gry, kod czeka wyłączony | **a) Mennica zostaje wyłączona** (`MINT_ACTIVE = false`) |
+| U4 | Zyskujące sektory w linii `supply` poniżej celu (D25) | a) zostawić; b) mocniejsza premia cenowa dla producentów spoza strefy szoku | a) — średnio +6,6 pp jest w celu, tylko rozrzut duży | **a) zostawić** |
+| U5 | Zapisy gracza w IPO z redukcją (D44) | a) nowy ekran według makiety 18 listy designu w kolejnej wersji; b) pominąć | a) | **a) zapisy funduszu gracza na IPO z redukcją przy nadsubskrypcji** w 0.18.6 (O7), ekran w liście designu |
+| U7 | Zanieczyszczenie po 20 latach 72–73 wobec celu 55–65 (już w bazie G9; ESG z M4 neutralne, +1) | a) zostawić, cel przesunąć na 65–75; b) strojenie energii 0.17.2 (szybsze OZE, mocniejsze kary) w osobnej części; c) stroić teraz | b) — dotyczy balansu energii, nie łańcuchów | **bez strojenia: nowa mechanika** — zanieczyszczenie → protesty i strajki, presja społeczna → wydatki na UEiE i poparcie Zielonych; w 0.18.6 (O5) |
+| U8 | REIT zdrowie: CAGR 20 lat 1,0% wobec 5,4–6,9% pozostałych typów (D55) | a) zostawić; b) łagodniejsza strata w kryzysie (recesja −0,01, pandemia 0) i tańsze szpitale; c) wyższy najem 8% | b) z krótką serią, osobno od 0.18 | **zostawić do 0.19.2 Miasta 2**: najem (biura firmom, szpitale, mieszkania mieszkańcom), zapis w planie serii 7.2 |
+| U6 | Pozostałe okna (Bank, Firma, Internet) w ramie `.wn` z makiety 19; z makiety 18: pasek telefonu w 1 wierszu i szersza kolumna nazwy (D50) | a) przenieść w 0.18.5 jako część UI; b) osobna wersja UI | b) — 0.18.5 to wydajność | **ramy `.wn` dla Banku, Firmy i Internetu + poprawki z makiety 18** w 0.18.6 (O6) |

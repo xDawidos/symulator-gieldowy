@@ -6,8 +6,8 @@ Zgłoszenie użytkownika z 2026-11-13 (5 celów: debug, stany puste, formaty, pa
 
 | Wersja | Zakres | Kiedy |
 |---|---|---|
-| **0.18.6 Porządki** | wydzielenie debug do `debug.js`, stany puste, jedno formatowanie liczb, kwot i dat | zaraz po scaleniu 0.18 |
-| **Długa gra** | limity historii i pamięci, skala kapitału gracza wobec rynku, stopniowe odblokowywanie, automatyzacja portfela, U2 i czarne łabędzie, podsumowania dekad | po wersji „Cel gry”, przed 0.19.1; numer nadamy razem z celem gry |
+| **0.18.6 Porządki** | wydzielenie debug do `debug.js`, stany puste, jedno formatowanie liczb, kwot i dat; z decyzji U1–U8: kryzysy (U2), presja ekologiczna (U7), ramy okien (U6), zapisy gracza na IPO (U5) | zaraz po scaleniu 0.18 |
+| **Długa gra** | limity historii i pamięci, skala kapitału gracza wobec rynku, stopniowe odblokowywanie, automatyzacja portfela, czarne łabędzie, podsumowania dekad | po wersji „Cel gry”, przed 0.19.1; numer nadamy razem z celem gry |
 
 ## Co już jest w kodzie (przegląd 2026-11-13)
 
@@ -26,7 +26,7 @@ Zgłoszenie użytkownika z 2026-11-13 (5 celów: debug, stany puste, formaty, pa
 
 ## 0.18.6 Porządki
 
-Bez zmiany balansu. Bramka: GIG i marże ±0,3 pp (szum), 0 błędów, testy zielone, zapis bez wzrostu.
+O0–O3 i O6 bez zmiany balansu (GIG i marże ±0,3 pp, szum). O4, O5 i O7 zmieniają balans, więc mają własne bramki. **Cel GIG 20 lat: 10–13%** (U1, 2026-11-13). Bramka całej wersji: 0 błędów, testy zielone, zapis bez wzrostu, GIG 20 lat w 10–13%, marże 0 ± 0,3 pp.
 
 ### O0. Spis
 
@@ -55,9 +55,42 @@ Bez zmiany balansu. Bramka: GIG i marże ±0,3 pp (szum), 0 błędów, testy zie
 - **Test:** testy helperów (minus typograficzny, `—` dla NaN, waluta EUR przy starcie z DE); skrypt `spis_formatow.mjs` w trybie kontroli: 0 wstawek `toFixed` w tekstach dla gracza, 0 „zł” w kodzie UI; przebieg 24 gier bez zmiany wyniku (formatowanie nie zmienia liczb).
 - **Bramka:** kontrola `raporty/kontrola_0.18.6.md`.
 
-### O4. Kontrola 0.18.6
+### O4. Kryzysy częściej (U2, decyzja 2026-11-13)
 
-Seria 24 × 6,5 roku i testy. Zrzuty Ustawień (z debug i bez), stanów pustych i kilku okien z kwotami.
+- **Zakres:** minimalny okres spokoju między liniami **12 → 10 kw.** (nie 8) i łagodniejszy wymóg fazy rynku (linia może ruszyć w szerszym zbiorze faz; dokładną listę ustala diagnoza). `CRISIS_BASE_CHANCE` bez zmian (D33: to pokrętło nie działa). Bez czarnych łabędzi (te są w „Długiej grze”).
+- **Pliki:** `crises.js` (stałe spokoju i warunek fazy), preset `kryzys` w `tests/przebiegi.html`.
+- **Test:** test jednostkowy: linia nie startuje przed 10 kw. od poprzedniej; seria 20 × 20 lat bez UI.
+- **Bramka:** **1–2 linie na 20 lat**, GIG 20 lat w 10–13%, marże 0 ± 0,3 pp. Jeśli przy 10 kw. wyjdzie poniżej 1, pytanie do użytkownika (8 kw. albo inny warunek).
+
+### O5. Presja ekologiczna (U7, decyzja 2026-11-13: mechanika zamiast strojenia)
+
+Stan w kodzie: partia **„Zieloni”** (`green`, `core.js:4872`) wchodzi na wyborach na miejsce Socjaldemokratów przy zanieczyszczeniu ≥ 60 z szansą 30% (`GREENS_SWAP_POLLUTION`, `GREENS_SWAP_CHANCE`, `core.js:5433`) albo od startu gry (25%). Jej poparcie rośnie o 0,1 pp na punkt ponad 30. Protest i smog (`ENERGY_EVENTS`, `energy.js:456`) mają stałą szansę po przekroczeniu progu. UEiE dostaje 15% budżetu energetycznego, a przy Zielonych w rządzie 30% (`ENERGY_OFFICE_RULES`, `energy.js:453`). Strajki pracownicze (`startStrike`, `getStrikeRisk`, `companies.js:10949, 11173`) nie zależą od zanieczyszczenia.
+
+- **Zakres:** jeden wskaźnik **presji ekologicznej** 0–100 w `society.energy`. Rośnie z zanieczyszczeniem ponad 45 i z każdym smogiem, protestem i kwaśnym deszczem, a spada powoli, gdy zanieczyszczenie maleje. Skutki presji:
+  1. częstsze protesty i smog (mnożnik szansy 1 → 2 przy presji 100) oraz **strajki ekologiczne** w spółkach o największej emisji (spadek zadowolenia pracowników, więc wyższe `getStrikeRisk`);
+  2. udział UEiE w budżecie energetycznym rośnie płynnie z 15% do 30% także bez Zielonych w rządzie (z Zielonymi do 40%), co przez poziomy urzędu obniża emisje;
+  3. silniejsi Zieloni: poparcie rośnie o presję × współczynnik, a przy presji ≥ 60 wchodzą na wybory już od zanieczyszczenia 50 i z wyższą szansą;
+  4. spada opinia publiczna spółek emitujących (`OPINION_EVENTS`).
+- **Pliki:** `energy.js` (presja, zdarzenia, budżet UEiE), `core.js` (Zieloni: poparcie, wejście), `companies.js` (strajk ekologiczny), `energy_ui.js` (wskaźnik w Państwo → Środowisko), `main.js` (pole w zapisie; stary zapis liczy presję z bieżącego zanieczyszczenia). Teksty bez emoji.
+- **Test:** presja rośnie przy zanieczyszczeniu 70 i spada przy 40; szansa protestu przy presji 100 jest dwa razy większa od bazowej; budżet UEiE 15% → 30% bez Zielonych; Zieloni wchodzą przy 50, gdy presja ≥ 60.
+- **Bramka:** seria 20 × 20 lat (razem z O4): zanieczyszczenie po 20 latach średnio 55–65, gry „brudne” (≥ 90) najwyżej w 10%, Zieloni obecni w ≥ 50% gier z zanieczyszczeniem > 60, GIG 20 lat 10–13%, marże 0 ± 0,3 pp.
+
+### O6. Ramy okien i poprawki z makiet (U6)
+
+- **Zakres:** okna Bank, Firma i Internet w ramie `.wn` z makiety 19; z makiety 18: pasek telefonu w jednym wierszu i szersza kolumna nazwy (D50).
+- **Pliki:** `ui.js`, `internet.js`, `style.css`, `index.html`.
+- **Test:** test DOM: trzy okna mają ramę `.wn`; zrzuty przy 1280 i 1920 px; pasek telefonu się nie łamie.
+
+### O7. Zapisy funduszu gracza na IPO (U5)
+
+- **Zakres:** w nowym IPO (0.18.4 A3) gracz jako fundusz składa zapis w okresie subskrypcji: liczba akcji albo kwota, z blokadą gotówki. Przy nadsubskrypcji przydział jest redukowany proporcjonalnie, jak u botów, a nadwyżka gotówki wraca po przydziale. Wycofana emisja oznacza pełny zwrot. Obowiązują limity KNF i limit pozycji funduszu, lock-up bez zmian. Zapis widać w karcie debiutu, a wynik przydziału przychodzi pocztą.
+- **Pliki:** `listings.js` (subskrypcja, redukcja), `companies.js` (debiut), `player.js` (blokada gotówki, przydział), `ui.js` (formularz według makiety), `main.js` (zapis otwartych zapisów).
+- **Test:** nadsubskrypcja 3× daje przydział 1/3 i zwrot reszty; wycofanie daje pełny zwrot; niezmienniki 0 (zablokowana + wolna gotówka = gotówka przed zapisem).
+- **Bramka:** debiuty i „pop” pierwszego dnia jak w kontroli 0.18.4 ±20%, GIG ±0,5 pp.
+
+### O8. Kontrola 0.18.6
+
+Seria 24 × 6,5 roku, seria 20 × 20 lat (O4, O5) i testy, raport `raporty/kontrola_0.18.6.md`. Zrzuty Ustawień (z debug i bez), stanów pustych, okien w ramie `.wn`, formularza zapisu na IPO i wskaźnika presji.
 
 ---
 
@@ -99,10 +132,10 @@ Seria 24 × 6,5 roku i testy. Zrzuty Ustawień (z debug i bez), stanów pustych 
 - **Pliki:** `automation.js` (nowy, logika bez DOM), `finance.js` (lokaty), `core.js` (`resolveTBillAuction`), `companies.js` (`resolveCollateralAuction`), `player.js` (zlecenia), `learning.js` (certyfikaty), `ui.js` (okno), `main.js` (zapis ustawień).
 - **Test:** lokata zapada → nowa w najlepszym banku; rebalancing przy odchyleniu > tolerancji, nie przy mniejszym; oferta aukcyjna złożona z limitem i odrzucona ponad limitem; preset `automaty` w przebiegach: 20 lat bez błędów i niezmienników.
 
-### D5. Kryzysy: U2 i czarne łabędzie
+### D5. Czarne łabędzie
 
-- **D5a, naprawa U2 (wariant b):** okres spokoju 12 → 8 kw. i łagodniejszy wymóg fazy rynku. Seria kryzysowa 20 × 20 lat. **Cel:** 1–2 linie na 20 lat, GIG 20 lat bez pogorszenia.
-- **D5b, czarny łabędź:** rzadkie zdarzenie **ponad liniami i poza ich wspólnym budżetem**, 1 na 15–25 lat (losowy odstęp, pierwszy najwcześniej po 10. roku, więc w grze 6,5-letniej nie wystąpi). Kilka typów: pandemia globalna, wojna regionalna, upadek waluty, rewolucja technologiczna (pozytywny łabędź), krach systemu bankowego. Każdy uruchamia 1–2 linie z `crises.js` jednocześnie w kilku krajach, zmienia parametry na dłużej (np. stopa, popyt na klasę dóbr w łańcuchach, migracja) i ma wpis w historii świata. Baner kryzysu (0.18.1 P4) w wariancie „Czarny łabędź”.
+- **U2 jest w 0.18.6 (O4)**, tu zostają tylko łabędzie.
+- **Czarny łabędź:** rzadkie zdarzenie **ponad liniami i poza ich wspólnym budżetem**, 1 na 15–25 lat (losowy odstęp, pierwszy najwcześniej po 10. roku, więc w grze 6,5-letniej nie wystąpi). Kilka typów: pandemia globalna, wojna regionalna, upadek waluty, rewolucja technologiczna (pozytywny łabędź), krach systemu bankowego. Każdy uruchamia 1–2 linie z `crises.js` jednocześnie w kilku krajach, zmienia parametry na dłużej (np. stopa, popyt na klasę dóbr w łańcuchach, migracja) i ma wpis w historii świata. Baner kryzysu (0.18.1 P4) w wariancie „Czarny łabędź”.
 - **Pliki:** `crises.js` (stałe spokoju, rejestr `BLACK_SWANS`, harmonogram), `chains.js` (szoki popytu), `countries.js` (wiele krajów), `ui.js` (baner), `tests/przebiegi.html` (preset `labedz`).
 - **Test:** wymuszony łabędź uruchamia swoje linie i wraca do normy; przebieg dymny 50 lat: 2–3 łabędzie, 0 błędów; gra 6,5-letnia: 0 łabędzi.
 
@@ -114,7 +147,7 @@ Seria 24 × 6,5 roku i testy. Zrzuty Ustawień (z debug i bez), stanów pustych 
 
 ### D7. Kontrola
 
-Testy, seria 24 × 6,5 roku i 10 × 20 lat (GIG i marże ±0,5 pp; U2 według D5a), przebieg dymny 50 lat (tylko technika), raport `raporty/kontrola_dluga_gra.md`.
+Testy, seria 24 × 6,5 roku i 10 × 20 lat (GIG ±0,5 pp i w 10–13% dla 20 lat, marże ±0,5 pp), przebieg dymny 50 lat (tylko technika), raport `raporty/kontrola_dluga_gra.md`.
 
 ---
 
@@ -124,6 +157,9 @@ Testy, seria 24 × 6,5 roku i 10 × 20 lat (GIG i marże ±0,5 pp; U2 według D5
 |---|---|---|---|---|
 | 1 | 0.18.6 | **Stan pusty** (komponent) | ikona, jedno zdanie, opcjonalny przycisk; warianty: brak danych, przed pierwszym tickiem, zablokowane | `renderEmptyState` |
 | 2 | 0.18.6 | **Ustawienia → Debug** | ten sam zestaw narzędzi co dziś, ale w klasach CSS zamiast stylów inline | `debug.js` |
+| 8 | 0.18.6 | **Zapis funduszu na IPO** (karta debiutu) | okres subskrypcji, cena emisyjna, pole liczby akcji lub kwoty, zablokowana gotówka, stan po przydziale (redukcja, zwrot), wycofana emisja | `listings.js`, `player.js` |
+| 9 | 0.18.6 | **Presja ekologiczna** (Państwo → Środowisko) | wskaźnik 0–100 słowem i liczbą, źródła (zanieczyszczenie, smog, protesty), skutki: budżet UEiE, poparcie Zielonych, strajki ekologiczne | `energy.js` (`society.energy`) |
+| 10 | 0.18.6 | **Bank, Firma, Internet w ramie `.wn`** | trzy okna w ramie z makiety 19; pasek telefonu w 1 wierszu, szersza kolumna nazwy (makieta 18) | `ui.js`, `internet.js` |
 | 3 | Długa gra | **Zakładka zablokowana** | kłódka w pasku bocznym, w środku warunek i postęp („Aktywa 32 / 50 tys. PLN”, „Certyfikat: Obligacje”) | `unlocks.js` |
 | 4 | Długa gra | **Okno „Automaty”** | trzy automaty: stan, parametry, ostatnie akcje, warunek odblokowania | `automation.js` |
 | 5 | Długa gra | **Baner „Czarny łabędź”** | wariant banera kryzysu: typ, kraje, linie, czas trwania | `crises.js` (`BLACK_SWANS`) |
@@ -152,7 +188,7 @@ testy (design/narzedzia/run_tests.mjs) i przebiegi ×200 przed commitem;
 kolor nie jest jedynym nośnikiem, bez nowych okien modalnych; plików w
 plany/design nie edytujesz; decyzje przez AskUserQuestion z rekomendacją.
 
-0.18.6 Porządki (bramka: GIG i marże ±0,3 pp, zapis bez wzrostu):
+0.18.6 Porządki (bramka: GIG 20 lat 10–13%, marże ±0,3 pp, zapis bez wzrostu):
 O0 spis: debug, puste kontenery, formatowanie poza helperami (z klasyfikacją
    tekst / log / obliczenie); raporty/spis_0.18.6.md i
    design/narzedzia/spis_formatow.mjs. Spis pokaż mi przed O1.
@@ -164,7 +200,15 @@ O2 renderEmptyState według makiety 18; najpierw okna z pierwszych minut;
 O3 formatters.js (czysty, ładowany pierwszy) z obecnymi helperami +
    formatInt, formatShares, formatPp, formatDateLong; wymiana wstawek
    ze spisu plik po pliku (tylko teksty dla gracza); 0 „zł” w kodzie UI.
-O4 kontrola raporty/kontrola_0.18.6.md.
+O4 U2: spokój 12 → 10 kw., łagodniejszy wymóg fazy; seria 20 × 20 lat,
+   cel 1–2 linie (inaczej pytanie do mnie).
+O5 U7: presja ekologiczna w society.energy (rośnie z zanieczyszczeniem,
+   smogiem i protestami) → częstsze protesty, strajki ekologiczne, UEiE
+   15 → 30% (40% z Zielonymi), silniejsi Zieloni (wejście od 50); bramka:
+   zanieczyszczenie po 20 latach 55–65, „brudne” gry ≤ 10%.
+O6 U6: Bank, Firma, Internet w ramie .wn (makieta 19), poprawki makiety 18.
+O7 U5: zapis funduszu gracza na IPO z redukcją, blokadą i zwrotem gotówki.
+O8 kontrola raporty/kontrola_0.18.6.md.
 
 Długa gra (po wersji „Cel gry”; bez bramki balansu dla 50–100 lat):
 D0 diagnoza: pamięć i zapis co 5 lat w przebiegu 50 lat, kapitał funduszu
@@ -176,8 +220,7 @@ D3 unlocks.js: rejestr odblokowań (aktywa, stanowisko, certyfikat, rok),
    kłódka z warunkiem, stare zapisy i piaskownica odblokowane.
 D4 automation.js: auto-rolowanie lokat, rebalancing, limity aukcyjne;
    każdy po certyfikacie Akademii; te same opłaty co ręcznie.
-D5a U2: spokój 12 → 8 kw., łagodniejszy wymóg fazy; seria 20 × 20 lat,
-   cel 1–2 linie. D5b czarne łabędzie: 1 na 15–25 lat, od 10. roku,
+D5 czarne łabędzie: 1 na 15–25 lat, od 10. roku,
    poza budżetem linii, kilka krajów, baner.
 D6 history.js: raport dekady (poczta + Ranking → Historia).
 D7 kontrola raporty/kontrola_dluga_gra.md (+ przebieg dymny 50 lat).
