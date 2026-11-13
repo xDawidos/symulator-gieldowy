@@ -1785,6 +1785,7 @@ function initializeGame() {
     document.querySelector('.topbar-kpi-group')?.classList.remove('is-loading'); // przegląd 2026-11-08 pkt 6
 
     if (typeof updateSessionControls === 'function') updateSessionControls(); // makieta 18 (R5)
+    if (typeof displayFundPanel === 'function' && playerFund) displayFundPanel(); // makieta 18 (R7): księga funduszu widoczna przed pierwszym tygodniem
 
     updateInterestRates();
 

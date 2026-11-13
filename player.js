@@ -1810,6 +1810,7 @@ function startNewCareer(profile = {}) {
     activeTradingAccount = 'fund';
 
     playerFund = createPlayerFund();
+    playerFund.startGig = getBenchmarkValue(); // makieta 18 (R7): wynik „wobec GIG” od startu gry
     const nav = FUND_START_CASH / FUND_START_UNITS;
 
     // Kilkunastu startowych klientów; JU rozdzielone wg typowej wpłaty.

@@ -2588,7 +2588,7 @@ function displayPortfolio() {
         }
     }
 
-    body.innerHTML = rows.length ? rows.join('') : `<tr><td colspan="4" class="text-muted">Brak pozycji ${isPrivate ? 'na koncie prywatnym' : 'w funduszu'}.</td></tr>`;
+    body.innerHTML = rows.length ? rows.join('') : `<tr><td colspan="4"><div class="ms-empty"><b>Nie masz jeszcze pozycji${isPrivate ? ' na koncie prywatnym' : ''}.</b> Wybierz spółkę z listy i kliknij przycisk handlu.${isPrivate ? '' : ' Zaufanie klientów spada, gdy cały fundusz leży w gotówce.'}</div></td></tr>`; // makieta 18: pusty stan
 
     // Pasywa
     const liabilities = document.getElementById('my-liabilities-list');
@@ -7049,13 +7049,7 @@ function renderFundSummary() {
     const trust = Math.round(playerFund.trust);
     const trustClass = trust >= 60 ? 'good' : trust >= 40 ? 'mid' : 'bad';
 
-    container.innerHTML = `
-        <div class="fund-kpis">
-            <div><span>NAV / udział</span><strong>${formatNav(nav)}</strong></div>
-            <div><span>Udziały</span><strong>${formatNumberPl(playerFund.units, 1)}</strong></div>
-            <div><span>Klienci</span><strong>${playerFund.clients.length}</strong></div>
-            <div><span>Stanowisko</span><strong>${escapeHtml(getPlayerPosition().name)}</strong></div>
-        </div>
+    container.innerHTML = renderFundLedger(nav) + `
         <div class="fund-trust">
             <span>Zaufanie klientów: <strong>${trust}/100</strong></span>
             <div class="fund-trust-bar"><div class="fund-trust-fill ${trustClass}" style="width:${trust}%"></div></div>
@@ -7070,6 +7064,28 @@ function renderFundSummary() {
             <div style="width:${(periodProgress * 100).toFixed(1)}%"></div>
         </div>`;
     updateEmissionControls();
+}
+
+/** Makieta 18 cz. 5 (R7): NAV dużą liczbą, wynik od startu i wobec GIG, księga: gotówka (% aktywów), akcje, klienci, konto prywatne. */
+function getFundSinceStart(nav = getFundNav()) {
+    if (!(playerFund?.startGig > 0) && typeof macro === 'object' && !macro.quarter && (playerFund?.calWeek || 1) <= 1) playerFund.startGig = getBenchmarkValue(); // start gry bez zapamiętanego GIG
+    const fund = nav / (FUND_START_CASH / FUND_START_UNITS) - 1, gig = playerFund?.startGig > 0 ? getBenchmarkValue() / playerFund.startGig - 1 : null;
+    return { fund, gig, vs: gig == null ? null : (fund - gig) * 100 };
+}
+function renderFundLedger(nav) {
+    const r = getFundSinceStart(nav), assets = getFundAssets(), cash = Math.max(0, Number(playerCash) || 0), shares = getFundPortfolioValue();
+    const held = Object.values(playerPortfolio).filter(p => (p?.shares || 0) > 0).length;
+    const started = (playerFund.calWeek || 1) > 1 || (typeof macro === 'object' && macro.quarter > 0);
+    const sign = v => `<b class="num ${v > 0 ? 'is-up' : v < 0 ? 'is-down' : ''}">${v > 0 ? '▲ ' : v < 0 ? '▼ ' : ''}${formatPct(v)}</b>`;
+    const vs = !started ? '<span>Wynik wobec GIG pokaże się po pierwszej sesji.</span>'
+        : `<span>od startu ${sign(r.fund)}</span>${r.gig == null ? '' : `<span>GIG ${sign(r.gig)}</span><span>wobec GIG <b class="num ${r.vs > 0 ? 'is-up' : r.vs < 0 ? 'is-down' : ''}">${r.vs > 0 ? '+' : ''}${formatNumberPl(r.vs, 1)} pp</b></span>`}`;
+    return `<div class="ms-nav-big"><span>NAV / udział</span><b>${formatNav(nav)}</b><div class="ms-vs">${vs}</div></div>
+        <dl class="ms-ledger">
+            <dt>Gotówka funduszu</dt><dd class="is-mine">${formatZl(cash)}<small>${assets > 0 ? Math.round(cash / assets * 100) : 100}% aktywów</small></dd>
+            <dt>Akcje</dt><dd>${formatZl(shares)}<small>${held} ${held === 1 ? 'spółka' : held % 10 >= 2 && held % 10 <= 4 && (held % 100 < 12 || held % 100 > 14) ? 'spółki' : 'spółek'}</small></dd>
+            <dt>Klienci</dt><dd>${playerFund.clients.length}<small>${formatNumberPl(playerFund.units, 0)} udziałów</small></dd>
+            <dt>Konto prywatne</dt><dd class="is-mine">${formatZl(playerWallet?.cash || 0)}<small>na szkolenia i udziały</small></dd>
+        </dl>`;
 }
 
 /** 0.14.2 P12: przycisk emisji — próg zaufania, licznik X/2, maksymalna wielkość. */

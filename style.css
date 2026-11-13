@@ -6070,3 +6070,19 @@ body.dark-mode .owned-badge, .owned-badge { background: transparent; color: var(
 #pause-game-btn { white-space: nowrap; }
 .topbar-kpi[hidden] { display: none !important; }
 @media (max-width: 640px) { .ms-state span { display: none; } }
+
+/* Makieta 18 cz. 5 (R7): panel funduszu jako księga */
+.portfolio-kpi-grid[hidden] { display: none !important; }
+.ms-nav-big span { font-size: 12px; color: var(--color-text-muted); }
+.ms-nav-big > b { display: block; font-family: var(--font-family-mono); font-variant-numeric: tabular-nums; font-size: 30px; font-weight: 600; line-height: 1.15; }
+.ms-vs { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; font-size: 12px; color: var(--color-text-secondary); }
+.ms-vs .num { font-family: var(--font-family-mono); font-size: 13px; }
+.ms-vs .is-up { color: var(--green-400); } .ms-vs .is-down { color: var(--red-400); }
+.ms-ledger { margin: 12px 0; display: grid; grid-template-columns: 1fr auto; border-top: 1px solid var(--ink-700); }
+.ms-ledger dt, .ms-ledger dd { padding: 8px 0; border-bottom: 1px solid var(--ink-800); }
+.ms-ledger dt { color: var(--color-text-secondary); }
+.ms-ledger dd { margin: 0; text-align: right; font-family: var(--font-family-mono); font-variant-numeric: tabular-nums; font-weight: 600; }
+.ms-ledger dd.is-mine { color: var(--amber-400); }
+.ms-ledger dd small { display: block; font-family: var(--font-family-sans); font-weight: 400; font-size: 11px; color: var(--color-text-muted); }
+.ms-empty { padding: 12px; border: 1px solid var(--ink-700); border-radius: 6px; color: var(--color-text-secondary); white-space: normal; }
+.ms-empty b { color: var(--color-text-primary); }

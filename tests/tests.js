@@ -17501,17 +17501,30 @@ group('0.18.4 Audyt, oceny, IPO, sufity', () => {
 });
 
 group('0.18.5 Wydajność', () => {
+    test('makieta 18 cz. 5: księga funduszu — wynik wobec GIG w pp od startu, przed pierwszą sesją komunikat', () => {
+        resetWorld([makeCompany('AAA')]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+        assert(playerFund.startGig > 0, 'GIG ze startu zapamiętany');
+        const q0 = macro.quarter; macro.quarter = 0; playerFund.calWeek = 1;
+        assert(renderFundLedger(getFundNav()).includes('pokaże się po pierwszej sesji'), 'przed pierwszą sesją');
+        macro.quarter = q0;
+        const gig = marketIndexes.find(i => i.id === 'GIG'); gig.value = playerFund.startGig * 1.10; playerFund.calWeek = 2;
+        const r = getFundSinceStart(10.5);
+        assert(Math.abs(r.fund - 0.05) < 1e-9 && Math.abs(r.gig - 0.10) < 1e-9 && Math.abs(r.vs + 5) < 1e-9, `od startu ${r.fund}, GIG ${r.gig}, wobec ${r.vs}`);
+        const html = renderFundLedger(10.5);
+        assert(html.includes('−5,0 pp') || html.includes('-5,0 pp'), 'wobec GIG w pp');
+        assert(html.includes('Gotówka funduszu') && html.includes('Konto prywatne') && html.includes('is-mine'), 'księga z bursztynem dla pieniędzy gracza');
+    });
     test('makieta 18 cz. 4: przycisk sesji „Rozpocznij grę” → „Wstrzymaj” → „Wznów”, stan słowem', () => {
         const btn = document.createElement('button'), st = document.createElement('span'); btn.id = 'pause-game-btn'; st.id = 'session-state'; st.innerHTML = '<i></i><span></span>';
         document.body.append(btn, st);
-        const saved = { paused: isGamePaused, ran: sessionEverRun, q: macro.quarter };
+        const saved = { paused: isGamePaused, ran: sessionEverRun, q: macro.quarter, week: playerFund?.calWeek };
         try {
-            macro.quarter = 0; isGamePaused = true; sessionEverRun = false; updateSessionControls();
+            macro.quarter = 0; if (playerFund) playerFund.calWeek = 1; isGamePaused = true; sessionEverRun = false; updateSessionControls();
             const live = () => document.getElementById('pause-game-btn'), state = () => document.getElementById('session-state');
             assertEq(live().textContent, 'Rozpocznij grę', 'start');
             togglePauseGame(); assertEq(live().textContent, 'Wstrzymaj', 'w trakcie'); assert(state().classList.contains('is-on') && state().textContent.includes('Sesja trwa'), 'stan: trwa');
             togglePauseGame(); assertEq(live().textContent, 'Wznów', 'po wstrzymaniu'); assert(state().textContent.includes('Sesja wstrzymana'), 'stan: wstrzymana');
-        } finally { isGamePaused = saved.paused; sessionEverRun = saved.ran; macro.quarter = saved.q; btn.remove(); st.remove(); }
+        } finally { isGamePaused = saved.paused; sessionEverRun = saved.ran; macro.quarter = saved.q; if (playerFund) playerFund.calWeek = saved.week; btn.remove(); st.remove(); }
     });
     test('makieta 18 cz. 3: „—” przed pierwszą sesją, wykres 7 sesji, podświetlenie tylko przy zmianie i bez ruchu przy reduced-motion', async () => {
         const c = makeCompany('FLX'); c.segments = [{ sector: 'Technologia', subsector: null, share: 1 }]; c.sector = getSectorsFromSegments(c.segments); c.weeklyCloses = [];
