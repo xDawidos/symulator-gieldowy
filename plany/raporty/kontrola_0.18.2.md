@@ -38,6 +38,6 @@ Testy: **1094/1094** (po poprawce REIT).
 
 ## Co nie zostało sprawdzone
 
-- Poprawka REIT zdrowie (D46) bez osobnej serii; wynik zmierzy seria M6 (`p018.reit`).
+- Poprawka REIT zdrowie (D46) bez osobnej serii; migawki M6 i A5 są sprzed niej, więc wynik zmierzy kontrola końcowa W4 (`p018.reit`).
 - Gra ręczna (tryb autonomiczny).
 - G8 (GIG 20 lat) — do decyzji użytkownika, U1.
