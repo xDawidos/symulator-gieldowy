@@ -75,6 +75,13 @@ Czat realizujący podejmuje decyzje sam, zgodnie z planem `plan_0.18_lancuchy_pr
 | D44 | A3 | IPO: audyt przy debiucie, opiekun emisji = losowy bank inwestycyjny (prowizja 3–7% od ok. ¼ kapitału, czyli części oferowanej), dyskonto 10% − 1,5 pp na stopień ponad BBB (+4 pp w bessie, widełki 5–15%), „pop” +3–12% w hossie i euforii; w bessie startup z szansą sukcesu < 60% wycofuje emisję z prawdopodobieństwem 50% (czeka w kolejce). **Bez zapisów gracza z redukcją** (osobny ekran, makieta 18 listy designu) | Zapis gracza to nowy przepływ UI i pieniędzy; zostawiam na część UI |
 | D45 | A4 | Sufity 130 i 180; próg miękki 100 → 120, wymuszone wycofanie od 115 → 135, pełne wydzielenia do 110 → 130 (te same odstępy co dawniej). Historia liczby spółek co kwartał (120 kw. w zapisie), wykres i CSV w Państwo → Rynki | Plan A4 |
 
+## Część UI: makieta 18 (ekran główny)
+
+| # | Część | Decyzja | Uzasadnienie |
+|---|---|---|---|
+| D49 | UI 18 | Wdrożone w 6 częściach (6334cfd, 943f7ce, 06f80b9, ac65dae, 76212fd, 841b93d + b989318) na obecnej tabeli `#stock-table` zamiast podmiany na klasy `.ms-*`: płytka giełdy `tr.ms-ex.t-*`, szyna z `data-level` wiersza, księga w `#fund-summary`. Ticker jest w linii opisu (Condensed), nie w osobnej kolumnie: przy 1366–1440 px kolumna nazwy ma 110–150 px i osobny ticker zjadał nazwę. Wykres 7 sesji = 6 zamknięć tygodniowych + bieżący kurs (sesja = tydzień gry). Grupa branży od 3 spółek (wcześniej 2). Wersaliki usunięte w całym `style.css` poza skórkami Internetu i umowy (`.net-*`, `.tied-*`, `.intro-*`) | Najmniejsza zmiana, która zachowuje filtry, szufladę handlu i testy tabeli; Internet i umowa mają własny styl (makieta 19) |
+| D50 | UI 18 | Nie zrobione: górny pasek na telefonie w 1 wierszu (dziś 2–3 wiersze, zwija się po przewinięciu jak w przeglądzie 2026-11-08 pkt 7) i nazwa spółki min. 180 px (przy 1440 px nazwa ma ok. 70–120 px obok ikon karty i gwiazdki). Oba wymagają przebudowy kolumn tabeli albo paska; **czeka na zgodność z makietą** | Poza zakresem części 1–6 z promptu designu; do listy U6 (okna i układ) |
+
 ## Do decyzji użytkownika
 
 Zbiorczo na koniec 0.18 (pytanie z opcjami po W4). Do tego czasu obowiązuje rekomendacja.
@@ -86,4 +93,4 @@ Zbiorczo na koniec 0.18 (pytanie z opcjami po W4). Do tego czasu obowiązuje rek
 | U3 | Mennica (D47): marże −0,47 pp | a) zostawić wyłączoną; b) stroić (udział 2% → 1%) i ponownie zmierzyć; c) usunąć kod | a) — mała wartość dla gry, kod czeka wyłączony |
 | U4 | Zyskujące sektory w linii `supply` poniżej celu (D25) | a) zostawić; b) mocniejsza premia cenowa dla producentów spoza strefy szoku | a) — średnio +6,6 pp jest w celu, tylko rozrzut duży |
 | U5 | Zapisy gracza w IPO z redukcją (D44) | a) nowy ekran według makiety 18 listy designu w kolejnej wersji; b) pominąć | a) |
-| U6 | Pozostałe okna (Bank, Firma, Internet) w ramie `.wn` z makiety 19 | a) przenieść w 0.18.5 jako część UI; b) osobna wersja UI | b) — 0.18.5 to wydajność |
+| U6 | Pozostałe okna (Bank, Firma, Internet) w ramie `.wn` z makiety 19; z makiety 18: pasek telefonu w 1 wierszu i szersza kolumna nazwy (D50) | a) przenieść w 0.18.5 jako część UI; b) osobna wersja UI | b) — 0.18.5 to wydajność |
