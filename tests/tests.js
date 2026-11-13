@@ -6900,12 +6900,12 @@ group('0.14.1 R6: widok spółek — rynek → poziom → sektor, opis działaln
             currentSortState = 'price_asc';
             displayStocks();
             const rows = [...body.rows].map(r => r.classList.contains('market-header') ? 'M' : r.classList.contains('exchange-header') ? 'E' : r.classList.contains('sector-subheader') ? r.textContent.replace(/[^A-Za-zżąśćęłóźńŻĄŚĆĘŁÓŹŃ]/g, '') : r.dataset.symbol);
-            assert(rows.join(',') === 'M,E,Bankowość,BKA,BKB,Technologia,TEB,TEA,SUB', rows.join(','));
+            assert(rows.join(',') === 'M,E,Pozostałe,BKA,TEB,BKB,TEA,SUB', rows.join(',')); // makieta 18: grupa branży od 3 spółek
             assert(body.rows[0].cells[0].colSpan === 6 && document.querySelector('#stock-table-body tr[data-symbol="BKA"]').cells.length === 6, '6 kolumn');
             currentSortState = 'price_desc';
             displayStocks();
             const order = [...body.rows].map(r => r.dataset.symbol).filter(Boolean);
-            assert(order.join(',') === 'BKB,BKA,TEA,SUB,TEB', order.join(','));
+            assert(order.join(',') === 'TEA,SUB,BKB,TEB,BKA', order.join(','));
             assert(body.querySelector('tr[data-symbol="BKA"] .stock-meta').textContent.startsWith('Bankowość'), 'opis pod nazwą');
             sectorFilterState = { sector: 'Bankowość', subsector: null, secondary: false, type: 'all' };
             displayStocks();
@@ -17501,6 +17501,26 @@ group('0.18.4 Audyt, oceny, IPO, sufity', () => {
 });
 
 group('0.18.5 Wydajność', () => {
+    test('makieta 18 cz. 3: „—” przed pierwszą sesją, wykres 7 sesji, podświetlenie tylko przy zmianie i bez ruchu przy reduced-motion', async () => {
+        const c = makeCompany('FLX'); c.segments = [{ sector: 'Technologia', subsector: null, share: 1 }]; c.sector = getSectorsFromSegments(c.segments); c.weeklyCloses = [];
+        resetWorld([c]);
+        const saved = { filter: sectorFilterState, level: currentMarketLevel, owned: ownedOnlyFilter, fav: favoritesOnlyFilter, market: selectedMarketOperator };
+        const table = document.createElement('table'), body = document.createElement('tbody'); body.id = 'stock-table-body'; table.appendChild(body); document.body.appendChild(table);
+        try {
+            sectorFilterState = { sector: 'all', subsector: null, secondary: false, type: 'all' }; currentMarketLevel = 'ALL'; ownedOnlyFilter = false; favoritesOnlyFilter = false; selectedMarketOperator = 'GPW';
+            lastDrawnPrice.clear(); displayStocks();
+            const row = () => document.getElementById('stock-table-body').querySelector('tr[data-symbol="FLX"]');
+            assertEq(row().querySelector('.change-pill').textContent.trim(), '—', 'przed pierwszą sesją');
+            assert(!row().querySelector('.ms-spark') && !row().querySelector('.flash-up, .flash-down'), 'bez wykresu i podświetlenia na starcie');
+            assertEq(row().querySelector('.ms-tick')?.textContent, 'FLX', 'ticker');
+            c.weeklyCloses = [90, 95, 100]; c.price = 110; displayStocks();
+            assert(row().querySelector('.ms-spark.is-up') && row().querySelector('.price-main.flash-up'), 'wykres w górę i podświetlenie po wzroście');
+            displayStocks();
+            assert(!row().querySelector('.price-main.flash-up'), 'bez zmiany kursu bez podświetlenia');
+        } finally { sectorFilterState = saved.filter; currentMarketLevel = saved.level; ownedOnlyFilter = saved.owned; favoritesOnlyFilter = saved.fav; selectedMarketOperator = saved.market; table.remove(); }
+        const css = await (await fetch('../style.css', { cache: 'no-store' })).text();
+        assert(/prefers-reduced-motion:\s*no-preference\)\s*\{\s*\.price-main\.flash-up/.test(css), 'podświetlenie tylko w no-preference');
+    });
     test('makieta 18 cz. 2: reguła wejścia giełdy (kurs, ocena), klasa t-* płytki z poziomu giełdy', () => {
         assertEq(getExchangeRuleText('JUNK'), 'kurs do 20 PLN', 'Śmieciowa');
         assertEq(getExchangeRuleText('BRONZE'), 'kurs 20–75 PLN', 'Brązowa');

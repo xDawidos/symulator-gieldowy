@@ -1785,6 +1785,22 @@ function displayCash() {
 const STOCK_TABLE_COLS = 6; // 0.14.1 R6: bez kolumny „Sektor”
 
 /** Jeden wiersz tabeli spółek (nazwa, znaczniki, kurs, zmiana, dostępność, akcje gracza, przyciski handlu). */
+/** Makieta 18 cz. 3: wykres 7 sesji (zamknięcia tygodniowe + bieżący kurs), 56×18, kolor z kierunku. */
+function renderSparkline7(stock) {
+    const pts = [...(stock.weeklyCloses || []).slice(-6), stock.price].filter(v => v > 0);
+    if (pts.length < 2) return '';
+    const lo = Math.min(...pts), hi = Math.max(...pts), span = hi - lo || 1;
+    const line = pts.map((v, i) => `${(1 + i * 54 / (pts.length - 1)).toFixed(1)},${(16 - (v - lo) / span * 14).toFixed(1)}`).join(' ');
+    const dir = pts[pts.length - 1] > pts[0] ? ' is-up' : pts[pts.length - 1] < pts[0] ? ' is-down' : '';
+    return `<svg class="ms-spark${dir}" viewBox="0 0 56 18" width="56" height="18" aria-hidden="true"><polyline points="${line}"/></svg>`;
+}
+/** Podświetlenie ceny 500 ms przy zmianie kursu od ostatniego rysowania (CSS tylko przy prefers-reduced-motion: no-preference). */
+const lastDrawnPrice = new Map();
+function getPriceFlashClass(stock) {
+    const prev = lastDrawnPrice.get(stock.symbol); lastDrawnPrice.set(stock.symbol, stock.price);
+    return prev === undefined || prev === stock.price ? '' : prev < stock.price ? ' flash-up' : ' flash-down';
+}
+
 /** Makieta 18: reguła wejścia na giełdę w nagłówku listy („kurs 400–800 PLN, ocena BBB”). */
 function getExchangeRuleText(key) {
     const ex = exchanges[key];
@@ -1941,7 +1957,8 @@ function renderStockTableRow(stock, isSubsidiary, parentSymbol, stockTableBody, 
     const parentNote = stock.isSubsidiaryOf ? ` · spółka zależna od ${stock.isSubsidiaryOf}${Number.isFinite(stock.parentStakePct) ? ` (${Math.round(stock.parentStakePct * 100)}%)` : ''} · ${exchanges[stock.exchange]?.name || stock.exchange}` : ''; // 0.14.2 P3
     const spinNote = (stock.spinoff ? ` · zapowiedziane wydzielenie: ${stock.spinoff.sector}` : '') + (stock.spunOffFrom && !stock.isSubsidiaryOf ? ` · wydzielona z ${stock.spunOffFrom}` : '') // 0.14 T4
       + (typeof getStockCooperations === 'function' && getStockCooperations(stock).length ? ` · kooperacje: ${getStockCooperations(stock).length}` : ''); // 0.14 T5
-    metaLine.textContent = `${primarySector} · ${stock.symbol}${parentNote}${spinNote}${marketId !== 'GPW' ? ` · ${getMarketBadgeText(stock)}` : ''}${typeof getCompanyCountryNote === 'function' ? ` · ${getCompanyCountryNote(stock)}` : ''}${stock.isDividendAristocrat ? ' · dywidendowy arystokrata' : ''}`;
+    const metaRest = `${parentNote}${spinNote}${marketId !== 'GPW' ? ` · ${getMarketBadgeText(stock)}` : ''}${typeof getCompanyCountryNote === 'function' ? ` · ${getCompanyCountryNote(stock)}` : ''}${stock.isDividendAristocrat ? ' · dywidendowy arystokrata' : ''}`;
+    metaLine.innerHTML = `${escapeHtml(primarySector)} · <span class="ms-tick">${escapeHtml(stock.symbol)}</span>${escapeHtml(metaRest)}`; // makieta 18 cz. 3: ticker w Condensed (bez osobnej kolumny — nazwa zostaje szeroka)
     metaLine.title = metaLine.textContent; // pełny opis, gdy wiersz jest ucięty
 
 
@@ -1979,7 +1996,7 @@ function renderStockTableRow(stock, isSubsidiary, parentSymbol, stockTableBody, 
     // KOMÓRKA 2: CENA
     const priceCell = row.insertCell();
     priceCell.classList.add('cell-number', 'cell-price');
-    priceCell.innerHTML = `<div class="price-main">${formatZl(stock.price)}</div>`;
+    priceCell.innerHTML = `<div class="price-main${getPriceFlashClass(stock)}">${formatZl(stock.price)}</div>`;
 
     if (stock.corporatePhase && getSkillLevel('financialAnalyst') >= 1) {
       const phaseBadge = document.createElement('div');
@@ -1997,7 +2014,7 @@ function renderStockTableRow(stock, isSubsidiary, parentSymbol, stockTableBody, 
     const changeCell = row.insertCell();
     changeCell.classList.add('cell-number');
     const changeArrow = changeClass === 'up' ? '▲' : changeClass === 'down' ? '▼' : '■';
-    changeCell.innerHTML = `<span class="change-pill ${changeClass}"><span aria-hidden="true">${changeArrow}</span> ${formatPct(changePct / 100)}</span>`;
+    changeCell.innerHTML = (stock.weeklyCloses?.length ? `${renderSparkline7(stock)}<span class="change-pill ${changeClass}"><span aria-hidden="true">${changeArrow}</span> ${formatPct(changePct / 100)}</span>` : '<span class="change-pill is-none" title="Zmiana pojawi się po pierwszej sesji">—</span>'); // makieta 18 cz. 3
 
     // KOMÓRKA 5: WOLUMEN / dostępne
     const availableCell = row.insertCell();
@@ -2303,11 +2320,11 @@ function displayStocks(previousInputValues = {}) {
     // 0.14.5: możliwość wyłączenia grupowania według kategorii — płaska lista i sortowanie po cenie w całej giełdzie.
     const isGroupedBySector = sectorFilterState.grouped !== false;
     const sectorOf = new Map(stocksOnThisExchange.map(stock => [stock, isForeignRow(stock) ? stock.sectors[0][0] : getMainSector(stock)]));
-    // przegląd 2026-11-08 pkt 10: grupa od 2 spółek; sektor z 1 spółką trafia do wspólnej grupy „Pozostałe” na końcu giełdy
+    // makieta 18: grupa od 3 spółek (wcześniej 2); mniejsze sektory trafiają do wspólnej grupy „Pozostałe” na końcu giełdy, branża jest w opisie wiersza
     if (isGroupedBySector) {
       const perSector = new Map();
       for (const s of stocksOnThisExchange) perSector.set(sectorOf.get(s), (perSector.get(sectorOf.get(s)) || 0) + 1);
-      for (const s of stocksOnThisExchange) if (perSector.get(sectorOf.get(s)) < 2) sectorOf.set(s, null);
+      for (const s of stocksOnThisExchange) if (perSector.get(sectorOf.get(s)) < 3) sectorOf.set(s, null);
     }
     const countryDir = countrySortState === 'asc' ? 1 : countrySortState === 'desc' ? -1 : 0;
     const byCountry = (a, b) => countryDir ? rowCountry(a).localeCompare(rowCountry(b)) * countryDir : 0;

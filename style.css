@@ -2906,10 +2906,10 @@ body.dark-mode #stock-table,
 #stock-table th, #stock-table td { box-sizing: border-box; }
 #stock-table .col-name { width: auto; }
 #stock-table .col-price { width: 148px; } /* 0.15.4 P1: „17 418,77 PLN” (mono, nowrap) wystawało pod pigułkę zmiany przy 108 px */
-#stock-table .col-change { width: 108px; }
-#stock-table .col-avail { width: 140px; }
+#stock-table .col-change { width: 150px; } /* makieta 18: wykres 7 sesji + zmiana */
+#stock-table .col-avail { width: 112px; }
 #stock-table .col-owned { width: 64px; }
-#stock-table .col-actions { width: 84px; }
+#stock-table .col-actions { width: 56px; }
 
 body.dark-mode #stock-table thead th,
 #stock-table thead th {
@@ -6042,3 +6042,19 @@ body.dark-mode #stock-table tr.ms-ex:not(.market-header) td, #stock-table tr.ms-
 #stock-table tr.ms-ex .ex-count { margin-left: auto; font-size: 12px; }
 #stock-table tr.ms-ex .exchange-chevron { margin-left: 8px; align-self: center; }
 #stock-table tr.stock-row[data-level] > td:first-child { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--tier, transparent) 35%, transparent); }
+
+/* Makieta 18 cz. 3: wiersz spółki — ticker, wykres 7 sesji, „—” przed pierwszą sesją, podświetlenie ceny, Twoje akcje bursztynem */
+.ms-tick { flex: none; font-family: var(--font-family-cond); font-weight: 600; font-size: 13px; letter-spacing: .02em; color: var(--color-text-secondary); }
+.ms-spark { display: inline-block; width: 56px; height: 18px; margin-right: 8px; vertical-align: middle; }
+#stock-table td.cell-number:has(> .ms-spark) { white-space: nowrap; }
+.ms-spark polyline { fill: none; stroke-width: 1.5; stroke: var(--ink-500); }
+.ms-spark.is-up polyline { stroke: var(--green-400); } .ms-spark.is-down polyline { stroke: var(--red-400); }
+.change-pill.is-none { color: var(--color-text-muted); background: transparent; }
+.price-main { border-radius: 2px; }
+@media (prefers-reduced-motion: no-preference) {
+  .price-main.flash-up { animation: msFlashUp .5s ease-out; } .price-main.flash-down { animation: msFlashDown .5s ease-out; }
+  @keyframes msFlashUp { from { background: rgba(61,220,132,.28); } to { background: transparent; } }
+  @keyframes msFlashDown { from { background: rgba(255,107,107,.28); } to { background: transparent; } }
+}
+body.dark-mode .owned-badge, .owned-badge { background: transparent; color: var(--amber-400); font-family: var(--font-family-mono); font-weight: 600; } /* R4: bursztyn = Twoje */
+@media (max-width: 640px) { .ms-spark { display: none; } }
