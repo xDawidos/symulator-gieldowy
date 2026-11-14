@@ -265,9 +265,6 @@ html, body { margin: 0; background: #05070a; color: var(--color-text-primary); f
 .ms-kpi b { font-family: var(--font-family-mono); font-variant-numeric: tabular-nums; font-size: 16px; font-weight: 600; white-space: nowrap; }
 .ms-kpi.is-mine b { color: var(--amber-400); } /* R4: bursztyn = Twoje pieniądze */
 .ms-session { display: flex; align-items: center; gap: 12px; }
-.ms-state { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--color-text-secondary); white-space: nowrap; }
-.ms-state i { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-500); }
-.ms-state.is-on i { background: var(--green-400); }
 .ms-date { font-family: var(--font-family-mono); font-size: 12px; color: var(--color-text-secondary); white-space: nowrap; }
 .ms-speed { display: inline-flex; padding: 2px; gap: 2px; background: var(--ink-750); border: 1px solid var(--ink-700); border-radius: 999px; }
 .ms-speed button { min-width: 36px; height: 28px; border: 0; border-radius: 999px; background: transparent; color: var(--color-text-secondary); font: 400 12px var(--font-family-mono); cursor: pointer; }
@@ -314,7 +311,7 @@ html, body { margin: 0; background: #05070a; color: var(--color-text-primary); f
 /* R1: giełda jako szkielet. Nagłówek z płytką w kolorze metalu, szyna wzdłuż wierszy grupy */
 .ms-ex th { position: sticky; top: 89px; z-index: 2; padding: 0; background: var(--ink-850); text-align: left; }
 .ms-ex .ex-plate { position: relative; display: flex; align-items: baseline; gap: 12px; padding: 10px 12px; border-left: 3px solid var(--tier); border-bottom: 1px solid var(--ink-700); }
-.ms-ex .ex-name { padding: 0; border: 0; background: none; font-family: 'IBM Plex Sans Condensed', var(--font-family-sans); font-size: 15px; font-weight: 600; color: var(--tier); cursor: help; text-decoration: underline dotted color-mix(in srgb, var(--tier) 50%, transparent); text-underline-offset: 4px; }
+.ms-ex .ex-name { padding: 0; border: 0; background: none; font-family: 'IBM Plex Sans Condensed', var(--font-family-sans); font-size: 15px; font-weight: 600; color: var(--tier); cursor: help; }
 /* Warunek dostępu tylko w podpowiedzi (nazwa giełdy: najechanie, fokus, dotknięcie). Treść przykładowa, kryteria planuje czat planowania */
 .ms-ex .ex-tip { position: absolute; left: 12px; top: calc(100% - 4px); z-index: 4; max-width: 260px; padding: 6px 10px; border: 1px solid var(--ink-600); border-radius: 6px; background: var(--ink-950); color: var(--color-text-primary); font-size: 12px; font-weight: 400; white-space: normal; box-shadow: 0 8px 20px rgba(0,0,0,.5); visibility: hidden; }
 .ms-ex .ex-name:hover + .ex-tip, .ms-ex .ex-name:focus-visible + .ex-tip, .ms-ex .ex-name[data-open] + .ex-tip { visibility: visible; }
@@ -389,7 +386,7 @@ html, body { margin: 0; background: #05070a; color: var(--color-text-primary); f
   .ms-kpis { gap: 16px; }
   .ms-kpi { min-width: 0; } .ms-kpi:nth-child(3) { display: none; } /* zaufanie: w szufladzie funduszu */
   .ms-kpi b { font-size: 14px; }
-  .ms-date, .ms-speed, .ms-state span, .ms-icon-btn { display: none; }
+  .ms-date, .ms-speed, .ms-icon-btn { display: none; }
   .ms-play { height: 40px; }
   .ms-body { grid-template-columns: minmax(0, 1fr); }
   .ms-nav, .ms-fund { display: none; }
@@ -446,7 +443,7 @@ html, body { margin: 0; background: #05070a; color: var(--color-text-primary); f
       <div class="ms-kpi"><span>Zaufanie klientów</span><b>58/100</b></div>
     </div>
     <div class="ms-session">
-      <span class="ms-state" role="status"><i></i><span>Sesja wstrzymana</span></span>
+      <span class="sr" role="status">Sesja wstrzymana</span><!-- stan widać na przycisku (Wznów / Wstrzymaj); tu tylko dla czytnika -->
       <span class="ms-date">Rok 1, kw. 1, tydz. 3</span>
       <span class="ms-speed" role="radiogroup" aria-label="Prędkość gry"><button role="radio" aria-checked="true">x1</button><button role="radio" aria-checked="false">x2</button><button role="radio" aria-checked="false">x5</button></span>
       <button class="ms-play">Wznów</button>
@@ -503,7 +500,7 @@ html, body { margin: 0; background: #05070a; color: var(--color-text-primary); f
 </template>
 
 <h1 class="frame-title">1. Ekran główny, desktop 1366 px (gra w toku, 3 pozycje)</h1>
-<p class="frame-sub">Poziomy giełd tworzą szkielet listy (R1): płytka z kolorem metalu i progiem wejścia, a wzdłuż wierszy grupy biegnie szyna. Bursztyn oznacza tylko rzeczy gracza: gotówkę, konto prywatne, liczbę Twoich akcji i główny przycisk. Kurs co 2 s zmienia się w demie, żeby pokazać podświetlenie 500 ms.</p>
+<p class="frame-sub">Poziomy giełd tworzą szkielet listy (R1): płytka z kolorem metalu (warunek dostępu w podpowiedzi na nazwie), a wzdłuż wierszy grupy biegnie szyna. Bursztyn oznacza tylko rzeczy gracza: gotówkę, konto prywatne, liczbę Twoich akcji i główny przycisk. Kurs co 2 s zmienia się w demie, żeby pokazać podświetlenie 500 ms.</p>
 <div class="frame" id="f-desk"></div>
 
 <h2 class="frame-title">2. Telefon 390 px: lista, potem otwarta szuflada funduszu</h2>
