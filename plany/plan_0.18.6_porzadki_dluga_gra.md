@@ -20,7 +20,7 @@ Makiety 22 i 23 (`design/22_pierwsze_kroki.md`, `design/23_fazy_dekada.md`, comm
 | Etap 1: globalny moduł formatowania (PLN, 2 albo 4 miejsca dla NAV, polskie spacje i przecinki) | **O3** | zgodne; 4 miejsca tylko dla NAV / udziału (makieta 18: „10,4210 PLN”), kwoty 2, liczby akcji 0 |
 | Etap 1: panel debug poza `index.html`, tylko `?debug=1` lub localhost | **O1** | **różnica:** użytkownik 2026-11-14 potwierdził, że przycisk w Ustawieniach na razie zostaje; `?debug=1` / localhost w „Odłożone” |
 | Etap 2: Progressive Disclosure (obligacje korporacyjne, aukcje hipoteczne, Miasto) po progach NAV lub szkoleniach | **E1** (dawne D3) | „Aukcje hipoteczne” w grze nie istnieją; najbliższe to aukcje akcji zastawnych (`startCollateralAuction`). Miasto: blokujemy obecne okno inwestycji miejskich, a Miasta 2 (0.19.2) dostają tylko szkielet reguły w rejestrze |
-| Etap 2: 4 zadania „Pierwsze kroki” z premią na konto prywatne | **E2** (nowe) | według makiety 22: 4 × 50 PLN |
+| Etap 2: 4 zadania „Pierwsze kroki” z premią na konto prywatne | **E2** (nowe) | według makiety 22: 4 × 50 PLN; dopisek 2026-11-14: E2 to ogólny system zadań (TeamedUP! + przypinanie, zadania fazy, zadania wzrostu) |
 | Etap 3: 3 automaty w Akademii | **D4** | auto-rolowanie lokat bez zmian; „limity aukcyjne” zawężone do bonów skarbowych z limitem gotówki; rebalancing klas aktywów zastąpiony **alertem koncentracji sektora (tylko alert, bez automatycznej sprzedaży)**, decyzja 2026-11-14 |
 | Etap 3: czarne łabędzie co 15–25 lat (stopy, zaufanie klientów, sektory) i podsumowanie dekady | **D5, D6** | skrócenie spokoju z U2 zostaje w O4 (bez dublowania); skutki łabędzi uzupełnione o stopy i zaufanie klientów; dekada w TeamedUP! (makieta 23) |
 | (spoza listy) makieta 23: akcent fazy, bezpiecznik | **O8** | decyzja 2026-11-14: w 0.18.6 |
@@ -128,11 +128,38 @@ Bez zmiany balansu (blokady dotyczą tylko gracza; przebiegi bez UI je ignorują
 - **Pliki:** `unlocks.js` (nowy, bez DOM), `ui.js` (pasek boczny, przyciski), `learning.js` (certyfikaty jako warunek), `index.html`, `main.js` (zapis odblokowań).
 - **Test:** nowa gra: zakładki z warunkiem pokazują kłódkę i warunek; spełnienie warunku odblokowuje i wysyła wiadomość; stary zapis ma wszystko odblokowane; przebiegi bez UI ignorują blokady (boty bez zmian).
 
-### E2. Pierwsze kroki (makieta 22 §1)
+### E2. System zadań: Pierwsze kroki, zadania fazy i zadania wzrostu (makieta 22 §1, dopisek użytkownika 2026-11-14)
 
-- **Zakres:** karta nad księgą funduszu: 4 zadania (kup pierwsze akcje; miej akcje 3 spółek; załóż lokatę w banku; przeczytaj zadanie od szefa w TeamedUP!), każde **+50 PLN na konto prywatne** (razem 200 PLN), przez tę samą funkcję co inne wpływy na konto, z wpisem w historii konta. Stan w zapisie `playerProfile.firstSteps = { done, collapsed, hidden }`. Zadania sprawdzane po każdej transakcji i przy otwarciu okna (bez pętli co tick). Stare zapisy: lista ukryta. „Ukryj listę” do końca gry, przywrócenie w Ustawieniach. Zadania wskazują tylko rzeczy otwarte od startu, więc działają z E1. ARIA według makiety (`aria-expanded`, `role=progressbar`, `aria-live=polite`).
-- **Pliki:** `onboarding.js` (nowy, logika bez DOM), `ui.js` (karta), `player.js` (premia na konto prywatne), `tied.js` (zadanie 4), `main.js`, `style.css`.
-- **Test:** nagroda wpada raz na zadanie (także po wczytaniu); stary zapis nie pokazuje listy; po 4 zadaniach jedna linia „ukończone +200 PLN”, która znika po końcu kwartału.
+Dopisek użytkownika: makieta 22 pokazuje wygląd okna zadań w ogóle. Zadania mieszkają standardowo w TeamedUP!, a gracz może je przypiąć do panelu funduszu. Dochodzą zadania tematyczne zależne od fazy (bessa, hossa) i zadania wzrostu wartości, które uczą mechanik.
+
+**Gdzie są zadania.** Dom zadań to TeamedUP! → „Zadania i oceny” (dziś cele zarządu z `getPlayerTargets`, `ai.js:2723`). Lista ma trzy grupy: cele zarządu (bez zmian), zadania aktywne i ukończone. Każde zadanie można **przypiąć** (najwyżej 4 naraz). Przypięte zadania pokazuje karta z makiety 22 nad księgą funduszu (ten sam wygląd: postęp, nagroda, przycisk przejścia, zwijanie). Pierwsze kroki są przypięte domyślnie w nowej grze. Bez przypiętych zadań karta znika.
+
+**Rejestr `QUESTS`** (`quests.js`, bez DOM). Każde zadanie ma:
+
+| Pole | Znaczenie | Przykład |
+|---|---|---|
+| `id`, `group` | identyfikator i grupa: `start`, `phase`, `growth` | `growth.diversify` |
+| `title`, `hint`, `go` | tytuł, podpowiedź, przycisk przejścia (okno lub zakładka) | „Otwórz Bank” |
+| `source` | kto daje zadanie: `system` (Pierwsze kroki), `boss` (szef w TeamedUP!), `info` (firma informacyjna, zadania fazy), `academy` (mentor) | `academy` |
+| `when` | warunek pojawienia się: faza lub objawy, stanowisko, odblokowanie z E1, poprzednie zadanie | `phase: 'bear'` |
+| `check(state)` | warunek wykonania, liczony z danych gry | 5 spółek z różnych sektorów |
+| `reward` | nagroda: PLN na konto prywatne, punkty relacji z szefem, odblokowanie hasła Akademii; bez nagród w aktywach funduszu (balans) | `{ pln: 100, academy: 'dywersyfikacja' }` |
+| `expires` | wygaśnięcie: brak (start, wzrost), koniec fazy albo N kwartałów (faza) | `{ phaseEnd: true, quarters: 4 }` |
+| `academy` | hasło Akademii, do którego prowadzi i które odblokowuje | `cz`, `fazy_rynku` |
+
+**Grupy zadań (pierwsza pula do akceptacji użytkownika):**
+- **Pierwsze kroki** (`start`, makieta 22): 4 zadania × 50 PLN, jak wyżej.
+- **Zadania fazy** (`phase`, 2–3 na fazę): np. w bessie „Kup spółkę z C/Z poniżej mediany sektora”, „Zatrzymaj klientów: zaufanie ≥ 50 do końca spadków”, „Załóż lokatę na przeczekanie”; w hossie „Zrealizuj zysk na pozycji +30%”, „Sprawdź wyceny: sprzedaj spółkę z C/Z dwa razy ponad medianę”; w euforii i kapitulacji po jednym zadaniu o ryzyku. Nagroda 50–150 PLN. Wygasają z końcem fazy.
+- **Zadania wzrostu wartości** (`growth`, łańcuch uczący mechanik): dywersyfikacja (5 sektorów), dywidendy, obligacje (po E1), kampania emisyjna i klienci, relacje z inwestorami (Tied), audyt i IPO (0.18.4), łańcuchy (zakładka Łańcuchy), surowce i kontrakty. Każde prowadzi do hasła Akademii i je odblokowuje, a ukończenie daje 100–300 PLN. Kolejne zadanie z łańcucha pojawia się po poprzednim albo po odblokowaniu funkcji w E1.
+
+**Wybór zadań fazy.** Faza jest ukryta do L4 (makieta 23), więc wybór nie może jej zdradzać. Gracz z L4 dostaje zadania według `regime.shownPhase` (z nazwą fazy w tytule). Gracz bez L4 dostaje je przy objawach, które widzi sam, i bez nazwy fazy, np. „GIG spadł o 15% od szczytu” albo „trzeci debiut z nadsubskrypcją w kwartale”, z tym samym opóźnieniem co wskazówki E3. Najwyżej 2 aktywne zadania fazy naraz, nowe najwcześniej co 2 kwartały, losowanie bez powtórzeń z puli fazy (pamięć ostatnich 6 `id`). Źródło `info`, czyli zadanie przychodzi od firmy informacyjnej w TeamedUP!.
+
+**Zapis** (`playerProfile.quests`): `{ active: [{ id, since, progress }], done: { id: kwartał }, pinned: [id], recent: [id], collapsed, hidden }`. Zastępuje `firstSteps` z makiety 22. Stare zapisy: Pierwsze kroki oznaczone jako wykonane bez nagrody, karta ukryta, a zadania wzrostu startują od tego, czego gracz jeszcze nie zrobił.
+
+- **Sprawdzanie:** po transakcji, przy otwarciu okna i raz na tydzień gry dla zadań fazy (bez pętli co tick). Nagroda przez tę samą funkcję co inne wpływy na konto prywatne, z wpisem w historii konta i w CV (zadania wzrostu).
+- **Pliki:** `quests.js` (nowy, rejestr i logika bez DOM), `ai.js` (lista w „Zadania i oceny”), `ui.js` (karta przypiętych zadań), `tied.js` (nadawca zadań fazy), `learning.js` (hasła jako cel i nagroda), `player.js` (premia), `main.js`, `style.css`.
+- **Test:** nagroda wpada raz na zadanie (także po wczytaniu); przypięcie piątego zadania jest zablokowane; zadanie fazy wygasa z końcem fazy; gracz bez L4 nie widzi nazwy fazy w żadnym zadaniu; stary zapis nie pokazuje Pierwszych kroków; ukończenie zadania wzrostu odblokowuje hasło Akademii.
+- **Bramka (w E4):** suma nagród z zadań ≤ 1 500 PLN na 6,5 roku (preset `gracz-aktywny`), GIG i marże bez zmian.
 
 ### E3. Wskazówki o fazie rynku (makieta 23 §4)
 
@@ -142,7 +169,7 @@ Bez zmiany balansu (blokady dotyczą tylko gracza; przebiegi bez UI je ignorują
 
 ### E4. Kontrola 0.18.7
 
-Seria 24 × 6,5 roku z gracza-aktywnego (blokady włączone w UI), testy, zrzuty kłódki, Pierwszych kroków i wskazówek; raport `raporty/kontrola_0.18.7.md`.
+Seria 24 × 6,5 roku z gracza-aktywnego (blokady włączone w UI), testy, zrzuty kłódki, karty przypiętych zadań, listy zadań w TeamedUP! i wskazówek; suma nagród z zadań ≤ 1 500 PLN; raport `raporty/kontrola_0.18.7.md`.
 
 ---
 
@@ -208,7 +235,8 @@ Testy, seria 24 × 6,5 roku i 10 × 20 lat (GIG ±0,5 pp i w 10–13% dla 20 lat
 | 10 | 0.18.6 | **Bank, Firma, Internet w ramie `.wn`** | trzy okna w ramie z makiety 19; pasek telefonu w 1 wierszu, szersza kolumna nazwy (makieta 18) | `ui.js`, `internet.js` |
 | 11 | 0.18.6 | **Pola z etykietą** — makieta 22 §3 | widoczne etykiety pól wyboru, chipy branż jako `fieldset` | `index.html` |
 | 12 | 0.18.6 | **Akcent fazy i bezpiecznik** — makieta 23 §1–2 | chip fazy (od L4), krawędź rynku; baner bezpiecznika z licznikiem | `regime.shownPhase`, `updateCircuitBreakerUI` |
-| 13 | 0.18.7 | **Pierwsze kroki** — makieta 22 §1 | 4 zadania, postęp, +50 PLN, zwijanie i ukrywanie | `playerProfile.firstSteps` |
+| 13 | 0.18.7 | **Karta przypiętych zadań** — makieta 22 §1 (ogólny wygląd zadań) | do 4 przypiętych zadań: postęp, nagroda, przycisk przejścia, zwijanie; Pierwsze kroki domyślnie | `playerProfile.quests.pinned` |
+| 15 | 0.18.7 | **TeamedUP! → Zadania i oceny** (do zaprojektowania) | cele zarządu, zadania aktywne (grupy: start, faza, wzrost) i ukończone; źródło, nagroda, wygaśnięcie; przycisk „Przypnij” / „Odepnij” z licznikiem 4; zadanie fazy bez nazwy fazy przed L4 | `quests.js`, `getPlayerTargets` |
 | 14 | 0.18.7 | **Wskazówki o fazie** — makieta 23 §4 | wpis Tied i mail subskrypcji z wiarygodnością | `regime`, subskrypcje |
 | 3 | 0.18.7 | **Zakładka zablokowana** | kłódka w pasku bocznym, w środku warunek i postęp („Aktywa 32 / 50 tys. PLN”, „Certyfikat: Obligacje”) | `unlocks.js` |
 | 4 | 0.18.8 | **Okno „Automaty”** (do zaprojektowania) | auto-rolowanie, auto-udział w aukcjach bonów, alert koncentracji: stan, parametry, ostatnie akcje, warunek odblokowania | `automation.js` |
@@ -274,8 +302,12 @@ E1 unlocks.js: progi (aktywa, stanowisko, certyfikat, rok) dla aukcji
    Łańcuchów i okna Miasto; dla Miast 2 tylko szkielet reguły; kłódka
    z warunkiem i postępem (wariant „zablokowane”); stare zapisy odblokowane.
    Progi pokaż mi przed wdrożeniem.
-E2 Pierwsze kroki (makieta 22 §1): 4 zadania × 50 PLN na konto prywatne,
-   playerProfile.firstSteps, stare zapisy z ukrytą listą.
+E2 quests.js: rejestr zadań (grupa, źródło, warunek, nagroda, wygaśnięcie,
+   hasło Akademii); dom w TeamedUP! → Zadania i oceny, przypinanie do 4
+   na karcie z makiety 22; Pierwsze kroki (4 × 50 PLN) przypięte domyślnie;
+   zadania fazy (L4: shownPhase, bez L4: objawy bez nazwy fazy, max 2,
+   co 2 kw.); zadania wzrostu uczące mechanik; zapis playerProfile.quests;
+   pulę zadań pokaż mi przed wdrożeniem; nagrody ≤ 1 500 PLN / 6,5 roku.
 E3 wskazówki o fazie (makieta 23 §4): Tied i subskrypcje, bez nazwy fazy,
    z wiarygodnością i opóźnieniem.
 E4 kontrola raporty/kontrola_0.18.7.md.
