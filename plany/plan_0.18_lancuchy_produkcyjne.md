@@ -45,7 +45,8 @@ Zastępuje szkic z 2026-10-25. Decyzje z rozmowy 2026-11-10 są w sekcji „Decy
 | **0.18.4** | Audyt, oceny i IPO | księgowość i audyt jako B2B, ocena AAA–D, nowe IPO, finanse z serii (filie banków, Lombardex/Limbard, Wrona), sufity 130/180 | na końcu |
 | **0.18.5** | Wydajność | profil kwartału, budżet ms/kw. dla serii, rzadsze rysowanie przy ×200, LOD spółek, Worker dla grafu i surowców, jeśli pomiar go uzasadni | kontrola końcowa 0.18 |
 | **0.18.6** | Porządki | `debug.js`, stany puste, `formatters.js` (`plan_0.18.6_porzadki_dluga_gra.md`) | na końcu |
-| po 0.18 | Cel gry | `plan_cel_gry.md` jako osobna wersja (numer nadamy przy planowaniu) | — |
+| **0.18.7–0.18.8** | Progresja i onboarding; Długa gra | odblokowania, Pierwsze kroki; automaty, czarne łabędzie, dekady (ten sam plik) | na końcu każdej |
+| po 0.18.8 | Cel gry | `plan_cel_gry.md` jako osobna wersja (numer nadamy przy planowaniu) | — |
 
 Wersje idą po kolei. Każda zaczyna się od pomiaru bazy poprzedniej i kończy kontrolą `raporty/kontrola_0.18.N.md`.
 

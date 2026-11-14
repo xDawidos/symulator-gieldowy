@@ -1,13 +1,31 @@
-# Plan 0.18.6 „Porządki” i wersja „Długa gra” (2026-11-13)
+# Plan 0.18.6 „Porządki”, 0.18.7 „Progresja i onboarding”, 0.18.8 „Długa gra” (2026-11-13, etapy 2026-11-14)
 
 Zgłoszenie użytkownika z 2026-11-13 (5 celów: debug, stany puste, formaty, pamięć i skala, długa gra). Stan wyjściowy: `zmiany-AI` po 0.18.5 (64f17cd). Kontrola końcowa 0.18 trwa w czacie „Realizacja 0.18”, więc ten plan nie rusza przed jej scaleniem. Liczby są startowe.
 
-**Podział (decyzja 2026-11-13):**
+**Podział i kolejność (decyzje 2026-11-13 i 2026-11-14):** trzy etapy z listy użytkownika po kolei, potem cel gry.
 
-| Wersja | Zakres | Kiedy |
+| Kolejność | Wersja | Etap użytkownika | Zakres |
+|---|---|---|---|
+| 1 | **0.18.6 Porządki** | Etap 1: porządki i spójność | `debug.js`, stany puste (makieta 22), jedno formatowanie, z decyzji U1–U8: kryzysy (U2), presja ekologiczna (U7), ramy okien (U6), zapisy na IPO (U5); z makiet 22 i 23: pola z etykietą, akcent fazy, bezpiecznik |
+| 2 | **0.18.7 Progresja i onboarding** | Etap 2 | stopniowe odblokowywanie (E1), Pierwsze kroki z premią na konto prywatne (E2, makieta 22), wskazówki o fazie (E3, makieta 23) |
+| 3 | **0.18.8 Długa gra** | Etap 3: late game 50–100 lat | diagnoza i limity pamięci, skala kapitału, 3 automaty w Akademii, czarne łabędzie, podsumowania dekad (makieta 23) |
+| 4 | Cel gry | — | `plan_cel_gry.md`, numer nadamy przy planowaniu (po 0.18.8, przed 0.19.1) |
+
+Makiety 22 i 23 (`design/22_pierwsze_kroki.md`, `design/23_fazy_dekada.md`, commit beac246) **czekają na akceptację użytkownika**. Części, które z nich korzystają, ruszają po akceptacji.
+
+## Uzgodnienie z listą użytkownika (2026-11-14)
+
+| Punkt listy | Część planu | Różnica i rozstrzygnięcie |
 |---|---|---|
-| **0.18.6 Porządki** | wydzielenie debug do `debug.js`, stany puste, jedno formatowanie liczb, kwot i dat; z decyzji U1–U8: kryzysy (U2), presja ekologiczna (U7), ramy okien (U6), zapisy gracza na IPO (U5) | zaraz po scaleniu 0.18 |
-| **Długa gra** | limity historii i pamięci, skala kapitału gracza wobec rynku, stopniowe odblokowywanie, automatyzacja portfela, czarne łabędzie, podsumowania dekad | po wersji „Cel gry”, przed 0.19.1; numer nadamy razem z celem gry |
+| Etap 1: globalny moduł formatowania (PLN, 2 albo 4 miejsca dla NAV, polskie spacje i przecinki) | **O3** | zgodne; 4 miejsca tylko dla NAV / udziału (makieta 18: „10,4210 PLN”), kwoty 2, liczby akcji 0 |
+| Etap 1: panel debug poza `index.html`, tylko `?debug=1` lub localhost | **O1** | **różnica:** użytkownik 2026-11-14 potwierdził, że przycisk w Ustawieniach na razie zostaje; `?debug=1` / localhost w „Odłożone” |
+| Etap 2: Progressive Disclosure (obligacje korporacyjne, aukcje hipoteczne, Miasto) po progach NAV lub szkoleniach | **E1** (dawne D3) | „Aukcje hipoteczne” w grze nie istnieją; najbliższe to aukcje akcji zastawnych (`startCollateralAuction`). Miasto: blokujemy obecne okno inwestycji miejskich, a Miasta 2 (0.19.2) dostają tylko szkielet reguły w rejestrze |
+| Etap 2: 4 zadania „Pierwsze kroki” z premią na konto prywatne | **E2** (nowe) | według makiety 22: 4 × 50 PLN |
+| Etap 3: 3 automaty w Akademii | **D4** | auto-rolowanie lokat bez zmian; „limity aukcyjne” zawężone do bonów skarbowych z limitem gotówki; rebalancing klas aktywów zastąpiony **alertem koncentracji sektora (tylko alert, bez automatycznej sprzedaży)**, decyzja 2026-11-14 |
+| Etap 3: czarne łabędzie co 15–25 lat (stopy, zaufanie klientów, sektory) i podsumowanie dekady | **D5, D6** | skrócenie spokoju z U2 zostaje w O4 (bez dublowania); skutki łabędzi uzupełnione o stopy i zaufanie klientów; dekada w TeamedUP! (makieta 23) |
+| (spoza listy) makieta 23: akcent fazy, bezpiecznik | **O8** | decyzja 2026-11-14: w 0.18.6 |
+| (spoza listy) makieta 23: wskazówki o fazie | **E3** | decyzja 2026-11-14: w 0.18.7 |
+| (spoza listy) makieta 22: pola z etykietą | **O8** | małe, w 0.18.6 |
 
 ## Co już jest w kodzie (przegląd 2026-11-13)
 
@@ -26,7 +44,7 @@ Zgłoszenie użytkownika z 2026-11-13 (5 celów: debug, stany puste, formaty, pa
 
 ## 0.18.6 Porządki
 
-O0–O3 i O6 bez zmiany balansu (GIG i marże ±0,3 pp, szum). O4, O5 i O7 zmieniają balans, więc mają własne bramki. **Cel GIG 20 lat: 10–13%** (U1, 2026-11-13). Bramka całej wersji: 0 błędów, testy zielone, zapis bez wzrostu, GIG 20 lat w 10–13%, marże 0 ± 0,3 pp.
+O0–O3, O6 i O8 bez zmiany balansu (GIG i marże ±0,3 pp, szum). O4, O5 i O7 zmieniają balans, więc mają własne bramki. **Cel GIG 20 lat: 10–13%** (U1, 2026-11-13). Bramka całej wersji: 0 błędów, testy zielone, zapis bez wzrostu, GIG 20 lat w 10–13%, marże 0 ± 0,3 pp.
 
 ### O0. Spis
 
@@ -36,21 +54,21 @@ O0–O3 i O6 bez zmiany balansu (GIG i marże ±0,3 pp, szum). O4, O5 i O7 zmien
 
 ### O1. Wydzielenie debug do `debug.js`
 
-- **Decyzja 2026-11-13:** przycisk „Tryb debug” **zostaje na razie w Ustawieniach**. Docelowo debug ma działać tylko na localhost (zapis w „Odłożone”).
+- **Decyzja 2026-11-13, potwierdzona 2026-11-14:** przycisk „Tryb debug” **zostaje na razie w Ustawieniach**. Docelowo debug ma działać tylko na localhost (zapis w „Odłożone”).
 - **Zakres:** cały kod debug przenosimy do `debug.js`: funkcje `debug*` z `ui.js` i `core.js`, `applyDebugModeUi`, `toggleDebugMode`, sondy pomocnicze i blok `#debug-tools`. Blok jest budowany przez `debug.js` (wstawiany do okna Ustawień), a nie zapisany w `index.html`. W `index.html` zostaje tylko pusty kontener i przycisk. `isDebugMode()` zostaje w `ui.js`, bo czyta ją kod gry (energia, intro, A1). `debugCheckInvariants` przenosimy do `debug.js`, ładowanego zawsze, więc testy i przebiegi działają bez zmian. Style inline z bloku debug przechodzą do klas w `style.css`.
 - **Pliki:** `debug.js` (nowy), `index.html` (−ok. 100 linii, `<script src="debug.js">`), `ui.js`, `core.js`, `style.css`, `tests/tests.html`, `tests/przebiegi.html` (kolejność skryptów).
 - **Test:** po włączeniu trybu debug panel ma te same przyciski co dziś; po wyłączeniu w DOM nie ma ani jednego elementu `#debug-tools`; `grep "function debug" ui.js core.js` daje 0; testy i przebiegi bez zmian.
 
 ### O2. Stany puste
 
-- **Zakres:** jeden komponent `renderEmptyState({ icon, title, text, action })` w stylu makiety 18 (ikona SVG, jedno zdanie, opcjonalny przycisk). Stosujemy go w kontenerach ze spisu O0, najpierw w tych, które gracz widzi w pierwszych minutach (portfel, pozycje, poczta, Tied, klienci, kontrakty, łańcuchy przed pierwszym kwartałem). Do tego jeden stan „ładowanie przed pierwszym tickiem” dla tabel rynku. Teksty według `design/04_teksty.md`.
+- **Zakres:** jeden komponent `renderEmptyState({ icon, title, text, action })` według makiety 22 (§2) w 4 wariantach: brak danych, przed pierwszą sesją, zablokowane (używane od E1), w tabeli (`tr.empty-row`). Stosujemy go w kontenerach ze spisu O0, najpierw w tych, które gracz widzi w pierwszych minutach (portfel, pozycje, poczta, Tied, klienci, kontrakty, łańcuchy przed pierwszym kwartałem). Do tego jeden stan „ładowanie przed pierwszym tickiem” dla tabel rynku. Teksty według `design/04_teksty.md`.
 - **Pliki:** `ui.js` (komponent), moduły UI ze spisu (`ui.js`, `energy_ui.js`, `chains_ui.js`, `countries_ui.js`, `currency_ui.js`, `internet.js`, `tied.js`, `learning.js`), `style.css`.
 - **Test:** świeża gra przed pierwszym tickiem: żaden kontener ze spisu nie jest pusty (test DOM po kolei otwiera okna); stary zapis bez danych łańcuchów pokazuje stan pusty.
 - **Design:** ekran 1 z listy niżej.
 
 ### O3. Jedno formatowanie
 
-- **Zakres:** helpery formatowania przechodzą z `ui.js` do nowego `formatters.js`. To czysty moduł bez DOM, ładowany pierwszy, a nazwy funkcji zostają (`formatNumberPl`, `formatZl`, `formatPLNShort`, `formatPct`, `formatNav`, `formatGameDate`, `formatQuarterDate`). Dochodzą: `formatInt` (liczba akcji, bez groszy), `formatShares` („1 250 akcji”), `formatPp` (punkty procentowe), `formatDateLong`. Waluta zawsze z `getBaseCurrency()` (dziś PLN), nigdy „zł” na sztywno. Udziały funduszu (NAV) mają 4 miejsca. Potem wymiana wstawek ze spisu O0, plik po pliku, tylko w tekstach dla gracza. Logi konsoli i obliczenia zostają.
+- **Zakres:** helpery formatowania przechodzą z `ui.js` do nowego `formatters.js`. To czysty moduł bez DOM, ładowany pierwszy, a nazwy funkcji zostają (`formatNumberPl`, `formatZl`, `formatPLNShort`, `formatPct`, `formatNav`, `formatGameDate`, `formatQuarterDate`). Dochodzą: `formatInt` (liczba akcji, bez groszy), `formatShares` („1 250 akcji”), `formatPp` (punkty procentowe), `formatDateLong`. Waluta zawsze z `getBaseCurrency()` (dziś PLN), nigdy „zł” na sztywno. Udział funduszu (NAV) ma 4 miejsca jak w makiecie 18 („10,4210 PLN”), wszystkie inne kwoty 2, liczby akcji 0, procenty 2 (pp 1). Potem wymiana wstawek ze spisu O0, plik po pliku, tylko w tekstach dla gracza. Logi konsoli i obliczenia zostają.
 - **Pliki:** `formatters.js` (nowy), `ui.js`, `campaigns.js`, `index.html` (stałe „zł”), moduły ze spisu (ui.js, companies.js, learning.js, player.js, state.js, core.js, ai.js, ma.js, finance.js, exchange_clock.js, listings.js…). Commit po każdym pliku albo grupie.
 - **Test:** testy helperów (minus typograficzny, `—` dla NaN, waluta EUR przy starcie z DE); skrypt `spis_formatow.mjs` w trybie kontroli: 0 wstawek `toFixed` w tekstach dla gracza, 0 „zł” w kodzie UI; przebieg 24 gier bez zmiany wyniku (formatowanie nie zmienia liczb).
 - **Bramka:** kontrola `raporty/kontrola_0.18.6.md`.
@@ -88,13 +106,47 @@ Stan w kodzie: partia **„Zieloni”** (`green`, `core.js:4872`) wchodzi na wyb
 - **Test:** nadsubskrypcja 3× daje przydział 1/3 i zwrot reszty; wycofanie daje pełny zwrot; niezmienniki 0 (zablokowana + wolna gotówka = gotówka przed zapisem).
 - **Bramka:** debiuty i „pop” pierwszego dnia jak w kontroli 0.18.4 ±20%, GIG ±0,5 pp.
 
-### O8. Kontrola 0.18.6
+### O8. UI z makiet 22 i 23 (po akceptacji makiet)
 
-Seria 24 × 6,5 roku, seria 20 × 20 lat (O4, O5) i testy, raport `raporty/kontrola_0.18.6.md`. Zrzuty Ustawień (z debug i bez), stanów pustych, okien w ramie `.wn`, formularza zapisu na IPO i wskaźnika presji.
+- **Zakres:** (1) pola z etykietą (makieta 22 §3): widoczne `label for` dla pól z tabeli notki, chipy branż jako `fieldset` + `legend`; (2) akcent fazy rynku (makieta 23 §1): `data-phase` na `.app-main` tylko przy „Analityk indeksu” L4 i pokazanej fazie, `.phase-chip`, krawędź panelu rynku, ruch tylko przy `prefers-reduced-motion: no-preference`; (3) bezpiecznik giełdowy (makieta 23 §2): nowy `#circuit-breaker-banner` (`role=alert`, ikona zamiast emoji, bez wersalików i pulsowania, licznik `aria-hidden`); (4) usunięcie ukrytego wiersza konta prywatnego `.topbar-kpi[hidden]` z `index.html`.
+- **Pliki:** `index.html`, `ui.js` (`updateMoodKpi`, `updateCircuitBreakerUI`), `style.css`, `tokens.css` (zmienne fazy).
+- **Test:** każdy `select` w `index.html` ma etykietę; bez L4 brak `data-phase`, z L4 atrybut = `shownPhase`; bezpiecznik bez emoji i wersalików; przy `reduce` brak animacji.
+
+### O9. Kontrola 0.18.6
+
+Seria 24 × 6,5 roku, seria 20 × 20 lat (O4, O5) i testy, raport `raporty/kontrola_0.18.6.md`. Zrzuty Ustawień (z debug i bez), stanów pustych, okien w ramie `.wn`, formularza zapisu na IPO, wskaźnika presji, akcentu fazy i bezpiecznika.
 
 ---
 
-## Długa gra (po celu gry, przed 0.19.1)
+## 0.18.7 Progresja i onboarding (Etap 2)
+
+Bez zmiany balansu (blokady dotyczą tylko gracza; przebiegi bez UI je ignorują). Bramka: GIG i marże ±0,3 pp, 0 błędów, testy zielone.
+
+### E1. Stopniowe odblokowywanie (dawne D3)
+
+- **Zakres:** rejestr `UNLOCKS` (zakładka lub funkcja → warunek: NAV / aktywa funduszu, stanowisko, certyfikat Akademii, rok gry). Progi startowe (do akceptacji): Bank od startu (lokaty, potrzebne w Pierwszych krokach); aukcje bonów skarbowych po certyfikacie „Obligacje” albo aktywach ≥ 50 tys.; **obligacje korporacyjne** (`index.html:781`) po tym samym certyfikacie albo aktywach ≥ 100 tys.; **aukcje akcji zastawnych** (w liście użytkownika „aukcje hipoteczne”; aukcji hipotecznych w grze nie ma) po stanowisku Zarządca funduszu; Budownictwo i Państwo → Łańcuchy po 1. roku; okno **Miasto** (dziś inwestycje miejskie) po certyfikacie albo 2. roku. **Miasta 2 (0.19.2):** w rejestrze tylko szkielet reguły (`city2: { requires: 'version-0.19.2' }`), bez ekranu. Zablokowana zakładka jest widoczna z kłódką i warunkiem (wariant „zablokowane” stanu pustego z makiety 22, z postępem „Aktywa 32 400 / 50 000 PLN”). Stare zapisy i piaskownica: wszystko odblokowane. Ustawienie „Pokaż wszystko od startu”.
+- **Pliki:** `unlocks.js` (nowy, bez DOM), `ui.js` (pasek boczny, przyciski), `learning.js` (certyfikaty jako warunek), `index.html`, `main.js` (zapis odblokowań).
+- **Test:** nowa gra: zakładki z warunkiem pokazują kłódkę i warunek; spełnienie warunku odblokowuje i wysyła wiadomość; stary zapis ma wszystko odblokowane; przebiegi bez UI ignorują blokady (boty bez zmian).
+
+### E2. Pierwsze kroki (makieta 22 §1)
+
+- **Zakres:** karta nad księgą funduszu: 4 zadania (kup pierwsze akcje; miej akcje 3 spółek; załóż lokatę w banku; przeczytaj zadanie od szefa w TeamedUP!), każde **+50 PLN na konto prywatne** (razem 200 PLN), przez tę samą funkcję co inne wpływy na konto, z wpisem w historii konta. Stan w zapisie `playerProfile.firstSteps = { done, collapsed, hidden }`. Zadania sprawdzane po każdej transakcji i przy otwarciu okna (bez pętli co tick). Stare zapisy: lista ukryta. „Ukryj listę” do końca gry, przywrócenie w Ustawieniach. Zadania wskazują tylko rzeczy otwarte od startu, więc działają z E1. ARIA według makiety (`aria-expanded`, `role=progressbar`, `aria-live=polite`).
+- **Pliki:** `onboarding.js` (nowy, logika bez DOM), `ui.js` (karta), `player.js` (premia na konto prywatne), `tied.js` (zadanie 4), `main.js`, `style.css`.
+- **Test:** nagroda wpada raz na zadanie (także po wczytaniu); stary zapis nie pokazuje listy; po 4 zadaniach jedna linia „ukończone +200 PLN”, która znika po końcu kwartału.
+
+### E3. Wskazówki o fazie rynku (makieta 23 §4)
+
+- **Zakres:** dla graczy bez L4 (i z L4 jako treść świata): wpisy analityków na Tied i maile firm informacyjnych w Poczta → Subskrypcje („Barometr Rynku: 3 z 5 wskaźników jak przed szczytem”). Opisują objawy, nie nazwę fazy. Dane z gry: wyceny, napływy, debiuty, obroty. Wiarygodność autora (3 kreski + słowo), szum jak w `macro.expectation`, opóźnienie względem prawdziwej fazy. Generowane przy zmianie `regime.phase` i losowo raz na kilka tygodni.
+- **Pliki:** `tied.js`, `internet.js` (subskrypcje), `core.js` (odczyt fazy i wskaźników).
+- **Test:** wskazówka nie zawiera nazwy fazy; przy zmianie fazy pojawia się najwyżej jedna wskazówka na kanał; wiarygodność rośnie z poziomem subskrypcji.
+
+### E4. Kontrola 0.18.7
+
+Seria 24 × 6,5 roku z gracza-aktywnego (blokady włączone w UI), testy, zrzuty kłódki, Pierwszych kroków i wskazówek; raport `raporty/kontrola_0.18.7.md`.
+
+---
+
+## 0.18.8 Długa gra (Etap 3; przed celem gry)
 
 **Decyzja 2026-11-13:** 50 i 100 lat to odcinki długofalowe. **Nie mierzymy, czy utrzymują gracza**, i nie ma bramki balansu dla 50–100 lat. Rozbudowujemy grę tak, żeby w późniejszych etapach był content. Mierzymy tylko technikę: brak błędów, pamięć i zapis w grze 50-letniej (przebieg dymny, nie seria balansu).
 
@@ -116,33 +168,27 @@ Seria 24 × 6,5 roku, seria 20 × 20 lat (O4, O5) i testy, raport `raporty/kontr
 - **Pliki:** `player.js`, `core.js` (handel), `ui.js` (informacja o poślizgu w formularzu).
 - **Test:** zlecenie 10% obrotu spółki ma poślizg zgodny z tabelą; przebieg 6,5 roku: GIG i marże ±0,5 pp (krótka gra nie może się zmienić).
 
-### D3. Stopniowe odblokowywanie zakładek
-
-- **Zakres:** rejestr `UNLOCKS` (zakładka lub funkcja → warunek: aktywa funduszu, stanowisko, certyfikat Akademii, rok gry). Proponowane progi startowe: Bank od startu (lokaty), obligacje i aukcje bonów po certyfikacie „Obligacje” albo aktywach ≥ 50 tys., aukcje zastawów po stanowisku Zarządca funduszu, Budownictwo i Państwo → Łańcuchy po 1. roku, okno **Miasto** (dziś inwestycje miejskie) po certyfikacie albo 2. roku. **Miasta 2 z 0.19.2 korzystają z tego samego rejestru.** Zablokowana zakładka jest widoczna z kłódką i warunkiem („Odblokujesz po…”), bez ukrywania. Stare zapisy i piaskownica: wszystko odblokowane. Ustawienie „Pokaż wszystko od startu”.
-- **Pliki:** `unlocks.js` (nowy, bez DOM), `ui.js` (pasek boczny, przyciski), `learning.js` (certyfikaty jako warunek), `index.html`, `main.js` (zapis odblokowań).
-- **Test:** nowa gra: zakładki z warunkiem pokazują kłódkę i warunek; spełnienie warunku odblokowuje i wysyła wiadomość; wczytany stary zapis ma wszystko odblokowane; przebiegi bez UI ignorują blokady (boty bez zmian).
-
 ### D4. Automatyzacja portfela (odblokowywana w Akademii)
 
-- **Zakres:** trzy automaty, każdy po certyfikacie Akademii, ze wspólnym oknem „Automaty” (przegląd, włącz/wyłącz, dziennik ostatnich 20 akcji):
-  1. **Auto-rolowanie lokat:** po zapadnięciu lokata odnawia się na ten sam okres w banku z najwyższą stopą, który przyjmuje depozyty funduszu (`canBankTakeFundDeposits`); próg minimalnej stopy.
-  2. **Rebalancing:** docelowe udziały klas aktywów (akcje, obligacje, gotówka, towary) i tolerancja; raz na kwartał zlecenia do celu, z kosztami prowizji; respektuje lock-up i limity KNF.
-  3. **Limity aukcyjne:** stała oferta w aukcjach bonów skarbowych i zastawów (kwota, maks. cena lub min. rentowność); składana automatycznie przy każdej aukcji.
-- Automaty działają jak zlecenia gracza (te same opłaty i ograniczenia), więc nie dają przewagi poza oszczędnością klików.
-- **Pliki:** `automation.js` (nowy, logika bez DOM), `finance.js` (lokaty), `core.js` (`resolveTBillAuction`), `companies.js` (`resolveCollateralAuction`), `player.js` (zlecenia), `learning.js` (certyfikaty), `ui.js` (okno), `main.js` (zapis ustawień).
-- **Test:** lokata zapada → nowa w najlepszym banku; rebalancing przy odchyleniu > tolerancji, nie przy mniejszym; oferta aukcyjna złożona z limitem i odrzucona ponad limitem; preset `automaty` w przebiegach: 20 lat bez błędów i niezmienników.
+- **Zakres:** trzy ulepszenia w zakładce Akademia, każde po certyfikacie, ze wspólnym oknem „Automaty” (przegląd, włącz/wyłącz, dziennik ostatnich 20 akcji):
+  1. **Auto-rolowanie lokat terminowych:** po zapadnięciu lokata odnawia się na ten sam okres w banku z najwyższą stopą, który przyjmuje depozyty funduszu (`canBankTakeFundDeposits`); próg minimalnej stopy.
+  2. **Auto-udział w aukcjach bonów skarbowych:** oferta składana przy każdej aukcji (`resolveTBillAuction`) do ustalonego limitu gotówki (kwota albo % gotówki funduszu) i z min. rentownością.
+  3. **Alert koncentracji sektora (decyzja 2026-11-14: tylko alert):** wiadomość, gdy jeden sektor przekracza ustawiony limit akcji funduszu (domyślnie 35%), z odnośnikiem do pozycji. Bez automatycznej sprzedaży.
+- Automaty 1–2 działają jak zlecenia gracza (te same opłaty i ograniczenia), więc nie dają przewagi poza oszczędnością klików.
+- **Pliki:** `automation.js` (nowy, logika bez DOM), `finance.js` (lokaty), `core.js` (`resolveTBillAuction`), `player.js` (zlecenia, udziały sektorów), `learning.js` (certyfikaty), `ui.js` (okno), `main.js` (zapis ustawień).
+- **Test:** lokata zapada → nowa w najlepszym banku; alert przy przekroczeniu limitu sektora raz (nie co tick) i ponownie dopiero po zejściu poniżej; oferta aukcyjna nie przekracza limitu gotówki; preset `automaty` w przebiegach: 20 lat bez błędów i niezmienników.
 
 ### D5. Czarne łabędzie
 
 - **U2 jest w 0.18.6 (O4)**, tu zostają tylko łabędzie.
-- **Czarny łabędź:** rzadkie zdarzenie **ponad liniami i poza ich wspólnym budżetem**, 1 na 15–25 lat (losowy odstęp, pierwszy najwcześniej po 10. roku, więc w grze 6,5-letniej nie wystąpi). Kilka typów: pandemia globalna, wojna regionalna, upadek waluty, rewolucja technologiczna (pozytywny łabędź), krach systemu bankowego. Każdy uruchamia 1–2 linie z `crises.js` jednocześnie w kilku krajach, zmienia parametry na dłużej (np. stopa, popyt na klasę dóbr w łańcuchach, migracja) i ma wpis w historii świata. Baner kryzysu (0.18.1 P4) w wariancie „Czarny łabędź”.
+- **Czarny łabędź:** rzadkie zdarzenie **ponad liniami i poza ich wspólnym budżetem**, 1 na 15–25 lat (losowy odstęp, pierwszy najwcześniej po 10. roku, więc w grze 6,5-letniej nie wystąpi). Kilka typów: pandemia globalna, wojna regionalna, upadek waluty, rewolucja technologiczna (pozytywny łabędź), krach systemu bankowego. Każdy uruchamia 1–2 linie z `crises.js` jednocześnie w kilku krajach i tymczasowo zmienia: **stopy procentowe** (bank centralny), **zaufanie klientów** funduszy (odpływ lub napływ), **wybrane sektory** (premia lub kara), a w łańcuchach popyt na klasę dóbr i ma wpis w historii świata. Baner kryzysu (0.18.1 P4) w wariancie „Czarny łabędź”.
 - **Pliki:** `crises.js` (stałe spokoju, rejestr `BLACK_SWANS`, harmonogram), `chains.js` (szoki popytu), `countries.js` (wiele krajów), `ui.js` (baner), `tests/przebiegi.html` (preset `labedz`).
 - **Test:** wymuszony łabędź uruchamia swoje linie i wraca do normy; przebieg dymny 50 lat: 2–3 łabędzie, 0 błędów; gra 6,5-letnia: 0 łabędzi.
 
 ### D6. Podsumowania dekad i historia świata
 
-- **Zakres:** co 10 lat gry raport dekady: GIG i inflacja za dekadę, najlepsze i najgorsze sektory, kryzysy i łabędzie, rządy i ustawy, wynik funduszu wobec GIG, kamienie milowe gracza. Raport trafia do poczty i do nowej zakładki „Historia” w oknie Ranking (lista dekad). Zapis dekady jest zagregowany (kilkadziesiąt liczb), więc zastępuje szczegółową historię z D1.
-- **Pliki:** `history.js` (nowy, bez DOM: zbieranie i agregacja), `ui.js` (zakładka), `player.js` (CV), `main.js`.
+- **Zakres:** co 10 lat gry raport dekady: GIG i inflacja za dekadę, najlepsze i najgorsze sektory, kryzysy i łabędzie, rządy i ustawy, wynik funduszu wobec GIG, kamienie milowe gracza. Raport przychodzi jako **wiadomość TeamedUP! od „Kronika Rynku”** (firma informacyjna, makieta 23 §3; decyzja użytkownika: bez nowego okna), a pełna wersja trafia do nowej zakładki „Historia” w oknie Ranking (lista dekad). Komórka „Wkład w Miasto” dochodzi w 0.19.2. Zapis dekady jest zagregowany (kilkadziesiąt liczb), więc zastępuje szczegółową historię z D1.
+- **Pliki:** `history.js` (nowy, bez DOM: zbieranie i agregacja), `ui.js` (zakładka), `tied.js` (`getTeamedMessages`, nadawca typu `info`), `player.js` (CV), `main.js`.
 - **Test:** po 10 latach powstaje raport z kompletem pól; po 30 latach 3 raporty; zapis rośnie o ≤ 2 KB na dekadę.
 
 ### D7. Kontrola
@@ -155,22 +201,27 @@ Testy, seria 24 × 6,5 roku i 10 × 20 lat (GIG ±0,5 pp i w 10–13% dla 20 lat
 
 | # | Wersja | Ekran | Co pokazuje | Dane |
 |---|---|---|---|---|
-| 1 | 0.18.6 | **Stan pusty** (komponent) | ikona, jedno zdanie, opcjonalny przycisk; warianty: brak danych, przed pierwszym tickiem, zablokowane | `renderEmptyState` |
+| 1 | 0.18.6 | **Stan pusty** (komponent) — makieta 22 §2 | 4 warianty: brak danych, przed pierwszą sesją, zablokowane, w tabeli | `renderEmptyState` |
 | 2 | 0.18.6 | **Ustawienia → Debug** | ten sam zestaw narzędzi co dziś, ale w klasach CSS zamiast stylów inline | `debug.js` |
 | 8 | 0.18.6 | **Zapis funduszu na IPO** (karta debiutu) | okres subskrypcji, cena emisyjna, pole liczby akcji lub kwoty, zablokowana gotówka, stan po przydziale (redukcja, zwrot), wycofana emisja | `listings.js`, `player.js` |
 | 9 | 0.18.6 | **Presja ekologiczna** (Państwo → Środowisko) | wskaźnik 0–100 słowem i liczbą, źródła (zanieczyszczenie, smog, protesty), skutki: budżet UEiE, poparcie Zielonych, strajki ekologiczne | `energy.js` (`society.energy`) |
 | 10 | 0.18.6 | **Bank, Firma, Internet w ramie `.wn`** | trzy okna w ramie z makiety 19; pasek telefonu w 1 wierszu, szersza kolumna nazwy (makieta 18) | `ui.js`, `internet.js` |
-| 3 | Długa gra | **Zakładka zablokowana** | kłódka w pasku bocznym, w środku warunek i postęp („Aktywa 32 / 50 tys. PLN”, „Certyfikat: Obligacje”) | `unlocks.js` |
-| 4 | Długa gra | **Okno „Automaty”** | trzy automaty: stan, parametry, ostatnie akcje, warunek odblokowania | `automation.js` |
-| 5 | Długa gra | **Baner „Czarny łabędź”** | wariant banera kryzysu: typ, kraje, linie, czas trwania | `crises.js` (`BLACK_SWANS`) |
-| 6 | Długa gra | **Raport dekady** (poczta i Ranking → Historia) | GIG, inflacja, sektory, kryzysy, rządy, fundusz wobec GIG, kamienie milowe; lista dekad | `history.js` |
-| 7 | Długa gra | **Poślizg w formularzu zlecenia** (jeśli D2 go wybierze) | szacowany poślizg i udział w obrocie dnia | `player.js` |
+| 11 | 0.18.6 | **Pola z etykietą** — makieta 22 §3 | widoczne etykiety pól wyboru, chipy branż jako `fieldset` | `index.html` |
+| 12 | 0.18.6 | **Akcent fazy i bezpiecznik** — makieta 23 §1–2 | chip fazy (od L4), krawędź rynku; baner bezpiecznika z licznikiem | `regime.shownPhase`, `updateCircuitBreakerUI` |
+| 13 | 0.18.7 | **Pierwsze kroki** — makieta 22 §1 | 4 zadania, postęp, +50 PLN, zwijanie i ukrywanie | `playerProfile.firstSteps` |
+| 14 | 0.18.7 | **Wskazówki o fazie** — makieta 23 §4 | wpis Tied i mail subskrypcji z wiarygodnością | `regime`, subskrypcje |
+| 3 | 0.18.7 | **Zakładka zablokowana** | kłódka w pasku bocznym, w środku warunek i postęp („Aktywa 32 / 50 tys. PLN”, „Certyfikat: Obligacje”) | `unlocks.js` |
+| 4 | 0.18.8 | **Okno „Automaty”** (do zaprojektowania) | auto-rolowanie, auto-udział w aukcjach bonów, alert koncentracji: stan, parametry, ostatnie akcje, warunek odblokowania | `automation.js` |
+| 5 | 0.18.8 | **Baner „Czarny łabędź”** | wariant banera kryzysu: typ, kraje, linie, czas trwania | `crises.js` (`BLACK_SWANS`) |
+| 6 | 0.18.8 | **Raport dekady** — makieta 23 §3 (TeamedUP!) + Ranking → Historia (do zaprojektowania) | GIG, inflacja, sektory, kryzysy, rządy, fundusz wobec GIG, kamienie milowe; lista dekad | `history.js` |
+| 7 | 0.18.8 | **Poślizg w formularzu zlecenia** (jeśli D2 go wybierze) | szacowany poślizg i udział w obrocie dnia | `player.js` |
 
 ## Odłożone
 
-- **Debug tylko na localhost** (decyzja 2026-11-13: na razie zostaje w Ustawieniach). Po O1 wystarczy warunek ładowania `debug.js` (localhost albo parametr) i zmiana w testach.
+- **Debug tylko na localhost albo z `?debug=1`** (lista użytkownika 2026-11-14; decyzja 2026-11-13 i 2026-11-14: na razie przycisk zostaje w Ustawieniach). Po O1 wystarczy warunek ładowania `debug.js` (localhost albo parametr) i zmiana w testach.
 - Mierzenie, czy gra 50–100 lat utrzymuje gracza: nie teraz.
-- Miasta jako obiekty: 0.19.2 (używają rejestru odblokowań z D3).
+- Miasta jako obiekty: 0.19.2 (używają rejestru odblokowań z E1).
+- Automatyczny rebalancing (klasy aktywów lub koncentracja): decyzja 2026-11-14, tylko alert.
 
 ## Co nie zostało sprawdzone
 
@@ -179,50 +230,68 @@ Liczby wstawek formatowania pochodzą z `grep`, bez klasyfikacji (część `toFi
 ## Polecenie dla czatu kodu
 
 ```
-Implementujesz plan plany/plan_0.18.6_porzadki_dluga_gra.md w Capital Quest.
-Zacznij dopiero po scaleniu kontroli końcowej 0.18 (czat „Realizacja 0.18”).
+Implementujesz plan plany/plan_0.18.6_porzadki_dluga_gra.md w Capital Quest,
+w kolejności: 0.18.6 Porządki (Etap 1) → 0.18.7 Progresja i onboarding
+(Etap 2) → 0.18.8 Długa gra (Etap 3). Cel gry dopiero potem.
+Zacznij po scaleniu kontroli końcowej 0.18 (czat „Realizacja 0.18”).
+Części z makiet 22 i 23 (O2 warianty, O8, E1 kłódka, E2, E3, D6) ruszają
+dopiero po akceptacji tych makiet przez użytkownika
+(plany/design/22_pierwsze_kroki.md, plany/design/23_fazy_dekada.md).
 
 Zasady: po polsku; część po części, commit po każdej, tylko swoje pliki;
 testy (design/narzedzia/run_tests.mjs) i przebiegi ×200 przed commitem;
 0 błędów JS i niezmienników; UI: ciemny motyw, ikony SVG, PLN, „udział”,
-kolor nie jest jedynym nośnikiem, bez nowych okien modalnych; plików w
-plany/design nie edytujesz; decyzje przez AskUserQuestion z rekomendacją.
+„konto prywatne”, kolor nie jest jedynym nośnikiem, bez nowych okien
+modalnych; plików w plany/design nie edytujesz; decyzje przez
+AskUserQuestion z rekomendacją. Cel GIG 20 lat: 10–13%.
 
 0.18.6 Porządki (bramka: GIG 20 lat 10–13%, marże ±0,3 pp, zapis bez wzrostu):
 O0 spis: debug, puste kontenery, formatowanie poza helperami (z klasyfikacją
    tekst / log / obliczenie); raporty/spis_0.18.6.md i
    design/narzedzia/spis_formatow.mjs. Spis pokaż mi przed O1.
 O1 debug.js: cały kod debug z ui.js, core.js i index.html (#debug-tools)
-   w jednym module, ładowanym zawsze; przycisk w Ustawieniach zostaje;
-   isDebugMode zostaje w ui.js; testy i przebiegi bez zmian.
-O2 renderEmptyState według makiety 18; najpierw okna z pierwszych minut;
-   test DOM świeżej gry przed pierwszym tickiem.
-O3 formatters.js (czysty, ładowany pierwszy) z obecnymi helperami +
-   formatInt, formatShares, formatPp, formatDateLong; wymiana wstawek
-   ze spisu plik po pliku (tylko teksty dla gracza); 0 „zł” w kodzie UI.
+   w jednym module, ładowanym zawsze; przycisk w Ustawieniach zostaje
+   (decyzja 2026-11-14; ?debug=1 / localhost później); isDebugMode zostaje.
+O2 renderEmptyState w 4 wariantach z makiety 22; najpierw portfel, pozycje,
+   aukcje, poczta; test DOM świeżej gry przed pierwszym tickiem.
+O3 formatters.js (czysty, ładowany pierwszy): obecne helpery + formatInt,
+   formatShares, formatPp, formatDateLong; NAV/udział 4 miejsca, kwoty 2,
+   akcje 0; wymiana wstawek ze spisu plik po pliku; 0 „zł” w kodzie UI.
 O4 U2: spokój 12 → 10 kw., łagodniejszy wymóg fazy; seria 20 × 20 lat,
    cel 1–2 linie (inaczej pytanie do mnie).
-O5 U7: presja ekologiczna w society.energy (rośnie z zanieczyszczeniem,
-   smogiem i protestami) → częstsze protesty, strajki ekologiczne, UEiE
-   15 → 30% (40% z Zielonymi), silniejsi Zieloni (wejście od 50); bramka:
-   zanieczyszczenie po 20 latach 55–65, „brudne” gry ≤ 10%.
+O5 U7: presja ekologiczna → częstsze protesty, strajki ekologiczne, UEiE
+   15 → 30% (40% z Zielonymi), Zieloni od 50; bramka: zanieczyszczenie
+   po 20 latach 55–65, „brudne” gry ≤ 10%.
 O6 U6: Bank, Firma, Internet w ramie .wn (makieta 19), poprawki makiety 18.
 O7 U5: zapis funduszu gracza na IPO z redukcją, blokadą i zwrotem gotówki.
-O8 kontrola raporty/kontrola_0.18.6.md.
+O8 makiety 22 §3 i 23 §1–2: pola z etykietą, akcent fazy (tylko L4),
+   bezpiecznik bez emoji; usuń ukryty .topbar-kpi z kontem prywatnym.
+O9 kontrola raporty/kontrola_0.18.6.md.
 
-Długa gra (po wersji „Cel gry”; bez bramki balansu dla 50–100 lat):
+0.18.7 Progresja i onboarding (bramka: GIG i marże ±0,3 pp):
+E1 unlocks.js: progi (aktywa, stanowisko, certyfikat, rok) dla aukcji
+   bonów, obligacji korporacyjnych, aukcji akcji zastawnych, Budownictwa,
+   Łańcuchów i okna Miasto; dla Miast 2 tylko szkielet reguły; kłódka
+   z warunkiem i postępem (wariant „zablokowane”); stare zapisy odblokowane.
+   Progi pokaż mi przed wdrożeniem.
+E2 Pierwsze kroki (makieta 22 §1): 4 zadania × 50 PLN na konto prywatne,
+   playerProfile.firstSteps, stare zapisy z ukrytą listą.
+E3 wskazówki o fazie (makieta 23 §4): Tied i subskrypcje, bez nazwy fazy,
+   z wiarygodnością i opóźnieniem.
+E4 kontrola raporty/kontrola_0.18.7.md.
+
+0.18.8 Długa gra (bez bramki balansu dla 50–100 lat; technika tak):
 D0 diagnoza: pamięć i zapis co 5 lat w przebiegu 50 lat, kapitał funduszu
    wobec obrotu; raport i propozycje do mojej decyzji.
 D1 limity rosnących tablic (szczegół N kw. + agregaty roczne); 50 lat:
    zapis ≤ 1,5 × zapisu po 20 latach.
 D2 skala kapitału według decyzji po D0; krótka gra ±0,5 pp.
-D3 unlocks.js: rejestr odblokowań (aktywa, stanowisko, certyfikat, rok),
-   kłódka z warunkiem, stare zapisy i piaskownica odblokowane.
-D4 automation.js: auto-rolowanie lokat, rebalancing, limity aukcyjne;
-   każdy po certyfikacie Akademii; te same opłaty co ręcznie.
-D5 czarne łabędzie: 1 na 15–25 lat, od 10. roku,
-   poza budżetem linii, kilka krajów, baner.
-D6 history.js: raport dekady (poczta + Ranking → Historia).
+D4 automation.js w Akademii: auto-rolowanie lokat, auto-udział w aukcjach
+   bonów do limitu gotówki, alert koncentracji sektora (tylko alert).
+D5 czarne łabędzie: 1 na 15–25 lat, od 10. roku, poza budżetem linii,
+   kilka krajów; skutki: stopy, zaufanie klientów, sektory; baner.
+D6 history.js: dekada jako wiadomość TeamedUP! od „Kronika Rynku”
+   (makieta 23 §3) + Ranking → Historia.
 D7 kontrola raporty/kontrola_dluga_gra.md (+ przebieg dymny 50 lat).
 
 Po każdej części: commit, testy, wynik bramki, co nie zostało sprawdzone.
