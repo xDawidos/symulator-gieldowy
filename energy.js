@@ -460,6 +460,49 @@ const ENERGY_EVENTS = {
     acidRain: { minPollution: 50, chance: 0.06, texts: ['🌧️ Kwaśne deszcze niszczą uprawy, a rolnicy liczą straty.', '🌧️ Rolnicy alarmują: kwaśne deszcze obniżają plony.'] },
     scandal: { minPollution: 30, chance: 0.04, texts: ['🕵️ Skandal ekologiczny: {name} miała ukrywać prawdziwe emisje.', '🕵️ Dziennikarze ujawniają nielegalny zrzut ścieków spółki {name}.', '🕵️ {name} pod lupą po ujawnieniu sfałszowanych pomiarów emisji.'] }
 };
+// 0.18.6 O5 (U7): presja ekologiczna 0–100 — społeczna reakcja na zanieczyszczenie zamiast strojenia emisji.
+const ECO_PRESSURE_RULES = {
+    from: 45, scale: 2.5,             // cel presji = (zanieczyszczenie − 45) × 2,5 (zanieczyszczenie 85 → 100)
+    up: 0.25, down: 0.10,             // dojście do celu na kwartał: szybko w górę, wolno w dół
+    bumps: { smog: 5, protest: 4, acidRain: 3, ecoStrike: 2 },
+    eventMult: 1,                     // szansa smogu i protestu × (1 + presja/100)
+    strikeFrom: 30, strikeChance: 0.25, strikeMood: 12, // strajk ekologiczny: szansa 25% × presja/100 na kwartał u dużego emitenta
+    officeShare: [0.15, 0.30], greenOfficeShare: [0.30, 0.40],
+    greensSupport: 0.05, greensPressure: 60, greensPollution: 50, greensChance: 0.5
+};
+const ECO_STRIKE_TEXTS = ['Strajk ekologiczny w {name}: załoga odmawia pracy przy instalacjach bez filtrów.', 'Pracownicy {name} przerywają zmianę i żądają planu ograniczenia emisji.', 'Strajk w {name}: związkowcy i mieszkańcy razem pod bramą zakładu.'];
+/** Presja ekologiczna (0–100); stary zapis bez pola: start z bieżącego zanieczyszczenia. */
+function getEcoPressure(e = society?.energy) {
+    if (!e) return 0;
+    if (!Number.isFinite(e.pressure)) e.pressure = getEcoPressureTarget(e);
+    return e.pressure;
+}
+function getEcoPressureTarget(e) { return clampValue(((Number(e.pollution) || 0) - ECO_PRESSURE_RULES.from) * ECO_PRESSURE_RULES.scale, 0, 100); }
+function bumpEcoPressure(e, id) { const b = ECO_PRESSURE_RULES.bumps[id]; if (b && e) e.pressure = clampValue(getEcoPressure(e) + b, 0, 100); }
+/** Co kwartał (po zanieczyszczeniu i zdarzeniach): presja dąży do celu, przy wysokiej możliwy strajk ekologiczny. */
+function processEcoPressure(e) {
+    const p = getEcoPressure(e), target = getEcoPressureTarget(e);
+    e.pressure = +clampValue(p + (target - p) * (target > p ? ECO_PRESSURE_RULES.up : ECO_PRESSURE_RULES.down), 0, 100).toFixed(2);
+    if (e.pressure >= ECO_PRESSURE_RULES.strikeFrom && Math.random() < ECO_PRESSURE_RULES.strikeChance * e.pressure / 100) runEcoStrike(e);
+    return e.pressure;
+}
+function runEcoStrike(e = society.energy) {
+    const stock = pickPolluter();
+    if (!stock) return null;
+    if (stock.workforce) stock.workforce.satisfaction = clampValue(stock.workforce.satisfaction - ECO_PRESSURE_RULES.strikeMood, 0, 100); // niższe zadowolenie → wyższe getStrikeRisk
+    e.stats.events = e.stats.events || {};
+    e.stats.events.ecoStrike = (e.stats.events.ecoStrike || 0) + 1;
+    bumpEcoPressure(e, 'ecoStrike');
+    if (typeof noteEnergyOpinion === 'function') noteEnergyOpinion('ecoStrike');
+    publishEnergyNews(fillEnergyText(getRandomElement(ECO_STRIKE_TEXTS), stock), `Strajk ekologiczny: ${stock.name}`, 1);
+    return stock;
+}
+/** Udział UEiE w opłacie klimatycznej: rośnie z presją (bez Zielonych 15 → 30%, z Zielonymi 30 → 40%). */
+function getEnergyOfficeBudgetShare(greens, e = society?.energy) {
+    const [lo, hi] = greens ? ECO_PRESSURE_RULES.greenOfficeShare : ECO_PRESSURE_RULES.officeShare;
+    return lo + (hi - lo) * getEcoPressure(e) / 100;
+}
+
 const ENERGY_EVENT_RULES = { smogMood: 1, protestPrice: -0.02, failureQuarters: 2, failureShare: 0.5, failurePrice: -0.03, acidCut: 0.05, acidQuarters: 2, scandalPrice: -0.04 };
 
 const getEnergyOfficeLevel = () => Number(oversight?.energy?.level) || 0;
@@ -553,7 +596,7 @@ function collectClimateFee(e) {
     const amount = fee > 0 ? stocks.reduce((sum, stock) => sum + (stock.isBankrupt ? 0 : getStockRevenue(stock) * getStockEmissionFactor(stock) * fee), 0) : 0;
     e.feeQuarter = Math.round(amount);
     const greens = macro?.election?.ruling === 'green' || macro?.election?.coalition?.partner === 'green';
-    const office = amount * (greens ? ENERGY_OFFICE_RULES.greenBudgetShare : ENERGY_OFFICE_RULES.budgetShare);
+    const office = amount * getEnergyOfficeBudgetShare(greens, e); // 0.18.6 O5: udział rośnie z presją ekologiczną
     if (office > 0) fundInstitution(oversight.energy, office);
     e.fund = (Number(e.fund) || 0) + amount - office;
     return amount;
@@ -633,6 +676,7 @@ function runEnergyEvent(id, e = society.energy) {
     e.stats.events[id] = (e.stats.events[id] || 0) + 1;
     publishEnergyNews(fillEnergyText(getRandomElement(def.texts), stock), `${def.texts[0].split(' ')[0]} ${stock?.name || 'Środowisko'}`, id === 'scandal' ? 2 : 1);
     if (typeof noteEnergyOpinion === 'function') noteEnergyOpinion(id);
+    bumpEcoPressure(e, id); // 0.18.6 O5
     return { id, stock };
 }
 function processEnergyEvents(e) {
@@ -643,7 +687,8 @@ function processEnergyEvents(e) {
     }
     if (e.pollution >= ENERGY_EVENTS.smog.minPollution && typeof unlockAcademyEntry === 'function') unlockAcademyEntry('emisjeLimity', 'Wysokie zanieczyszczenie');
     const open = Object.keys(ENERGY_EVENTS).filter(id => e.pollution >= ENERGY_EVENTS[id].minPollution).sort(() => Math.random() - 0.5);
-    for (const id of open) if (Math.random() < ENERGY_EVENTS[id].chance) return runEnergyEvent(id, e);
+    const mult = 1 + ECO_PRESSURE_RULES.eventMult * getEcoPressure(e) / 100; // 0.18.6 O5: presja zwiększa szansę smogu i protestu (×2 przy 100)
+    for (const id of open) if (Math.random() < ENERGY_EVENTS[id].chance * (id === 'smog' || id === 'protest' ? mult : 1)) return runEnergyEvent(id, e);
     return null;
 }
 
@@ -742,7 +787,7 @@ function maybeFoundStateAtom(e, roll = Math.random()) {
 }
 
 const OPINION_RULES = { start: 50, pull: 0.1, climateStep: 3, pollutionWeight: 0.2, certWeight: 0.3, maxEffect: 0.02, sectors: ['Dobra konsumpcyjne', 'Media', 'Turystyka'] };
-const OPINION_EVENTS = { smog: -2, protest: -1, failure: -1, acidRain: -1, scandal: -4 };
+const OPINION_EVENTS = { smog: -2, protest: -1, failure: -1, acidRain: -1, scandal: -4, ecoStrike: -1 };
 function noteEnergyOpinion(id) {
     const e = society.energy;
     e.opinion = clampValue((e.opinion ?? OPINION_RULES.start) + (OPINION_EVENTS[id] || 0), 0, 100);
@@ -797,6 +842,7 @@ function processEnergyQuarterly() {
     processEnergyOffice(e);
     processAiEsg(e);
     processEnergyEvents(e);
+    processEcoPressure(e); // 0.18.6 O5 (U7)
     payOzeSubsidies(e);
     maybeFoundStateAtom(e);
     processOpinion(e);

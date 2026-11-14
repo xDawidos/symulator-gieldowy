@@ -5394,7 +5394,8 @@ function syncFourthParty() { PARTY_IDS[3] = society?.greens === true ? 'green' :
 /** Na wyborach: przy wysokim zanieczyszczeniu Zieloni zajmują miejsce Socjaldemokratów poza rządem. */
 function maybeSwapGreens(pollution = Number(society?.energy?.pollution) || 0, roll = Math.random()) {
     const election = macro.election;
-    if (society.greens !== false || pollution < GREENS_SWAP_POLLUTION || roll >= GREENS_SWAP_CHANCE) return false;
+    const pressure = typeof getEcoPressure === 'function' ? getEcoPressure() : 0, strong = pressure >= (typeof ECO_PRESSURE_RULES === 'object' ? ECO_PRESSURE_RULES.greensPressure : 101); // 0.18.6 O5: przy presji ≥ 60 Zieloni wchodzą od zanieczyszczenia 50, z szansą 50%
+    if (society.greens !== false || pollution < (strong ? ECO_PRESSURE_RULES.greensPollution : GREENS_SWAP_POLLUTION) || roll >= (strong ? ECO_PRESSURE_RULES.greensChance : GREENS_SWAP_CHANCE)) return false;
     if (election.ruling === 'social' || election.coalition?.partner === 'social') return false;
     society.greens = true;
     syncFourthParty();
@@ -6060,7 +6061,7 @@ function computePartySupport(withNoise = true) {
     }
     if (badTimes && ruling !== getFourthParty() && support.social !== undefined) support.social += SOCIAL_CRISIS_BONUS;
     if (support[ruling] !== undefined && typeof getLifeVoteAdj === 'function') support[ruling] += getLifeVoteAdj(); // 0.17.2 E6
-    if (support.green !== undefined) support.green += Math.max(0, (Number(society.energy?.pollution) || 0) - 30) * GREENS_POLLUTION_SUPPORT;
+    if (support.green !== undefined) support.green += Math.max(0, (Number(society.energy?.pollution) || 0) - 30) * GREENS_POLLUTION_SUPPORT + (typeof getEcoPressure === 'function' ? getEcoPressure() * ECO_PRESSURE_RULES.greensSupport : 0); // 0.18.6 O5: + presja × 0,05 pp
     const donations = election.donations || {};
     const assets = Math.max(1, typeof getFundAssets === 'function' && playerFund ? getFundAssets() : 1);
     PARTY_IDS.forEach(id => { support[id] += Math.min(10, (Number(donations[id]) || 0) / assets * 500); });

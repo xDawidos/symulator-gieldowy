@@ -99,6 +99,19 @@ function renderPollutionCard(e) {
         ${renderLimitMeter(value, null, `Zanieczyszczenie ${Math.round(value)} na 100`, high).replace('limit-meter', 'limit-meter en-wide')}
         <p class="text-sm">${limit} Polityka klimatyczna: ${escapeHtml(SOCIAL_LAWS.climatePolicy.levels[Number(society.laws.climatePolicy)].toLowerCase())}, opłata ${formatNumberPl(getClimateFee() * 100, 1)}% przychodów × emisje.</p>${top}</article>`;
 }
+const PRESSURE_WORDS = [[20, 'niska'], [45, 'umiarkowana'], [70, 'wysoka'], [101, 'bardzo wysoka']];
+/** 0.18.6 O5 (U7): presja ekologiczna — wskaźnik, źródła i skutki (Państwo → Energia i środowisko). */
+function renderEcoPressureCard(e) {
+    if (!canSeeCountryEmissions()) return '';
+    const p = getEcoPressure(e), word = PRESSURE_WORDS.find(([max]) => p < max)?.[1] || 'bardzo wysoka', target = getEcoPressureTarget(e), ev = e.stats?.events || {};
+    const greens = macro?.election?.ruling === 'green' || macro?.election?.coalition?.partner === 'green';
+    const share = getEnergyOfficeBudgetShare(greens, e), mult = 1 + ECO_PRESSURE_RULES.eventMult * p / 100;
+    return `<article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('megafon', 20)}</span><div><h4>Presja ekologiczna</h4><span class="bank-card-type">reakcja społeczna na zanieczyszczenie</span></div></header>
+        <div class="en-state"><span class="en-value">${Math.round(p)}<small> /100</small></span><span class="badge badge--${p >= 60 ? 'warn' : 'neutral'}">${capitalize(word)}</span> ${target > p + 0.5 ? 'rośnie' : target < p - 0.5 ? 'słabnie' : 'stabilna'}</div>
+        ${renderLimitMeter(p, null, `Presja ekologiczna ${Math.round(p)} na 100`, p >= 60).replace('limit-meter', 'limit-meter en-wide')}
+        <h5 class="mb-1">Źródła</h5><ul class="list-plain text-sm"><li>Zanieczyszczenie ponad ${ECO_PRESSURE_RULES.from}: ${Math.round(e.pollution)}/100</li><li>Smog ${ev.smog || 0}, protesty ${ev.protest || 0}, kwaśne deszcze ${ev.acidRain || 0}, strajki ekologiczne ${ev.ecoStrike || 0} (od początku gry)</li></ul>
+        <h5 class="mb-1">Skutki</h5><ul class="list-plain text-sm"><li>Budżet UEiE: ${formatNumberPl(share * 100, 0)}% opłat za emisje${greens ? ' (Zieloni w rządzie)' : ''}</li><li>Smog i protesty ${formatNumberPl(mult, 2)}× częściej</li><li>Poparcie Zielonych +${formatNumberPl(p * ECO_PRESSURE_RULES.greensSupport, 1)} pp${p >= ECO_PRESSURE_RULES.greensPressure ? `; wchodzą do polityki już przy zanieczyszczeniu ${ECO_PRESSURE_RULES.greensPollution}` : ''}</li>${p >= ECO_PRESSURE_RULES.strikeFrom ? `<li>Strajki ekologiczne u dużych emitentów (szansa ${formatNumberPl(ECO_PRESSURE_RULES.strikeChance * p, 0)}% na kwartał)</li>` : ''}</ul></article>`;
+}
 function renderLifeCard(e) {
     const factors = getLifeFactors(e), life = Number(e.life) || 0, hist = e.lifeHist || [], change = hist.length > 1 ? hist[hist.length - 1] - hist[hist.length - 2] : 0;
     const hideHealth = !getEnergyOfficeLevel() && !(typeof isDebugMode === 'function' && isDebugMode());
@@ -135,7 +148,7 @@ function renderEnergyPanel() {
         </div>
         ${renderEnergyAlerts(e)}
         <div class="bank-grid mt-3">${renderEnergyMixCard(e)}${renderEnergyBalanceCard(e)}${renderEnergyPriceCard(e)}</div>
-        <div class="bank-grid mt-3">${renderEnergyBuildCard()}${renderPollutionCard(e)}${renderLifeCard(e)}</div>`;
+        <div class="bank-grid mt-3">${renderEnergyBuildCard()}${renderPollutionCard(e)}${renderEcoPressureCard(e)}${renderLifeCard(e)}</div>`;
 }
 
 /** Nadzór: oś poziomów UEiE. */

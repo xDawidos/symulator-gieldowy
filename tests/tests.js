@@ -17597,6 +17597,39 @@ group('0.18.5 Wydajność', () => {
 });
 
 group('0.18.6 Porządki', () => {
+    test('O5 (U7): presja ekologiczna — rośnie przy zanieczyszczeniu 70, spada przy 40; smog i protest ×2 przy 100; UEiE 15 → 30% (z Zielonymi do 40%); Zieloni od 50 przy presji ≥ 60', () => {
+        const e = { pollution: 70, stats: { events: {} } };
+        const realRandom = Math.random;
+        try {
+            Math.random = () => 0.99; // bez strajku ekologicznego
+            assertEq(getEcoPressure(e), 62.5, 'stary zapis: presja z bieżącego zanieczyszczenia');
+            e.pressure = 20; processEcoPressure(e); assert(e.pressure > 20, `rośnie przy 70: ${e.pressure}`);
+            e.pollution = 40; const before = e.pressure; processEcoPressure(e); assert(e.pressure < before && e.pressure > before * 0.85, `spada wolno przy 40: ${before} → ${e.pressure}`);
+        } finally { Math.random = realRandom; }
+        e.pressure = 0; assertEq(getEnergyOfficeBudgetShare(false, e), 0.15, 'UEiE 15% bez presji');
+        e.pressure = 100; assert(Math.abs(getEnergyOfficeBudgetShare(false, e) - 0.30) < 1e-9 && Math.abs(getEnergyOfficeBudgetShare(true, e) - 0.40) < 1e-9, 'UEiE 30% / 40% przy presji 100');
+        // szansa smogu przy presji 100 dwa razy większa: losowanie tuż ponad bazową szansę przechodzi tylko przy presji
+        const base = ENERGY_EVENTS.smog.chance, runs = [];
+        const saved = runEnergyEvent;
+        try {
+            runEnergyEvent = id => { runs.push(id); return { id }; };
+            for (const pressure of [0, 100]) {
+                const st = { pollution: 46, pressure, stats: { events: {} } };
+                Math.random = () => base * 1.5;
+                processEnergyEvents(st);
+            }
+        } finally { runEnergyEvent = saved; Math.random = realRandom; }
+        assert(runs.length === 1, `tylko przy presji 100 zdarzenie przy losowaniu 1,5 × szansy (${runs})`);
+        // Zieloni: przy presji ≥ 60 wchodzą od zanieczyszczenia 50
+        const savedSoc = { greens: society.greens, energy: society.energy, ruling: macro.election?.ruling, partner: macro.election?.coalition };
+        try {
+            society.greens = false; macro.election.ruling = 'liberal'; macro.election.coalition = null;
+            society.energy = { pollution: 52, pressure: 10, stats: {} };
+            assert(!maybeSwapGreens(52, 0.1), 'bez presji: próg 60');
+            society.energy.pressure = 65; society.greens = false;
+            assert(maybeSwapGreens(52, 0.4), 'presja 65: wchodzą od 50, szansa 50%');
+        } finally { society.greens = savedSoc.greens; society.energy = savedSoc.energy; macro.election.ruling = savedSoc.ruling; macro.election.coalition = savedSoc.partner; if (typeof syncFourthParty === 'function') syncFourthParty(); }
+    });
     test('O4 (U2): linia kryzysu nie rusza przed 10 kw. spokoju, po 10 kw. tak; szoki zewnętrzne także w bessie, Czarny czwartek przy dystrybucji z premią > 15%', () => {
         resetWorld([makeCompany('AAA', { sector: ['Technologia'] }), makeCompany('BBB', { sector: ['Turystyka'] })]);
         startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' }); initMarketRegimes();
