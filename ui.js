@@ -8087,7 +8087,9 @@ function switchBankTab(tabName) {
     if (!modal) return;
     modal.querySelectorAll('.bank-tab-content').forEach(content => { content.style.display = 'none'; });
     document.getElementById(`bank-content-${tabName}`).style.display = 'block';
-    modal.querySelectorAll('.bank-tab-btn').forEach(button => button.classList.toggle('active', button.id === `tab-btn-${tabName}`));
+    modal.querySelectorAll('.bank-tab-btn').forEach(button => { const on = button.id === `tab-btn-${tabName}`; button.classList.toggle('active', on); button.setAttribute('aria-selected', String(on)); });
+    const main = document.getElementById('bank-main'); if (main) main.scrollTop = 0; // 0.18.6 O6: zmiana zakładki nie zmienia okna, treść wraca na górę
+    const head = document.getElementById('bank-headline'); if (head) head.textContent = getBankHeadline();
     renderBankTicker();
     if (tabName === 'bonds') renderBondMarketInBank();
     else if (tabName === 'commercial') renderCommercialBanksList();
@@ -8325,6 +8327,13 @@ function stateRailKey(event) {
     event.preventDefault(); next?.focus();
 }
 /** Jedno zdanie stanu zamiast kickera z kropkami (O3). */
+/** 0.18.6 O6: jedno zdanie stanu w nagłówku Banku (zamiast kickera z kropkami). */
+function getBankHeadline() {
+    const rate = (Number(centralBank?.baseInterestRate) || 0) * 100, deposits = typeof getFundDeposits === 'function' ? getFundDeposits().length : 0;
+    const auction = (typeof currentTBillAuction !== 'undefined' && currentTBillAuction) ? ' Trwa aukcja bonów skarbowych.' : (typeof currentCollateralAuction !== 'undefined' && currentCollateralAuction) ? ' Trwa aukcja akcji zastawnych.' : '';
+    return `Stopa bazowa ${formatNumberPl(rate, 2)}%. ${deposits ? `Fundusz ma ${deposits} ${deposits === 1 ? 'lokatę' : deposits % 10 >= 2 && deposits % 10 <= 4 && (deposits % 100 < 12 || deposits % 100 > 14) ? 'lokaty' : 'lokat'}.` : 'Fundusz nie ma lokat.'}${auction}`;
+}
+
 function getStateHeadline() {
     const rate = (Number(centralBank?.baseInterestRate) || 0) * 100, inf = (Number(macro?.inflation) || 0) * 100, target = 2.5;
     const infWord = inf > target + 0.5 ? 'powyżej celu' : inf < target - 1 ? 'poniżej celu' : 'blisko celu';

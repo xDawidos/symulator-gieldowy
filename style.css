@@ -6128,3 +6128,6 @@ body.dark-mode .owned-badge, .owned-badge { background: transparent; color: var(
 .empty .prog i { display: block; height: 4px; border-radius: 2px; background: linear-gradient(to right, var(--color-text-secondary) var(--v), var(--ink-750) var(--v)); }
 tr.empty-row td { padding: 12px 8px; border-bottom: 0; }
 li.empty-li { list-style: none; padding: 0; }
+
+/* 0.18.6 O6 (U6): Bank w ramie .wn. Akcent okna neutralny niebieski, nie bursztyn: po R4 bursztyn znaczy „Twoje” (pytanie otwarte z makiety 19) */
+.wn--bank { --wn-accent: var(--blue-400); }

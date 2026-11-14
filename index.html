@@ -647,22 +647,21 @@
         <div id="skills-list"></div>
     </div>
 
-    <div id="bank-modal" class="modal modal-xl bank-window" style="display: none;">
-    <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
-    <header class="bank-hero">
-        <div class="bank-emblem" aria-hidden="true"><svg class="ic" width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10h18M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18M12 3l9 5H3z"/></svg></div>
-        <div>
-            <div class="bank-hero-kicker">System bankowy · obsługa funduszy</div>
-            <h2 class="bank-hero-title">Centrum bankowe</h2>
-        </div>
+    <div id="bank-modal" class="modal wn-host bank-window" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="bank-title">
+    <section class="wn wn--bank"><!-- 0.18.6 O6 (U6): wspólna rama okna (plany/design/19_okna.md) -->
+    <header class="wn-head">
+        <div class="wn-emblem" aria-hidden="true"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10h18M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18M12 3l9 5H3z"/></svg></div>
+        <div><h2 id="bank-title" tabindex="-1">Centrum bankowe</h2><p id="bank-headline"></p></div>
+        <button class="wn-close" onclick="closeModalFrom(this)" aria-label="Zamknij (Esc)"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     </header>
-    <div class="bank-ticker" id="bank-ticker"></div>
-
-    <nav class="bank-tabs" role="tablist">
-        <button id="tab-btn-central" class="bank-tab-btn active" onclick="switchBankTab('central')">Bank Centralny</button>
-        <button id="tab-btn-commercial" class="bank-tab-btn" onclick="switchBankTab('commercial')">Banki i lokaty</button>
-        <button id="tab-btn-bonds" class="bank-tab-btn" onclick="switchBankTab('bonds')">Obligacje</button>
+    <div class="wn-strip bank-ticker" id="bank-ticker"></div>
+    <div class="wn-body is-tabs">
+    <nav class="wn-tabs" role="tablist" aria-label="Zakładki Banku">
+        <button id="tab-btn-central" class="bank-tab-btn wn-tab active" role="tab" aria-selected="true" onclick="switchBankTab('central')">Bank Centralny</button>
+        <button id="tab-btn-commercial" class="bank-tab-btn wn-tab" role="tab" aria-selected="false" onclick="switchBankTab('commercial')">Banki i lokaty</button>
+        <button id="tab-btn-bonds" class="bank-tab-btn wn-tab" role="tab" aria-selected="false" onclick="switchBankTab('bonds')">Obligacje</button>
     </nav>
+    <div class="wn-main" id="bank-main">
 
     <div id="bank-content-central" class="bank-tab-content">
         <h3 class="bank-section-title">Bank Centralny</h3>
@@ -743,6 +742,9 @@
             </table>
         </div>
     </div>
+    </div><!-- /wn-main -->
+    </div><!-- /wn-body -->
+    </section>
 </div>
 <div id="city-investment-modal" class="modal modal-xl bank-window city-window" style="display: none;">
     <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
