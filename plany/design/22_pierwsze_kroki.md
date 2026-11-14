@@ -7,7 +7,10 @@ Makieta: [makiety/22_pierwsze_kroki.html](makiety/22_pierwsze_kroki.html) (samod
 - **Faza rynku bez zmian:** chip w pasku tylko z „Analityk indeksu” L4 (`updateMoodKpi`). Stopy bazowej w pasku nie dodajemy (pasek ma zostać lekki; stopa jest w oknie Banku, makieta 21).
 - **Pierwsze kroki:** 4 zadania po 50 PLN na konto prywatne, razem 200 PLN.
 
-## 1. Pierwsze kroki (panel funduszu)
+## 1. Panel przypiętych zadań (panel funduszu)
+
+**Korekta 2026-11-14 (uwaga użytkownika):** karta z tej makiety to **ogólny panel przypiętych zadań**, a nie tylko „Pierwsze kroki”. Pełna lista zadań jest w TeamedUP! → Zadania i oceny, z kategoriami Pierwsze kroki, Od zarządu, Rynek i Mechaniki. Gracz przypina do panelu najwyżej 3 zadania. Na starcie gra sama przypina 3 pierwsze zadania z Pierwszych kroków, a gdy jedno się wykona, w wolne miejsce wchodzi następne (tylko ta kategoria przypina się sama). Projekt listy i przypinania: [24_zadania.md](24_zadania.md). Tabela niżej opisuje zachowanie karty (zwijanie, postęp, komunikat o nagrodzie, stan ukończony); wygląd pojedynczego przypiętego zadania (kategoria, postęp, nagroda, termin, „Odepnij”) jest w makiecie 24. Nagłówek karty to „Zadania” zamiast „Pierwsze kroki”.
+
 | Część | Co pokazuje | Markup / ARIA |
 |---|---|---|
 | Karta | Nad księgą funduszu. Nagłówek „Pierwsze kroki” + pasek postępu (neutralny, R4) + strzałka zwijania | `section.fs[aria-labelledby]`, `button.fs-head[aria-expanded][aria-controls]`, `.fs-meter[role=progressbar][aria-valuenow][aria-valuemin=0][aria-valuemax=4]` |
