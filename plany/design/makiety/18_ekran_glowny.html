@@ -313,9 +313,11 @@ html, body { margin: 0; background: #05070a; color: var(--color-text-primary); f
 
 /* R1: giełda jako szkielet. Nagłówek z płytką w kolorze metalu, szyna wzdłuż wierszy grupy */
 .ms-ex th { position: sticky; top: 89px; z-index: 2; padding: 0; background: var(--ink-850); text-align: left; }
-.ms-ex .ex-plate { display: flex; align-items: baseline; gap: 12px; padding: 10px 12px; border-left: 3px solid var(--tier); border-bottom: 1px solid var(--ink-700); }
-.ms-ex .ex-name { font-family: 'IBM Plex Sans Condensed', var(--font-family-sans); font-size: 15px; font-weight: 600; color: var(--tier); }
-.ms-ex .ex-rule { font-size: 12px; color: var(--color-text-secondary); }
+.ms-ex .ex-plate { position: relative; display: flex; align-items: baseline; gap: 12px; padding: 10px 12px; border-left: 3px solid var(--tier); border-bottom: 1px solid var(--ink-700); }
+.ms-ex .ex-name { padding: 0; border: 0; background: none; font-family: 'IBM Plex Sans Condensed', var(--font-family-sans); font-size: 15px; font-weight: 600; color: var(--tier); cursor: help; text-decoration: underline dotted color-mix(in srgb, var(--tier) 50%, transparent); text-underline-offset: 4px; }
+/* Warunek dostępu tylko w podpowiedzi (nazwa giełdy: najechanie, fokus, dotknięcie). Treść przykładowa, kryteria planuje czat planowania */
+.ms-ex .ex-tip { position: absolute; left: 12px; top: calc(100% - 4px); z-index: 4; max-width: 260px; padding: 6px 10px; border: 1px solid var(--ink-600); border-radius: 6px; background: var(--ink-950); color: var(--color-text-primary); font-size: 12px; font-weight: 400; white-space: normal; box-shadow: 0 8px 20px rgba(0,0,0,.5); visibility: hidden; }
+.ms-ex .ex-name:hover + .ex-tip, .ms-ex .ex-name:focus-visible + .ex-tip, .ms-ex .ex-name[data-open] + .ex-tip { visibility: visible; }
 .ms-ex .ex-count { margin-left: auto; font-size: 12px; color: var(--color-text-muted); }
 .ms-row td:first-child { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--tier) 35%, transparent); }
 .ms-row:hover td { background: rgba(255,255,255,.03); }
@@ -513,11 +515,12 @@ html, body { margin: 0; background: #05070a; color: var(--color-text-primary); f
 <div class="frame" id="f-start"></div>
 
 <script>
-// Dane przykładowe. W grze: stocks + exchanges (companies.js), próg z minPrice albo rankBased.
+// Dane przykładowe. W grze: stocks + exchanges (companies.js). Trzecie pole = treść podpowiedzi o dostępie (przykład; kryteria w planie).
+let tipN = 0; // unikalne id podpowiedzi (szablon montowany w kilku ramkach)
 const EX = [
-  ['junk', 'Giełda Śmieciowa', 'kurs do 20 PLN', [['KFX', 'Konfiturex', 'Żywność', 2.00, 4.2, 684, 1000, 420], ['WZM', 'Miejskie Ziemniaki', 'Żywność', 1.50, -1.3, 719, 1000, 0], ['ECL', 'EcoLube', 'Chemia', 5.00, 0.6, 776, 1000, 0], ['PIX', 'Pikselowe Marzenia', 'Technologia', 7.50, -3.8, 756, 1000, 0], ['BLP', 'Błyskawiczna Proteza', 'Medycyna', 13.10, -2.4, 675, 1000, 90]]],
-  ['bronze', 'Giełda Brązowa', 'kurs 20–75 PLN', [['MDS', 'Mediasfera', 'Media', 41.20, 1.9, 512, 1200, 0], ['TRB', 'Transbałtyk', 'Transport', 63.80, 0.3, 230, 900, 0]]],
-  ['gold', 'Giełda Złota', 'kurs od 400 PLN, ocena BBB', [['HKT', 'Huta Katowice', 'Przemysł', 412.30, 1.2, 140, 500, 3], ['WSB', 'Wawelski Bank', 'Finanse', 612.00, -0.7, 88, 400, 0]]]
+  ['junk', 'Giełda Śmieciowa', 'Dostęp bez oceny kredytowej', [['KFX', 'Konfiturex', 'Żywność', 2.00, 4.2, 684, 1000, 420], ['WZM', 'Miejskie Ziemniaki', 'Żywność', 1.50, -1.3, 719, 1000, 0], ['ECL', 'EcoLube', 'Chemia', 5.00, 0.6, 776, 1000, 0], ['PIX', 'Pikselowe Marzenia', 'Technologia', 7.50, -3.8, 756, 1000, 0], ['BLP', 'Błyskawiczna Proteza', 'Medycyna', 13.10, -2.4, 675, 1000, 90]]],
+  ['bronze', 'Giełda Brązowa', 'Dostęp od oceny widocznej publicznie', [['MDS', 'Mediasfera', 'Media', 41.20, 1.9, 512, 1200, 0], ['TRB', 'Transbałtyk', 'Transport', 63.80, 0.3, 230, 900, 0]]],
+  ['gold', 'Giełda Złota', 'Dostęp od oceny A', [['HKT', 'Huta Katowice', 'Przemysł', 412.30, 1.2, 140, 500, 3], ['WSB', 'Wawelski Bank', 'Finanse', 612.00, -0.7, 88, 400, 0]]]
 ];
 const pl = (n, d = 2) => n.toLocaleString('pl-PL', { minimumFractionDigits: d, maximumFractionDigits: d });
 function spark(seed, chg) {
@@ -526,7 +529,7 @@ function spark(seed, chg) {
   return `<svg class="ms-spark ${chg > 0 ? 'is-up' : chg < 0 ? 'is-down' : ''}" viewBox="0 0 56 18" aria-hidden="true"><polyline points="${pts.join(' ')}"/></svg>`;
 }
 function rows(start) {
-  return EX.map(([t, name, rule, list]) => `<tr class="ms-ex t-${t}"><th colspan="8"><div class="ex-plate"><span class="ex-name">${name}</span><span class="ex-rule">${rule}</span><span class="ex-count">${list.length} spółek</span></div></th></tr>` +
+  return EX.map(([t, name, rule, list]) => `<tr class="ms-ex t-${t}"><th colspan="8"><div class="ex-plate">${(id => `<button type="button" class="ex-name" aria-describedby="${id}">${name}</button><span class="ex-tip" role="tooltip" id="${id}">${rule}</span>`)(`ex-tip-${++tipN}`)}<span class="ex-count">${list.length} spółek</span></div></th></tr>` +
     list.map(([tk, nm, sec, price, chg, av, tot, mine], i) => {
       const c = start ? 0 : chg, m = start ? 0 : mine;
       const chgTxt = start ? '<span class="ms-chg is-none" title="Zmiana pojawi się po pierwszej sesji">—</span>' : `<span class="ms-chg ${c > 0 ? 'is-up' : 'is-down'}">${c > 0 ? '▲ +' : '▼ −'}${pl(Math.abs(c), 1)}%</span>`;
@@ -569,6 +572,9 @@ setInterval(() => {
   const v = +el.dataset.p, nv = Math.max(0.5, v * (1 + (Math.random() - 0.5) * 0.04)); el.dataset.p = nv;
   el.textContent = pl(nv) + ' PLN'; el.classList.remove('flash-up', 'flash-down'); void el.offsetWidth; el.classList.add(nv >= v ? 'flash-up' : 'flash-down');
 }, 2000);
+// Podpowiedź giełdy: dotknięcie/klik przełącza, Esc i klik obok zamykają (najechanie i fokus obsługuje CSS)
+document.addEventListener('click', e => { const b = e.target.closest('.ex-name'); document.querySelectorAll('.ex-name[data-open]').forEach(x => x !== b && x.removeAttribute('data-open')); if (b) b.toggleAttribute('data-open'); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') document.querySelectorAll('.ex-name[data-open]').forEach(x => x.removeAttribute('data-open')); });
 </script>
 <style>.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }</style>
 </body></html>
