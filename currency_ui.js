@@ -84,7 +84,7 @@ function renderFxChart(code) {
     const x = i => pad + i / (h.length - 1) * (W - 2 * pad);
     const points = h.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
     const band = (v, label) => `<line x1="${pad}" x2="${W - pad}" y1="${y(v)}" y2="${y(v)}" stroke="currentColor" stroke-opacity="0.25" stroke-dasharray="4 4"/><text x="${W - pad}" y="${y(v) + (v === def.min ? -3 : 11)}" text-anchor="end" font-size="10" fill="currentColor" fill-opacity="0.7">${label}</text>`;
-    return `<svg class="fx-chart" viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Wykres kursu ${code}: od ${fmtRate(h[0], code)} do ${fmtRate(h[h.length - 1], code)} zł">
+    return `<svg class="fx-chart" viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Wykres kursu ${code}: od ${fmtRate(h[0], code)} do ${fmtRate(h[h.length - 1], code)} PLN">
         ${band(def.max, 'góra widełek ' + fmtRate(def.max, code))}${band(def.min, 'dół widełek ' + fmtRate(def.min, code))}
         <polyline points="${points}" fill="none" stroke="var(--accent-info)" stroke-width="2"/></svg>`;
 }
@@ -119,7 +119,7 @@ function renderRatesTab() {
     return `<table class="asset-mini-table w-full"><thead><tr><th>Waluta</th><th class="text-right">Kurs środkowy</th><th class="text-right">Zmiana</th><th class="text-right">Twoja pozycja</th></tr></thead><tbody>${rows}</tbody></table>
         <h4 class="mt-3">${currencyIcon(code, 18)} ${code} — ${escapeHtml(def.name)}</h4>
         ${renderFxChart(code)}
-        <p class="text-sm text-muted">Kurs porusza się w widełkach ${fmtRate(def.min, code)}–${fmtRate(def.max, code)} zł i wraca do wolno zmieniającej się średniej. ${def.safe ? 'Waluta „bezpiecznej przystani”: w kryzysie zwykle drożeje.' : 'W kryzysie zwykle słabnie wobec bezpiecznych przystani (USD, CHF, JPY).'}</p>
+        <p class="text-sm text-muted">Kurs porusza się w widełkach ${fmtRate(def.min, code)}–${fmtRate(def.max, code)} PLN i wraca do wolno zmieniającej się średniej. ${def.safe ? 'Waluta „bezpiecznej przystani”: w kryzysie zwykle drożeje.' : 'W kryzysie zwykle słabnie wobec bezpiecznych przystani (USD, CHF, JPY).'}</p>
         <div class="bank-card mt-3"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('moneta', 20)}</span><div><h4>Wymiana ${code}</h4><span class="bank-card-type">kupno i sprzedaż po kursie kantoru</span></div></header>
             <div class="kantor-form"><label for="kantor-provider" class="text-sm">Kantor <select id="kantor-provider" onchange="setKantorProvider(this.value)">${renderProviderOptions(kantorProviderId, code)}</select></label>
             <label for="kantor-amount" class="text-sm">Kwota (${getBaseCurrency()} przy kupnie, jednostki ${code} przy sprzedaży)</label>
@@ -127,7 +127,7 @@ function renderRatesTab() {
             <div class="btn-row"><button class="btn-primary" onclick="kantorUiBuy()">Kup ${code} za ${getBaseCurrency()}</button><button class="btn-ghost" onclick="kantorUiSell()">Sprzedaj ${code}</button></div></div>
             <p id="kantor-quote" class="text-sm" aria-live="polite"></p></div>
         <h4 class="mt-3">Porównanie kursów ${code}</h4><div id="kantor-compare"></div>
-        <p class="text-sm text-muted">Banki (e-bank, uniwersalny, międzynarodowy) i Kantor Miejski ustalają własne kursy i spready, odświeżane co kwartał. Bank międzynarodowy jest najtańszy przy dużych kwotach (od 100 tys. zł) i wymienia wszystkie waluty; e-bank ma limit transakcji, Kantor Miejski wymienia tylko EUR, USD i CZK do 30 tys. zł, a jego zysk zasila miasto.</p>`;
+        <p class="text-sm text-muted">Banki (e-bank, uniwersalny, międzynarodowy) i Kantor Miejski ustalają własne kursy i spready, odświeżane co kwartał. Bank międzynarodowy jest najtańszy przy dużych kwotach (od 100 tys. PLN) i wymienia wszystkie waluty; e-bank ma limit transakcji, Kantor Miejski wymienia tylko EUR, USD i CZK do 30 tys. PLN, a jego zysk zasila miasto.</p>`;
 }
 
 function providerLabel(p) { return `${p.name} (${p.tag})`; }
@@ -142,7 +142,7 @@ function renderKantorCompare(code, amount) {
     const okBuy = rows.filter(r => r.buy.ok).map(r => r.buy.rate), okSell = rows.filter(r => r.sell.ok).map(r => r.sell.rate);
     const bestBuy = Math.min(...okBuy), bestSell = Math.max(...okSell);
     const body = rows.map(r => r.buy.ok && r.sell.ok
-        ? `<tr><td>${escapeHtml(r.p.name)} <span class="text-muted text-xs">${escapeHtml(r.p.tag)}</span></td><td class="text-right">${fmtRate(r.buy.rate, code)} zł${r.buy.rate === bestBuy ? ' · najtaniej' : ''}</td><td class="text-right">${fmtRate(r.sell.rate, code)} zł${r.sell.rate === bestSell ? ' · najdrożej' : ''}</td><td class="text-right">${formatNumberPl(r.buy.spread * 100, 2)}%</td></tr>`
+        ? `<tr><td>${escapeHtml(r.p.name)} <span class="text-muted text-xs">${escapeHtml(r.p.tag)}</span></td><td class="text-right">${fmtRate(r.buy.rate, code)} PLN${r.buy.rate === bestBuy ? ' · najtaniej' : ''}</td><td class="text-right">${fmtRate(r.sell.rate, code)} PLN${r.sell.rate === bestSell ? ' · najdrożej' : ''}</td><td class="text-right">${formatNumberPl(r.buy.spread * 100, 2)}%</td></tr>`
         : `<tr class="text-muted"><td>${escapeHtml(r.p.name)} <span class="text-xs">${escapeHtml(r.p.tag)}</span></td><td colspan="3">${escapeHtml((r.buy.ok ? r.sell.reason : r.buy.reason) || 'niedostępny')}</td></tr>`).join('');
     return `<table class="asset-mini-table w-full"><thead><tr><th>Kantor</th><th class="text-right">Kupno ${code} (płacisz)</th><th class="text-right">Sprzedaż (dostajesz)</th><th class="text-right">Spread</th></tr></thead><tbody>${body}</tbody></table>`;
 }
@@ -294,7 +294,7 @@ Object.assign(ACADEMY_ENTRIES, {
     ryzykoWalutowe: {
         title: 'Ryzyko walutowe', get icon() { return academyIcon('moneta'); },
         text: 'Gdy trzymasz papiery albo gotówkę w obcej walucie, Twój wynik w złotych zależy od dwóch rzeczy: od ceny papieru i od kursu. Zysk 10% na akcji w euro znika, jeśli euro w tym czasie potanieje o 10%. Kurs waluty rośnie i spada w widełkach, a w kryzysie „bezpieczne przystanie” (frank, jen, dolar) zwykle drożeją, a waluty rynków wschodzących tanieją.',
-        example: () => { const eur = fxRates.EUR; const held = getForeignCashPln('player'); return `Teraz 1 EUR kosztuje ${formatNumberPl(eur, 3)} zł; w walutach trzymasz ${formatZl(held, 0)}.`; },
+        example: () => { const eur = fxRates.EUR; const held = getForeignCashPln('player'); return `Teraz 1 EUR kosztuje ${formatNumberPl(eur, 3)} PLN; w walutach trzymasz ${formatZl(held, 0)}.`; },
         quiz: [
             { q: 'Akcja w euro zyskała 10%, a euro potaniało o 10%. Jaki jest Twój wynik w złotych?', a: ['ok. 1% straty', '+10%', '+20%'], c: 0 },
             { q: 'Która waluta zwykle drożeje w kryzysie?', a: ['frank szwajcarski', 'rupia indyjska', 'żadna'], c: 0 },
@@ -304,7 +304,7 @@ Object.assign(ACADEMY_ENTRIES, {
     spread: {
         title: 'Spread', get icon() { return academyIcon('moneta'); },
         text: 'Spread to różnica między ceną kupna a sprzedaży. Kantor kupuje walutę drożej, niż ją odkupuje, i to jest jego zarobek: u nas 1–2%, tym mniej, im większa kwota. Każda wymiana tam i z powrotem kosztuje cały spread, więc częste „kręcenie” walutą zjada zysk, a pewnego zysku z samego powrotu kursu do średniej nie ma.',
-        example: () => `Dla kwoty 100 tys. zł spread kantoru wynosi ${formatNumberPl(getKantorSpread(100000) * 100, 1)}%, dla 5 mln zł — ${formatNumberPl(getKantorSpread(5e6) * 100, 1)}%.`,
+        example: () => `Dla kwoty 100 tys. PLN spread kantoru wynosi ${formatNumberPl(getKantorSpread(100000) * 100, 1)}%, dla 5 mln PLN — ${formatNumberPl(getKantorSpread(5e6) * 100, 1)}%.`,
         quiz: [
             { q: 'Kupujesz walutę i od razu ją sprzedajesz. Co się dzieje z Twoimi pieniędzmi?', a: ['tracisz spread', 'zyskujesz spread', 'nic'], c: 0 },
             { q: 'Kiedy spread kantoru jest niższy?', a: ['przy większych kwotach', 'przy mniejszych kwotach', 'zawsze taki sam'], c: 0 },
@@ -314,9 +314,9 @@ Object.assign(ACADEMY_ENTRIES, {
     dzwigniaMarginCall: {
         title: 'Dźwignia i margin call', get icon() { return academyIcon('samolot'); },
         text: 'Dźwignia 1:10 oznacza, że wkładasz 10% wartości pozycji (depozyt), a resztę „pożycza” rynek. Zysk i strata liczą się od całej wartości, więc ruch kursu o 5% daje ±50% depozytu. Gdy kapitał pozycji spadnie poniżej 70% depozytu, dostajesz ostrzeżenie (margin call), a poniżej 50% pozycja zamyka się automatycznie. Za utrzymanie pozycji płacisz koszt finansowania (swap), a przy otwarciu spread. Strata nie przekroczy depozytu.',
-        example: () => `Pozycja 100 000 zł z dźwignią 1:10 ma depozyt 10 000 zł. Kurs spada o 5% → strata 5 000 zł, kapitał 50% depozytu — pozycja zostaje zamknięta.`,
+        example: () => `Pozycja 100 000 PLN z dźwignią 1:10 ma depozyt 10 000 PLN. Kurs spada o 5% → strata 5 000 PLN, kapitał 50% depozytu — pozycja zostaje zamknięta.`,
         quiz: [
-            { q: 'Ile wynosi depozyt pozycji 50 000 zł przy dźwigni 1:10?', a: ['5 000 zł', '50 000 zł', '500 zł'], c: 0 },
+            { q: 'Ile wynosi depozyt pozycji 50 000 PLN przy dźwigni 1:10?', a: ['5 000 PLN', '50 000 PLN', '500 PLN'], c: 0 },
             { q: 'Co się dzieje, gdy kapitał pozycji spada poniżej 50% depozytu?', a: ['pozycja zamyka się automatycznie', 'dopłacasz bez końca', 'nic'], c: 0 },
             { q: 'Czym jest swap w tej grze?', a: ['kosztem finansowania pozycji z dźwignią', 'zyskiem z kursu', 'prowizją od akcji'], c: 0 }
         ]

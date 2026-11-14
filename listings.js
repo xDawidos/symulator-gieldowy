@@ -268,8 +268,8 @@ const MARKET_PROFILES = [
     { id: 'tech', label: 'tylko technologia', sectors: ['Technologia'] },
     { id: 'modern', label: 'tylko technologia i gaming', sectors: ['Technologia', 'Gaming'] },
     { id: 'consumer', label: 'tylko konsumpcja', sectors: ['Żywność', 'Alkohole', 'Dobra konsumpcyjne', 'Turystyka'] },
-    { id: 'cap1m', label: 'kapitalizacja od 1 mln zł', minCap: 1_000_000 },
-    { id: 'cap300k', label: 'kapitalizacja od 300 tys. zł', minCap: 300_000 },
+    { id: 'cap1m', label: 'kapitalizacja od 1 mln PLN', minCap: 1_000_000 },
+    { id: 'cap300k', label: 'kapitalizacja od 300 tys. PLN', minCap: 300_000 },
     { id: 'poland', label: 'tylko spółki z Polski', countries: ['PL'] }
 ];
 

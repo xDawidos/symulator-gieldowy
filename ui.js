@@ -3114,7 +3114,7 @@ function openManagementModal(symbol, defaultTab = 'main') {
         } else if (isDividendTooSmall(stock, getForcedDividendAmount(stock) / Math.max(1, stock.totalShares))) {
             // 0.15.4 P3: słowa, nie kolor — dlaczego przycisk jest nieaktywny
             dividendBtn.disabled = true;
-            cooldownInfo.textContent = `Dywidenda zbyt mała: poniżej ${formatZl(getMinDividendPerShare(stock))} na akcję (0,01 zł albo 0,1% kursu) — spółka nie ma na nią gotówki.`;
+            cooldownInfo.textContent = `Dywidenda zbyt mała: poniżej ${formatZl(getMinDividendPerShare(stock))} na akcję (${formatZl(0.01)} albo 0,1% kursu) — spółka nie ma na nią gotówki.`;
         } else {
             dividendBtn.disabled = false;
             cooldownInfo.textContent = '';

@@ -44,7 +44,7 @@ function openMarginPosition({ market, instrument, side, notional, leverage }) {
     side = side === -1 ? -1 : 1; notional = Number(notional); leverage = Math.floor(Number(leverage));
     const maxLev = getMarginMaxLeverage(market, instrument);
     if (!(leverage >= 1 && leverage <= maxLev)) return { ok: false, reason: `Dźwignia od 1 do ${maxLev}.` };
-    if (!(notional >= MARGIN_RULES.minNotional)) return { ok: false, reason: `Najmniejsza pozycja to ${MARGIN_RULES.minNotional} zł.` };
+    if (!(notional >= MARGIN_RULES.minNotional)) return { ok: false, reason: `Najmniejsza pozycja to ${formatZl(MARGIN_RULES.minNotional, 0)}.` };
     const price = Number(m.priceOf(instrument));
     if (!(price > 0)) return { ok: false, reason: 'Nieznany instrument.' };
     if (getMarginNotional() + notional > MARGIN_RULES.fundLeverageCap * getFundAssets() + 1e-9) return { ok: false, reason: `Limit funduszu: pozycje do ${MARGIN_RULES.fundLeverageCap}× aktywów.` };
