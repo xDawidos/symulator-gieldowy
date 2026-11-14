@@ -114,7 +114,7 @@ Nowy wskaźnik krajowy 0–100, średnia ważona 5 czynników:
 - Wagi startowe równe, po 20%.
 - Skutek: wchodzi do `getCountryAttractiveness`, więc steruje migracją, oraz do przyrostu populacji i nastrojów wyborczych.
 - UI: karta kraju i panel Państwa, czynniki rozpisane słowem i liczbą.
-- Pogłębienie: `0.19.1` Społeczeństwo 2 (zdrowie, nauka) i `0.19.2` Miasta 2 (wskaźnik na miasto).
+- Pogłębienie: `0.19.1` Polityka i Społeczeństwo 2 (zdrowie, nauka) i `0.19.2` Miasta 2 (wskaźnik na miasto), `plan_0.19.md`.
 
 ## E7. OZE i atom z udziałem państwa
 
@@ -143,7 +143,7 @@ Bez nowego katalogu. Istniejące pozycje z `technologies` dostają efekt na emis
 
 ## Przeniesione
 
-- **Handel energią między państwami:** do Polityki 2 (`plan_0.19.1_polityka_2.md`).
+- **Handel energią między państwami:** do 0.19.4 Handel światowy (`plan_0.19.md`; wcześniej Polityka 2).
 
 ## Atom (decyzja użytkownika 2026-11-07)
 

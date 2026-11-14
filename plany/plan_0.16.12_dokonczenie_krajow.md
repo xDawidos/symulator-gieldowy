@@ -21,5 +21,5 @@
 ### D5. Kontrola
 - Testy grupy „0.16.12”; przebiegi ≥ 12 gier ×200 dla PL i DE (GIG ±1 pp względem 0.16.11, czas kroku i zapis w budżecie, niezmienniki 0, brak zawieszeń); raport `kontrola_0.16.12.md` z „Pominięte i problemy”.
 
-## Poza zakresem (przeniesione do 0.19.2/0.19.3+)
+## Poza zakresem (przeniesione do 0.19.3 Multikulturalizm i wersji krajów 0.19.6+, `plan_0.19.md`; numery od 2026-11-14)
 Strajki i rynek pracy obcych; partie, wybory i społeczeństwo kraju startowego (K3/S0d); listy firm i kalibracja USA i Czech; własne instytucje, Landy, flavour krajów.

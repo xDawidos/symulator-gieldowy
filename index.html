@@ -1418,8 +1418,9 @@
     </div>
 
 <!-- 0.16.5: Internet (dawny Kantor). Strony tylko z ulubionych; adres tylko do odczytu -->
-<div id="internet-modal" class="modal modal-xl bank-window internet-window" style="display: none;" role="dialog" aria-labelledby="internet-title">
-    <button class="close-btn" onclick="closeInternet()" aria-label="Zamknij">&times;</button>
+<div id="internet-modal" class="modal wn-host internet-window" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="internet-title">
+    <section class="wn wn--net"><!-- 0.18.6 O6 (U6): Internet jako skórka wspólnej ramy okna (pasek przeglądarki zamiast nagłówka) -->
+    <button class="wn-close" onclick="closeInternet()" aria-label="Zamknij (Esc)"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     <h2 class="sr-only" id="internet-title">Internet</h2>
     <div class="net-tabs" role="presentation">
         <span class="net-tab"><span class="net-tab-dot" aria-hidden="true"></span><span id="net-tab-title">Ulubione</span></span>
@@ -1510,6 +1511,7 @@
         <section id="net-page-windykacja" hidden aria-label="Windykacja"><div id="net-windykacja-body"></div></section>
     </div>
     </div>
+    </section>
 </div>
 <div id="giant-event-modal" class="modal" style="display: none;" role="alertdialog" aria-labelledby="giant-event-title">
     <header class="bank-hero">

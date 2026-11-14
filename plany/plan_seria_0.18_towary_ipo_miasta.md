@@ -126,7 +126,7 @@ Klasy: **M** materiał, **P** półprodukt, **K** dobro kapitałowe, **Z** końc
 - **Bilans** `b_g = (S_g + (z_g − z*_g)/τ) / D_g`, `τ` = 2 kw.
 - **Cena wewnętrzna:** `P_g = P0_g · b_g^(−ε)`, `ε` = 0,5, widełki 0,5–2,0 × P0, wygładzenie `θ` jak w S1. Na starcie `b = 1` z konstrukcji, więc wyniki „średnio zero” (jak w 0.17) zachowane.
 - **Niedobór** (`b < 1`): odbiorcy dostają `b` ich potrzeby (priorytet: obronność i państwo, potem reszta proporcjonalnie). Aktywność odbiorcy spada o `(1 − b)` ważone udziałem tego wsadu w jego kosztach; spółka widzi to jako niższy przychód w raporcie. Cykle (np. maszyny → maszyny) łamiemy **opóźnieniem 1 kwartału** (dostępność z poprzedniego kwartału).
-- **Import:** niedobór pokrywa import z krajów z nadwyżką do limitu przepustowości (port/lotnisko/magistrala z 0.17 S5), koszt = fracht (S4) + cło (0.20). Do 0.20 cła = 0.
+- **Import:** niedobór pokrywa import z krajów z nadwyżką do limitu przepustowości (port/lotnisko/magistrala z 0.17 S5), koszt = fracht (S4) + cło (0.19.4 Handel światowy, `plan_0.19.md`). Do tego czasu cła = 0.
 - **Szoki:** strajk w kopalni, blokada cieśniny, wypadek reaktora zmniejszają `c_j` na kilka kwartałów; skutek idzie w dół łańcucha z opóźnieniem (efekt byka, jak w planie 0.18).
 - **Pilotażowa bramka:** średnia odchyłek marż sektorów 0 ± 0,3 pp, GIG ±1 pp, czas kroku ≤ budżet z 0.18.0.
 
@@ -172,24 +172,7 @@ AI (wojskowe, naukowe, społeczne), OZE, Kosmos, Gaming, DeepTech, Fintech, MedT
 
 ## 7. Miasta 2 (0.19.2)
 
-### 7.1 Model
-
-- Każdy kraj dzieli się na kilka **miast** (PL: 6, kraje obce: 3–4). Miasto: ludność i struktura klas (0.13), **infrastruktura** (drogi, kolej, energia, łącza; 0–100), zanieczyszczenie, zadowolenie, podatek lokalny, budżet, lista projektów i spółek z siedzibą.
-- **Graf towarów zostaje na poziomie podsektor × kraj** (nie × miasto). Miasto modyfikuje: koszt i dostępność pracy, limit rozwoju, zanieczyszczenie i zadowolenie. Dzięki temu miasta nie mnożą macierzy.
-- **Oddziały spółek:** spółka może otworzyć oddział w mieście (zatrudnia tam). Oddział zwiększa aktywność podsektora, ale zużywa pojemność miasta.
-- **Pojemność miasta** = f(infrastruktura, ludność, wykształcenie). Przekroczenie → rosną koszty pracy i podatki, rośnie zanieczyszczenie, spada zadowolenie.
-- **Projekty miasta** (to samo `MEGA_PROJECTS` i lista projektów budowlanych, tylko zamawiającym jest miasto), przetargi dla Budowlanego, infrastruktura z 0.17 S5 na poziomie kraju jako tło.
-
-### 7.2 Zasady wynikające z rozmowy
-
-- **1 uniwersytet na miasto**. Bonus dla spółek „obok” liczony z tabeli giełdowej (ten sam sektor/poziom), nie z mapy miast.
-- **Galerie handlowe** = REIT typ `retail` (Nieruchomości), na giełdach prywatnych także prywatne i miejskie. Są ogniwem dystrybucji: część konsumpcji dóbr końcowych w mieście realizuje się tylko przez powierzchnię handlową (galerie, sieci handlowe, e-commerce). Brak galerii = niższa sprzedaż dóbr końcowych.
-- **REIT zdrowie (U8, 2026-11-13):** dziś najsłabszy typ REIT (CAGR 20 lat 1,0% wobec 5,4–6,9%). Rozwiązanie w miastach przez najem: biura innym firmom, szpitale miastu i państwu, mieszkania mieszkańcom; czynsz zależy od popytu w mieście (ludność, klasy, infrastruktura), a nie od samego profilu typu.
-- **Szpitale i uniwersytety** zależą od miasta (potrzeby i klasy: 0.19.1).
-
-### 7.3 Ryzyko
-
-Miasta dotykają zapisu (kilkadziesiąt obiektów), czasu kroku (oddziały) i UI (mapa). Dlatego po 0.19.1 i po bramce wydajności.
+Przeniesione do `plan_0.19.md` (sekcja 0.19.2, 2026-11-14).
 
 ## 8. Wydajność: kolejność i ocena
 
@@ -204,7 +187,7 @@ Miasta dotykają zapisu (kilkadziesiąt obiektów), czasu kroku (oddziały) i UI
 
 ## 9. Kolejność wersji (zmieniona 2026-11-10)
 
-Podział 0.18.0–0.18.11 z 2026-11-03 **zastępuje** specyfikacja `plan_0.18_lancuchy_produkcyjne.md`: 0.18.1 Pilotaż (rejestr, bilans cichy, 3 łańcuchy, rozdzielenie `metals`), 0.18.2 Pełny graf (grupy sektorów jako części G1–G7, strojenie GIG z bilansem), 0.18.3 Mechaniki (magazyny, konsumpcja, R&D, ESG, mapa szlaków), 0.18.4 Audyt, oceny i IPO (sekcja 6 tego pliku, finanse), 0.18.5 Wydajność (sekcja 8 tego pliku, po pełnym grafie). Cel gry jako osobna wersja po 0.18. Kolejność 0.19.1 Społeczeństwo 2 → 0.19.2 Miasta 2 → 0.19.3 bramka testowa bez zmian.
+Podział 0.18.0–0.18.11 z 2026-11-03 **zastępuje** specyfikacja `plan_0.18_lancuchy_produkcyjne.md`: 0.18.1 Pilotaż (rejestr, bilans cichy, 3 łańcuchy, rozdzielenie `metals`), 0.18.2 Pełny graf (grupy sektorów jako części G1–G7, strojenie GIG z bilansem), 0.18.3 Mechaniki (magazyny, konsumpcja, R&D, ESG, mapa szlaków), 0.18.4 Audyt, oceny i IPO (sekcja 6 tego pliku, finanse), 0.18.5 Wydajność (sekcja 8 tego pliku, po pełnym grafie). Cel gry jako osobna wersja po 0.18. Seria 0.19 od 2026-11-14 w `plan_0.19.md`: 0.19.1 Polityka i Społeczeństwo 2 → 0.19.2 Miasta 2 → 0.19.3 Multikulturalizm → 0.19.4 Handel światowy → 0.19.5 bramka testowa → 0.19.6+ kraje.
 
 Sekcje 2–6 i 8 tego pliku zostają źródłem rejestru, receptur, modelu bilansu, IPO i wydajności; plan 0.18 tylko dzieli je na części.
 
@@ -237,7 +220,7 @@ Starsze pomysły z notatek (`roadmap.txt`, dawny „plany poprawione przez ai.tx
 - **Miasta:** mają własne zużycie prądu (0.19.2), także do pomiaru.
 - **ESG:** rozwinięcie ścieżki z 0.17.2: spółki idą w ekologię, oceny i koszty, wymaga poziomu UEiE.
 - **Podwykonawcy:** rozbudowa i uporządkowanie rynku. Powstawanie nowych, specjalności, geolodzy i energetyczni z 0.17.2.
-- **Poziom życia:** wskaźnik z 0.17.2 (konsumpcja i zadowolenie, zdrowie, bezpieczeństwo, edukacja i nauka, informacja) pogłębia 0.19.1, a 0.19.2 przenosi go na miasta.
+- **Poziom życia:** wskaźnik z 0.17.2 (konsumpcja i zadowolenie, zdrowie, bezpieczeństwo, edukacja i nauka, informacja) pogłębia 0.19.1, a 0.19.2 przenosi go na miasta (`plan_0.19.md`).
 - **Blok jądrowy:** 3 etapy zastępują mechanikę z 0.17.2.
 
 ## 14. Dopiski z 0.17.1 (2026-11-08)

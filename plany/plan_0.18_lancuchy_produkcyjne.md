@@ -300,7 +300,7 @@ Wymogi wspólne: ciemny motyw i tokeny z `tokens.css`, ikony SVG (bez emoji), PL
 14. Kwity GDR usuwamy bez migracji: stare zapisy tracą kwity bez zwrotu.
 15. Widoczność kryzysu: niemodalny baner z animacją.
 
-**Przeniesione poza 0.18:** miasta, galerie handlowe i oddziały (0.19.2); ruch klas (0.19.1); cła na krawędziach grafu (0.19 Handel światowy); Worker rdzenia symulacji i WebAssembly (po profilu W0); cel gry (osobna wersja); U9, czyli premia kryzysu za granicą (do decyzji, `raporty/balans_0.17.1.md`).
+**Przeniesione poza 0.18:** miasta, galerie handlowe i oddziały (0.19.2); ruch klas (0.19.1, `plan_0.19.md`); cła na krawędziach grafu (0.19.4 Handel światowy, `plan_0.19.md`); Worker rdzenia symulacji i WebAssembly (po profilu W0); cel gry (osobna wersja); U9, czyli premia kryzysu za granicą (do decyzji, `raporty/balans_0.17.1.md`).
 
 ## Co nie zostało sprawdzone
 

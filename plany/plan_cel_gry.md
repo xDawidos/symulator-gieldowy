@@ -66,7 +66,7 @@ Dziś `completeFundTakeover` dodaje symbol do `acquiredFunds`. Przejęcie ma zos
 
 ## 7. Dawne pomysły: rozstrzygnięcie
 
-- **Wygrana przez większościowca w spółce diamentowej (5/10 min):** odrzucić jako samodzielny cel; można wrócić jako wariant ścieżki C po 0.19.3 (wymaga rankingu DIAMOND z oceną AAA z nowego IPO, więc naturalnie dopiero po 0.18.11). Zapisane, nie wdrażane.
+- **Wygrana przez większościowca w spółce diamentowej (5/10 min):** odrzucić jako samodzielny cel; można wrócić jako wariant ścieżki C po wersji „Cel gry” (wymaga rankingu DIAMOND z oceną AAA z nowego IPO, więc naturalnie dopiero po 0.18.11). Zapisane, nie wdrażane.
 - **Firma „Boss”:** odrzucić; rolę „szefa” pełni `getPlayerBoss` + zarząd. Nie ma jej w żadnym kodzie.
 - **Zdefiniowanie celu gry (pkt 1.2 starego planu):** zamykane tym dokumentem.
 
@@ -91,8 +91,8 @@ Dziś `completeFundTakeover` dodaje symbol do `acquiredFunds`. Przejęcie ma zos
 Cel gry nie dostaje własnej wersji, bo większość elementów pasuje do planowanych:
 - **0.18.0:** nic (wydajność); w razie potrzeby tylko pole `goal` w stanie gry (zapis opcjonalny).
 - **0.18.11 (Audyt/oceny/IPO):** ocena AAA jako bramka giełdy DIAMOND; podstawa wariantu C.
-- **0.19.1 (Społeczeństwo 2):** rozmowy z zarządem (0.17.3) mogą korzystać z relacji.
-- **0.19.3 (bramka testowa):** menu startowe ze ścieżką celu, porażka i koniec gry, przejęcie ze skutkami (pkt 5), symulowane fundusze. Jeśli to za dużo, wydzielić **0.19.4 „Cel gry”**.
+- **0.19.1 (Polityka i Społeczeństwo 2):** rozmowy z zarządem (0.17.3) mogą korzystać z relacji.
+- **Wersja „Cel gry” (decyzja 2026-11-10/14: osobna wersja po 0.18.8, przed 0.19.1):** menu startowe ze ścieżką celu, porażka i koniec gry, przejęcie ze skutkami (pkt 5), symulowane fundusze. (Wcześniej planowane w bramce 0.19.3, która od 2026-11-14 jest 0.19.5.)
 - Testy: macierz „ścieżka × wynik” (zwycięstwo A/B/C, porażka przy zerowym majątku), niezmiennik „brak wygranej przed K okresami”, przebiegi ×200 na ścieżkę (cel: 40–60% sukcesu dla gracza, który gra sensownie).
 
 ## 10. Otwarte pytania do użytkownika
@@ -102,7 +102,7 @@ Rozstrzygnięte 2026-11-03: **brak limitu czasu gry**; dochodzą **losowane cele
 Rozstrzygnięte 2026-11-03: **porażka = brak pieniędzy i akcji** (pkt 6).
 
 1. Czy do porażki liczy się sam fundusz, czy fundusz i konto prywatne łącznie (propozycja: sam fundusz).
-2. Czy ścieżka C (CEO + przejęcia) ma wejść do 0.19.3, czy zostaje na później?
+2. Czy ścieżka C (CEO + przejęcia) ma wejść do wersji „Cel gry”, czy zostaje na później?
 Rozstrzygnięte 2026-11-03: rywali-zarządców jest **3–5** w firmie; media do przejęcia, jedno z nich jako misja poboczna (pkt 8, 11).
 
 ## 11. Losowane cele poboczne
@@ -122,7 +122,7 @@ Dziś `getPlayerTargets` zwraca **te same 5 celów** w każdym okresie (pobij GI
 - **Zasada uczciwości:** wszystkie cele sprawdzają wynik gracza, nie ruch ceny (cena egzogeniczna nie może „dawać” celu przypadkiem); żaden cel nie wymaga losowego zdarzenia.
 - **UI:** pasek celów w zakładce Firma, stan słowem („3 z 5 sektorów”), nie samym kolorem; ikony SVG.
 - **Test:** każdy cel z puli ma test warunku (spełniony/niespełniony), losowanie nie powtarza celów, zapis zachowuje bieżące cele; przebieg ×200 sprawdza, że żaden cel nie jest spełniany przez pasywnego gracza ani niemożliwy.
-- **Wersja:** mechanizm i ~10 celów w 0.19.3 razem z celem gry; kolejne cele dopisuje każda następna wersja do swojej mechaniki (wpis w jej planie).
+- **Wersja:** mechanizm i ~10 celów w wersji „Cel gry”; kolejne cele dopisuje każda następna wersja do swojej mechaniki (wpis w jej planie).
 
 ## 12. Co nie zostało sprawdzone
 
