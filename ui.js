@@ -6963,44 +6963,7 @@ function updateResearchChoiceTimerUI() {
 // konto prywatne, CV ze szkoleniami i scenka startowa
 // =================================================================================
 
-// 0.14.5: jeden format liczb w całej grze (04_teksty.md): „14 040,25 PLN”, „−7,20%”, minus typograficzny.
-const MINUS_SIGN = '\u2212';
-
-const NUMBER_FORMATS_PL = {}; // cache Intl.NumberFormat — toLocaleString z opcjami tworzy formatter przy każdym wywołaniu
-function formatNumberPl(value, digits = 2) {
-    const number = Number(value);
-    if (!Number.isFinite(number)) return '—';
-    const format = NUMBER_FORMATS_PL[digits] || (NUMBER_FORMATS_PL[digits] = new Intl.NumberFormat('pl-PL', { minimumFractionDigits: digits, maximumFractionDigits: digits }));
-    const text = format.format(Math.abs(number));
-    return (number < 0 && /[1-9]/.test(text) ? MINUS_SIGN : '') + text;
-}
-
-/** Kwota w PLN (nazwa formatZl zostaje — używana w całej grze). */
-function formatZl(value, digits = 2) { // 0.16.11 K2: wartość w jednostkach gry → waluta bazowa konta (PL: PLN, bez zmian)
-    const text = formatNumberPl(Number(value) / getBaseScale(), digits);
-    return text === '—' ? text : `${text} ${getBaseCurrency()}`;
-}
-
-/** Krótka kwota: 3,5 mln PLN / 1,2 mld PLN; poniżej miliona pełna kwota bez groszy. */
-function formatPLNShort(value) {
-    const number = Number(value) / getBaseScale(), code = getBaseCurrency();
-    if (!Number.isFinite(number)) return '—';
-    const abs = Math.abs(number);
-    if (abs >= 1e9) return `${formatNumberPl(number / 1e9, 1)} mld ${code}`;
-    if (abs >= 1e6) return `${formatNumberPl(number / 1e6, 1)} mln ${code}`;
-    return formatZl(number * getBaseScale(), 0);
-}
-
-/** Zmiana procentowa ze znakiem: +2,10% / −7,20% / 0,00% (value jako ułamek). */
-function formatPct(value, digits = 2) {
-    const number = Number(value) * 100;
-    if (!Number.isFinite(number)) return '—';
-    const text = formatNumberPl(number, digits);
-    return `${number > 0 && /[1-9]/.test(text) ? '+' : ''}${text}%`;
-}
-
-/** NAV / udział: 4 miejsca po przecinku. */
-function formatNav(value) { return formatZl(value, 4); }
+// 0.18.6 O3: formatNumberPl, formatZl, formatPLNShort, formatPct, formatNav są w formatters.js (ładowany pierwszy).
 
 function escapeHtml(text) {
     return String(text).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));

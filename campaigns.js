@@ -13,14 +13,7 @@ function getGameCalendar() {
     return { year: Math.floor(q / 4) + 1, quarter: (q % 4) + 1, week, absQuarter: q };
 }
 
-function formatGameDate(cal = getGameCalendar(), short = false) {
-    return short ? `R${cal.year} · K${cal.quarter} · T${cal.week}` : `Rok ${cal.year} · kw. ${cal.quarter} · tydz. ${cal.week}`;
-}
-
-/** Termin kwartalny (numer bezwzględny) w tym samym formacie: „Rok 3 · kw. 2”. */
-function formatQuarterDate(absQuarter) {
-    return `Rok ${Math.floor(absQuarter / 4) + 1} · kw. ${(absQuarter % 4) + 1}`;
-}
+// 0.18.6 O3: formatGameDate i formatQuarterDate są w formatters.js.
 
 function advanceFundCalendar() {
     const q = Number(macro?.quarter) || 0;

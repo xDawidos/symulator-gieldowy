@@ -17597,6 +17597,19 @@ group('0.18.5 Wydajność', () => {
 });
 
 group('0.18.6 Porządki', () => {
+    test('O3: formatters.js — minus typograficzny, „—” dla NaN, NAV 4 miejsca, akcje z odmianą, pp ze znakiem, waluta EUR przy starcie z DE', () => {
+        assertEq(formatNumberPl(-7.2, 2), '\u22127,20', 'minus typograficzny');
+        assertEq(formatNumberPl(NaN), '—', 'NaN'); assertEq(formatZl(undefined), '—', 'kwota NaN'); assertEq(formatPp(NaN), '—', 'pp NaN');
+        assertEq(formatNumberPl(14040.25, 2).replace(/\s/g, ' '), '14 040,25', 'separatory');
+        assertEq(formatInt(12500.6).replace(/\s/g, ' '), '12 501', 'liczba całkowita (pl-PL grupuje od 5 cyfr)');
+        assertEq(formatShares(1), '1 akcja', '1'); assertEq(formatShares(3), '3 akcje', '3'); assertEq(formatShares(12), '12 akcji', '12'); assertEq(formatShares(22), '22 akcje', '22');
+        assertEq(formatPp(1.34), '+1,3 pp', 'pp'); assertEq(formatPp(-0.4), '\u22120,4 pp', 'pp ujemne'); assertEq(formatPct(-0.072), '\u22127,20%', 'procent');
+        const saved = playerProfile?.baseCurrency;
+        try {
+            if (playerProfile) { playerProfile.baseCurrency = 'PLN'; assert(formatNav(10.421).endsWith('10,4210 PLN') || formatNav(10.421) === '10,4210 PLN', `NAV: ${formatNav(10.421)}`); playerProfile.baseCurrency = 'EUR'; assert(formatZl(400).endsWith(' EUR'), `EUR: ${formatZl(400)}`); }
+        } finally { if (playerProfile) playerProfile.baseCurrency = saved; }
+        assertEq(formatDateLong({ year: 3, quarter: 2, week: 4 }), 'rok 3, 2. kwartał, tydzień 4', 'data długa');
+    });
     test('O2: renderEmptyState — 4 warianty (brak danych, przed sesją, zablokowane z postępem, w tabeli), ikona ukryta dla czytników, bez role=status', () => {
         const wrap = html => { const d = document.createElement('table'); d.innerHTML = `<tbody>${html}</tbody>`; return d; };
         const box = html => { const d = document.createElement('div'); d.innerHTML = html; return d.firstElementChild; };
