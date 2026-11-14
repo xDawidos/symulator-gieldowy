@@ -32,7 +32,7 @@ function renderEnergyMixCard(e) {
     const mix = getEnergyMix(e), total = Object.values(mix).reduce((a, b) => a + b, 0) || 1;
     const share = type => mix[type] / total * 100;
     const label = ENERGY_TYPE_IDS.map(type => `${ENERGY_TYPES[type].name.toLowerCase()} ${formatNumberPl(share(type), 0)}%`).join(', ');
-    const segments = ENERGY_TYPE_IDS.filter(type => mix[type] > 0).map(type => `<span class="en-t-${type}" style="flex:${share(type).toFixed(1)}">${share(type) >= 8 ? ENERGY_TYPES[type].name : ''}</span>`).join('');
+    const segments = ENERGY_TYPE_IDS.filter(type => mix[type] > 0).map(type => `<span class="en-t-${type}" style="flex:${formatNumberPl(share(type), 1)}">${share(type) >= 8 ? ENERGY_TYPES[type].name : ''}</span>`).join('');
     const legend = ENERGY_TYPE_IDS.map(type => `<li class="en-t-${type}">${uiIcon(ENERGY_ICONS[type], 16)}<span>${ENERGY_TYPES[type].name}</span><b>${formatNumberPl(share(type), 0)}%</b><small>${formatGw(mix[type])}</small></li>`).join('');
     return `<article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('prad', 20)}</span><div><h4>Miks energetyczny</h4><span class="bank-card-type">udział w mocy kraju</span></div></header>
         <div class="en-mix" role="img" aria-label="Miks: ${label}">${segments}</div><ul class="en-legend">${legend}</ul></article>`;

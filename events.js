@@ -318,7 +318,7 @@ function processBubbleNewsToMail() {
                 addMail({
                     sender: 'KNF',
                     subject: `[SMSR Lvl 2 - Radar] Potwierdzona bańka spekulacyjna: ${bubble.name}`,
-                    body: `System Monitoringu i Stabilizacji Rynku zidentyfikował w czasie rzeczywistym bańkę spekulacyjną w sektorze ${bubble.name}. Bieżąca premia wyceny wynosi +${(bubble.premium * 100).toFixed(0)}%, a model zaklasyfikował typ zjawiska jako: ${typeName}. Zalecana weryfikacja ekspozycji funduszu.`,
+                    body: `System Monitoringu i Stabilizacji Rynku zidentyfikował w czasie rzeczywistym bańkę spekulacyjną w sektorze ${bubble.name}. Bieżąca premia wyceny wynosi +${formatNumberPl((bubble.premium * 100), 0)}%, a model zaklasyfikował typ zjawiska jako: ${typeName}. Zalecana weryfikacja ekspozycji funduszu.`,
                     importance: 3
                 });
             }
@@ -338,7 +338,7 @@ function processBubbleNewsToMail() {
                 addMail({
                     sender: 'PULS',
                     subject: `Puls Rynku: Wyceny sektora ${bubble.name} szybują w górę`,
-                    body: `Premia wyceny w branży ${bubble.name} osiąga nie notowane od dawna poziomy (+${(bubble.premium * 100).toFixed(0)}%). Czy to początek trwałej hossy technologicznej, czy zbliża się przegrzanie?`,
+                    body: `Premia wyceny w branży ${bubble.name} osiąga nie notowane od dawna poziomy (+${formatNumberPl((bubble.premium * 100), 0)}%). Czy to początek trwałej hossy technologicznej, czy zbliża się przegrzanie?`,
                     importance: 2
                 });
             }
@@ -1443,7 +1443,7 @@ const governmentInterventions = [
             const change = -0.005 * getRandomInRange(0.5, 1.5); // Obniżka o 0.25-0.75 pp
             centralBank.baseInterestRate = Math.max(0.005, centralBank.baseInterestRate + change);
             updateInterestRates(); // Zastosuj zmianę
-            logEvent(`💰 Rząd w porozumieniu z Bankiem Centralnym obniża stopy procentowe, by pobudzić gospodarkę! Nowa stopa bazowa: ${(centralBank.baseInterestRate * 100).toFixed(1)}%.`);
+            logEvent(`💰 Rząd w porozumieniu z Bankiem Centralnym obniża stopy procentowe, by pobudzić gospodarkę! Nowa stopa bazowa: ${formatNumberPl((centralBank.baseInterestRate * 100), 1)}%.`);
         },
         message: () => `💰 Rząd decyduje się na stymulację gospodarki przez obniżkę stóp procentowych!`
     },

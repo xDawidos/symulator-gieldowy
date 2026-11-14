@@ -456,9 +456,9 @@ function finishSubscription() {
     bd.count++; bd.fillSum += fillPct;
 
     const types = Object.entries(sub.byType).sort((a, b) => b[1] - a[1]).map(([type, value]) => `${CLIENT_TYPES[type]?.label || type}: ${formatZl(value, 0)}`).join(', ') || 'brak wpłat';
-    const text = `Kampania emisyjna zakończona: zebrano ${formatNumberPl(sub.raisedUnits, 1)} z ${formatNumberPl(sub.targetUnits, 0)} udziałów (${(fillPct * 100).toFixed(0)}% celu, ${formatZl(sub.raisedValue, 0)}).`;
+    const text = `Kampania emisyjna zakończona: zebrano ${formatNumberPl(sub.raisedUnits, 1)} z ${formatNumberPl(sub.targetUnits, 0)} udziałów (${formatNumberPl((fillPct * 100), 0)}% celu, ${formatZl(sub.raisedValue, 0)}).`;
     logEvent(`📣 ${text}`, 'review');
-    if (typeof pushNews === 'function') pushNews(`${text.split(':')[0]}: ${(fillPct * 100).toFixed(0)}% celu`);
+    if (typeof pushNews === 'function') pushNews(`${text.split(':')[0]}: ${formatNumberPl((fillPct * 100), 0)}% celu`);
     if (typeof addMail === 'function') addMail({
         sender: 'Dział obsługi klienta', subject: 'Raport kampanii emisyjnej',
         body: `${text} Nowi klienci: ${sub.newClients}. Wpłaty według typów: ${types}. Koszt kampanii: ${formatZl(sub.cost, 0)} (0,2% celu + 0,5% zebranej kwoty). Warunki: ${SUBSCRIPTION_DURATIONS[sub.duration].label}, lock-up ${sub.lockYears} lat${sub.guarantee ? ', gwarancja kapitału' : ''}${sub.mandate ? `, mandat ${getMandateDef(sub.mandate)?.label}` : ''}. Start: ${sub.startDate}.`,
@@ -827,7 +827,7 @@ if (typeof ACADEMY_ENTRIES === 'object') {
     Object.assign(ACADEMY_ENTRIES, {
         runda_subskrypcji: { title: 'Runda subskrypcji i koszt kapitału', icon: '📣',
             text: 'Fundusz może zbierać kapitał w kampanii: przez tydzień, dwa tygodnie albo kwartał oferuje nowe udziały po NAV. Dłuższa kampania sięga dalej, ale kapitał kosztuje — płacisz 0,2% celu na starcie i 0,5% zebranej kwoty. Popyt zależy od wyników względem GIG i od nastroju rynku: w euforii zbierzesz więcej, w panice prawie nic.',
-            example: () => { const t = playerFund?.campaignTotals; return t?.count ? `Dotąd kampanie zebrały średnio ${(t.fillSum / t.count * 100).toFixed(0)}% celu.` : 'Nie prowadzono jeszcze kampanii.'; },
+            example: () => { const t = playerFund?.campaignTotals; return t?.count ? `Dotąd kampanie zebrały średnio ${formatNumberPl((t.fillSum / t.count * 100), 0)}% celu.` : 'Nie prowadzono jeszcze kampanii.'; },
             quiz: [q3('Ile kosztuje kampania emisyjna?', ['0,2% celu + 0,5% zebranej kwoty', 'Nic', 'Połowę zebranej kwoty']), q3('Kiedy kampania zbiera najwięcej?', ['Gdy wyniki są lepsze od GIG i rynek jest w euforii', 'W panice', 'Zawsze tyle samo']), q3('Co daje dłuższa kampania?', ['Większy zasięg popytu', 'Niższy koszt', 'Gwarancję zysku'])] },
         lockup_fundusze_zamkniete: { title: 'Lock-up i fundusze zamknięte', icon: '🔒',
             text: 'Lock-up to okres, w którym klient nie może umorzyć udziałów. Daje funduszowi stabilność (nie musi sprzedawać akcji w panice), ale zniechęca niecierpliwych inwestorów, a przyciąga cierpliwych. Zablokowane udziały można sprzedać innemu inwestorowi na rynku wtórnym. Tak działają fundusze zamknięte (FIZ).',
@@ -899,7 +899,7 @@ function renderCampaignCards() {
         const pct = sub.raisedUnits / Math.max(1, sub.targetUnits) * 100;
         campaignBody = `<div class="camp-running"><p class="text-sm"><strong>Kampania trwa</strong> · start: ${escapeHtml(sub.startDate)}</p>
             <div class="camp-progress" role="progressbar" aria-label="Zebrano z celu kampanii" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.min(100, Math.round(pct))}"><span style="width:${Math.min(100, pct).toFixed(0)}%"></span></div>
-            <p class="camp-progress-text"><strong>${formatNumberPl(sub.raisedUnits, 1)}</strong> z ${formatNumberPl(sub.targetUnits, 0)} udziałów (${pct.toFixed(0)}%) · do końca: <strong>${sub.weeksLeft} tyg.</strong></p></div>`;
+            <p class="camp-progress-text"><strong>${formatNumberPl(sub.raisedUnits, 1)}</strong> z ${formatNumberPl(sub.targetUnits, 0)} udziałów (${formatNumberPl(pct, 0)}%) · do końca: <strong>${sub.weeksLeft} tyg.</strong></p></div>`;
     } else {
         const reason = getCampaignBlockReason({ duration: 'quarter', targetPct: 0.1, lockYears: 0 });
         const defCost = getFundNav() * getCampaignTargetUnits(Math.min(10, maxPct) / 100) * CAMPAIGN_COST_TARGET;
@@ -920,7 +920,7 @@ function renderCampaignCards() {
     const lockedUnits = getLockedFundUnits(), liability = getGuaranteeLiability(), loan = getLiquidityLoanPrincipal();
     const kpi = (label, value, hint) => `<div class="cc-kpi camp-kpi" title="${escapeHtml(hint)}"><span>${label}</span><strong>${value}</strong></div>`;
     const stateKpis = `<div class="cc-kpis camp-kpis">${kpi('Udziały w lock-upie', formatNumberPl(lockedUnits, 0), 'Udziały, których klienci nie umorzą przed końcem lock-upu.')}${kpi('Zobowiązanie z gwarancji', formatZl(liability, 0), 'Kwota, którą fundusz dopłaci, jeśli gwarancja kapitału zostanie uruchomiona.')}${loan > 0 ? kpi('Kredyt płynnościowy', formatZl(loan, 0), 'Kredyt zaciągnięty na wypłaty z gwarancji; do spłaty z odsetkami.') : ''}</div>`;
-    const history = (playerFund.campaignHistory || []).slice(0, 3).map(h => `<li class="text-xs">${formatQuarterDate(h.startQ)}: ${(h.fill * 100).toFixed(0)}% celu, ${formatZl(h.raisedValue, 0)}, koszt ${formatZl(h.cost, 0)}, lock-up ${h.lockYears} lat</li>`).join('');
+    const history = (playerFund.campaignHistory || []).slice(0, 3).map(h => `<li class="text-xs">${formatQuarterDate(h.startQ)}: ${formatNumberPl((h.fill * 100), 0)}% celu, ${formatZl(h.raisedValue, 0)}, koszt ${formatZl(h.cost, 0)}, lock-up ${h.lockYears} lat</li>`).join('');
     const campaignCard = `<article class="bank-card camp-card"><header class="bank-card-head"><span class="bank-card-icon">${icon('megafon')}</span><div><h4>Kampania emisyjna</h4><span class="bank-card-type">${formatGameDate()}</span></div></header>
         ${campaignBody}
         ${stateKpis}
@@ -934,8 +934,8 @@ function renderCampaignCards() {
         const mood = getGroupMood(id), v = mood.value;
         const mission = level >= 2 ? ir.missions?.[id] : null;
         const causes = level >= 3 ? getGroupCauses(id) : [];
-        const meter = v === null ? '' : `<div class="ir-meter ${v >= 0 ? 'up' : 'down'}" role="img" aria-label="Nastrój ${v.toFixed(0)} w skali od −50 do +50"><span style="left:${v >= 0 ? 50 : 50 + Math.max(-50, v)}%;width:${Math.min(50, Math.abs(v))}%"></span></div>`;
-        return `<li class="ir-group">${head}<span class="ir-mood"><strong class="${v === null ? '' : v >= 0 ? 'text-up' : 'text-down'}">${v === null ? '—' : `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(0)}`}</strong> <span class="text-sm">${getMoodWord(v)}</span></span>${meter}${mission ? `<p class="ir-note"><strong>Misja</strong> do ${formatQuarterDate(mission.dueQ)}: ${escapeHtml(mission.text)}</p>` : ''}${causes.length ? `<p class="ir-note text-muted"><strong>Powody:</strong> ${causes.join(', ')}</p>` : ''}</li>`;
+        const meter = v === null ? '' : `<div class="ir-meter ${v >= 0 ? 'up' : 'down'}" role="img" aria-label="Nastrój ${formatNumberPl(v, 0)} w skali od −50 do +50"><span style="left:${v >= 0 ? 50 : 50 + Math.max(-50, v)}%;width:${Math.min(50, Math.abs(v))}%"></span></div>`;
+        return `<li class="ir-group">${head}<span class="ir-mood"><strong class="${v === null ? '' : v >= 0 ? 'text-up' : 'text-down'}">${v === null ? '—' : `${v >= 0 ? '+' : '−'}${formatNumberPl(Math.abs(v), 0)}`}</strong> <span class="text-sm">${getMoodWord(v)}</span></span>${meter}${mission ? `<p class="ir-note"><strong>Misja</strong> do ${formatQuarterDate(mission.dueQ)}: ${escapeHtml(mission.text)}</p>` : ''}${causes.length ? `<p class="ir-note text-muted"><strong>Powody:</strong> ${causes.join(', ')}</p>` : ''}</li>`;
     }).join('');
     const irButtons = IR_LEVELS.map(l => `<button type="button" class="seg-btn${l.level === level ? ' active' : ''}" aria-pressed="${l.level === level}" title="${escapeHtml(l.label + (l.gives ? ': ' + l.gives : ''))}" onclick="setIrLevel(${l.level}); renderJuMarket();">${l.level === 0 ? 'Brak' : 'L' + l.level}</button>`).join('');
     const irCard = `<article class="bank-card ir-card"><header class="bank-card-head"><span class="bank-card-icon">${icon('teczka')}</span><div><h4>Relacje inwestorskie</h4><span class="bank-card-type">${level ? `${IR_LEVELS[level].label} · ${formatZl(getIrQuarterCost(), 0)} na kwartał` : 'bez analityka'}</span></div></header>

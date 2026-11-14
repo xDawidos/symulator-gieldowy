@@ -20,6 +20,12 @@ export function classify(line) {
     const all = (t.match(/\.toFixed\(/g) || []).length;
     const attr = (t.match(/\b(?:d|points|cx|cy|x|y|x1|y1|x2|y2|r|transform|viewBox|width|height)="[^"]*?\.toFixed\(|(?:width|left|top|height|right|bottom|flex-basis|--[\w-]+):\s*\$\{[^}]*?\.toFixed\(|\b[MLHVC]\$\{[^}]*?\.toFixed\(|(?<=[MLHVC]\$\{[^}]*\}[ ,])\$\{[^}]*?\.toFixed\(/g) || []).length;
     if (all && attr >= all) return 'svg';
+    // linia buduje SVG (ścieżka, punkty, okręgi): liczby muszą mieć kropkę — O3 ich nie zmienia
+    if (all && /'[MLHVCZ]'|"[MLHVCZ]"|[MLHVCZ]\$\{|\sd="|points="|<path|<polyline|<line\b|<text\s+x=|<circle|<rect|viewBox|\.join\(' '\)/.test(t)) return 'svg';
+    // wartość pola formularza (input value/min/max): liczba z kropką, czytana przez parseFloat
+    if (all && (t.match(/\b(?:value|min|max|step)="\$\{[^}]*?\.toFixed\(/g) || []).length >= all) return 'pole';
+    // diagnostyka rejestru (lista problemów dla testów, nie dla gracza)
+    if (/problems\.push\(/.test(t)) return 'log';
     // obliczenie: wynik toFixed wraca do liczby
     if (/(Number|parseFloat|Math\.\w+)\(\s*[^()]*\.toFixed\(/.test(t) || /\+\s*\(?[\w.\[\]]+\.toFixed\(/.test(t) || /\.toFixed\(\d\)\s*\)?\s*(===|!==|==|<=|>=|<|>)/.test(t)) return 'obliczenie';
     // tekst: wstawka szablonu, sklejenie z napisem albo przypisanie do DOM

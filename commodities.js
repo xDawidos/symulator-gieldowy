@@ -276,7 +276,7 @@ function checkCommodityInvariants() {
     for (const id of COMMODITY_IDS) {
         const p = commodityState.prices[id], [lo, hi] = getCommodityBand(id);
         if (!(p > 0) || !Number.isFinite(p)) problems.push(`surowiec ${id}: cena ${p}`);
-        else if (p < lo * (1 - 1e-9) || p > hi * (1 + 1e-9)) problems.push(`surowiec ${id}: cena ${p.toFixed(2)} poza widełkami ${lo.toFixed(2)}–${hi.toFixed(2)}`);
+        else if (p < lo * (1 - 1e-9) || p > hi * (1 + 1e-9)) problems.push(`surowiec ${id}: cena ${formatNumberPl(p, 2)} poza widełkami ${formatNumberPl(lo, 2)}–${formatNumberPl(hi, 2)}`);
     }
     if (typeof checkFreightInvariants === 'function') problems.push(...checkFreightInvariants()); // 0.17 S4
     if (typeof checkInfraInvariants === 'function') problems.push(...checkInfraInvariants()); // 0.17 S5

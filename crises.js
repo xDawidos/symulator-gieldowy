@@ -631,7 +631,7 @@ function finishCrisisLine() {
         const names = [...line.bankrupted, ...line.rescued].map(symbol => symbol).join(', ');
         addMail({
             sender: 'Redakcja PULS', subject: `${def.icon ? def.icon + " " : ""}Retrospektywa: ${def.name}`,
-            body: `${def.name} dobiegła końca (${formatQuarterDate(line.startQuarter)} – ${formatQuarterDate(crisisQuarter())}). GIG spadł od szczytu o ${(Math.abs(gigDrop) * 100).toFixed(0)}%, a w całej linii zmienił się o ${(gigChange * 100).toFixed(0)}%. Twój fundusz: ${(fundChange * 100).toFixed(0)}% (zaufanie ${Math.round(playerFund?.trust ?? 0)}). Upadłości: ${line.bankrupted.length}${line.rescued.length ? `, ratunki państwa: ${line.rescued.length}` : ''}${names ? ` (${names})` : ''}. Wzór historyczny: ${def.year}. Zobacz hasło Akademii „${def.name}”.`,
+            body: `${def.name} dobiegła końca (${formatQuarterDate(line.startQuarter)} – ${formatQuarterDate(crisisQuarter())}). GIG spadł od szczytu o ${formatNumberPl((Math.abs(gigDrop) * 100), 0)}%, a w całej linii zmienił się o ${formatNumberPl((gigChange * 100), 0)}%. Twój fundusz: ${formatNumberPl((fundChange * 100), 0)}% (zaufanie ${Math.round(playerFund?.trust ?? 0)}). Upadłości: ${line.bankrupted.length}${line.rescued.length ? `, ratunki państwa: ${line.rescued.length}` : ''}${names ? ` (${names})` : ''}. Wzór historyczny: ${def.year}. Zobacz hasło Akademii „${def.name}”.`,
             importance: 2
         });
     }
@@ -730,7 +730,7 @@ function renderCrisisSectionBase() {
         const now = stage === crisisLine.stage;
         return `<li class="${now ? 'current' : n < currentIdx ? 'done' : ''}" ${now ? 'aria-current="step"' : ''}><span class="crisis-step-no">${n < currentIdx ? '✓' : n + 1}</span>${CRISIS_STAGE_NAMES[stage]}${now ? ' <em>(teraz)</em>' : ''}</li>`;
     }).join('');
-    const reaction = crisisState.rate ? `Bank centralny: ${crisisState.rate.kind === 'hike' ? 'podwyżki' : 'cięcia'} stóp w toku.` : (crisisState.lastRate ? `Bank centralny zmienił stopy łącznie o ${(crisisState.lastRate.total * 100).toFixed(1)} pp.` : 'Reakcja banku centralnego jeszcze nie ruszyła.');
+    const reaction = crisisState.rate ? `Bank centralny: ${crisisState.rate.kind === 'hike' ? 'podwyżki' : 'cięcia'} stóp w toku.` : (crisisState.lastRate ? `Bank centralny zmienił stopy łącznie o ${formatNumberPl((crisisState.lastRate.total * 100), 1)} pp.` : 'Reakcja banku centralnego jeszcze nie ruszyła.');
     return `<div class="crisis-section"><h4 class="bank-section-title crisis-title">${icon(def.svg, 20)} Kryzys: ${escapeHtml(def.name)}</h4>
         <ol class="crisis-axis" aria-label="Etapy kryzysu">${axis}</ol>
         <div class="crisis-cols">${column(def.lose, -1)}${column(def.gain, 1)}</div>

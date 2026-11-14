@@ -91,7 +91,7 @@ function runWolfBot(ai) {
             if (Math.random() < WOLF_RULES.knfChance) { // ciemna strefa: kontrola KNF
                 const fine = Math.min(ai.cash, ai.cash * WOLF_RULES.knfFine);
                 ai.cash -= fine; governmentTreasury += fine;
-                logEvent(`🕵️ KNF bada manipulację kursem ${stock.name} — ${ai.name} płaci karę ${fine.toFixed(0)} PLN.`, 'review');
+                logEvent(`🕵️ KNF bada manipulację kursem ${stock.name} — ${ai.name} płaci karę ${formatNumberPl(fine, 0)} PLN.`, 'review');
             }
             Object.assign(w, { phase: 'idle', symbol: null, runs: 0, cooldownQ: q + WOLF_RULES.cooldownQ });
             return 'dump';

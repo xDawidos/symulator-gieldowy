@@ -181,7 +181,7 @@ function processBuyoutOffersQuarterly() {
         addMail({
             sender: CORPORATION_SENDER,
             subject: `🤝 Oferta kupna: ${offer.bidder.name} chce kupić ${offer.wholeCompany ? stock.name : `pakiet funduszu w ${stock.name}`}`,
-            body: `${offer.bidder.name} oferuje ${formatZl(offer.price)} za akcję (premia ${Math.round((offer.price / stock.price - 1) * 100)}%) za ${offer.wholeCompany ? 'całą spółkę — mniejszościowi dostaną tę samą cenę' : `pakiet ${offer.shares.toLocaleString('pl-PL')} akcji funduszu`}. Oferta ważna ${BUYOUT_OFFER_VALID_QUARTERS} kw. Możesz rozmawiać, negocjować, zaprosić drugiego oferenta albo przyjąć.`,
+            body: `${offer.bidder.name} oferuje ${formatZl(offer.price)} za akcję (premia ${Math.round((offer.price / stock.price - 1) * 100)}%) za ${offer.wholeCompany ? 'całą spółkę — mniejszościowi dostaną tę samą cenę' : `pakiet ${formatInt(offer.shares)} akcji funduszu`}. Oferta ważna ${BUYOUT_OFFER_VALID_QUARTERS} kw. Możesz rozmawiać, negocjować, zaprosić drugiego oferenta albo przyjąć.`,
             importance: 2, symbol: stock.symbol, action: { type: 'buyoutOffer', symbol: stock.symbol }
         });
         if (typeof pushNews === 'function') pushNews(`${offer.bidder.name} składa ofertę kupna ${stock.name}`, stock.symbol);
@@ -348,7 +348,7 @@ function startBuyoutDeal(offer, price) {
         pos.shares -= shares; if (pos.shares <= 0) delete seller.portfolio[target.symbol];
         seller.cash += cost;
     }
-    logEvent(`🤝 ${sellerIsPlayer ? 'Fundusz sprzedaje' : `${seller.name} sprzedaje`} pakiet ${shares.toLocaleString('pl-PL')} akcji ${target.name} dla ${offer.bidder.name} po ${formatZl(price)} (premia ${Math.round((price / offer.preOfferPrice - 1) * 100)}%).`, 'market');
+    logEvent(`🤝 ${sellerIsPlayer ? 'Fundusz sprzedaje' : `${seller.name} sprzedaje`} pakiet ${formatInt(shares)} akcji ${target.name} dla ${offer.bidder.name} po ${formatZl(price)} (premia ${Math.round((price / offer.preOfferPrice - 1) * 100)}%).`, 'market');
     return true;
 }
 
@@ -466,8 +466,8 @@ function finishKnfTender(stock, sellers, retail, price) {
     const holding = playerPortfolio[symbol] = playerPortfolio[symbol] || { shares: 0, avgPrice: price, assetType: 'stock' };
     holding.avgPrice = (holding.avgPrice * holding.shares + cost) / Math.max(1, holding.shares + bought);
     holding.shares += bought;
-    addMail({ sender: 'KNF', subject: `📣 Nakaz wezwania: ${stock.name}`, body: `Na nakaz KNF fundusz ogłosił wezwanie po ${formatZl(price)} (najwyższa cena z transakcji pakietowych). Akcjonariusze sprzedali ${bought.toLocaleString('pl-PL')} akcji za ${formatZl(cost, 0)}; fundusz ma teraz ${(getFundStakePct(stock) * 100).toFixed(1)}%.`, importance: 3, symbol });
-    logEvent(`📣 Nakaz KNF: wezwanie funduszu na akcje ${stock.name} po ${formatZl(price)} — kupiono ${bought.toLocaleString('pl-PL')} akcji.`, 'review');
+    addMail({ sender: 'KNF', subject: `📣 Nakaz wezwania: ${stock.name}`, body: `Na nakaz KNF fundusz ogłosił wezwanie po ${formatZl(price)} (najwyższa cena z transakcji pakietowych). Akcjonariusze sprzedali ${formatInt(bought)} akcji za ${formatZl(cost, 0)}; fundusz ma teraz ${formatNumberPl((getFundStakePct(stock) * 100), 1)}%.`, importance: 3, symbol });
+    logEvent(`📣 Nakaz KNF: wezwanie funduszu na akcje ${stock.name} po ${formatZl(price)} — kupiono ${formatInt(bought)} akcji.`, 'review');
     return 'tender';
 }
 
@@ -484,7 +484,7 @@ function sellFundSharesForced(stock, quantity, reason) {
     if (typeof applyTradeImpact === 'function') applyTradeImpact(stock, n, -1);
     if (holding.shares <= 0) delete playerPortfolio[stock.symbol];
     if (typeof notePlayerPositionLoss === 'function') notePlayerPositionLoss(stock.symbol, n, reason, proceeds);
-    logEvent(`⛔ ${reason}: fundusz sprzedaje ${n.toLocaleString('pl-PL')} akcji ${stock.name}.`, 'review');
+    logEvent(`⛔ ${reason}: fundusz sprzedaje ${formatInt(n)} akcji ${stock.name}.`, 'review');
     return n;
 }
 
@@ -630,7 +630,7 @@ function executeBlockBuy(stock, holder, shares, price) {
     holding.shares += shares;
     blockDealState.log.push({ q: getBuyoutQuarter(), symbol, shares, price, from: holder.kind });
     blockDealState.log = blockDealState.log.filter(e => getBuyoutQuarter() - e.q <= 8);
-    logEvent(`🤝 Fundusz odkupuje pakiet ${shares.toLocaleString('pl-PL')} akcji ${stock.name} od ${holder.name} po ${formatZl(price)} (poza rynkiem).`, 'review');
+    logEvent(`🤝 Fundusz odkupuje pakiet ${formatInt(shares)} akcji ${stock.name} od ${holder.name} po ${formatZl(price)} (poza rynkiem).`, 'review');
     if (typeof unlockAcademyEntry === 'function') { unlockAcademyEntry('transakcja_pakietowa'); if (getFundStakePct(stock) > 0.5) unlockAcademyEntry('pakiet_kontrolny'); }
     if (typeof onBlockBuyCompleted === 'function') onBlockBuyCompleted(stock); // M5: KNF i próg wezwania
     if (typeof displayCash === 'function') displayCash();
@@ -654,7 +654,7 @@ function renderBlockBuyForm(stock, holder) {
             <label class="text-xs">Cena: <input type="range" id="${id}-p" min="${min.toFixed(2)}" max="${max.toFixed(2)}" step="0.01" value="${(range ? range.high : stock.price * 1.15).toFixed(2)}" oninput="document.getElementById('${id}-v').textContent = formatZl(this.value) + (${range ? 'true' : 'false'} ? ' · ' + (this.value < ${range?.low || 0} ? 'poniżej oczekiwań' : this.value <= ${range?.high || 0} ? 'w przedziale oczekiwań' : 'powyżej oczekiwań') : '')"></label>
             <span class="text-xs" id="${id}-v">${formatZl(range ? range.high : stock.price * 1.15)}${range ? ` · ${label(range.high)}` : ''}</span>
             <button class="btn-xs" onclick="blockAction('${stock.symbol}', '${holder.id}', proposeBlockBuy, document.getElementById('${id}-n').value, document.getElementById('${id}-p').value)">Złóż propozycję</button>
-            ${talk?.counter ? `<span class="text-xs">Kontroferta: ${talk.counter.shares.toLocaleString('pl-PL')} akcji po ${formatZl(talk.counter.price)}</span><button class="btn-xs" onclick="blockAction('${stock.symbol}', '${holder.id}', acceptBlockCounter)">Przyjmij kontrofertę</button>` : ''}
+            ${talk?.counter ? `<span class="text-xs">Kontroferta: ${formatInt(talk.counter.shares)} akcji po ${formatZl(talk.counter.price)}</span><button class="btn-xs" onclick="blockAction('${stock.symbol}', '${holder.id}', acceptBlockCounter)">Przyjmij kontrofertę</button>` : ''}
         </div></details>`;
 }
 
@@ -1104,7 +1104,7 @@ function validateLbo(initiator, target, totalCost) {
     if (!lender) return { ok: false, reason: 'żaden bank nie sfinansuje wykupu lewarowanego' };
     const assets = (initiator.balanceSheet?.assets || 0) + (target.balanceSheet?.assets || 0);
     const debt = (initiator.balanceSheet?.liabilities || 0) + (target.balanceSheet?.liabilities || 0) + totalCost;
-    if (assets <= 0 || debt / assets > LBO_MAX_DEBT_TO_ASSETS) return { ok: false, reason: `zadłużenie po wykupie przekroczyłoby ${(LBO_MAX_DEBT_TO_ASSETS * 100).toFixed(0)}% aktywów` };
+    if (assets <= 0 || debt / assets > LBO_MAX_DEBT_TO_ASSETS) return { ok: false, reason: `zadłużenie po wykupie przekroczyłoby ${formatNumberPl((LBO_MAX_DEBT_TO_ASSETS * 100), 0)}% aktywów` };
     if ((Number(initiator.financialHealth) || 0) < -1) return { ok: false, reason: 'zbyt słaba kondycja inicjatora' };
     return { ok: true, lender };
 }
@@ -1235,7 +1235,7 @@ function runTakeoverNegotiation(initiator, target, process) {
     const affordable = process.financing !== 'cash' || initiator.cash >= newTotal;
     if (affordable && Math.random() < getAggressorPersistence(initiator) + 0.2) {
         raiseTakeoverOffer(initiator, target, process, demand);
-        logEvent(`🤝 ${initiator.name} przyjmuje żądania ${target.name}: premia rośnie o ${(demand * 100).toFixed(0)} pkt proc. (cena ${formatZl(process.offerDetails.buyoutPricePerShare, 2)}).`, 'review');
+        logEvent(`🤝 ${initiator.name} przyjmuje żądania ${target.name}: premia rośnie o ${formatNumberPl((demand * 100), 0)} pkt proc. (cena ${formatZl(process.offerDetails.buyoutPricePerShare, 2)}).`, 'review');
     } else {
         logEvent(`🤝 ${initiator.name} odrzuca żądania ${target.name} i wycofuje ofertę.`, 'review');
         abortTakeover(initiator, target, 'Agresor odrzucił żądania wyższej premii.');
@@ -1261,11 +1261,11 @@ function runWhiteKnight(initiator, target, process) {
     const counterTotal = process.offerDetails.buyoutPricePerShare * (1 + counter) * target.totalShares;
     if ((process.financing !== 'cash' || initiator.cash >= counterTotal) && Math.random() < getAggressorPersistence(initiator)) {
         raiseTakeoverOffer(initiator, target, process, counter);
-        logEvent(`🛡️ ${knight.name} staje do walki o ${target.name}, ale ${initiator.name} podbija ofertę o ${(counter * 100).toFixed(0)}% — Rycerz rezygnuje.`, 'review');
+        logEvent(`🛡️ ${knight.name} staje do walki o ${target.name}, ale ${initiator.name} podbija ofertę o ${formatNumberPl((counter * 100), 0)}% — Rycerz rezygnuje.`, 'review');
         return;
     }
     abortTakeover(initiator, target, `Wygrała przyjazna oferta ${knight.name}.`);
-    logEvent(`🛡️ Biały Rycerz: ${knight.name} przejmuje inicjatywę i składa przyjazną ofertę za ${target.name} (premia ${(knightPremium * 100).toFixed(0)}%).`, 'review');
+    logEvent(`🛡️ Biały Rycerz: ${knight.name} przejmuje inicjatywę i składa przyjazną ofertę za ${target.name} (premia ${formatNumberPl((knightPremium * 100), 0)}%).`, 'review');
     initiateMergerProcess(knight, target, 'przejęcie', 'cash', knightPremium, { friendly: true });
 }
 
@@ -1280,7 +1280,7 @@ function runPacMan(initiator, target, process) {
         target.equityStakes[initiator.symbol] = (target.equityStakes[initiator.symbol] || 0) + shares;
         applyTradeImpact(initiator, shares, 1);
     }
-    logEvent(`👾 Pac-Man: ${target.name} skupuje ${shares.toLocaleString('pl-PL')} akcji agresora ${initiator.name}!`, 'review');
+    logEvent(`👾 Pac-Man: ${target.name} skupuje ${formatInt(shares)} akcji agresora ${initiator.name}!`, 'review');
     if (Math.random() > getAggressorPersistence(initiator) * 0.7) {
         abortTakeover(initiator, target, 'Kontratak Pac-Man — agresor musi bronić się sam.');
     } else {
@@ -1334,7 +1334,7 @@ function notifyFundOfTakeover(initiator, target) {
     addMail({
         sender: CORPORATION_SENDER,
         subject: `🚨 Wezwanie: ${initiator.name} chce przejąć ${target.name}`,
-        body: `${initiator.name} oferuje ${formatZl(process.offerDetails.buyoutPricePerShare, 2)} za akcję ${target.name} (premia ${((process.offerDetails.premium || 0) * 100).toFixed(0)}%). Fundusz ma ${(pct * 100).toFixed(1)}% akcji — zdecyduj: sprzedaż po cenie oferty albo głos przeciw${pct > 0.5 ? ', a jako większościowy akcjonariusz także obrona' : ''}.`,
+        body: `${initiator.name} oferuje ${formatZl(process.offerDetails.buyoutPricePerShare, 2)} za akcję ${target.name} (premia ${formatNumberPl(((process.offerDetails.premium || 0) * 100), 0)}%). Fundusz ma ${formatNumberPl((pct * 100), 1)}% akcji — zdecyduj: sprzedaż po cenie oferty albo głos przeciw${pct > 0.5 ? ', a jako większościowy akcjonariusz także obrona' : ''}.`,
         importance: 3, symbol: target.symbol, action: { type: 'takeover', symbol: target.symbol }
     });
     // U1: decyzja o przejęciu wyskakuje na ekranie i pauzuje grę (wyjątek od zasady „bez okien”).
@@ -1391,7 +1391,7 @@ function negotiationDemand(symbol, demand) {
         raiseTakeoverOffer(initiator, target, process, demand);
         neg.open = false;
         result = 'accepted';
-        logEvent(`🤝 ${initiator.name} przyjmuje żądanie: premia +${(demand * 100).toFixed(0)} pkt proc. (cena ${formatZl(process.offerDetails.buyoutPricePerShare, 2)}).`, 'review');
+        logEvent(`🤝 ${initiator.name} przyjmuje żądanie: premia +${formatNumberPl((demand * 100), 0)} pkt proc. (cena ${formatZl(process.offerDetails.buyoutPricePerShare, 2)}).`, 'review');
     } else if (neg.round < NEGOTIATION_MAX_ROUNDS && affordable && Math.random() < 0.6) {
         neg.counter = Math.round(demand * getRandomInRange(0.3, 0.6) * 100) / 100;
         result = 'counter';
@@ -1414,7 +1414,7 @@ function negotiationAcceptCounter(symbol) {
     raiseTakeoverOffer(pair.initiator, target, pair.process, neg.counter);
     neg.open = false;
     neg.history.push({ round: neg.round, result: 'counterAccepted', counter: neg.counter });
-    logEvent(`🤝 Porozumienie: ${pair.initiator.name} podnosi premię za ${target.name} o ${(neg.counter * 100).toFixed(0)} pkt proc.`, 'review');
+    logEvent(`🤝 Porozumienie: ${pair.initiator.name} podnosi premię za ${target.name} o ${formatNumberPl((neg.counter * 100), 0)} pkt proc.`, 'review');
     return true;
 }
 
@@ -1450,7 +1450,7 @@ function sellFundSharesToAggressor(symbol) {
     process.offerDetails.totalCost = Math.max(0, process.offerDetails.totalCost - amount);
     process.fundDecision = 'sold';
     syncTakeover(initiator, target);
-    logEvent(`💰 Fundusz sprzedaje ${shares.toLocaleString('pl-PL')} akcji ${target.name} spółce ${initiator.name} po ${formatZl(price, 2)} (wynik ${profit >= 0 ? '+' : ''}${formatZl(profit, 0)}).`, 'review');
+    logEvent(`💰 Fundusz sprzedaje ${formatInt(shares)} akcji ${target.name} spółce ${initiator.name} po ${formatZl(price, 2)} (wynik ${profit >= 0 ? '+' : ''}${formatZl(profit, 0)}).`, 'review');
     showToast(`Sprzedano pakiet ${symbol} za ${formatZl(amount, 0)}.`, 'success');
     if (typeof refreshFundViews === 'function') refreshFundViews();
     refreshTakeoverViews(symbol);
@@ -1485,7 +1485,7 @@ function triggerHostileTakeoverEvent(forcedTarget = null) {
     const pool = spareFund ? affordable.filter(s => getFundStakePct(s) < 0.2) : affordable;
     const target = forcedTarget || (fundTargets.length && Math.random() < 0.5 ? getRandomElement(fundTargets) : getRandomElement(pool));
     if (!target) return null;
-    logEvent(`🚨 WROGIE PRZEJĘCIE: ${initiator.name} ogłasza ofertę za ${target.name} (premia ${(premium * 100).toFixed(0)}%).`, 'market');
+    logEvent(`🚨 WROGIE PRZEJĘCIE: ${initiator.name} ogłasza ofertę za ${target.name} (premia ${formatNumberPl((premium * 100), 0)}%).`, 'market');
     return initiateMergerProcess(initiator, target, 'przejęcie', 'cash', premium) ? { initiator, target } : null;
 }
 
@@ -1565,7 +1565,7 @@ function triggerRescueOfferingEvent(forcedTarget = null) {
 
     if (getRescueOffer(stock.symbol)) finalizeRescueOffering(stock); // poprzednia emisja tej spółki zamknięta przed nową
     const offer = { symbol: stock.symbol, price, total, remaining: total, fundReserved: 0, closed: false, quarter: typeof macro === 'object' ? macro.quarter : 0 };
-    logEvent(`📢 EMISJA RATUNKOWA: ${stock.name} oferuje ${total.toLocaleString('pl-PL')} nowych akcji po ${formatZl(price, 2)}, aby spłacić długi.`, 'market');
+    logEvent(`📢 EMISJA RATUNKOWA: ${stock.name} oferuje ${formatInt(total)} nowych akcji po ${formatZl(price, 2)}, aby spłacić długi.`, 'market');
 
     // Fundusz: pula zarezerwowana (do 40%) — gracz decyduje w oknie/poczcie.
     const fundEligible = playerFund && canAccessExchange(stock.exchange);
@@ -1574,7 +1574,7 @@ function triggerRescueOfferingEvent(forcedTarget = null) {
     for (const ai of [...aiCompetitors].sort(() => Math.random() - 0.5)) {
         if (forBots <= 0) break;
         const bought = aiDecideOnRescueOffer(ai, offer, Math.ceil(forBots * getRandomInRange(0.2, 0.6)));
-        if (bought > 0) logEvent(`[AI] ${ai.name} obejmuje ${bought.toLocaleString('pl-PL')} akcji z emisji ratunkowej ${stock.symbol}.`, 'market');
+        if (bought > 0) logEvent(`[AI] ${ai.name} obejmuje ${formatInt(bought)} akcji z emisji ratunkowej ${stock.symbol}.`, 'market');
         forBots -= bought;
     }
 
@@ -1583,7 +1583,7 @@ function triggerRescueOfferingEvent(forcedTarget = null) {
         addMail({
             sender: CORPORATION_SENDER,
             subject: `Emisja ratunkowa: ${stock.name}`,
-            body: `${stock.name} oferuje funduszowi do ${offer.fundReserved.toLocaleString('pl-PL')} nowych akcji po ${formatZl(price, 2)} (dyskonto do rynku). Pieniądze idą na spłatę długu.`,
+            body: `${stock.name} oferuje funduszowi do ${formatInt(offer.fundReserved)} nowych akcji po ${formatZl(price, 2)} (dyskonto do rynku). Pieniądze idą na spłatę długu.`,
             importance: 2, symbol: stock.symbol, action: { type: 'rescue', symbol: stock.symbol }
         });
         if ((playerPortfolio[stock.symbol]?.shares || 0) > 0) openRescueOfferingModal(stock.symbol);
@@ -1604,7 +1604,7 @@ function acceptRescueOffer(symbol, quantity) {
     const before = playerPortfolio[symbol]?.shares || 0;
     const issued = issueRescueShares(stock, 'player', quantity, offer.price);
     if (!(issued > 0) || (playerPortfolio[symbol]?.shares || 0) - before !== issued) { showToast('Nie udało się objąć akcji.', 'error'); return false; }
-    logEvent(`📢 Fundusz obejmuje ${issued.toLocaleString('pl-PL')} akcji ${stock.name} (${symbol}) z emisji ratunkowej po ${formatZl(offer.price)} — razem ${formatZl(issued * offer.price, 0)}.`, 'review');
+    logEvent(`📢 Fundusz obejmuje ${formatInt(issued)} akcji ${stock.name} (${symbol}) z emisji ratunkowej po ${formatZl(offer.price)} — razem ${formatZl(issued * offer.price, 0)}.`, 'review');
     changeReputation('player', stock.symbol, 10);
     finalizeRescueOffering(stock);
     if (typeof refreshFundViews === 'function') refreshFundViews();
@@ -1795,7 +1795,7 @@ function createPendingAgm(stock) {
         addMail({
             sender: CORPORATION_SENDER,
             subject: `🗳️ Walne zgromadzenie ${stock.name} w przyszłym kwartale`,
-            body: `Porządek obrad: ${gov.pendingAgm.items.map(item => item.label).join('; ')}. Fundusz ma ${(getFundStakePct(stock) * 100).toFixed(1)}% głosów — ustaw głosy przed terminem (domyślnie „za”).`,
+            body: `Porządek obrad: ${gov.pendingAgm.items.map(item => item.label).join('; ')}. Fundusz ma ${formatNumberPl((getFundStakePct(stock) * 100), 1)}% głosów — ustaw głosy przed terminem (domyślnie „za”).`,
             importance: 2, symbol: stock.symbol, action: { type: 'agm', symbol: stock.symbol }
         });
     }
@@ -1899,11 +1899,11 @@ function holdAgm(stock) {
         addMail({
             sender: CORPORATION_SENDER,
             subject: `🗳️ Uchwały walnego zgromadzenia ${stock.name}`,
-            body: `Frekwencja ${(turnout * 100).toFixed(0)}%. ` + results.map(r => `${r.label}: ${r.passed ? 'PRZYJĘTA' : 'odrzucona'} (za ${(r.for / Math.max(1, r.for + r.against) * 100).toFixed(0)}%)${r.effect ? ` — ${r.effect}` : ''}`).join('; ') + '.',
+            body: `Frekwencja ${formatNumberPl((turnout * 100), 0)}%. ` + results.map(r => `${r.label}: ${r.passed ? 'PRZYJĘTA' : 'odrzucona'} (za ${formatNumberPl((r.for / Math.max(1, r.for + r.against) * 100), 0)}%)${r.effect ? ` — ${r.effect}` : ''}`).join('; ') + '.',
             importance: 2, symbol: stock.symbol, action: { type: 'agm', symbol: stock.symbol }
         });
     }
-    if (!isForeignShare(stock) || getIssuerHeld(stock) > 0) logEvent(`🗳️ Walne zgromadzenie ${stock.name}: ${results.filter(r => r.passed).length}/${results.length} uchwał przyjętych (frekwencja ${(turnout * 100).toFixed(0)}%).`, 'company');
+    if (!isForeignShare(stock) || getIssuerHeld(stock) > 0) logEvent(`🗳️ Walne zgromadzenie ${stock.name}: ${results.filter(r => r.passed).length}/${results.length} uchwał przyjętych (frekwencja ${formatNumberPl((turnout * 100), 0)}%).`, 'company');
     return record;
 }
 
@@ -1955,7 +1955,7 @@ function runBuyback(stock) {
     adjustBalanceSheet(stock, { assets: -cost, retainedEarnings: -cost });
     stock.totalShares -= shares;
     stock.price *= 1.02;
-    return `skupiono ${shares.toLocaleString('pl-PL')} akcji`;
+    return `skupiono ${formatInt(shares)} akcji`;
 }
 
 function runAgmIssue(stock) {
@@ -1968,7 +1968,7 @@ function runAgmIssue(stock) {
     adjustBalanceSheet(stock, { assets: amount });
     if (stock.balanceSheet) stock.balanceSheet.shareCapital = (Number(stock.balanceSheet.shareCapital) || 0) + amount;
     stock.price *= 0.97;
-    return `wyemitowano ${shares.toLocaleString('pl-PL')} akcji`;
+    return `wyemitowano ${formatInt(shares)} akcji`;
 }
 
 /** Co kwartał (main.js): odliczanie, porządek obrad kwartał wcześniej, potem zgromadzenie. */

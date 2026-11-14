@@ -127,7 +127,7 @@ function runCityEconomy() {
     mayor.support += (city.budget > 0 ? 3 : -8) + (city.infrastructureLevel - 1) * 5 + (50 - mayor.support) * 0.1;
     mayor.support = Math.max(5, Math.min(95, mayor.support));
 
-    logEvent(`🏙️ Roczne rozliczenie miasta ${city.name}: budżet ${formatZl(city.budget, 0)}, mieszkańców ${city.population.toLocaleString('pl-PL')}, poparcie burmistrza ${mayor.support.toFixed(0)}%.`, 'city');
+    logEvent(`🏙️ Roczne rozliczenie miasta ${city.name}: budżet ${formatZl(city.budget, 0)}, mieszkańców ${formatInt(city.population)}, poparcie burmistrza ${formatNumberPl(mayor.support, 0)}%.`, 'city');
 }
 
 function runMayorPolicy() {
@@ -287,7 +287,7 @@ function triggerMayoralElection(forcedWinnerId = null) {
     city.lastElection = scores.map(item => ({ name: item.candidate.name, policy: item.candidate.policy, share: Math.max(1, item.score) / total }));
     city.election = null;
 
-    const results = city.lastElection.map(r => `${r.name} ${(r.share * 100).toFixed(0)}%`).join(', ');
+    const results = city.lastElection.map(r => `${r.name} ${formatNumberPl((r.share * 100), 0)}%`).join(', ');
     logEvent(`🗳️ Wybory na prezydenta miasta wygrywa ${winner.name} (${MAYOR_POLICIES[winner.policy].label})${changed ? '' : ' — reelekcja'}. Wyniki: ${results}.`, 'city');
 
     if (winner.playerDonations > 0) {
@@ -357,7 +357,7 @@ function triggerStatePrivatizationEvent() {
         fundShares: 0,
         remainingMs: BASE_DELAYS.weekly
     };
-    logEvent(`🏛️ PRYWATYZACJA: Skarb Państwa sprzedaje ${shares.toLocaleString('pl-PL')} akcji ${stock.name} po ${formatZl(privatizationOffer.price, 2)} (dyskonto do rynku). Zapisy przez tydzień.`, 'state');
+    logEvent(`🏛️ PRYWATYZACJA: Skarb Państwa sprzedaje ${formatInt(shares)} akcji ${stock.name} po ${formatZl(privatizationOffer.price, 2)} (dyskonto do rynku). Zapisy przez tydzień.`, 'state');
     addMail({
         sender: CORPORATION_SENDER,
         subject: `Oferta prywatyzacyjna: ${stock.name}`,
@@ -434,7 +434,7 @@ function processPrivatizationWeekly(deltaMs = BASE_DELAYS.weekly) {
         offer.remaining -= quantity;
         sold += quantity;
     }
-    logEvent(`🏛️ Prywatyzacja ${stock.name} zakończona: sprzedano ${sold.toLocaleString('pl-PL')} z ${offer.shares.toLocaleString('pl-PL')} akcji.`, 'state');
+    logEvent(`🏛️ Prywatyzacja ${stock.name} zakończona: sprzedano ${formatInt(sold)} z ${formatInt(offer.shares)} akcji.`, 'state');
 }
 
 /** Urząd antymonopolowy: monopolista może dostać karę (szansa i wysokość zależą od poziomu urzędu). */
@@ -505,7 +505,7 @@ function generatePppOffer() {
         risk
     };
     ppp.offers.push(offer);
-    logEvent(`🏙️ Miasto ogłasza projekt PPP: ${offer.icon} ${offer.name} — ${formatZl(offer.total, 0)}, ${(offer.rate * 100).toFixed(1)}% rocznie, ${offer.termWeeks} tyg.`, 'city');
+    logEvent(`🏙️ Miasto ogłasza projekt PPP: ${offer.icon} ${offer.name} — ${formatZl(offer.total, 0)}, ${formatNumberPl((offer.rate * 100), 1)}% rocznie, ${offer.termWeeks} tyg.`, 'city');
     return offer;
 }
 
@@ -525,7 +525,7 @@ function investInPpp(offerId, amount) {
     amount = Math.min(amount, offer.total - offer.raised);
     if (!(amount >= 100)) { showToast(`Minimalny udział: ${formatZl(100, 0)}.`, 'error'); return null; }
     if (amount > playerCash) { showToast('Za mało gotówki funduszu.', 'error'); return null; }
-    if (amount > getFundPppCapacity() + 1e-6) { showToast(`Limit PPP: ${(PPP_FUND_LIMIT * 100).toFixed(0)}% aktywów funduszu.`, 'error'); return null; }
+    if (amount > getFundPppCapacity() + 1e-6) { showToast(`Limit PPP: ${formatNumberPl((PPP_FUND_LIMIT * 100), 0)}% aktywów funduszu.`, 'error'); return null; }
 
     playerCash -= amount;
     if (offer.payer === 'state') { governmentTreasury += amount; if (typeof noteInfraPpp === 'function') noteInfraPpp(offer, amount); } // 0.17 S5: projekt państwa
@@ -552,12 +552,12 @@ function processPppEvents(stake) {
         city.budget -= paid;
         playerCash += paid;
         playerFund.ppp = playerFund.ppp.filter(item => item !== stake);
-        addMail({ sender: CORPORATION_SENDER, subject: `🏙️ Wcześniejszy wykup PPP: ${stake.name}`, body: `Miasto ma nadwyżkę i wykupuje udział funduszu przed terminem: ${formatZl(paid, 0)} (nominał + ${(PPP_EARLY_BUYOUT_PREMIUM * 100).toFixed(0)}% premii).`, importance: 2 });
+        addMail({ sender: CORPORATION_SENDER, subject: `🏙️ Wcześniejszy wykup PPP: ${stake.name}`, body: `Miasto ma nadwyżkę i wykupuje udział funduszu przed terminem: ${formatZl(paid, 0)} (nominał + ${formatNumberPl((PPP_EARLY_BUYOUT_PREMIUM * 100), 0)}% premii).`, importance: 2 });
         return true;
     }
     if (!stake.restructure && city.budget < stake.principal && stake.weeksLeft <= 8 && Math.random() < 0.25) {
         stake.restructure = 'pending';
-        addMail({ sender: CORPORATION_SENDER, subject: `🏙️ Miasto prosi o restrukturyzację PPP: ${stake.name}`, body: `Budżet miasta nie wystarczy na spłatę ${formatZl(stake.principal, 0)}. Propozycja: przesunięcie spłaty o pół roku i oprocentowanie +1 pkt proc. Odmowa: miasto szuka pomocy w Skarbie Państwa — jeśli jej nie dostanie, grozi niewypłacalność (odzysk ${(PPP_RECOVERY * 100).toFixed(0)}%).`, importance: 3, action: { type: 'pppRestructure', stakeId: stake.id } });
+        addMail({ sender: CORPORATION_SENDER, subject: `🏙️ Miasto prosi o restrukturyzację PPP: ${stake.name}`, body: `Budżet miasta nie wystarczy na spłatę ${formatZl(stake.principal, 0)}. Propozycja: przesunięcie spłaty o pół roku i oprocentowanie +1 pkt proc. Odmowa: miasto szuka pomocy w Skarbie Państwa — jeśli jej nie dostanie, grozi niewypłacalność (odzysk ${formatNumberPl((PPP_RECOVERY * 100), 0)}%).`, importance: 3, action: { type: 'pppRestructure', stakeId: stake.id } });
     }
     return false;
 }
@@ -570,7 +570,7 @@ function respondPppRestructure(stakeId, accept) {
         stake.weeksLeft += 26;
         stake.rate += 0.01;
         stake.extensions = 0;
-        logEvent(`🤝 Fundusz zgadza się na restrukturyzację PPP ${stake.name}: spłata za ${stake.weeksLeft} tyg., ${(stake.rate * 100).toFixed(1)}% rocznie.`, 'review');
+        logEvent(`🤝 Fundusz zgadza się na restrukturyzację PPP ${stake.name}: spłata za ${stake.weeksLeft} tyg., ${formatNumberPl((stake.rate * 100), 1)}% rocznie.`, 'review');
     } else {
         stake.restructure = 'refused';
         const help = Math.min(Math.max(0, governmentTreasury), stake.principal);
@@ -626,7 +626,7 @@ function processPppWeekly() {
             const recovery = stake.principal * PPP_RECOVERY;
             playerCash += recovery;
             playerFund.ppp = playerFund.ppp.filter(item => item !== stake);
-            logEvent(`💥 Miasto nie spłaca PPP ${stake.name} — fundusz odzyskuje ${recovery.toFixed(0)} z ${formatZl(stake.principal, 0)}.`, 'review');
+            logEvent(`💥 Miasto nie spłaca PPP ${stake.name} — fundusz odzyskuje ${formatNumberPl(recovery, 0)} z ${formatZl(stake.principal, 0)}.`, 'review');
         }
     }
 }
@@ -844,7 +844,7 @@ function createProject(def, { timed = false, deadline = null } = {}) {
 }
 
 function formatProjectMoney(value) {
-    return `${(value / getBaseScale() / 1e6).toFixed(1).replace('.', ',')} mln ${getBaseCurrency()}`;
+    return `${formatNumberPl(value / getBaseScale() / 1e6, 1)} mln ${getBaseCurrency()}`;
 }
 
 function getProjectFunding(project) {
@@ -1106,7 +1106,7 @@ function buyProjectBond(projectId, amount) {
     recordPayment('player-fund', 'external:konsorcjum', amount, `Obligacje projektowe: ${project.name}`);
     getProjectBonds().push({ projectId: project.id, name: project.name, icon: project.icon, principal: amount, quarter: getProjectQuarter(), interestPaid: 0 });
     if (typeof noteCorporateGoal === 'function') noteCorporateGoal('project');
-    logEvent(`📜 Fundusz kupuje obligacje projektowe ${project.icon} ${project.name} za ${formatZl(amount, 0)} (${(PROJECT_BOND_RATE * 100).toFixed(0)}% rocznie + ${(PROJECT_BOND_PREMIUM * 100).toFixed(0)}% premii przy ukończeniu).`, 'review');
+    logEvent(`📜 Fundusz kupuje obligacje projektowe ${project.icon} ${project.name} za ${formatZl(amount, 0)} (${formatNumberPl((PROJECT_BOND_RATE * 100), 0)}% rocznie + ${formatNumberPl((PROJECT_BOND_PREMIUM * 100), 0)}% premii przy ukończeniu).`, 'review');
     return true;
 }
 
@@ -1144,7 +1144,7 @@ function renderProjectBondForm(project) {
     if (!playerFund) return '';
     const own = getProjectBonds().filter(b => b.projectId === project.id).reduce((sum, b) => sum + b.principal, 0);
     const room = Math.max(0, Math.min(project.cost * PROJECT_BOND_MAX_SHARE - getProjectBondTotal(project), getFundAssets() * PROJECT_BOND_FUND_LIMIT - getFundProjectBondsValue()));
-    return `<p class="text-xs text-muted">📜 Obligacje projektowe: ${(PROJECT_BOND_RATE * 100).toFixed(0)}% rocznie od konsorcjum, +${(PROJECT_BOND_PREMIUM * 100).toFixed(0)}% przy ukończeniu, upadek w budowie = odzysk 50%.${own ? ` Twoje: ${formatZl(own, 0)}.` : ''}</p>
+    return `<p class="text-xs text-muted">📜 Obligacje projektowe: ${formatNumberPl((PROJECT_BOND_RATE * 100), 0)}% rocznie od konsorcjum, +${formatNumberPl((PROJECT_BOND_PREMIUM * 100), 0)}% przy ukończeniu, upadek w budowie = odzysk 50%.${own ? ` Twoje: ${formatZl(own, 0)}.` : ''}</p>
         ${room >= 100 ? `<div class="bank-card-form"><input type="text" inputmode="numeric" id="bond-amt-${project.id}" value="${Math.floor(room)}" aria-label="Kwota obligacji">
         <button class="btn-secondary" onclick="buyProjectBond('${project.id}', parseFloat(document.getElementById('bond-amt-${project.id}').value)); renderCitySpecialProjects();">Kup obligacje (fundusz)</button></div>` : ''}`;
 }
@@ -1403,9 +1403,9 @@ function renderMarketStabilityProjectCard() {
             liveStatusHtml = `<div class="bank-section" style="background: rgba(255, 75, 75, 0.12); border-left: 3px solid var(--color-down); padding: 8px 12px; margin-top: 10px; border-radius: 4px;">
                 <strong style="color: var(--color-down);">🔥 RADAR SMSR (Czas Rzeczywisty):</strong>
                 <p class="text-sm" style="margin: 4px 0 0 0;">
-                    Sektor: <strong>${escapeHtml(bubble.name)}</strong> | Typ: <strong>${getBubbleTypeName(bubble.type)}</strong> | Premia: <strong>+${(bubble.premium * 100).toFixed(1)}%</strong> | Faza: <strong>${bubble.phase}</strong><br>
+                    Sektor: <strong>${escapeHtml(bubble.name)}</strong> | Typ: <strong>${getBubbleTypeName(bubble.type)}</strong> | Premia: <strong>+${formatNumberPl((bubble.premium * 100), 1)}%</strong> | Faza: <strong>${bubble.phase}</strong><br>
                     Ryzyko pęknięcia w nast. kwartale: <span class="badge ${riskInfo.badgeCls}">${riskInfo.label}</span>
-                    ${bubble.spilloverSector ? ` · 🌐 Rozlanie na: <strong>${escapeHtml(bubble.spilloverSector.name)}</strong> (+${(bubble.premium * 50).toFixed(1)}%)` : ''}
+                    ${bubble.spilloverSector ? ` · 🌐 Rozlanie na: <strong>${escapeHtml(bubble.spilloverSector.name)}</strong> (+${formatNumberPl((bubble.premium * 50), 1)}%)` : ''}
                 </p>
             </div>`;
         } else {
@@ -1517,15 +1517,15 @@ function renderCitySpecialProjects() {
         const t = TIMED_PROJECT_TEMPLATES.find(x => x.id === offer.templateId);
         return `<article class="bank-card project-card"><header class="bank-card-head"><span class="bank-card-icon">${t.icon}</span><div><h4>${escapeHtml(t.name)}</h4>
             <span class="bank-card-type">czasowy · zgłoszenia jeszcze ${Math.max(0, offer.deadline - quarter)} kw. · bonus do ${offer.bonusQuarters} kw.</span></div></header>
-            <p class="text-sm">Koszt ${formatProjectMoney(t.cost)} · budowa ${t.quarters} kw. · bonus: przychody +${(t.bonus.growth * 100).toFixed(1)} pkt proc./kw., wycena +${(t.bonus.valuation * 100).toFixed(1)}%</p>
+            <p class="text-sm">Koszt ${formatProjectMoney(t.cost)} · budowa ${t.quarters} kw. · bonus: przychody +${formatNumberPl((t.bonus.growth * 100), 1)} pkt proc./kw., wycena +${formatNumberPl((t.bonus.valuation * 100), 1)}%</p>
             ${myCompanies.length ? `<div class="bank-card-form">${companySelect(`timed-co-${t.id}`)}<input type="text" inputmode="numeric" id="timed-amt-${t.id}" value="${Math.round(t.cost * 0.3)}" aria-label="Wkład">
             <button onclick="launchTimedProject('${t.id}', document.getElementById('timed-co-${t.id}').value, parseFloat(document.getElementById('timed-amt-${t.id}').value)); renderCitySpecialProjects();">Zgłoś konsorcjum</button></div>` : ''}
         </article>`;
     }).join('');
 
-    const available = MEGA_PROJECTS.filter(p => !isMegaProjectTaken(p.id)).map(p => `<li>${p.icon} <strong>${escapeHtml(p.name)}</strong> — ${formatProjectMoney(p.cost)}, ${p.quarters} kw.; sektory: ${p.sectors.join(', ')}; bonus: przychody +${(p.bonus.growth * 100).toFixed(1)} pkt proc./kw., wycena +${(p.bonus.valuation * 100).toFixed(0)}%</li>`).join('');
+    const available = MEGA_PROJECTS.filter(p => !isMegaProjectTaken(p.id)).map(p => `<li>${p.icon} <strong>${escapeHtml(p.name)}</strong> — ${formatProjectMoney(p.cost)}, ${p.quarters} kw.; sektory: ${p.sectors.join(', ')}; bonus: przychody +${formatNumberPl((p.bonus.growth * 100), 1)} pkt proc./kw., wycena +${formatNumberPl((p.bonus.valuation * 100), 0)}%</li>`).join('');
 
-    const completed = specialProjects.completed.map(project => `<li>${project.icon} <strong>${escapeHtml(project.name)}</strong>${project.timed ? ' (czasowy)' : ''} — ${project.participants.map(p => `${escapeHtml(p.name)}${p.heldBy ? ` → ${escapeHtml(p.heldBy)}` : ''} ${p.share ? `(${(p.share * 100).toFixed(0)}%)` : ''}`).join(', ')}${project.builder ? `; wykonawca ${escapeHtml(project.builder.name)}` : ''}</li>`).join('');
+    const completed = specialProjects.completed.map(project => `<li>${project.icon} <strong>${escapeHtml(project.name)}</strong>${project.timed ? ' (czasowy)' : ''} — ${project.participants.map(p => `${escapeHtml(p.name)}${p.heldBy ? ` → ${escapeHtml(p.heldBy)}` : ''} ${p.share ? `(${formatNumberPl((p.share * 100), 0)}%)` : ''}`).join(', ')}${project.builder ? `; wykonawca ${escapeHtml(project.builder.name)}` : ''}</li>`).join('');
 
     container.innerHTML = `
         ${renderMarketStabilityProjectCard()}
@@ -1730,7 +1730,7 @@ function greyUnderTable(symbol, quantity) {
     if (holding.shares <= 0) delete playerPortfolio[symbol];
     playerCash += value;
     getRecord('player').illegalGains += quantity * stock.price * premium;
-    logEvent(`🤝 Fundusz przekazuje ${quantity.toLocaleString('pl-PL')} akcji ${stock.name} „poza rynkiem” (kupujący: ${buyer.name}).`, 'review');
+    logEvent(`🤝 Fundusz przekazuje ${formatInt(quantity)} akcji ${stock.name} „poza rynkiem” (kupujący: ${buyer.name}).`, 'review');
     if (typeof refreshFundViews === 'function') refreshFundViews();
     return true;
 }
@@ -1901,7 +1901,7 @@ function renderOversightPanel() {
     const card = (kind, name, icon, text) => {
         const institution = oversight[kind];
         const next = INSTITUTION_LEVEL_COSTS[institution.level];
-        return `<article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${icon}</span><div><h4>${name}</h4><span class="bank-card-type">poziom ${institution.level}/5 · skuteczność ${(getInstitutionEffectiveness(institution) * 100).toFixed(0)}%</span></div></header>
+        return `<article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${icon}</span><div><h4>${name}</h4><span class="bank-card-type">poziom ${institution.level}/5 · skuteczność ${formatNumberPl((getInstitutionEffectiveness(institution) * 100), 0)}%</span></div></header>
             <p class="text-sm">${text}</p>
             <div class="inv-stages"><div class="inv-stage" style="flex:1"><span class="inv-stage-fill" style="width:${next ? Math.min(100, institution.budget / next * 100).toFixed(0) : 100}%"></span><span class="inv-stage-label">${next ? `do poziomu ${institution.level + 1}: ${formatZl(institution.budget, 0)} / ${formatZl(next, 0)}` : 'poziom maksymalny'}</span></div></div>
             <div class="bank-card-form"><input type="text" inputmode="numeric" id="donate-${kind}" value="500" aria-label="Kwota dotacji">
@@ -1909,8 +1909,8 @@ function renderOversightPanel() {
     };
     return `
         <div class="bank-ticker">
-            <div class="bank-ticker-item"><span>Korupcja</span><strong class="${oversight.corruption >= 50 ? 'text-down' : oversight.corruption >= 30 ? 'text-warn' : ''}">${oversight.corruption.toFixed(0)}/100</strong></div>
-            <div class="bank-ticker-item"><span>Uwaga KNF wobec funduszu</span><strong>${(getKnfAttention() * 100).toFixed(0)}%</strong></div>
+            <div class="bank-ticker-item"><span>Korupcja</span><strong class="${oversight.corruption >= 50 ? 'text-down' : oversight.corruption >= 30 ? 'text-warn' : ''}">${formatNumberPl(oversight.corruption, 0)}/100</strong></div>
+            <div class="bank-ticker-item"><span>Uwaga KNF wobec funduszu</span><strong>${formatNumberPl((getKnfAttention() * 100), 0)}%</strong></div>
             <div class="bank-ticker-item"><span>Podejrzenia wobec funduszu</span><strong class="${suspicion.cls}">${suspicion.label}</strong></div>
             <div class="bank-ticker-item"><span>Przewinienia</span><strong>${record.strikes}/${CONVICTION_STRIKES}</strong></div>
             <div class="bank-ticker-item" title="Dotacje dla policji i KNF: kary niższe o 25%, kontrole KNF częściej kończą się czysto. Nie zmniejszają podejrzeń."><span>Przyzwoity fundusz</span><strong class="${isDecentFund() ? 'text-up' : ''}">${isDecentFund() ? '✅ tak' : `${formatZl(oversight.decentScore || 0, 0)} / ${formatZl(getDecentFundThreshold(), 0)}`}</strong></div>
@@ -1968,11 +1968,11 @@ function renderGreyZone() {
         <p class="bank-lead">Usługi „ze szarej strefy” płaci fundusz. Każda zwiększa korupcję i podejrzenia wobec funduszu. Wykrycie: kara z funduszu, spadek zaufania klientów, wpis compliance w CV (ocena zarządu), a przy powtórkach rekwizycja i blokada handlu. ${CONVICTION_STRIKES}. wykrycie = wyrok.</p>
         <div class="bank-ticker"><div class="bank-ticker-item"><span>Podejrzenia</span><strong class="${suspicion.cls}">${suspicion.label}</strong></div>
             <div class="bank-ticker-item"><span>Przewinienia</span><strong>${record.strikes}/${CONVICTION_STRIKES}</strong></div>
-            <div class="bank-ticker-item"><span>Korupcja w kraju</span><strong>${oversight.corruption.toFixed(0)}/100</strong></div></div>
+            <div class="bank-ticker-item"><span>Korupcja w kraju</span><strong>${formatNumberPl(oversight.corruption, 0)}/100</strong></div></div>
         <div class="grey-grid">
             ${service('leak', '', 'greyLeak()')}
             ${service('debt', select('grey-debt', myCompanies.map(s => [s.symbol, `${s.name} (dług ${formatZl(s.balanceSheet?.liabilities || 0, 0)})`]), 'Spółka'), "greyDebtWriteOff(document.getElementById('grey-debt')?.value)")}
-            ${service('underTable', select('grey-under', holdings.map(([symbol, h]) => [symbol, `${symbol} (${h.shares.toLocaleString('pl-PL')} akcji)`]), 'Pakiet') + '<input type="text" inputmode="numeric" id="grey-under-qty" value="100" aria-label="Liczba akcji">', "greyUnderTable(document.getElementById('grey-under')?.value, parseInt(document.getElementById('grey-under-qty').value, 10))")}
+            ${service('underTable', select('grey-under', holdings.map(([symbol, h]) => [symbol, `${symbol} (${formatInt(h.shares)} akcji)`]), 'Pakiet') + '<input type="text" inputmode="numeric" id="grey-under-qty" value="100" aria-label="Liczba akcji">', "greyUnderTable(document.getElementById('grey-under')?.value, parseInt(document.getElementById('grey-under-qty').value, 10))")}
             ${service('tender', select('grey-tender', myBuilders.map(s => [s.symbol, s.name]), 'Spółka budowlana'), "greyTender(document.getElementById('grey-tender')?.value)")}
         </div>
         ${typeof renderMafiaSection === 'function' ? renderMafiaSection() : ''}`;
@@ -2219,7 +2219,7 @@ function mafiaEntryTicket(symbol) {
     mafia.acquired[symbol] = (mafia.acquired[symbol] || 0) + quantity;
     mafiaTrace(20 + (typeof isGuardProtected === 'function' && isGuardProtected(stock) ? 15 : 0), 3, 15, cost * 0.05); // Gwardia patrzy na ręce
     mafia.demand = { type: 'favor', amount: Math.round(cost * 0.15), quarter: macro.quarter + 1, deadline: macro.quarter + 2 };
-    logEvent(`🎟️ Fundusz dostaje „spod lady” ${quantity.toLocaleString('pl-PL')} akcji ${stock.name}. Pan Gato zapamięta przysługę.`, 'review');
+    logEvent(`🎟️ Fundusz dostaje „spod lady” ${formatInt(quantity)} akcji ${stock.name}. Pan Gato zapamięta przysługę.`, 'review');
     if (typeof refreshFundViews === 'function') refreshFundViews();
     return true;
 }
@@ -2246,7 +2246,7 @@ function answerMafiaDemand(accept) {
         const target = bruno.portfolio[demand.symbol] || (bruno.portfolio[demand.symbol] = { shares: 0, avgPrice: 0 });
         target.avgPrice = (target.avgPrice * target.shares + value) / (target.shares + shares);
         target.shares += shares;
-        logEvent(`🤝 Fundusz „sprzedaje” Panu Gato ${shares.toLocaleString('pl-PL')} akcji ${demand.symbol} po zaniżonej cenie.`, 'review');
+        logEvent(`🤝 Fundusz „sprzedaje” Panu Gato ${formatInt(shares)} akcji ${demand.symbol} po zaniżonej cenie.`, 'review');
     } else {
         const paid = Math.min(playerCash, demand.amount);
         playerCash -= paid;
@@ -2538,15 +2538,15 @@ function renderMafiaSection() {
             <button onclick="answerMafiaDemand(true); renderGreyZone();">Zgadzam się</button>
             <button class="btn-danger" onclick="answerMafiaDemand(false); renderGreyZone();">Odmawiam</button></div>` : ''}
         <div class="grey-grid">
-            <article class="grey-card"><h4>💼 „Pożyczka”</h4><p class="text-sm text-muted">Do ${(MAFIA_LOAN_LIMIT * 100).toFixed(0)}% aktywów funduszu, ~1% tygodniowo, termin 2 kwartały. Spóźnienie = windykacja.</p>
+            <article class="grey-card"><h4>💼 „Pożyczka”</h4><p class="text-sm text-muted">Do ${formatNumberPl((MAFIA_LOAN_LIMIT * 100), 0)}% aktywów funduszu, ~1% tygodniowo, termin 2 kwartały. Spóźnienie = windykacja.</p>
                 <div class="bank-card-form">${mafia.loan ? `<button onclick="repayMafiaLoan(); renderGreyZone(); displayCash();">Spłać</button>` : `<input type="text" inputmode="numeric" id="mafia-loan" value="${Math.floor(getFundAssets() * 0.1)}" aria-label="Kwota"><button class="btn-danger" onclick="mafiaLoan(parseFloat(document.getElementById('mafia-loan').value)); renderGreyZone(); displayCash();">Pożycz</button>`}</div></article>
             <article class="grey-card"><h4>🔥 Sabotaż</h4><p class="text-sm text-muted">Bardzo negatywne zdarzenie w wybranej spółce (−5…−10%, kondycja). Nie działa na spółki z niezależnym prezesem.</p>
                 <div class="bank-card-form"><select id="mafia-sabotage" aria-label="Spółka">${option(companies)}</select><button class="btn-danger" onclick="mafiaSabotage(document.getElementById('mafia-sabotage').value); renderGreyZone(); displayCash();">Zleć</button></div></article>
             <article class="grey-card"><h4>🤫 Cynk</h4><p class="text-sm text-muted">Przekręt na spółce ze śmieciówki: w przyszłym kwartale kurs +40…80% albo −30…45%. Czasem to policyjna prowokacja.</p>
                 <div class="bank-card-form"><button class="btn-danger" onclick="mafiaTip(); renderGreyZone(); displayCash();">Kup cynk</button></div></article>
-            <article class="grey-card"><h4>🛡️ Ochrona</h4><p class="text-sm text-muted">${(MAFIA_PROTECTION_FEE * 100).toFixed(0)}% aktywów funduszu na kwartał. Chroni przed żądaniami haraczu i atakami wrogich botów.</p>
+            <article class="grey-card"><h4>🛡️ Ochrona</h4><p class="text-sm text-muted">${formatNumberPl((MAFIA_PROTECTION_FEE * 100), 0)}% aktywów funduszu na kwartał. Chroni przed żądaniami haraczu i atakami wrogich botów.</p>
                 <div class="bank-card-form"><button class="${mafia.protection ? 'btn-secondary' : 'btn-danger'}" onclick="toggleMafiaProtection(); renderGreyZone();">${mafia.protection ? 'Zrezygnuj' : 'Wykup ochronę'}</button></div></article>
-            <article class="grey-card"><h4>🪓 „Rozbicie” związku</h4><p class="text-sm text-muted">Związek zakładowy w wybranej spółce „sam się rozwiązuje”. Ryzyko wykrycia ${(UNION_BUST_DETECTION * 100).toFixed(0)}%: strajk generalny w całym sektorze, afera, wpis compliance i spadek zaufania klientów.</p>
+            <article class="grey-card"><h4>🪓 „Rozbicie” związku</h4><p class="text-sm text-muted">Związek zakładowy w wybranej spółce „sam się rozwiązuje”. Ryzyko wykrycia ${formatNumberPl((UNION_BUST_DETECTION * 100), 0)}%: strajk generalny w całym sektorze, afera, wpis compliance i spadek zaufania klientów.</p>
                 <div class="bank-card-form">${unionized.length ? `<select id="mafia-union" aria-label="Spółka">${option(unionized)}</select><button class="btn-danger" onclick="mafiaBustUnion(document.getElementById('mafia-union').value); renderGreyZone(); displayCash();">Zleć</button>` : '<span class="text-xs text-muted">brak związków zakładowych</span>'}</div></article>
             <article class="grey-card"><h4>🎟️ Wejściówka</h4><p class="text-sm text-muted">Do 2% akcji spółki z najwyższych giełd −15%. Sprzedasz je dopiero, gdy stanowisko da dostęp do tej giełdy. Przysługa 15%, akcje podlegają rekwizycji.</p>
                 <div class="bank-card-form">${elite.length ? `<select id="mafia-ticket" aria-label="Spółka">${option(elite)}</select><button class="btn-danger" onclick="mafiaEntryTicket(document.getElementById('mafia-ticket').value); renderGreyZone(); displayCash();">Załatw</button>` : '<span class="text-xs text-muted">brak spółek</span>'}</div></article>
@@ -2670,7 +2670,7 @@ function spawnParabank(forced) {
     const parabank = { id: `pb${scandals.nextId++}`, scenario: scenario.id, bankId: bank.id, symbol, foreignId: scenario.foreignId || undefined, phase: 'open', quarters: 0, raised: 0, peakPrice: stock.price, knfWarned: false, collapseAt: getRandomIntInRange(3, 8) };
     scandals.parabanks.push(parabank);
     logEvent(`🏦 Nowy gracz na rynku: ${scenario.bankName} — ${scenario.desc}. ${scenario.foreignId ? `Akcje ${stock.name} notowane są na giełdzie w Szanghaju.` : `Akcje ${stock.name} debiutują na Rynku Brązowym.`}`, 'market');
-    addMail({ sender: 'PULS', subject: `🎁 ${scenario.bankName}: oferta, jakiej nie było`, body: `${scenario.bankName} kusi: ${scenario.desc}. Lokata dla funduszy nawet ${(getFundDepositRate(bank, 16) * 100).toFixed(1)}% rocznie. Akcje banku dla inwestorów instytucjonalnych z rabatem 10%.`, importance: 2, symbol });
+    addMail({ sender: 'PULS', subject: `🎁 ${scenario.bankName}: oferta, jakiej nie było`, body: `${scenario.bankName} kusi: ${scenario.desc}. Lokata dla funduszy nawet ${formatNumberPl((getFundDepositRate(bank, 16) * 100), 1)}% rocznie. Akcje banku dla inwestorów instytucjonalnych z rabatem 10%.`, importance: 2, symbol });
     return parabank;
 }
 
@@ -2820,7 +2820,7 @@ function settleParabankDeposits(parabank, recoveryBase) {
     if (lost <= 0 || !playerFund) return;
     const share = lost / Math.max(1, getFundAssets() + lost);
     playerFund.trust = Math.max(0, playerFund.trust - Math.min(15, 3 + share * 60));
-    if (share > 0.05) playerProfile?.cv.push({ type: 'compliance', text: `Lokata w parabanku: strata ${formatZl(lost, 0)} (${(share * 100).toFixed(1)}% aktywów).` });
+    if (share > 0.05) playerProfile?.cv.push({ type: 'compliance', text: `Lokata w parabanku: strata ${formatZl(lost, 0)} (${formatNumberPl((share * 100), 1)}% aktywów).` });
     addMail({ sender: CORPORATION_SENDER, subject: '💥 Lokata funduszu w parabanku przepadła', body: `Odzyskano ${formatZl(recovered, 0)}, strata ${formatZl(lost, 0)}. Klienci pytają, kto podjął tę decyzję.${share > 0.05 ? ' Zarząd korporacji wszczyna postępowanie wyjaśniające (wpis compliance).' : ''}`, importance: 3 });
 }
 
@@ -2862,7 +2862,7 @@ function supportPrCampaign(symbol) {
         if (!war.suggested) war.suggested = {};
         if (war.suggested[symbol] === quarter) { showToast('Zarząd już rozważał Twoją sugestię w tym kwartale.', 'default'); return false; }
         war.suggested[symbol] = quarter;
-        if (Math.random() >= stake * 2) { showToast(`Zarząd ${stock.name} nie przyjmuje sugestii (szansa ${(stake * 200).toFixed(0)}%).`, 'warning'); return false; }
+        if (Math.random() >= stake * 2) { showToast(`Zarząd ${stock.name} nie przyjmuje sugestii (szansa ${formatNumberPl((stake * 200), 0)}%).`, 'warning'); return false; }
     }
     adjustCompanyCash(stock, -cost);
     adjustBalanceSheet(stock, { assets: -cost, retainedEarnings: -cost });

@@ -206,7 +206,7 @@ function describeShareCountHistory(stock) {
 function announceShareCountChange(stock, entry) {
     if (!entry) return;
     const split = entry.kind === 'split', ratio = formatSplitRatio(split ? entry.ratio : 1 / entry.ratio);
-    const price = p => `${formatZl(p < 10 ? p.toFixed(2) : Math.round(p), 0)}`;
+    const price = p => formatZl(p, p < 10 ? 2 : 0);
     const text = split
         ? `🔀 ${stock.name} (${stock.symbol}) dzieli akcje ${ratio}: kurs ${price(entry.priceBefore)} → ${price(entry.priceAfter)}, akcji ${entry.ratio} razy więcej. Wartość posiadanych akcji bez zmian.`
         : `🔀 ${stock.name} (${stock.symbol}) skupia akcje ${ratio} (konsolidacja): kurs ${price(entry.priceBefore)} → ${price(entry.priceAfter)}, akcji ${Math.round(entry.ratio)} razy mniej. Ułamki akcji spółka wypłaca gotówką; wartość posiadanych akcji bez zmian.`;
@@ -214,7 +214,7 @@ function announceShareCountChange(stock, entry) {
     if (typeof pushNews === 'function') pushNews(text, stock.symbol);
     if (typeof addChartEvent === 'function') addChartEvent(stock, '🔀', split ? `Split ${ratio}: kurs ÷${entry.ratio}` : `Konsolidacja ${ratio}: kurs ×${Math.round(entry.ratio)}`);
     if (!(entry.playerBefore > 0)) return;
-    const mine = `Masz teraz ${Math.round(entry.playerAfter).toLocaleString('pl-PL')} akcji (było ${Math.round(entry.playerBefore).toLocaleString('pl-PL')})`;
+    const mine = `Masz teraz ${formatInt(Math.round(entry.playerAfter))} akcji (było ${formatInt(Math.round(entry.playerBefore))})`;
     if (typeof addMail === 'function') addMail({ sender: 'PULS', subject: `🔀 ${stock.name}: ${split ? 'split' : 'konsolidacja akcji'} ${ratio}`, body: `${text}\n\n${mine}. Twoje pakiety i zlecenia (alerty cenowe, zastaw) przeliczono automatycznie.`, importance: 2, symbol: stock.symbol });
     if (typeof showToast === 'function') showToast(`${stock.name}: ${split ? 'split' : 'konsolidacja akcji'} ${ratio}. ${mine}; wartość bez zmian.`, 'default');
     if (typeof displayPortfolio === 'function') displayPortfolio();

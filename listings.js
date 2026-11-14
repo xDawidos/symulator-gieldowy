@@ -163,7 +163,7 @@ function processNewHorizonsQuarterly() {
         if ((Number(stock.financialHealth) || 0) >= 1 && Math.random() < NH_BREAKTHROUGH_CHANCE) {
             const gain = getRandomInRange(...NH_BREAKTHROUGH_RANGE);
             applyPriceEffect(stock.symbol, gain, 'positive', 'company');
-            logEvent(`🚀 ${stock.name} (${stock.symbol}) na NewHorizons notuje przełom: kurs +${(gain * 100).toFixed(0)}%.`, 'market');
+            logEvent(`🚀 ${stock.name} (${stock.symbol}) na NewHorizons notuje przełom: kurs +${formatNumberPl((gain * 100), 0)}%.`, 'market');
         }
         const floor = getMarketCapValue(stock) * NH_MM_TURNOVER;
         if (governmentTreasury > 0 && supported < NH_MM_MAX_STOCKS && (Number(stock.lastTurnover) || 0) < floor) { stock.lastTurnover = floor; supported++; }
@@ -385,7 +385,7 @@ function antitrustFine(stock, tier) {
         recordPayment(stock, 'external:skarb-panstwa', fine, 'Kara antymonopolowa');
         applyPriceEffect(stock.symbol, -0.03, 'negative', 'company');
     }
-    noteAntitrust(stock, 'fine', fine, `⚖️ Urząd Antymonopolowy karze ${stock.name} (${stock.symbol}) za dominację na rynku: ${formatZl(fine, 0)} (${(tier.fine * 100).toFixed(1)}% rocznych przychodów).`);
+    noteAntitrust(stock, 'fine', fine, `⚖️ Urząd Antymonopolowy karze ${stock.name} (${stock.symbol}) za dominację na rynku: ${formatZl(fine, 0)} (${formatNumberPl((tier.fine * 100), 1)}% rocznych przychodów).`);
     return fine;
 }
 
@@ -466,7 +466,7 @@ function exposeMediaLie(daughter, parent) {
     applyPriceEffect(parent.symbol, -0.03, 'negative', 'company');
     const rival = lie?.rival && stocks.find(s => s.symbol === lie.rival);
     if (rival) applyPriceEffect(rival.symbol, 0.01, 'positive', 'company'); // sprostowanie
-    const text = `📰 ZDEMASKOWANO: gazeta ${daughter.name} (spółka zależna ${parent.name}) publikowała nieprawdziwe informacje${rival ? ` o ${rival.name}` : ""}. Kara ${formatZl(fine, 0)}, wiarygodność gazety spada do ${(daughter.mediaCred * 100).toFixed(0)}%, kurs ${parent.name} −3%.`;
+    const text = `📰 ZDEMASKOWANO: gazeta ${daughter.name} (spółka zależna ${parent.name}) publikowała nieprawdziwe informacje${rival ? ` o ${rival.name}` : ""}. Kara ${formatZl(fine, 0)}, wiarygodność gazety spada do ${formatNumberPl((daughter.mediaCred * 100), 0)}%, kurs ${parent.name} −3%.`;
     logEvent(text, 'company');
     if (typeof addMail === 'function') addMail({ sender: 'PULS', subject: `📰 Zdemaskowano gazetę ${daughter.name}`, body: text, importance: 2, symbol: parent.symbol });
     return fine;
@@ -490,7 +490,7 @@ function sendMediaMail(daughter, parent) {
         claim = lie ? `${parent.name} (${parent.symbol}) wchodzi w okres dynamicznego wzrostu — zysk kwartalny ${formatZl(Math.abs(earnings) * 1.35 + 1000, 0)}, wyraźnie ponad oczekiwaniami rynku.`
             : `${parent.name} (${parent.symbol}) zamknęła kwartał z wynikiem ${formatZl(earnings, 0)}; kurs ${formatZl(parent.price)}.`;
     }
-    const body = `Źródło: gazeta ${daughter.name}, spółka zależna ${parent.name} — redakcja może być przychylna właścicielowi. Wiarygodność źródła: ${(cred * 100).toFixed(0)}%.\n\n${claim}`;
+    const body = `Źródło: gazeta ${daughter.name}, spółka zależna ${parent.name} — redakcja może być przychylna właścicielowi. Wiarygodność źródła: ${formatNumberPl((cred * 100), 0)}%.\n\n${claim}`;
     if (typeof addMail === 'function') addMail({ sender: daughter.name, subject, body, importance: 1, symbol: (rival || parent).symbol });
     if (lie) {
         daughter.mediaLie = { quarter: typeof macro === 'object' ? macro.quarter : 0, rival: rival?.symbol || null };

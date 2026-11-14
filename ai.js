@@ -1504,7 +1504,7 @@ function runStateActions() {
                 if (sharesToBuy > 0 && sharesToBuy <= availableShares && governmentTreasury >= cost) {
                     governmentTreasury -= cost; // zakup z rynku (pakiet państwa jest poza wolnym obrotem)
                     targetStock.stateOwnershipPct = (Number(targetStock.stateOwnershipPct) || 0) + sharesToBuy / targetStock.totalShares;
-                    logEvent(`🏛️ Skarb Państwa, w ramach dywersyfikacji, nabywa mniejszościowy pakiet ${ (targetStock.stateOwnershipPct * 100).toFixed(1) }% akcji w prywatnej spółce ${targetStock.name}!`, 'review');
+                    logEvent(`🏛️ Skarb Państwa, w ramach dywersyfikacji, nabywa mniejszościowy pakiet ${formatNumberPl((targetStock.stateOwnershipPct * 100), 1)}% akcji w prywatnej spółce ${targetStock.name}!`, 'review');
                 }
             }
         }
@@ -1935,7 +1935,7 @@ function acceptBankBlockOffer(bankId) {
     if (!transferBankBlock(bank, stock, { kind: 'player' }, offer.shares, offer.price)) return false;
     bank.resaleOffer = null;
     bank.resaleStats.resold++;
-    logEvent(`🏦 Fundusz odkupuje od ${bank.name} pakiet ${offer.shares.toLocaleString('pl-PL')} akcji ${stock.name} po ${formatZl(offer.price)} (premia za kontrolę).`, 'review');
+    logEvent(`🏦 Fundusz odkupuje od ${bank.name} pakiet ${formatInt(offer.shares)} akcji ${stock.name} po ${formatZl(offer.price)} (premia za kontrolę).`, 'review');
     if (typeof refreshFundViews === 'function') refreshFundViews();
     return true;
 }
@@ -1971,7 +1971,7 @@ function runInvestmentBankAI(bank) {
             const shares = holding.shares;
             transferBankBlock(bank, stock, { kind: 'company', entity: pair.initiator }, shares, tenderPrice);
             bank.resaleStats.tender++;
-            logEvent(`🏦 ${bank.name} sprzedaje w wezwaniu pakiet ${shares.toLocaleString('pl-PL')} akcji ${stock.name} spółce ${pair.initiator.name}.`, 'market');
+            logEvent(`🏦 ${bank.name} sprzedaje w wezwaniu pakiet ${formatInt(shares)} akcji ${stock.name} spółce ${pair.initiator.name}.`, 'market');
             return;
         }
         const holder = getShareholders(stock).find(h => h.id === block.holderId);
@@ -1982,13 +1982,13 @@ function runInvestmentBankAI(bank) {
                 bank.resaleOffer = { symbol, shares: holding.shares, price, expiresQuarter: quarter + IB_OFFER_QUARTERS };
                 if (typeof addMail === 'function') addMail({
                     sender: bank.name, subject: `🏦 Pakiet ${stock.name} do odkupienia`,
-                    body: `${bank.name} ma ${holding.shares.toLocaleString('pl-PL')} akcji ${stock.name} (${(holding.shares / stock.totalShares * 100).toFixed(1)}%). Z Twoimi ${(holder.pct * 100).toFixed(1)}% to kontrola nad spółką. Cena ${formatZl(price)} za akcję (premia za kontrolę ${((price / stock.price - 1) * 100).toFixed(0)}%). Oferta ważna ${IB_OFFER_QUARTERS} kw.`,
+                    body: `${bank.name} ma ${formatInt(holding.shares)} akcji ${stock.name} (${formatNumberPl((holding.shares / stock.totalShares * 100), 1)}%). Z Twoimi ${formatNumberPl((holder.pct * 100), 1)}% to kontrola nad spółką. Cena ${formatZl(price)} za akcję (premia za kontrolę ${formatNumberPl(((price / stock.price - 1) * 100), 0)}%). Oferta ważna ${IB_OFFER_QUARTERS} kw.`,
                     importance: 2, symbol, action: { type: 'bankBlock', bankId: bank.id, symbol }
                 });
             }
         } else if (Math.random() < IB_RESALE_CHANCE && transferBankBlock(bank, stock, holder, holding.shares, price)) {
             bank.resaleStats.resold++;
-            logEvent(`🏦 ${holder.name} odkupuje od ${bank.name} pakiet akcji ${stock.name} z premią ${((price / stock.price - 1) * 100).toFixed(0)}% i przekracza 50%.`, 'market');
+            logEvent(`🏦 ${holder.name} odkupuje od ${bank.name} pakiet akcji ${stock.name} z premią ${formatNumberPl(((price / stock.price - 1) * 100), 0)}% i przekracza 50%.`, 'market');
             return;
         }
     }
@@ -2015,7 +2015,7 @@ function runInvestmentBankAI(bank) {
         if (bought >= stock.totalShares * IB_MIN_POSITION) {
             bank.resaleBlocks[stock.symbol] = { holderId: holder.id, kind: holder.kind, since: quarter };
             bank.resaleStats.blocks++;
-            logEvent(`🏦 ${bank.name} skupuje ${bought.toLocaleString('pl-PL')} akcji ${stock.name} (${(bought / stock.totalShares * 100).toFixed(1)}%) — pakiet do odsprzedaży dla posiadacza ${(holder.pct * 100).toFixed(0)}%.`, 'market');
+            logEvent(`🏦 ${bank.name} skupuje ${formatInt(bought)} akcji ${stock.name} (${formatNumberPl((bought / stock.totalShares * 100), 1)}%) — pakiet do odsprzedaży dla posiadacza ${formatNumberPl((holder.pct * 100), 0)}%.`, 'market');
             return;
         }
     }
@@ -2540,7 +2540,7 @@ function giveGiftToBot(id, amount) {
     const raw = Math.min(GIFT_MAX_GAIN, amount / 100 * GIFT_RELATION_PER_100) * Math.pow(0.5, count - 1);
     const room = Math.max(0, 60 - getRelation(id)); // samymi prezentami najwyżej do 60
     const gain = changeRelation(id, Math.min(raw, room), 'prezent');
-    showToast(`${person.name}: relacja ${gain >= 0 ? '+' : ''}${gain.toFixed(1)}.`, 'success');
+    showToast(`${person.name}: relacja ${gain >= 0 ? '+' : ''}${formatNumberPl(gain, 1)}.`, 'success');
     return true;
 }
 
@@ -2635,7 +2635,7 @@ function getHostileLine(person) {
     const fundReturn = playerFund ? getPeriodReturn(playerFund.current.startNav, getFundNav()) : 0;
     const benchmark = playerFund ? getPeriodReturn(playerFund.current.startBenchmark, getBenchmarkValue()) : 0;
     const lines = [
-        `Wynik ${(fundReturn * 100).toFixed(1)}% przy GIG ${(benchmark * 100).toFixed(1)}%? Gratuluję — moja babcia z lokatą ma lepiej.`,
+        `Wynik ${formatNumberPl((fundReturn * 100), 1)}% przy GIG ${formatNumberPl((benchmark * 100), 1)}%? Gratuluję — moja babcia z lokatą ma lepiej.`,
         'Widziałem Twoje ostatnie transakcje. Kupujesz drogo, sprzedajesz tanio — to jakaś nowa strategia?',
         'Twoi klienci już pytają mnie o przeniesienie środków. Mam dla nich miejsce.',
         'Zarządzanie funduszem to nie loteria. Choć patrząc na Twój portfel, chyba myślisz inaczej.',
@@ -2677,7 +2677,7 @@ function offerBotBlock(ai) {
     botRelations.blockOffer = { aiId: ai.id, symbol: pick.stock.symbol, shares, price };
     addMail({
         sender: `bot:${ai.id}`, subject: `🤝 ${ai.name}: pakiet ${pick.stock.symbol} dla Ciebie`,
-        body: `Mogę odstąpić Twojemu funduszowi ${shares.toLocaleString('pl-PL')} akcji ${pick.stock.name} po ${formatZl(price, 2)} (${(BOT_BLOCK_DISCOUNT * 100).toFixed(0)}% poniżej rynku). Oferta ważna do końca kwartału.`,
+        body: `Mogę odstąpić Twojemu funduszowi ${formatInt(shares)} akcji ${pick.stock.name} po ${formatZl(price, 2)} (${formatNumberPl((BOT_BLOCK_DISCOUNT * 100), 0)}% poniżej rynku). Oferta ważna do końca kwartału.`,
         importance: 2, symbol: pick.stock.symbol, action: { type: 'botBlock', symbol: pick.stock.symbol }
     });
     return botRelations.blockOffer;
@@ -2700,7 +2700,7 @@ function acceptBotBlock() {
     target.shares += offer.shares; // sharesHeld bez zmian — akcje zmieniają właściciela
     recordPayment('player-fund', `external:${ai.id}`, cost, `Pakiet ${offer.symbol} od ${ai.name}`);
     changeRelation(ai.id, 3, `zakup pakietu ${offer.symbol}`);
-    logEvent(`🤝 Fundusz odkupuje od ${ai.name} ${offer.shares.toLocaleString('pl-PL')} akcji ${stock.name} z rabatem.`, 'review');
+    logEvent(`🤝 Fundusz odkupuje od ${ai.name} ${formatInt(offer.shares)} akcji ${stock.name} z rabatem.`, 'review');
     botRelations.blockOffer = null;
     if (typeof refreshFundViews === 'function') refreshFundViews();
     return true;
@@ -2729,7 +2729,7 @@ function getPlayerTargets() {
     return [
         { label: 'Pobij GIG w tym okresie', value: `${formatNumberPl(((fundReturn - benchmark) * 100), 1)} pkt proc.`, progress: Math.max(0, Math.min(1, 0.5 + (fundReturn - benchmark) * 10)), done: fundReturn > benchmark },
         { label: 'Wynik powyżej lokaty i inflacji', value: `${formatNumberPl((fundReturn * 100), 1)}% vs ${formatNumberPl((hurdle * 100), 1)}%`, progress: hurdle > 0 ? Math.max(0, Math.min(1, fundReturn / hurdle)) : 1, done: fundReturn >= hurdle },
-        { label: 'Zaufanie klientów ≥ 60', value: `${playerFund.trust.toFixed(0)}/100`, progress: Math.min(1, playerFund.trust / 60), done: playerFund.trust >= 60 },
+        { label: 'Zaufanie klientów ≥ 60', value: `${formatNumberPl(playerFund.trust, 0)}/100`, progress: Math.min(1, playerFund.trust / 60), done: playerFund.trust >= 60 },
         { label: `Ocena zarządu ≥ ${PROMOTION_SCORE} (awans)`, value: corporation.lastPlayerScore !== null ? `${Math.round(corporation.lastPlayerScore)}/100` : 'brak oceny', progress: Math.min(1, (corporation.lastPlayerScore || 0) / PROMOTION_SCORE), done: (corporation.lastPlayerScore || 0) >= PROMOTION_SCORE },
         { label: 'Przejęcia firm zarządzających', value: `${takeovers.done}/${takeovers.required}`, progress: takeovers.done / Math.max(1, takeovers.required), done: takeovers.done >= takeovers.required }
     ];
@@ -2757,11 +2757,11 @@ function renderCorporationFirm() {
         const value = getRelation(person.id);
         const mood = getRelationMood(value);
         return `<tr><td>${escapeHtml(person.name)}<span class="text-xs text-muted d-block">${person.kind === 'colleague' ? `kolega · ${escapeHtml(CAREER_POSITIONS[getPositionIndex(person.entity.positionId)].name)}` : person.entity?.isGuard ? 'fundusz patriotyczny · głosuje na walnych, współinwestuje w obronność' : 'inwestor giełdowy'}</span></td>
-            <td>${renderRelationBar(value)}</td><td class="${mood.cls}">${mood.icon} ${value.toFixed(0)} · ${mood.label}</td>
+            <td>${renderRelationBar(value)}</td><td class="${mood.cls}">${mood.icon} ${formatNumberPl(value, 0)} · ${mood.label}</td>
             <td><div class="d-flex gap-1"><input type="text" inputmode="numeric" class="w-xs" id="gift-${person.id}" value="200" aria-label="Kwota prezentu">
                 <button class="btn-xs" onclick="corporationAction(giveGiftToBot, '${person.id}', parseFloat(document.getElementById('gift-${person.id}').value))">Prezent</button></div></td></tr>`;
     }).join('');
-    const log = botRelations.log.slice(0, 8).map(entry => `<li><span class="${entry.delta >= 0 ? 'text-up' : 'text-down'}">${entry.delta >= 0 ? '+' : ''}${entry.delta.toFixed(1)}</span> ${escapeHtml(entry.name)} — ${escapeHtml(entry.reason)}</li>`).join('');
+    const log = botRelations.log.slice(0, 8).map(entry => `<li><span class="${entry.delta >= 0 ? 'text-up' : 'text-down'}">${entry.delta >= 0 ? '+' : ''}${formatNumberPl(entry.delta, 1)}</span> ${escapeHtml(entry.name)} — ${escapeHtml(entry.reason)}</li>`).join('');
 
     return `
         <div class="firm-grid">
@@ -2769,7 +2769,7 @@ function renderCorporationFirm() {
             <section>
                 <h4>Szef</h4>
                 <div class="firm-boss"><strong>${escapeHtml(boss.name)}</strong>${boss.positionId ? `<span class="text-xs text-muted">${escapeHtml(CAREER_POSITIONS[getPositionIndex(boss.positionId)].name)}</span>` : ''}
-                    <span class="${bossMood.cls}">${bossMood.icon} ${boss.opinion >= RELATION_FRIENDLY ? 'lubi Cię' : boss.opinion <= RELATION_HOSTILE ? 'nie lubi Cię' : boss.opinion > 10 ? 'ma o Tobie dobre zdanie' : boss.opinion < -10 ? 'ma zastrzeżenia' : 'jest neutralny'} (${boss.opinion.toFixed(0)})</span></div>
+                    <span class="${bossMood.cls}">${bossMood.icon} ${boss.opinion >= RELATION_FRIENDLY ? 'lubi Cię' : boss.opinion <= RELATION_HOSTILE ? 'nie lubi Cię' : boss.opinion > 10 ? 'ma o Tobie dobre zdanie' : boss.opinion < -10 ? 'ma zastrzeżenia' : 'jest neutralny'} (${formatNumberPl(boss.opinion, 0)})</span></div>
                 <h4>Zadania i oceny zarządu</h4>
                 <p class="fund-muted">Targety okresu, cele zarządu i wyniki ocen są teraz w aplikacji TeamedUP!.</p>
                 <button class="btn-primary btn-sm" onclick="closeVisibleModals(); openTeamedUp('tasks')">Otwórz TeamedUP!</button>

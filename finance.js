@@ -316,7 +316,7 @@ function openFundDeposit(bankId, amount, weeks) {
     bank.cash += amount;
     getFundDeposits().push(deposit);
     recordPayment('player-fund', bank, amount, `Lokata ${weeks} tyg.`);
-    logEvent(`🏦 Fundusz zakłada lokatę w ${bank.name}: ${formatZl(amount, 2)} na ${weeks} tyg. (${(deposit.rate * 100).toFixed(2)}% rocznie).`, 'review');
+    logEvent(`🏦 Fundusz zakłada lokatę w ${bank.name}: ${formatZl(amount, 2)} na ${weeks} tyg. (${formatNumberPl((deposit.rate * 100), 2)}% rocznie).`, 'review');
     if (typeof refreshFundViews === 'function') refreshFundViews();
     return deposit;
 }
@@ -343,7 +343,7 @@ function breakFundDeposit(depositId) {
     const deposit = getFundDeposits().find(item => item.id === depositId);
     if (!deposit) return false;
     const payout = settleFundDeposit(deposit, true);
-    logEvent(`🏦 Fundusz zrywa lokatę w ${deposit.bankName}: wypłata ${formatZl(payout, 2)} (utrata odsetek i kara ${(FUND_DEPOSIT_BREAK_PENALTY * 100).toFixed(0)}%).`, 'review');
+    logEvent(`🏦 Fundusz zrywa lokatę w ${deposit.bankName}: wypłata ${formatZl(payout, 2)} (utrata odsetek i kara ${formatNumberPl((FUND_DEPOSIT_BREAK_PENALTY * 100), 0)}%).`, 'review');
     if (typeof refreshFundViews === 'function') refreshFundViews();
     return true;
 }
@@ -438,7 +438,7 @@ function pawnShares(account, symbol, quantity) {
     if (!(quantity > 0) || quantity > free) return fail(`Możesz zastawić najwyżej ${free} wolnych akcji.`);
 
     const principal = Math.min(quantity * stock.price * PAWN_LOAN_TO_VALUE, getPawnCapacity(account), pawnShop.cash * 0.5);
-    if (!(principal >= 1)) return fail(`Limit zastawów: ${(PAWN_MAX_SHARE_OF_ASSETS * 100).toFixed(0)}% aktywów funduszu.`);
+    if (!(principal >= 1)) return fail(`Limit zastawów: ${formatNumberPl((PAWN_MAX_SHARE_OF_ASSETS * 100), 0)}% aktywów funduszu.`);
 
     const loan = {
         id: nextSimulationId('pawn'),
@@ -812,7 +812,7 @@ function issueNewBondOffer() {
         remainingOfferMs: BOND_OFFER_LIFETIME_MS
     };
     activeBonds.push(offer);
-    logEvent(`📰 Nowa emisja obligacji (${type}) od ${issuer.name}: ${(annual * 100).toFixed(1)}% rocznie, ${duration} min.`, 'market');
+    logEvent(`📰 Nowa emisja obligacji (${type}) od ${issuer.name}: ${formatNumberPl((annual * 100), 1)}% rocznie, ${duration} min.`, 'market');
 }
 
 function payForBonds(buyer, totalCost) {
@@ -845,7 +845,7 @@ function buyStateBond(buyer, type, quantity) {
     for (let i = 0; i < quantity; i++) allBonds.push(createBondRecord(ownerId, template, duration, annual));
 
     if (ownerId === 'player') {
-        logEvent(`Fundusz kupuje ${quantity} szt. obligacji skarbowych (${(annual * 100).toFixed(1)}% rocznie).`, 'review');
+        logEvent(`Fundusz kupuje ${quantity} szt. obligacji skarbowych (${formatNumberPl((annual * 100), 1)}% rocznie).`, 'review');
         if (typeof displayCash === 'function') displayCash();
         if (typeof openBankModal === 'function' && document.getElementById('bank-modal')?.style.display === 'block') openBankModal();
     }
@@ -876,7 +876,7 @@ function buyOtherBond(buyer, bondId, quantity) {
     for (let i = 0; i < quantity; i++) allBonds.push(createBondRecord(ownerId, offer, offer.durationMinutes, offer.interestRate));
 
     if (ownerId === 'player') {
-        logEvent(`Fundusz kupuje ${quantity} szt. obligacji ${offer.issuerName} (${(offer.interestRate * 100).toFixed(1)}% rocznie).`, 'review');
+        logEvent(`Fundusz kupuje ${quantity} szt. obligacji ${offer.issuerName} (${formatNumberPl((offer.interestRate * 100), 1)}% rocznie).`, 'review');
         if (typeof displayCash === 'function') displayCash();
         if (typeof renderBondMarketInBank === 'function') renderBondMarketInBank();
     }
@@ -1157,7 +1157,7 @@ function runDiamondStrategy() {
     diamond.equityStakes[target.symbol] = (diamond.equityStakes[target.symbol] || 0) + quantity;
 
     const stake = diamond.equityStakes[target.symbol] / target.totalShares;
-    logEvent(`💎 ${diamond.name} skupuje ${quantity} akcji ${target.name} (udział ${(stake * 100).toFixed(1)}%).`, 'market');
+    logEvent(`💎 ${diamond.name} skupuje ${quantity} akcji ${target.name} (udział ${formatNumberPl((stake * 100), 1)}%).`, 'market');
     if (stake > 0.5 && !target.isSubsidiaryOf) {
         target.parentStakePct = stake;
         if (typeof makeSubsidiary === 'function') makeSubsidiary(diamond, target);
@@ -1247,7 +1247,7 @@ function generateBridgeLoanOffers() {
         weeksLeft: 3
     };
     bridgeLoanOffers.push(offer);
-    logEvent(`🏗️ ${company.name} szuka finansowania pomostowego na „${offer.project}”: ${formatZl(offer.amount, 0)}, ${(offer.rate * 100).toFixed(1)}% rocznie.`, 'construction');
+    logEvent(`🏗️ ${company.name} szuka finansowania pomostowego na „${offer.project}”: ${formatZl(offer.amount, 0)}, ${formatNumberPl((offer.rate * 100), 1)}% rocznie.`, 'construction');
     return offer;
 }
 
@@ -1256,7 +1256,7 @@ function fundBridgeLoan(offerId) {
     const company = offer && stocks.find(s => s.symbol === offer.symbol);
     if (!offer || !company || company.isBankrupt) { showToast('Oferta nieaktualna.', 'error'); return null; }
     if (offer.amount > playerCash) { showToast('Za mało gotówki funduszu.', 'error'); return null; }
-    if (offer.amount > getFundBridgeCapacity() + 1e-6) { showToast(`Limit finansowania pomostowego: ${(BRIDGE_FUND_LIMIT * 100).toFixed(0)}% aktywów.`, 'error'); return null; }
+    if (offer.amount > getFundBridgeCapacity() + 1e-6) { showToast(`Limit finansowania pomostowego: ${formatNumberPl((BRIDGE_FUND_LIMIT * 100), 0)}% aktywów.`, 'error'); return null; }
 
     playerCash -= offer.amount;
     adjustCompanyCash(company, offer.amount);
@@ -1265,7 +1265,7 @@ function fundBridgeLoan(offerId) {
     const loan = { id: offer.id, symbol: company.symbol, name: company.name, project: offer.project, principal: offer.amount, rate: offer.rate, accrued: 0, weeksLeft: offer.weeks, termWeeks: offer.weeks, extended: false };
     getFundBridgeLoans().push(loan);
     bridgeLoanOffers = bridgeLoanOffers.filter(item => item !== offer);
-    logEvent(`🏗️ Fundusz udziela ${company.name} pożyczki pomostowej ${formatZl(offer.amount, 0)} (${(offer.rate * 100).toFixed(1)}%, ${offer.weeks} tyg.).`, 'review');
+    logEvent(`🏗️ Fundusz udziela ${company.name} pożyczki pomostowej ${formatZl(offer.amount, 0)} (${formatNumberPl((offer.rate * 100), 1)}%, ${offer.weeks} tyg.).`, 'review');
     if (typeof refreshFundViews === 'function') refreshFundViews();
     return loan;
 }
@@ -1283,7 +1283,7 @@ function processBridgeLoansWeekly() {
         const company = stocks.find(s => s.symbol === loan.symbol);
         if (!company || company.isBankrupt) {
             const recovery = loan.principal * BRIDGE_RECOVERY;
-            closeBridgeLoan(loan, recovery, `💥 ${loan.name} upada — fundusz odzyskuje ${recovery.toFixed(0)} z ${formatZl(loan.principal, 0)} pożyczki pomostowej.`);
+            closeBridgeLoan(loan, recovery, `💥 ${loan.name} upada — fundusz odzyskuje ${formatNumberPl(recovery, 0)} z ${formatZl(loan.principal, 0)} pożyczki pomostowej.`);
             continue;
         }
         loan.accrued += loan.principal * loan.rate / FUND_WEEKS_PER_YEAR;
@@ -1303,7 +1303,7 @@ function processBridgeLoansWeekly() {
             const paid = Math.max(0, company.cash * 0.5);
             adjustCompanyCash(company, -paid);
             adjustBalanceSheet(company, { assets: -paid, liabilities: -Math.min(paid, loan.principal) });
-            closeBridgeLoan(loan, paid, `💥 ${company.name} spłaca tylko ${paid.toFixed(0)} z ${formatZl(due, 0)} pożyczki pomostowej.`);
+            closeBridgeLoan(loan, paid, `💥 ${company.name} spłaca tylko ${formatNumberPl(paid, 0)} z ${formatZl(due, 0)} pożyczki pomostowej.`);
         }
     }
 }
@@ -1375,7 +1375,7 @@ function describeEtfRules(etf) {
     if (r.aristocratsOnly) parts.push('tylko arystokraci');
     if (r.stateOnly) parts.push('tylko spółki państwowe');
     if (r.minExchangeLevel) parts.push(`giełda: ${Object.values(exchanges).find(e => e.level === r.minExchangeLevel)?.name || r.minExchangeLevel}+`);
-    parts.push(`maks. ${(r.maxWeight * 100).toFixed(0)}% na spółkę`);
+    parts.push(`maks. ${formatNumberPl((r.maxWeight * 100), 0)}% na spółkę`);
     parts.push(ETF_WEIGHTINGS[etf.weighting]);
     return parts.join(' · ');
 }
@@ -1572,7 +1572,7 @@ function reviewEtfYear(etf) {
         etf.weighting = getRandomElement(Object.keys(ETF_WEIGHTINGS).filter(w => w !== previous));
         if (Math.random() < 0.3) etf.rules.maxWeight = Math.max(0.08, Math.min(0.35, etf.rules.maxWeight + getRandomInRange(-0.05, 0.05)));
         etf.description = `Emitent: ${etf.issuerName}. Zasady: ${describeEtfRules(etf)}.`;
-        logEvent(`📊 ${etf.name} nie osiągnął celu (${(result * 100).toFixed(1)}% vs ${(etf.yearTarget * 100).toFixed(1)}%) — zmienia strategię na „${ETF_WEIGHTINGS[etf.weighting]}”.`, 'market');
+        logEvent(`📊 ${etf.name} nie osiągnął celu (${formatNumberPl((result * 100), 1)}% vs ${formatNumberPl((etf.yearTarget * 100), 1)}%) — zmienia strategię na „${ETF_WEIGHTINGS[etf.weighting]}”.`, 'market');
     }
     etf.yearTarget = getRandomInRange(0.05, 0.12);
     etf.yearStartPrice = etf.price;
@@ -2237,7 +2237,7 @@ function moveListing(symbol, marketId) {
     stock.listingMovedQuarter = quarter;
     const effect = getListingMovePriceEffect(marketId);
     applyPriceEffect(symbol, effect, effect >= 0 ? 'positive' : 'negative', 'company');
-    logEvent(`🔀 ${stock.name} przenosi notowania z ${getMarketLabel(from)} na ${getMarketLabel(marketId)} (prowizja ${((getMarketDef(marketId)?.commission || 0) * 100).toFixed(2)}%, opłata za notowanie ×${LISTING_FEE_FACTOR[marketId] ?? 1}).`, 'market');
+    logEvent(`🔀 ${stock.name} przenosi notowania z ${getMarketLabel(from)} na ${getMarketLabel(marketId)} (prowizja ${formatNumberPl(((getMarketDef(marketId)?.commission || 0) * 100), 2)}%, opłata za notowanie ×${LISTING_FEE_FACTOR[marketId] ?? 1}).`, 'market');
     return true;
 }
 
@@ -2266,7 +2266,7 @@ function renderMarketsPanel() {
         return `<article class="bank-card market-card" style="border-top: 3px solid ${def.color}">
             <header class="bank-card-head"><span class="bank-card-icon">🏛️</span><div><h4>${escapeHtml(def.name)} (${escapeHtml(def.short || operator.id)})</h4><span class="bank-card-type">${statusLabel[operator.status] || operator.status}</span></div></header>
             <dl class="bank-card-rates">
-                <div><dt>Prowizja</dt><dd>${(def.commission * 100).toFixed(2)}%</dd></div>
+                <div><dt>Prowizja</dt><dd>${formatNumberPl((def.commission * 100), 2)}%</dd></div>
                 <div><dt>Spółki</dt><dd>${operator.members}</dd></div>
                 ${typeof getMarketMinFee === 'function' ? `<div><dt>Opłata minimalna</dt><dd>${getMarketMinFee(operator.id) > 0 ? `${formatZl(getMarketMinFee(operator.id), 0)} / kw.` : operator.id === 'PRV' ? 'brak (nie ma operatora; ryzyko oszustw ×5 już ją obciąża)' : 'brak'}</dd></div>` : ''}
                 ${typeof describeMarketProfile === 'function' && isInternetMarket(operator.id) ? `<div><dt>Profil giełdy</dt><dd>${escapeHtml(describeMarketProfile(operator.id))}</dd></div>` : ''}

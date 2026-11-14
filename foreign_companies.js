@@ -514,7 +514,7 @@ function applyForeignAgmResolution(i, item) {
             const cost = n * i.price;
             adjustCompanyCash(i, -cost); adjustBalanceSheet(i, { assets: -cost, retainedEarnings: -cost });
             i.shares -= n; i.totalShares = i.shares; i.float -= n; i.price *= 1.02; syncPrice();
-            return `skupiono ${n.toLocaleString('pl-PL')} akcji`;
+            return `skupiono ${formatInt(n)} akcji`;
         }
         case 'issue': {
             if (typeof noteCapitalCycleResolution === 'function') noteCapitalCycleResolution(i, item);
@@ -524,7 +524,7 @@ function applyForeignAgmResolution(i, item) {
             adjustCompanyCash(i, amount); adjustBalanceSheet(i, { assets: amount });
             i.balanceSheet.shareCapital = (Number(i.balanceSheet.shareCapital) || 0) + amount;
             i.price *= 0.97; syncPrice();
-            return `wyemitowano ${n.toLocaleString('pl-PL')} akcji`;
+            return `wyemitowano ${formatInt(n)} akcji`;
         }
         case 'replaceCeo':
             i.ceo = newForeignCeo(i); noteForeignStat('ceoChanges');
@@ -572,7 +572,7 @@ function runForeignTenderOrder(issuer) {
     playerCash -= costPlnPaid;
     if (costPlnPaid > 0) recordPayment('player-fund', 'external:akcjonariusze', costPlnPaid, `Wezwanie (nakaz ${o.name}) ${sym}`);
     issuer.holders.player = getIssuerHeld(issuer) + bought;
-    const body = `Na nakaz ${o.name} fundusz ogłosił wezwanie na pozostałe akcje ${issuer.name} po ${formatNumberPl(price, 2)} ${cur} (kurs +${Math.round(FOREIGN_AGM.tenderPremium * 100)}%). Sprzedano ${bought.toLocaleString('pl-PL')} akcji za ${formatZl(toPln(cost, cur), 0)}; fundusz ma teraz ${(getIssuerStake(issuer, 'player') * 100).toFixed(1)}% głosów.`;
+    const body = `Na nakaz ${o.name} fundusz ogłosił wezwanie na pozostałe akcje ${issuer.name} po ${formatNumberPl(price, 2)} ${cur} (kurs +${Math.round(FOREIGN_AGM.tenderPremium * 100)}%). Sprzedano ${formatInt(bought)} akcji za ${formatZl(toPln(cost, cur), 0)}; fundusz ma teraz ${formatNumberPl((getIssuerStake(issuer, 'player') * 100), 1)}% głosów.`;
     if (typeof addMail === 'function') addMail({ sender: o.name, subject: `📣 ${o.name}: nakaz wezwania ${issuer.name}`, body, importance: 3 });
     logEvent(`📣 ${o.name}: ${body}`, 'review');
     return 'tender';

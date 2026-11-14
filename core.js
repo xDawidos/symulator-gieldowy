@@ -2557,7 +2557,7 @@ function advanceMarketRegimeQuarterly(market = 'home') {
         }
         const isRetro = !regime.shownPhase;
         const gigChange = (gigVal - (regime.startGig || gigVal)) / (regime.startGig || 1);
-        const gigPctStr = (gigChange >= 0 ? '+' : '') + (gigChange * 100).toFixed(0) + '%';
+        const gigPctStr = formatPct(gigChange, 0);
 
         let desc = '';
         if (isRetro) {
@@ -2622,13 +2622,13 @@ function sendMarketPhaseRetrospective(endedPhase, regime) {
     const gigVal = getGigIndexValue();
     const startGig = regime.startGig || gigVal;
     const gigChange = (gigVal - startGig) / (startGig || 1);
-    const gigPct = (gigChange >= 0 ? '+' : '') + (gigChange * 100).toFixed(1) + '%';
+    const gigPct = formatPct(gigChange, 1);
 
     const periods = (typeof playerFund !== 'undefined' && playerFund?.periods) ? playerFund.periods : [];
     const fundChangeVal = periods.length ? (periods[periods.length - 1].fundReturn || 0) : 0;
-    const fundPct = (fundChangeVal >= 0 ? '+' : '') + (fundChangeVal * 100).toFixed(1) + '%';
-    const fundDd = (((typeof playerFund !== 'undefined' && playerFund?.current?.maxDrawdown) || 0) * 100).toFixed(1) + '%';
-    const gigDd = Math.abs((((regime.gigTrough || gigVal) - (regime.gigPeak || gigVal)) / (regime.gigPeak || 1)) * 100).toFixed(1) + '%';
+    const fundPct = formatPct(fundChangeVal, 1);
+    const fundDd = formatNumberPl(((typeof playerFund !== 'undefined' && playerFund?.current?.maxDrawdown) || 0) * 100, 1) + '%';
+    const gigDd = formatNumberPl(Math.abs((((regime.gigTrough || gigVal) - (regime.gigPeak || gigVal)) / (regime.gigPeak || 1)) * 100), 1) + '%';
 
     let bestSector = 'Technologia';
     let worstSector = 'Finanse';
@@ -2945,7 +2945,7 @@ function tryStartSectorBubble(phaseKey) {
         if (typeof isMarketStabilityProjectUnlocked === 'function') {
             if (isMarketStabilityProjectUnlocked(2)) {
                 if (typeof logEvent === 'function') {
-                    logEvent(`🔥 [SMSR Poziom 2 - Radar Live]: Wykryto narodziny bańki spekulacyjnej w sektorze ${picked.name} (typ: ${getBubbleTypeName(bType)}, premia startowa: +${(startPrem * 100).toFixed(0)}%).`, 'market');
+                    logEvent(`🔥 [SMSR Poziom 2 - Radar Live]: Wykryto narodziny bańki spekulacyjnej w sektorze ${picked.name} (typ: ${getBubbleTypeName(bType)}, premia startowa: +${formatNumberPl((startPrem * 100), 0)}%).`, 'market');
                 }
             } else if (isMarketStabilityProjectUnlocked(1)) {
                 const smsr = typeof getMarketStabilityProject === 'function' ? getMarketStabilityProject() : null;
@@ -3031,7 +3031,7 @@ function advanceInflatingBubble(bubble) {
         }
         if (typeof isMarketStabilityProjectUnlocked === 'function' && isMarketStabilityProjectUnlocked(2)) {
             if (typeof logEvent === 'function') {
-                logEvent(`🚨 [SMSR Poziom 2 - Radar]: ALARM! Bańka w sektorze ${bubble.name} pękła! Fala wyprzedaży zmierza do dołka ${(bubble.popTarget * 100).toFixed(0)}%.`, 'market');
+                logEvent(`🚨 [SMSR Poziom 2 - Radar]: ALARM! Bańka w sektorze ${bubble.name} pękła! Fala wyprzedaży zmierza do dołka ${formatNumberPl((bubble.popTarget * 100), 0)}%.`, 'market');
             }
         }
     } else {
@@ -3070,7 +3070,7 @@ function advanceInflatingBubble(bubble) {
             if (prevPremium < 0.22 && bubble.premium >= 0.22) {
                 if (typeof logEvent === 'function') {
                     const rInfo = typeof getBubbleRiskInfo === 'function' ? getBubbleRiskInfo(bubble) : { label: 'Średnie' };
-                    logEvent(`🔥 [SMSR Poziom 2 - Radar]: Sektor ${bubble.name} przekroczył próg krytyczny (+${(bubble.premium * 100).toFixed(0)}%). Ryzyko pęknięcia: ${rInfo.label}.`, 'market');
+                    logEvent(`🔥 [SMSR Poziom 2 - Radar]: Sektor ${bubble.name} przekroczył próg krytyczny (+${formatNumberPl((bubble.premium * 100), 0)}%). Ryzyko pęknięcia: ${rInfo.label}.`, 'market');
                 }
             }
         }
@@ -3252,7 +3252,7 @@ function triggerMarketHalt(level, durationSec, currentDropPct = 0) {
     marketHalt.triggeredThisWeek[level] = true;
     marketHalt.lastDropPct = currentDropPct;
 
-    const pctStr = (Math.abs(currentDropPct) * 100).toFixed(1) + '%';
+    const pctStr = formatNumberPl(Math.abs(currentDropPct) * 100, 1) + '%';
     const haltMsg = level === 3 
         ? `🚨 BEZPIECZNIK GIEŁDOWY 3. STOPNIA! Spadek indeksu GIG o -${pctStr}! Handel na parkiecie ZAWIESZONY do końca tygodnia gry!`
         : `⚠️ BEZPIECZNIK GIEŁDOWY ${level}. STOPNIA! Spadek indeksu GIG o -${pctStr}! Handel na parkiecie wstrzymany na ${durationSec} s.`;
@@ -3445,7 +3445,7 @@ function reactCentralBankToCrash(forceCut = false) {
         centralBank.baseInterestRate = newRate;
         centralBank.lastRateChange = -0.005;
         if (typeof logEvent === 'function') {
-            logEvent(`🏛️ Bank Centralny zwołuje nadzwyczajne posiedzenie po krachu! Obniżka stopy bazowej o 50 pb do ${(newRate * 100).toFixed(1)}%!`, 'macro');
+            logEvent(`🏛️ Bank Centralny zwołuje nadzwyczajne posiedzenie po krachu! Obniżka stopy bazowej o 50 pb do ${formatNumberPl((newRate * 100), 1)}%!`, 'macro');
         }
         if (typeof pushNews === 'function') {
             pushNews('🏛️ Bank Centralny obniża stopy procentowe o 50 pb w odpowiedzi na krach!');
@@ -3454,7 +3454,7 @@ function reactCentralBankToCrash(forceCut = false) {
             addMail({
                 sender: 'NBP',
                 subject: 'Nadzwyczajna decyzja Rady Polityki Pieniężnej: cięcie stóp o 50 pb',
-                body: `W odpowiedzi na załamanie rynkowe i spadek płynności na giełdzie, Bank Centralny zdecydował o natychmiastowym obniżeniu stopy referencyjnej o 50 punktów bazowych do poziomu ${(newRate * 100).toFixed(1)}%.`,
+                body: `W odpowiedzi na załamanie rynkowe i spadek płynności na giełdzie, Bank Centralny zdecydował o natychmiastowym obniżeniu stopy referencyjnej o 50 punktów bazowych do poziomu ${formatNumberPl((newRate * 100), 1)}%.`,
                 importance: 2
             });
         }
@@ -3489,7 +3489,7 @@ function executeMarginCalls() {
                     if ((ai.portfolio[symbol]?.shares || 0) < before) soldAny = true;
                 }
                 if (soldAny && typeof logEvent === 'function') {
-                    logEvent(`⚠️ MARGIN CALL: ${ai.name} (dźwignia ${(leverage * 100).toFixed(0)}%) przymusowo wyprzedaje akcje pod wezwanie banku!`, 'market');
+                    logEvent(`⚠️ MARGIN CALL: ${ai.name} (dźwignia ${formatNumberPl((leverage * 100), 0)}%) przymusowo wyprzedaje akcje pod wezwanie banku!`, 'market');
                 }
             }
         }
@@ -3536,7 +3536,7 @@ function checkPlayerMarginCall() {
     const assetsAfter = getFundPortfolioValue() + Math.max(0, playerCash);
     const leverageAfter = debtAfter > 0 ? debtAfter / (assetsAfter + debtAfter) : 0;
     const soldText = sold.length ? ` Sprzedane pozycje: ${sold.map(s => `${s.symbol} ${s.quantity} szt.`).join(', ')}.` : '';
-    const text = `Margin call: fundusz spłacił ${formatZl(repaid, 0)} pożyczek lombardowych (dźwignia ${(leverage * 100).toFixed(0)}% → ${(leverageAfter * 100).toFixed(0)}%).${soldText}`;
+    const text = `Margin call: fundusz spłacił ${formatZl(repaid, 0)} pożyczek lombardowych (dźwignia ${formatNumberPl((leverage * 100), 0)}% → ${formatNumberPl((leverageAfter * 100), 0)}%).${soldText}`;
     if (typeof logEvent === 'function') logEvent(`🚨 ${text}`, 'market');
     if (typeof showToast === 'function') showToast(`🚨 ${text}`, 'error');
     if (typeof addMail === 'function') {
@@ -3793,7 +3793,7 @@ function updateInterestRates() {
     const centralTab = document.getElementById('bank-content-central');
     if (bankModal?.style.display === 'block' && centralTab?.style.display === 'block') {
          const baseRateEl = document.getElementById('bc-base-rate-display');
-         if(baseRateEl) baseRateEl.textContent = (centralBank.baseInterestRate * 100).toFixed(1); // Aktualizuj stopę bazową
+         if(baseRateEl) baseRateEl.textContent = formatNumberPl(centralBank.baseInterestRate * 100, 1); // Aktualizuj stopę bazową
     }
 }
 
@@ -4352,7 +4352,7 @@ function processWealthTax() {
 
                 if (entity.id === 'player') {
                     playerCash -= taxToPay;
-                    logEvent(`💸 Zapłacono roczny podatek od bogactwa: ${formatZl(taxToPay, 2)} (${(taxRate * 100).toFixed(0)}% od ${formatZl(netWorth, 2)}).`, 'review');
+                    logEvent(`💸 Zapłacono roczny podatek od bogactwa: ${formatZl(taxToPay, 2)} (${formatNumberPl((taxRate * 100), 0)}% od ${formatZl(netWorth, 2)}).`, 'review');
                     displayCash();
                 } else {
                     entity.cash -= taxToPay;
@@ -4432,7 +4432,7 @@ function issueStateBonds() {
         const change = Math.random() < 0.5 ? 0.005 : -0.005;
         stateBondOffer.mediumTerm.interestBase += change;
         stateBondOffer.longTerm.interestBase += change;
-        logEvent(`🏛️ Bank Centralny koryguje oprocentowanie obligacji o ${change > 0 ? '+' : ''}${(change * 100).toFixed(1)}%!`, 'market');
+        logEvent(`🏛️ Bank Centralny koryguje oprocentowanie obligacji o ${change > 0 ? '+' : ''}${formatNumberPl((change * 100), 1)}%!`, 'market');
     }
 
     logEvent("🏛️ Bank Centralny wyemitował nową serię obligacji skarbowych.", 'market');
@@ -4987,8 +4987,8 @@ function getPlannedRateChange(target) {
 }
 
 function describeRateChange(change) {
-    if (change > 0) return `podwyżka o ${(change * 100).toFixed(2)} pkt proc.`;
-    if (change < 0) return `obniżka o ${(-change * 100).toFixed(2)} pkt proc.`;
+    if (change > 0) return `podwyżka o ${formatNumberPl((change * 100), 2)} pkt proc.`;
+    if (change < 0) return `obniżka o ${formatNumberPl((-change * 100), 2)} pkt proc.`;
     return 'bez zmian';
 }
 
@@ -5037,8 +5037,8 @@ function publishRateDecision(change, expected, note = '') {
     const verb = change > 0 ? 'podnosi' : change < 0 ? 'obniża' : 'utrzymuje';
     const surprise = Math.abs(change - expected) >= 0.001 ? ' To niespodzianka dla rynku!' : ' Decyzja zgodna z oczekiwaniami.';
     const body = `Bank Centralny ${verb} stopę referencyjną ${change ? 'do' : 'na poziomie'} ${rate}% (${describeRateChange(change)}; oczekiwano: ${describeRateChange(expected)}).${surprise}${note} `
-        + `Inflacja ${(macro.inflation * 100).toFixed(1)}% (cel ${(INFLATION_TARGET * 100).toFixed(1)}%), bezrobocie ${(macro.unemployment * 100).toFixed(1)}%, PKB ${(macro.gdpAnnual * 100).toFixed(1)}% r/r. `
-        + `Kredyty od ${(LOAN_INTEREST_RATE * 100).toFixed(2)}%, depozyty ${(DEPOSIT_INTEREST_RATE * 100).toFixed(2)}%. `
+        + `Inflacja ${formatNumberPl((macro.inflation * 100), 1)}% (cel ${formatNumberPl((INFLATION_TARGET * 100), 1)}%), bezrobocie ${formatNumberPl((macro.unemployment * 100), 1)}%, PKB ${formatNumberPl((macro.gdpAnnual * 100), 1)}% r/r. `
+        + `Kredyty od ${formatNumberPl((LOAN_INTEREST_RATE * 100), 2)}%, depozyty ${formatNumberPl((DEPOSIT_INTEREST_RATE * 100), 2)}%. `
         + `Analitycy na kolejne posiedzenie oczekują: ${macro.expectation.label}.`;
     const subject = `📰 Gazeta Ekonomiczna: BC ${verb} stopy${change ? ` do ${rate}%` : ` (${rate}%)`}`;
     addMacroLog(`🏛️ ${subject.replace('📰 Gazeta Ekonomiczna: ', '')}`);
@@ -5064,7 +5064,7 @@ function runCentralBankAI() {
     if (traits.includes('Stabilizator')) reserveChange *= 0.2;
     if (Math.abs(reserveChange) > 0.001 && Math.random() < 0.3) {
         centralBank.reserveRequirement = clampValue(centralBank.reserveRequirement + reserveChange, 0.05, 0.25);
-        addMacroLog(`🏛️ Bank Centralny zmienia stopę rezerw obowiązkowych na ${(centralBank.reserveRequirement * 100).toFixed(0)}%.`);
+        addMacroLog(`🏛️ Bank Centralny zmienia stopę rezerw obowiązkowych na ${formatNumberPl((centralBank.reserveRequirement * 100), 0)}%.`);
     }
     if (Math.random() < Math.min(1, getRulingParty().subsidies * 0.5)) fundStateOwnedCompanies(); // dotacje zależą od partii rządzącej
 }
@@ -5145,7 +5145,7 @@ function advanceElectionCycle() {
     settlePoliticalFavor();
     if (typeof drawEducationPriority === 'function') drawEducationPriority();
     const party = getRulingParty();
-    const results = PARTY_IDS.map(id => `${RULING_PARTIES[id].name} ${result.support[id].toFixed(0)}%`).join(', ');
+    const results = PARTY_IDS.map(id => `${RULING_PARTIES[id].name} ${formatNumberPl(result.support[id], 0)}%`).join(', ');
     logEvent(`🗳️ WYBORY: ${change ? `zmiana władzy — wygrywa ${RULING_PARTIES[result.winner].name}` : `${RULING_PARTIES[result.winner].name} utrzymuje władzę`}${result.coalition ? ` (koalicja z: ${RULING_PARTIES[result.coalition.partner].name})` : ''}. Wyniki: ${results}. ${party.nationalization > 1 ? 'Więcej dotacji i nacjonalizacji.' : 'Kurs na prywatyzację i mniej dotacji.'}`, 'state');
     if (change) {
         for (const stock of stocks.filter(s => s.isStateOwned && !s.isBankrupt)) {
@@ -5667,7 +5667,7 @@ function getSocietyUnemploymentShift() {
 }
 
 function formatPopulation(value) {
-    return `${(value / 1e6).toFixed(2).replace('.', ',')} mln`;
+    return `${formatNumberPl(value / 1e6, 2)} mln`;
 }
 
 // =================================================================================
@@ -5966,7 +5966,7 @@ function updateBudgetBalance() {
         if (cut && !society.pendingLaw) announceLawChange('benefits', -1, party, 'cięcie wydatków po 2 latach deficytu');
         else if (budget.citAdd < DEFICIT_CIT_STEP * 2) {
             budget.citAdd += DEFICIT_CIT_STEP;
-            logSociety(`🏦 Dwa lata deficytu: rząd podnosi CIT o 2 pp (do ${((COMPANY_INCOME_TAX_RATE + budget.citAdd) * 100).toFixed(0)}%). Zyski spółek po podatku spadną.`);
+            logSociety(`🏦 Dwa lata deficytu: rząd podnosi CIT o 2 pp (do ${formatNumberPl(((COMPANY_INCOME_TAX_RATE + budget.citAdd) * 100), 0)}%). Zyski spółek po podatku spadną.`);
         }
     }
 }

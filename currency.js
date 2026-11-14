@@ -245,7 +245,7 @@ function getProviderQuote(providerId, code, amountPln, side = 'buy') {
     if (!provider) return { ok: false, reason: 'Ten kantor nie działa.' };
     if (provider.kind === 'std') return { ok: true, ...getKantorQuote(code, amountPln, side), provider };
     if (provider.currencies && !provider.currencies.includes(code)) return { ok: false, reason: `${provider.name} nie wymienia ${code}.` };
-    if (Math.abs(amountPln) > provider.maxPln) return { ok: false, reason: `${provider.name}: limit jednej transakcji ${Math.round(provider.maxPln).toLocaleString('pl-PL')} zł.` };
+    if (Math.abs(amountPln) > provider.maxPln) return { ok: false, reason: `${provider.name}: limit jednej transakcji ${formatInt(Math.round(provider.maxPln))} zł.` };
     const offer = ensureKantorOffer(provider);
     const mid = getFxRate(code);
     let spread = offer.s[code];

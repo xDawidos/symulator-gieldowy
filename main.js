@@ -967,7 +967,7 @@ function exportSaveFile() {
     link.href = url; link.download = name;
     document.body.appendChild(link); link.click(); link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 5000);
-    if (typeof showToast === 'function') showToast(`Zapis wyeksportowany: ${name} (${(blob.size / 1e6).toFixed(1)} MB).`, 'success');
+    if (typeof showToast === 'function') showToast(`Zapis wyeksportowany: ${name} (${formatNumberPl((blob.size / 1e6), 1)} MB).`, 'success');
     return name;
 }
 
@@ -1019,7 +1019,7 @@ const SAVE_LEVEL_LABELS = ['zwykły', 'kompaktowy', 'awaryjny'];
 
 function formatSaveBytes(value) {
     if (!(value > 0)) return '—';
-    return value >= 1e6 ? `${(value / 1e6).toLocaleString('pl-PL', { maximumFractionDigits: 2 })} MB` : `${Math.round(value / 1e3).toLocaleString('pl-PL')} KB`;
+    return value >= 1e6 ? `${formatNumberPl(value / 1e6, 2)} MB` : `${formatInt(Math.round(value / 1e3))} KB`;
 }
 
 function renderSavePanel() {

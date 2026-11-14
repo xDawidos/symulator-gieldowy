@@ -179,7 +179,7 @@ function enforceReitLtv(stock) {
         reit.forcedSales++;
         sales++;
     }
-    if (sales > 0) logEvent(`🏢 ${stock.name} sprzedaje część portfela (${sales}×), by obniżyć dźwignię poniżej ${(REIT_RULES.ltvMax * 100).toFixed(0)}% LTV.`, 'market');
+    if (sales > 0) logEvent(`🏢 ${stock.name} sprzedaje część portfela (${sales}×), by obniżyć dźwignię poniżej ${formatNumberPl((REIT_RULES.ltvMax * 100), 0)}% LTV.`, 'market');
     return sales;
 }
 

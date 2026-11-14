@@ -471,7 +471,7 @@ function replaceCeo(stock, newCeo = null) {
         const soldShares = stock.treasuryShares;
         stock.treasuryShares = 0; // Akcje wracają na rynek
         applyPriceEffect(stock.symbol, -0.01, 'negative', 'company');
-        logEvent(`[CEO] Po odejściu prezesa-kapitalisty, ${stock.name} sprzedaje ${soldShares.toLocaleString('pl-PL')} akcji własnych, co lekko obniża kurs.`, 'review');
+        logEvent(`[CEO] Po odejściu prezesa-kapitalisty, ${stock.name} sprzedaje ${formatInt(soldShares)} akcji własnych, co lekko obniża kurs.`, 'review');
     }
 }
 
@@ -3129,7 +3129,7 @@ function processAwaitingListings() {
             handleSuccessfulIPO(startup, info.multiplier);
         } else if (quarter - info.since >= AWAITING_LISTING_MAX_QUARTERS) {
             const payout = Math.min(2, Math.max(1.05, info.multiplier));
-            logEvent(`🤝 ${startup.name} nie doczekał się miejsca na giełdzie — projekt przejmuje inwestor branżowy, udziałowcy dostają ${(payout * 100 - 100).toFixed(0)}% ponad wkład.`, 'market');
+            logEvent(`🤝 ${startup.name} nie doczekał się miejsca na giełdzie — projekt przejmuje inwestor branżowy, udziałowcy dostają ${formatNumberPl((payout * 100 - 100), 0)}% ponad wkład.`, 'market');
             removeStartup(startup, 1, payout);
         }
     }
@@ -3736,7 +3736,7 @@ function reactToEarningsSurprise(stock, earningsSurprise, publishedEarnings) {
         logEvent(eventMessage);
         applyPriceEffect(stock.symbol, magnitude, magnitude < 0 ? 'negative' : 'positive', 'review');
     }
-    if (typeof addChartEvent === 'function' && Math.abs(surprise) >= 0.15) addChartEvent(stock, surprise > 0 ? '📈' : '📉', `Raport kwartalny: zysk ${surprise >= 0 ? '+' : ''}${(surprise * 100).toFixed(0)}% vs konsensus`);
+    if (typeof addChartEvent === 'function' && Math.abs(surprise) >= 0.15) addChartEvent(stock, surprise > 0 ? '📈' : '📉', `Raport kwartalny: zysk ${surprise >= 0 ? '+' : ''}${formatNumberPl((surprise * 100), 0)}% vs konsensus`);
 }
 
 /** Raport kwartalny: zmienność kursu zależnie od kondycji finansowej. */
@@ -4330,7 +4330,7 @@ function resolveMerger(stock1, stock2, process) {
             if (playerTargetShares > 0) delete playerPortfolio[target.symbol]; // wymiana opisana niżej w dzienniku (fuzja)
             if (totalNewSharesForPlayer > 0) {
                  playerPortfolio[initiator.symbol] = { shares: totalNewSharesForPlayer, avgPrice: totalNewValue / newTotalShares, assetType: 'stock' };
-                 logEvent(`🔄 Twoje akcje ${target.symbol} i ${initiator.symbol} zostały wymienione na ${totalNewSharesForPlayer.toFixed(0)} akcji nowej spółki.`, 'review');
+                 logEvent(`🔄 Twoje akcje ${target.symbol} i ${initiator.symbol} zostały wymienione na ${formatNumberPl(totalNewSharesForPlayer, 0)} akcji nowej spółki.`, 'review');
             }
 
             [...aiCompetitors, ...stocks.filter(s=>s.assetType==='Holding'), ...commercialBanks].forEach(entity => {
@@ -5956,7 +5956,7 @@ function issueRescueBond(stock) {
     };
 
     activeBonds.push(newBondOffer);
-    logEvent(`🆘 Emisja Ratunkowa Obligacji! ${stock.name} emituje ${quantityToIssue} obligacji (${(finalInterest * 100).toFixed(1)}%, Ryzyko: ${(finalRisk * 100).toFixed(0)}%) by pokryć długi!`, 'market');
+    logEvent(`🆘 Emisja Ratunkowa Obligacji! ${stock.name} emituje ${quantityToIssue} obligacji (${formatNumberPl((finalInterest * 100), 1)}%, Ryzyko: ${formatNumberPl((finalRisk * 100), 0)}%) by pokryć długi!`, 'market');
     showToast(`🆘 ${stock.name} emituje obligacje ratunkowe!`, 'warning');
 
     // Zapobiegaj natychmiastowej kolejnej emisji (np. cooldown na kwartał)
@@ -6543,8 +6543,8 @@ function maybeInstituteCompetitionEvent() {
     const change = getRandomInRange(0.10, 0.20) * (up ? 1 : -1);
     applyPriceEffect(stock.symbol, change, 'neutral');
     logEvent(up
-        ? `🧪 Konkurencja instytutów: ${stock.name} wygrywa duży grant badawczy — kurs ${(change * 100).toFixed(0)}%.`
-        : `🧪 Konkurencja instytutów: ${stock.name} przegrywa spór patentowy z innym instytutem — kurs ${(change * 100).toFixed(0)}%.`, 'market');
+        ? `🧪 Konkurencja instytutów: ${stock.name} wygrywa duży grant badawczy — kurs ${formatNumberPl((change * 100), 0)}%.`
+        : `🧪 Konkurencja instytutów: ${stock.name} przegrywa spór patentowy z innym instytutem — kurs ${formatNumberPl((change * 100), 0)}%.`, 'market');
     return { symbol: stock.symbol, change };
 }
 
@@ -7613,7 +7613,7 @@ function finalizeStartup(startup) {
         }
 
         showToast(`${successType}! ${startup.name} wchodzi na giełdę!`, toastType, 4000);
-        logEvent(`[IPO] ${successType} dla ${startup.name}! Mnożnik wyceny: x${successMultiplier.toFixed(1)}`, 'review');
+        logEvent(`[IPO] ${successType} dla ${startup.name}! Mnożnik wyceny: x${formatNumberPl(successMultiplier, 1)}`, 'review');
 
         // 0.18.4 A3: w bessie słaba emisja jest wycofywana (startup czeka w kolejce i próbuje w kolejnym kwartale)
         if (typeof shouldWithdrawIpo === 'function' && shouldWithdrawIpo(startup)) { parkStartupForListing(startup, successMultiplier); if (typeof ipoStats === 'object') ipoStats.withdrawn++; logEvent(`IPO ${startup.name} wycofane: bessa i słaby popyt na emisję. Spółka spróbuje w kolejnym kwartale.`, 'market'); return; }
@@ -7755,7 +7755,7 @@ function executeDebtTransfer(collectorStock, targetEntity, loan, newInterestRate
     }
 
     const entityName = (targetEntity === 'player') ? "Twój" : `Bota ${targetEntity.name}`;
-    logEvent(`🔔 ${collectorStock.name} przejął ${entityName} dług w wysokości ${formatZl(loan.amount, 2)}. Nowe oprocentowanie: ${(newInterestRate * 100).toFixed(1)}%.`, 'review');
+    logEvent(`🔔 ${collectorStock.name} przejął ${entityName} dług w wysokości ${formatZl(loan.amount, 2)}. Nowe oprocentowanie: ${formatNumberPl((newInterestRate * 100), 1)}%.`, 'review');
 
 }
 
@@ -9221,7 +9221,7 @@ function renderDividendBadges(stock) {
         ? `<span class="badge-aristocrat" title="Stabilność +${ARISTOCRAT_BONUS.stability}, przyrost +${ARISTOCRAT_BONUS.growth}, zainteresowanie +${ARISTOCRAT_BONUS.interest}">👑 Dywidendowy arystokrata</span>` : '';
     const history = (stock.dividendHistory || []).slice(0, 6).map(entry => formatNumberPl(entry.dps, 2)).join(' · ');
     const market = typeof getStockMarket === 'function' && getStockMarket(stock) !== 'GPW' ? `<span class="badge-market">${escapeHtml(getMarketBadgeText(stock))}</span>` : '';
-    const projects = (typeof getActiveSpecialBonuses === 'function' ? getActiveSpecialBonuses(stock) : []).map(bonus => `<span class="badge-market" title="Wzrost przychodów +${(bonus.growth * 100).toFixed(1)} pkt proc./kw., wycena +${(bonus.valuation * 100).toFixed(1)}%">${bonus.icon || '🏗️'} ${escapeHtml(bonus.name)}</span>`).join('');
+    const projects = (typeof getActiveSpecialBonuses === 'function' ? getActiveSpecialBonuses(stock) : []).map(bonus => `<span class="badge-market" title="Wzrost przychodów +${formatNumberPl((bonus.growth * 100), 1)} pkt proc./kw., wycena +${formatNumberPl((bonus.valuation * 100), 1)}%">${bonus.icon || '🏗️'} ${escapeHtml(bonus.name)}</span>`).join('');
     return `<p class="dividend-badges">${badge}${market}${projects}
         <span class="text-sm dividend-yield">Stopa dywidendy: <strong>${yieldPct}%</strong></span>
         ${stock.assetType ? '' : `<span class="text-sm text-muted">seria: ${stock.dividendStreak || 0}/${ARISTOCRAT_MIN_STREAK} kw.</span>`}
@@ -9408,14 +9408,14 @@ function fundTopUpInvestment(symbol, uid, amount, mode) {
         holding.shares += newShares;
         adjustBalanceSheet(stock, { assets: amount, retainedEarnings: amount });
         recordPayment('player-fund', stock, amount, `Dopłata za akcje: ${project.name}`);
-        logEvent(`💼 Fundusz dopłaca ${formatZl(amount, 0)} do „${project.name}” (${stock.name}) i obejmuje ${newShares.toLocaleString('pl-PL')} nowych akcji.`, 'review');
+        logEvent(`💼 Fundusz dopłaca ${formatZl(amount, 0)} do „${project.name}” (${stock.name}) i obejmuje ${formatInt(newShares)} nowych akcji.`, 'review');
     } else {
         const pct = Math.min(FUND_INCOME_MAX_SHARE, FUND_INCOME_MAX_SHARE * project.fundTopUp / Math.max(1, project.cost));
         project.fundIncomePct = pct;
         project.fundInvested = (project.fundInvested || 0) + amount;
         adjustBalanceSheet(stock, { assets: amount, liabilities: amount }); // zobowiązanie wobec funduszu (udział w zysku)
         recordPayment('player-fund', stock, amount, `Dopłata za udział w zysku: ${project.name}`);
-        logEvent(`💼 Fundusz dopłaca ${formatZl(amount, 0)} do „${project.name}” (${stock.name}) za ${(pct * 100).toFixed(0)}% zysku tej inwestycji.`, 'review');
+        logEvent(`💼 Fundusz dopłaca ${formatZl(amount, 0)} do „${project.name}” (${stock.name}) za ${formatNumberPl((pct * 100), 0)}% zysku tej inwestycji.`, 'review');
     }
     if (typeof refreshFundViews === 'function') refreshFundViews();
     return true;
@@ -9456,12 +9456,12 @@ function processPublicInvestmentFunding() {
             centralBank.funds -= amount;
             const shares = issueSharesToPublicOwner(stock, amount, 'state');
             project.publicFunding = 'state';
-            logEvent(`🏛️ Bank Centralny dofinansowuje „${project.name}” w ${stock.name}: ${formatZl(amount, 0)} za ${shares.toLocaleString('pl-PL')} akcji.`, 'state');
+            logEvent(`🏛️ Bank Centralny dofinansowuje „${project.name}” w ${stock.name}: ${formatZl(amount, 0)} za ${formatInt(shares)} akcji.`, 'state');
         } else if (stock.isMunicipal && Math.random() < (city.mayor?.policy === 'municipal' ? 0.6 : 0.25) && city.budget > amount * 3) {
             city.budget -= amount;
             const shares = issueSharesToPublicOwner(stock, amount, 'city');
             project.publicFunding = 'city';
-            logEvent(`🏙️ Miasto dofinansowuje „${project.name}” w ${stock.name}: ${formatZl(amount, 0)} za ${shares.toLocaleString('pl-PL')} akcji.`, 'city');
+            logEvent(`🏙️ Miasto dofinansowuje „${project.name}” w ${stock.name}: ${formatZl(amount, 0)} za ${formatInt(shares)} akcji.`, 'city');
         }
     }
 }
@@ -9503,7 +9503,7 @@ function canFundInvestInStartups(amount, silent = false) {
     if (!(amount > 0)) return fail('Wpisz poprawną kwotę.');
     if (amount > playerCash) return fail('Za mało gotówki funduszu.');
     if (amount > getFundStartupCapacity() + 1e-6) {
-        return fail(`Limit startupów: ${(STARTUP_FUND_LIMIT * 100).toFixed(0)}% aktywów funduszu (wolne: ${formatZl(getFundStartupCapacity(), 0)}).`);
+        return fail(`Limit startupów: ${formatNumberPl((STARTUP_FUND_LIMIT * 100), 0)}% aktywów funduszu (wolne: ${formatZl(getFundStartupCapacity(), 0)}).`);
     }
     return true;
 }
@@ -9697,7 +9697,7 @@ function handleSuccessfulIPO(startup, successMultiplier) {
             const holding = playerPortfolio[symbol] || { shares: 0, avgPrice: ipoPrice, assetType: 'stock' };
             holding.shares += shares;
             playerPortfolio[symbol] = holding;
-            if (claim.pool) { notePoolLedger('player', 'toShares', claim.contribution); notePoolSettlement({ symbol, name: startup.name, kind: 'ipo', contribution: claim.contribution, shares, text: `🏊 Pula: ${startup.name} — debiut, Twój udział: ${shares.toLocaleString('pl-PL')} akcji (wkład ${formatZl(claim.contribution, 0)}).` }); }
+            if (claim.pool) { notePoolLedger('player', 'toShares', claim.contribution); notePoolSettlement({ symbol, name: startup.name, kind: 'ipo', contribution: claim.contribution, shares, text: `🏊 Pula: ${startup.name} — debiut, Twój udział: ${formatInt(shares)} akcji (wkład ${formatZl(claim.contribution, 0)}).` }); }
         } else if (claim.kind === 'ai') {
             const holding = claim.ai.portfolio[symbol] || { shares: 0, avgPrice: ipoPrice };
             holding.shares += shares;
@@ -9743,9 +9743,9 @@ function handleSuccessfulIPO(startup, successMultiplier) {
     if (!startup.reputation) startup.reputation = { player: 0 };
 
     const fundValue = (playerPortfolio[symbol]?.shares || 0) * startup.price; // 0.18.4 A3: cena po dyskoncie i „popie”
-    logEvent(`🔔 IPO: ${startup.name} debiutuje${debutMarket !== 'GPW' ? ` na ${getMarketLabel(debutMarket)}` : ''} po ${formatZl(startup.price, 2)}${startup.ipo ? ` (ocena ${startup.ipo.grade}, dyskonto ${Math.round(startup.ipo.discount * 100)}%)` : ''} (${totalShares.toLocaleString('pl-PL')} akcji).${fundClaim > 0 ? ` Fundusz: ${formatZl(fundClaim, 0)} → ${formatZl(fundValue, 0)}.` : ''}`, 'review');
+    logEvent(`🔔 IPO: ${startup.name} debiutuje${debutMarket !== 'GPW' ? ` na ${getMarketLabel(debutMarket)}` : ''} po ${formatZl(startup.price, 2)}${startup.ipo ? ` (ocena ${startup.ipo.grade}, dyskonto ${Math.round(startup.ipo.discount * 100)}%)` : ''} (${formatInt(totalShares)} akcji).${fundClaim > 0 ? ` Fundusz: ${formatZl(fundClaim, 0)} → ${formatZl(fundValue, 0)}.` : ''}`, 'review');
     if (startup.operatorStartup && typeof activateMarketOperator === 'function') activateMarketOperator(startup); // nowy rynek (markets.js)
-    if (fundClaim > 0) playerProfile?.cv.push({ type: 'milestone', text: `Startup ${startup.name}: debiut na giełdzie (${fundClaim.toFixed(0)} → ${formatZl(fundValue, 0)}).` });
+    if (fundClaim > 0) playerProfile?.cv.push({ type: 'milestone', text: `Startup ${startup.name}: debiut na giełdzie (${formatNumberPl(fundClaim, 0)} → ${formatZl(fundValue, 0)}).` });
 }
 
 // =================================================================================
@@ -9821,7 +9821,7 @@ function migratePoolStakesToFacts() {
     investmentPool.stakesMigrated = true;
     const facts = Number(investmentPool.playerStakes?.player) || 0;
     const diff = stored - facts;
-    if (diff > 1) logEvent(`🏊 Korekta wkładu w pulę: ${stored.toFixed(0)} → ${formatZl(facts, 0)} (startupy, których już nie ma, rozliczono przed poprawką 0.14.1; limit 10% się odblokowuje).`, 'review');
+    if (diff > 1) logEvent(`🏊 Korekta wkładu w pulę: ${formatNumberPl(stored, 0)} → ${formatZl(facts, 0)} (startupy, których już nie ma, rozliczono przed poprawką 0.14.1; limit 10% się odblokowuje).`, 'review');
     return diff;
 }
 
@@ -9832,7 +9832,7 @@ function removeStartup(startup, refundMin = 0, refundMax = 0) {
     if (holding?.investedAmount > 0) {
         const refund = holding.isInsured ? holding.investedAmount * 0.75 : holding.investedAmount * (refundMax > 0 ? getRandomInRange(refundMin, refundMax) : 0);
         if (refund > 0) playerCash += refund;
-        logEvent(`📉 Startup ${startup.name} nie debiutuje — fundusz odzyskuje ${refund.toFixed(2)} z ${formatZl(holding.investedAmount, 2)}${holding.isInsured ? ' (ubezpieczenie)' : ''}.`, 'review');
+        logEvent(`📉 Startup ${startup.name} nie debiutuje — fundusz odzyskuje ${formatNumberPl(refund, 2)} z ${formatZl(holding.investedAmount, 2)}${holding.isInsured ? ' (ubezpieczenie)' : ''}.`, 'review');
         playerProfile?.cv.push({ type: 'milestone', text: `Startup ${startup.name}: upadek (odzysk ${formatZl(refund, 0)}).` });
     }
     for (const ai of aiCompetitors) {
@@ -10203,7 +10203,7 @@ function revealHiddenLiabilities(stock, by) {
     const drop = Math.min(0.6, value / Math.max(1, getMarketCapValue(stock)));
     if (drop > 0) applyPriceEffect(stock.symbol, -drop, 'negative', 'company');
     stock.hiddenRevealed = { quarter: getAccountingQuarter(), value, by };
-    const text = `📑 ${stock.name}: ujawniono ukryte zobowiązania (${formatZl(value, 0)}; wykrył: ${by}) — dług rośnie, kurs −${(drop * 100).toFixed(0)}%.`;
+    const text = `📑 ${stock.name}: ujawniono ukryte zobowiązania (${formatZl(value, 0)}; wykrył: ${by}) — dług rośnie, kurs −${formatNumberPl((drop * 100), 0)}%.`;
     logEvent(text, 'company');
     if ((playerPortfolio[stock.symbol]?.shares || 0) > 0 && typeof addMail === 'function') {
         addMail({ sender: CORPORATION_SENDER, subject: `📑 Ukryte zobowiązania: ${stock.name}`, body: `${text} To poręczenia, pozwy albo kary, których nie było w bilansie.`, importance: 3, symbol: stock.symbol });
@@ -10259,7 +10259,7 @@ function revealFraud(stock, by) {
     stock.fraudHistory = [...(stock.fraudHistory || []), { quarter: getAccountingQuarter(), writeOff, by }].slice(-3);
     if (typeof replaceCeo === 'function' && stock.ceo) replaceCeo(stock);
     if (typeof addChartEvent === 'function') addChartEvent(stock, '🧾', `Korekta wyników: odpis ${formatZl(writeOff, 0)}`);
-    const text = `🧾 KOREKTA WYNIKÓW: ${stock.name} (${stock.symbol}) zawyżała zyski — odpis ${formatZl(writeOff, 0)}, kurs −${(drop * 100).toFixed(0)}%, zarząd odwołany (wykrył: ${by}).`;
+    const text = `🧾 KOREKTA WYNIKÓW: ${stock.name} (${stock.symbol}) zawyżała zyski — odpis ${formatZl(writeOff, 0)}, kurs −${formatNumberPl((drop * 100), 0)}%, zarząd odwołany (wykrył: ${by}).`;
     logEvent(text, 'company'); // pasek newsów (P7); mail tylko gdy gracz ma akcje (routeEventToMail)
     const heldNow = (playerPortfolio[stock.symbol]?.shares || 0) > 0 || (playerWallet?.portfolio?.[stock.symbol]?.shares || 0) > 0;
     if (heldNow && typeof showBreakingNews === 'function') showBreakingNews(text, false); // 0.14.2 P7: „PILNE” tylko dla spółek gracza
@@ -10294,7 +10294,7 @@ function getRedFlags(stock) {
         const now = real[real.length - 1], before = real[real.length - 5];
         const recvGrowth = before.receivables > 0 ? now.receivables / before.receivables - 1 : 0;
         const revGrowth = before.revenue > 0 ? now.revenue / before.revenue - 1 : 0;
-        if (recvGrowth - revGrowth > 0.25) flags.push({ id: 'receivables', label: 'Należności rosną szybciej niż sprzedaż', desc: `Należności +${(recvGrowth * 100).toFixed(0)}%, przychody ${revGrowth >= 0 ? '+' : ''}${(revGrowth * 100).toFixed(0)}% r/r.` });
+        if (recvGrowth - revGrowth > 0.25) flags.push({ id: 'receivables', label: 'Należności rosną szybciej niż sprzedaż', desc: `Należności +${formatNumberPl((recvGrowth * 100), 0)}%, przychody ${revGrowth >= 0 ? '+' : ''}${formatNumberPl((revGrowth * 100), 0)}% r/r.` });
     }
     if (Number.isFinite(stock.auditorChangedQuarter) && getAccountingQuarter() - stock.auditorChangedQuarter <= 4) {
         flags.push({ id: 'auditor', label: 'Zmiana audytora', desc: `Spółka zmieniła firmę audytorską ${getAccountingQuarter() - stock.auditorChangedQuarter} kw. temu.` });
@@ -10307,8 +10307,8 @@ function getRedFlags(stock) {
     const related = typeof cooperations !== 'undefined' ? cooperations.find(c => c.flag && (c.a === stock.symbol || c.b === stock.symbol)) : null; // T5: tunelowanie
     const groupFlag = typeof getGroupRedFlag === 'function' ? getGroupRedFlag(stock) : null; // T6: pożyczka matka–córka poza rynkiem
     if (groupFlag) flags.push(groupFlag);
-    if (related) flags.push({ id: 'related', label: 'Transakcje z podmiotami powiązanymi', desc: `Kooperacja ${related.a} — ${related.b}: wspólny właściciel ${related.flag.name} ma ${(related.flag.pctA * 100).toFixed(0)}% i ${(related.flag.pctB * 100).toFixed(0)}% — ryzyko przerzucania zysku.` });
-    if (grey > 0.05) flags.push({ id: 'grey', label: 'Szara strefa', desc: `Ok. ${(grey * 100).toFixed(0)}% zatrudnionych bez umów — wyższa marża dziś, ryzyko kary Inspekcji Pracy jutro.` });
+    if (related) flags.push({ id: 'related', label: 'Transakcje z podmiotami powiązanymi', desc: `Kooperacja ${related.a} — ${related.b}: wspólny właściciel ${related.flag.name} ma ${formatNumberPl((related.flag.pctA * 100), 0)}% i ${formatNumberPl((related.flag.pctB * 100), 0)}% — ryzyko przerzucania zysku.` });
+    if (grey > 0.05) flags.push({ id: 'grey', label: 'Szara strefa', desc: `Ok. ${formatNumberPl((grey * 100), 0)}% zatrudnionych bez umów — wyższa marża dziś, ryzyko kary Inspekcji Pracy jutro.` });
     return flags;
 }
 
@@ -10409,7 +10409,7 @@ function renderAccountingSection(stock) {
                 <tr><td>Zysk netto</td>${real.map(q => `<td class="cell-number">${money(q.netIncome)}</td>`).join('')}</tr>
                 <tr><td>Gotówka z działalności</td>${real.map(q => `<td class="cell-number ${q.ocf < q.netIncome * 0.6 && q.netIncome > 0 ? 'text-down' : ''}">${money(q.ocf)}</td>`).join('')}</tr>
             </tbody></table>
-            <p class="text-sm">Zysk pokryty gotówką: <strong class="${net > 0 && ocf < net * 0.6 ? 'text-down' : ''}">${net > 0 ? `${(ocf / net * 100).toFixed(0)}%` : '—'}</strong>. Zdrowa spółka zamienia zysk w gotówkę (zwykle ≥ 80%).</p>`
+            <p class="text-sm">Zysk pokryty gotówką: <strong class="${net > 0 && ocf < net * 0.6 ? 'text-down' : ''}">${net > 0 ? `${formatNumberPl((ocf / net * 100), 0)}%` : '—'}</strong>. Zdrowa spółka zamienia zysk w gotówkę (zwykle ≥ 80%).</p>`
             : '<p class="text-sm text-muted">Przepływy pojawią się po pierwszym raporcie kwartalnym.</p>'}`;
     } else html += locked(3, 'Przepływy pieniężne');
 
@@ -10879,7 +10879,7 @@ function playerPoachCeo(buyerSymbol, sourceSymbol) {
     const result = poachCeo(buyer, source, true);
     if (!result.ok) { showToast(result.reason, 'error'); return null; }
     if (playerProfile) playerProfile.ceoPoachQuarter = getWorkforceQuarter();
-    showToast(result.success ? `Udało się! ${buyer.name} ma nowego prezesa.` : `Prezes odmówił (szansa była ${(result.chance * 100).toFixed(0)}%).`, result.success ? 'success' : 'warning', 6000);
+    showToast(result.success ? `Udało się! ${buyer.name} ma nowego prezesa.` : `Prezes odmówił (szansa była ${formatNumberPl((result.chance * 100), 0)}%).`, result.success ? 'success' : 'warning', 6000);
     return result;
 }
 
@@ -10909,7 +10909,7 @@ function processUnionFormation(companies) {
     for (const stock of companies) {
         if (stock.workforce.union || !(Math.random() < getUnionChance(stock))) continue;
         stock.workforce.union = createUnion('company');
-        logSociety(`✊ W ${stock.name} powstaje związek zawodowy (zadowolenie ${stock.workforce.satisfaction.toFixed(0)}/100).`, 'company');
+        logSociety(`✊ W ${stock.name} powstaje związek zawodowy (zadowolenie ${formatNumberPl(stock.workforce.satisfaction, 0)}/100).`, 'company');
         if (typeof unlockAcademyEntry === 'function' && (playerPortfolio?.[stock.symbol]?.shares || 0) > 0) unlockAcademyEntry('zwiazek');
     }
     const bySector = {};
@@ -11000,8 +11000,8 @@ function sendUnionDecisionMail(stock, demand, striking) {
     if (typeof addMail !== 'function') return;
     addMail({
         sender: CORPORATION_SENDER,
-        subject: striking ? `✊ Strajk w ${stock.name} — decyzja funduszu` : `✊ Związek w ${stock.name} żąda podwyżki ${(demand.raise * 100).toFixed(1)}%`,
-        body: `${striking ? 'Strajk trwa i obniża przychody spółki.' : `Związek zawodowy żąda podwyżki płac o ${(demand.raise * 100).toFixed(1)}%.`} Jako większościowy akcjonariusz możesz zdecydować do końca kwartału: zgoda (płace w górę, zadowolenie +10, możliwy układ zbiorowy), negocjacje (połowa podwyżki, 50% szans na porozumienie) albo odmowa (ryzyko strajku). Bez Twojej odpowiedzi zdecyduje prezes według swoich cech — to nie jest kara.`,
+        subject: striking ? `✊ Strajk w ${stock.name} — decyzja funduszu` : `✊ Związek w ${stock.name} żąda podwyżki ${formatNumberPl((demand.raise * 100), 1)}%`,
+        body: `${striking ? 'Strajk trwa i obniża przychody spółki.' : `Związek zawodowy żąda podwyżki płac o ${formatNumberPl((demand.raise * 100), 1)}%.`} Jako większościowy akcjonariusz możesz zdecydować do końca kwartału: zgoda (płace w górę, zadowolenie +10, możliwy układ zbiorowy), negocjacje (połowa podwyżki, 50% szans na porozumienie) albo odmowa (ryzyko strajku). Bez Twojej odpowiedzi zdecyduje prezes według swoich cech — to nie jest kara.`,
         importance: 3, symbol: stock.symbol, action: { type: 'unionDemand', symbol: stock.symbol }
     });
 }
@@ -11058,7 +11058,7 @@ function processUnionDemands(companies) {
         }
         const choice = getCeoUnionResponse(stock);
         const outcome = resolveUnionDemand(stock, choice, raise, union);
-        logSociety(`✊ ${stock.name}: związek żąda +${(raise * 100).toFixed(1)}% — ${UNION_OUTCOME_TEXT[outcome]}.`, 'company');
+        logSociety(`✊ ${stock.name}: związek żąda +${formatNumberPl((raise * 100), 1)}% — ${UNION_OUTCOME_TEXT[outcome]}.`, 'company');
     }
     // 4. Związki sektorowe: wspólne żądanie; gdy większość spółek odmawia — strajk całego sektora.
     for (const [sector, union] of Object.entries(society.sectorUnions || {})) {
@@ -11082,7 +11082,7 @@ function processUnionDemands(companies) {
         }
         if (!sectorStrike && Math.random() < 0.5) union.agreementUntil = quarter + COLLECTIVE_AGREEMENT_QUARTERS;
         logSociety(sectorStrike
-            ? `✊ STRAJK w całym sektorze ${sector}: związek sektorowy żądał +${(raise * 100).toFixed(1)}%, większość zarządów odmówiła.`
+            ? `✊ STRAJK w całym sektorze ${sector}: związek sektorowy żądał +${formatNumberPl((raise * 100), 1)}%, większość zarządów odmówiła.`
             : `✊ Związek sektorowy (${sector}) wywalczył podwyżki${union.agreementUntil >= quarter ? ' i układ zbiorowy' : ''}.`, 'state');
     }
 }
@@ -11139,15 +11139,15 @@ function processWorkforceQuarter() {
 /** S6: jeden zbiorczy mail na kwartał — „Raport z rynku pracy i kraju” (zamiast osobnych wiadomości). */
 function publishSocietyReport(companies = getWorkforceCompanies()) {
     if (typeof addMail !== 'function' || !mailbox || typeof society !== 'object' || !society) return null;
-    const pct = (v, d = 1) => `${(v * 100).toFixed(d)}%`;
+    const pct = (v, d = 1) => `${formatNumberPl(v * 100, d)}%`;
     const striking = companies.filter(s => s.workforce.strike);
     const held = companies.filter(s => (playerPortfolio?.[s.symbol]?.shares || 0) > 0);
     const heldNotes = held.filter(s => s.workforce.strike || s.workforce.satisfaction < 40 || getGreyShare(s) > 0.05 || s.workforce.pendingDemand)
-        .slice(0, 4).map(s => `${s.name}: ${s.workforce.strike ? 'strajk' : s.workforce.pendingDemand ? 'żądanie związku' : getGreyShare(s) > 0.05 ? 'szara strefa' : `zadowolenie ${s.workforce.satisfaction.toFixed(0)}`}`);
+        .slice(0, 4).map(s => `${s.name}: ${s.workforce.strike ? 'strajk' : s.workforce.pendingDemand ? 'żądanie związku' : getGreyShare(s) > 0.05 ? 'szara strefa' : `zadowolenie ${formatNumberPl(s.workforce.satisfaction, 0)}`}`);
     const growth = Number(society.lastGrowth) || 0;
     const lines = [
-        `Populacja ${formatPopulation(society.population)} (${growth >= 0 ? '+' : ''}${pct(growth, 2)} w kwartale, migracja ${(society.migration.lastPeople || 0) >= 0 ? '+' : ''}${Math.round(society.migration.lastPeople || 0).toLocaleString('pl-PL')}), bezrobocie ${pct(macro.unemployment)}, indeks popytu ${society.demandIndex.toFixed(3)}.`,
-        `Płace realne: pracownicy ${society.wages.workers.toFixed(3)}, specjaliści ${society.wages.specialists.toFixed(3)} (niedobór ${society.shortage.toFixed(2)}), edukacja ${society.education.toFixed(0)}/100.`,
+        `Populacja ${formatPopulation(society.population)} (${growth >= 0 ? '+' : ''}${pct(growth, 2)} w kwartale, migracja ${(society.migration.lastPeople || 0) >= 0 ? '+' : ''}${formatInt(Math.round(society.migration.lastPeople || 0))}), bezrobocie ${pct(macro.unemployment)}, indeks popytu ${formatNumberPl(society.demandIndex, 3)}.`,
+        `Płace realne: pracownicy ${formatNumberPl(society.wages.workers, 3)}, specjaliści ${formatNumberPl(society.wages.specialists, 3)} (niedobór ${formatNumberPl(society.shortage, 2)}), edukacja ${formatNumberPl(society.education, 0)}/100.`,
         `Strajki: ${striking.length ? striking.slice(0, 4).map(s => s.name).join(', ') : 'brak'}; związki zakładowe w ${companies.filter(s => s.workforce.union).length} spółkach${Object.keys(society.sectorUnions || {}).length ? `, sektorowe: ${Object.keys(society.sectorUnions).join(', ')}` : ''}.`,
         society.pendingLaw ? `Zapowiedź ustawy: ${SOCIAL_LAWS[society.pendingLaw.law].name} → ${describeLawLevel(society.pendingLaw.law, society.pendingLaw.to)}.` : '',
         society.budget.hasBalance !== undefined ? `Budżet: saldo ${formatZl(society.budget.balance || 0, 0)}${society.budget.deficitQuarters ? ` (deficyt od ${society.budget.deficitQuarters} kw.)` : ''}.` : '',
@@ -11193,7 +11193,7 @@ function renderLaborCostBar(stock, history) {
     const other = Math.max(0, 1 - labor - ebitda);
     const seg = (value, cls) => `<span class="${cls}" style="width:${Math.min(100, value * 100).toFixed(1)}%"></span>`;
     return `<div class="labor-bar" role="img" aria-label="Struktura przychodów">${seg(labor, 'labor')}${seg(other, 'other')}${seg(ebitda, 'ebitda')}</div>
-        <p class="text-xs">🟨 koszt pracy ${(labor * 100).toFixed(1)}% · ⬜ pozostałe koszty ${(other * 100).toFixed(1)}% · 🟩 EBITDA ${(ebitda * 100).toFixed(1)}% przychodów (ostatni kwartał)</p>`;
+        <p class="text-xs">🟨 koszt pracy ${formatNumberPl((labor * 100), 1)}% · ⬜ pozostałe koszty ${formatNumberPl((other * 100), 1)}% · 🟩 EBITDA ${formatNumberPl((ebitda * 100), 1)}% przychodów (ostatni kwartał)</p>`;
 }
 
 // #################################################################################
@@ -11256,21 +11256,21 @@ function resolveClinicalPhase(stock, roll = Math.random(), quarter = getSubsecto
     const share = Math.max(0.2, getSubsectorMechanicShare(stock, 'clinical')); // biotech jako segment poboczny — słabszy efekt
     const change = (success ? getRandomInRange(...CLINICAL_SUCCESS_JUMP) : -getRandomInRange(...CLINICAL_FAILURE_DROP)) * share;
     const phase = trial.phase;
-    applyBinaryPriceJump(stock, change, success ? '💊' : '☠️', `Faza ${def.name} ${trial.drug}: ${success ? 'sukces' : 'porażka'} (${(change * 100).toFixed(0)}%)`);
+    applyBinaryPriceJump(stock, change, success ? '💊' : '☠️', `Faza ${def.name} ${trial.drug}: ${success ? 'sukces' : 'porażka'} (${formatNumberPl((change * 100), 0)}%)`);
     noteSubsectorStat('clinicalResults');
     if (success && phase < 3) {
         trial.phase++;
         trial.dueQuarter = quarter + getRandomIntInRange(...CLINICAL_DURATION);
-        logEvent(`💊 ${stock.name}: lek ${trial.drug} przechodzi fazę ${def.name} badań klinicznych — kurs ${(change * 100).toFixed(0)}%. Następna faza: ${CLINICAL_PHASES[trial.phase].name}.`, 'company');
+        logEvent(`💊 ${stock.name}: lek ${trial.drug} przechodzi fazę ${def.name} badań klinicznych — kurs ${formatNumberPl((change * 100), 0)}%. Następna faza: ${CLINICAL_PHASES[trial.phase].name}.`, 'company');
     } else {
         if (success) {
             stock.growthAdj = (Number(stock.growthAdj) || 0) + CLINICAL_APPROVAL_GROWTH * share;
             stock.financialHealth = Math.min(5, (Number(stock.financialHealth) || 0) + 1);
             stock.approvedDrugs = (Number(stock.approvedDrugs) || 0) + 1;
-            logEvent(`🏅 ${stock.name}: lek ${trial.drug} zarejestrowany po fazie III — kurs ${(change * 100).toFixed(0)}%, trwale wyższy wzrost przychodów.`, 'company');
+            logEvent(`🏅 ${stock.name}: lek ${trial.drug} zarejestrowany po fazie III — kurs ${formatNumberPl((change * 100), 0)}%, trwale wyższy wzrost przychodów.`, 'company');
         } else {
             stock.financialHealth = Math.max(-5, (Number(stock.financialHealth) || 0) - 0.5);
-            logEvent(`☠️ ${stock.name}: lek ${trial.drug} nie przechodzi fazy ${def.name} badań klinicznych — kurs ${(change * 100).toFixed(0)}%. Program zamknięty.`, 'company');
+            logEvent(`☠️ ${stock.name}: lek ${trial.drug} nie przechodzi fazy ${def.name} badań klinicznych — kurs ${formatNumberPl((change * 100), 0)}%. Program zamknięty.`, 'company');
         }
         stock.clinicalTrial = null;
         stock.clinicalCooldownUntil = quarter + getRandomIntInRange(...CLINICAL_COOLDOWN);
@@ -11645,7 +11645,7 @@ function resolveExpansion(stock, roll = Math.random(), quarter = getStrategyQuar
         addStockSegment(stock, process.sector, EXPANSION_START_SHARE);
         stock.strategy.growth = { sector: process.sector, target: getRandomInRange(...EXPANSION_TARGET_SHARE), step: getRandomInRange(...EXPANSION_STEP) };
         noteStrategyStat('expansionsDone');
-        logEvent(`✅ ${stock.name}: nowy segment ${process.sector} rusza (10% przychodów, docelowo ${(stock.strategy.growth.target * 100).toFixed(0)}%).`, 'company');
+        logEvent(`✅ ${stock.name}: nowy segment ${process.sector} rusza (10% przychodów, docelowo ${formatNumberPl((stock.strategy.growth.target * 100), 0)}%).`, 'company');
         if (typeof addChartEvent === 'function') addChartEvent(stock, '✅', `Nowy segment: ${process.sector}`);
         return 'success';
     }
@@ -11925,7 +11925,7 @@ function startPivot(stock, toSector = null, quarter = getStrategyQuarter(), by =
     ensureStrategy(stock).pivot = { from, to, created, total, perQuarter: total / PIVOT_QUARTERS, moved: 0, startQuarter: quarter, until: quarter + PIVOT_QUARTERS, cost, by };
     stock.strategy.growth = null;
     noteStrategyStat('pivots');
-    logEvent(`🔄 ${stock.name} zmienia profil: z ${from} w stronę ${to} (−${(total * 100).toFixed(0)} pp segmentu głównego przez ${PIVOT_QUARTERS} kw.). Przejściowo niższa marża i większa zmienność.`, 'company');
+    logEvent(`🔄 ${stock.name} zmienia profil: z ${from} w stronę ${to} (−${formatNumberPl((total * 100), 0)} pp segmentu głównego przez ${PIVOT_QUARTERS} kw.). Przejściowo niższa marża i większa zmienność.`, 'company');
     if (typeof addChartEvent === 'function') addChartEvent(stock, '🔄', `Pivot: ${from} → ${to}`);
     return stock.strategy.pivot;
 }
@@ -12138,7 +12138,7 @@ function announceSpinoff(stock, by = 'ceo') {
     else gov.pendingAgm = { items: [item], extraordinary: true };
     gov.quartersToAgm = Math.min(gov.quartersToAgm || 1, 1);
     if (typeof addChartEvent === 'function') addChartEvent(stock, '✂️', `Zapowiedź wydzielenia: ${seg.sector}`);
-    logEvent(`✂️ ${stock.name} zapowiada wydzielenie działalności ${seg.sector} (${(seg.share * 100).toFixed(0)}% przychodów) do nowej spółki — walne w przyszłym kwartale. Kurs +${(jump * 100).toFixed(0)}%.`, 'company');
+    logEvent(`✂️ ${stock.name} zapowiada wydzielenie działalności ${seg.sector} (${formatNumberPl((seg.share * 100), 0)}% przychodów) do nowej spółki — walne w przyszłym kwartale. Kurs +${formatNumberPl((jump * 100), 0)}%.`, 'company');
     const held = isPlayerHolding(stock) || (playerWallet?.portfolio?.[stock.symbol]?.shares || 0) > 0;
     if (held && typeof unlockAcademyEntry === 'function') { unlockAcademyEntry('spinoff', `${stock.name}: zapowiedź wydzielenia`); unlockAcademyEntry('sotp'); }
     if (held && typeof addMail === 'function') addMail({ sender: 'PULS', subject: `✂️ ${stock.name}: zapowiedź wydzielenia ${seg.sector}`, body: `Każdy akcjonariusz ${stock.name} dostanie akcje nowej spółki proporcjonalnie do posiadanych (dywidenda rzeczowa). Kurs ${stock.name} spadnie o wartość wydzielonej części. Decyzja na walnym w przyszłym kwartale.`, importance: 2, symbol: stock.symbol });
@@ -12151,7 +12151,7 @@ function offerSpinoffDecision(stock) {
     if ((Number(stock.spinoffDecisionQuarter) || -99) > quarter - SPINOFF_PLAYER_BLOCK_QUARTERS || typeof addMail !== 'function') return;
     stock.spinoffDecisionQuarter = quarter;
     const seg = getSpinoffCandidateSegment(stock);
-    addMail({ sender: CORPORATION_SENDER, subject: `✂️ ${stock.name}: zarząd rozważa wydzielenie ${seg.sector}`, body: `Segment ${seg.sector} (${(seg.share * 100).toFixed(0)}% przychodów) mógłby działać jako osobna spółka. Jako większościowiec możesz zlecić zapowiedź od razu albo zablokować pomysł na rok. Bez Twojej decyzji zdecyduje prezes.`, importance: 2, symbol: stock.symbol, pinned: true, action: { type: 'spinoff', symbol: stock.symbol } });
+    addMail({ sender: CORPORATION_SENDER, subject: `✂️ ${stock.name}: zarząd rozważa wydzielenie ${seg.sector}`, body: `Segment ${seg.sector} (${formatNumberPl((seg.share * 100), 0)}% przychodów) mógłby działać jako osobna spółka. Jako większościowiec możesz zlecić zapowiedź od razu albo zablokować pomysł na rok. Bez Twojej decyzji zdecyduje prezes.`, importance: 2, symbol: stock.symbol, pinned: true, action: { type: 'spinoff', symbol: stock.symbol } });
 }
 
 function playerSpinoffDecision(symbol, choice) {
@@ -12293,12 +12293,12 @@ function executeSpinoff(parent, options = {}) {
     spinoffLog.length = Math.min(spinoffLog.length, SPINOFF_LOG_LIMIT);
     noteStrategyStat(carve ? 'carveOuts' : 'spinoffs');
     logEvent(carve
-        ? `✂️ CARVE-OUT: ${parent.name} wydziela ${child.name} (${symbol}) na ${getExchangeAcc(child.exchange)} — matka zachowuje ${(keep * 100).toFixed(0)}%, akcjonariusze dostają ${(factor * 100).toFixed(0)}% akcji córki.`
+        ? `✂️ CARVE-OUT: ${parent.name} wydziela ${child.name} (${symbol}) na ${getExchangeAcc(child.exchange)} — matka zachowuje ${formatNumberPl((keep * 100), 0)}%, akcjonariusze dostają ${formatNumberPl((factor * 100), 0)}% akcji córki.`
         : `✂️ SPIN-OFF: ${parent.name} wydziela ${child.name} (${symbol}) na ${getExchangeAcc(child.exchange)}. Każdy akcjonariusz dostaje 1 akcję ${symbol} za 1 akcję ${parent.symbol}.`, 'market');
     const held = (playerPortfolio[symbol]?.shares || 0) + (playerWallet?.portfolio?.[symbol]?.shares || 0);
     if (held > 0) {
-        if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('spinoff', `${parent.name}: dostajesz ${held.toLocaleString('pl-PL')} akcji ${child.name}`);
-        if (typeof addMail === 'function') addMail({ sender: 'PULS', subject: `✂️ Akcje ${child.name} z wydzielenia ${parent.name}`, body: `Dostajesz ${held.toLocaleString('pl-PL')} akcji ${child.name} (${symbol}) jako dywidendę rzeczową. Kurs ${parent.name} spadł o wartość wydzielonej części — wartość Twojej pozycji się nie zmienia.`, importance: 2, symbol });
+        if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('spinoff', `${parent.name}: dostajesz ${formatInt(held)} akcji ${child.name}`);
+        if (typeof addMail === 'function') addMail({ sender: 'PULS', subject: `✂️ Akcje ${child.name} z wydzielenia ${parent.name}`, body: `Dostajesz ${formatInt(held)} akcji ${child.name} (${symbol}) jako dywidendę rzeczową. Kurs ${parent.name} spadł o wartość wydzielonej części — wartość Twojej pozycji się nie zmienia.`, importance: 2, symbol });
     }
     noteGenealogy(carve ? 'carveout' : 'spinoff', parent, child, carve ? { pct: keep } : {});
     return child;
@@ -12590,7 +12590,7 @@ function onCooperationPartnerShock(stock, shock, label) {
         if (effect > 0.001) {
             applyPriceEffect(partner.symbol, -effect, 'negative', 'company');
             noteStrategyStat('cooperationShocks');
-            logEvent(`⛓️ Ryzyko kontrahenta: ${label} w ${stock.name} uderza w kooperanta ${partner.name} (kurs −${(effect * 100).toFixed(1)}%).`, 'company');
+            logEvent(`⛓️ Ryzyko kontrahenta: ${label} w ${stock.name} uderza w kooperanta ${partner.name} (kurs −${formatNumberPl((effect * 100), 1)}%).`, 'company');
             if (isPlayerHolding(partner) && typeof unlockAcademyEntry === 'function') unlockAcademyEntry('ryzykoKontrahenta', `${partner.name}: szok u kooperanta ${stock.name}`);
         }
         if (label === 'bankructwo') endCooperation(coop, 'bankructwo partnera');
@@ -12747,11 +12747,11 @@ function getSumOfParts(stock) {
         const profile = SECTORS[seg.sector]?.profile || {};
         const pe = (typeof getSectorMedians === 'function' ? getSectorMedians(seg.sector)?.pe : null) || profile.pe || 12;
         const value = net > 0 ? net * seg.share * pe : Math.max(0, revenue * seg.share * (profile.ps || 1) * 0.5);
-        return { label: `${SECTORS[seg.sector]?.icon || ''} ${seg.sector} ${(seg.share * 100).toFixed(0)}%`, value, method: net > 0 ? `C/Z ${pe.toFixed(1)}` : 'C/S × 0,5 (strata)' };
+        return { label: `${SECTORS[seg.sector]?.icon || ''} ${seg.sector} ${formatNumberPl((seg.share * 100), 0)}%`, value, method: net > 0 ? `C/Z ${formatNumberPl(pe, 1)}` : 'C/S × 0,5 (strata)' };
     });
     for (const child of stocks.filter(s => s.isSubsidiaryOf === stock.symbol && !s.isBankrupt)) {
         const stake = (stock.equityStakes?.[child.symbol] || 0) / Math.max(1, child.totalShares);
-        if (stake > 0) parts.push({ label: `↳ ${child.name} (${(stake * 100).toFixed(0)}%)`, value: getMarketCapValue(child) * stake, method: 'wartość rynkowa pakietu' });
+        if (stake > 0) parts.push({ label: `↳ ${child.name} (${formatNumberPl((stake * 100), 0)}%)`, value: getMarketCapValue(child) * stake, method: 'wartość rynkowa pakietu' });
     }
     const total = parts.reduce((sum, p) => sum + p.value, 0);
     const cap = getMarketCapValue(stock);
@@ -12908,7 +12908,7 @@ function grantGroupLoan(parent, child, amount = null, rate = null, by = 'ceo') {
     adjustBalanceSheet(child, { assets: value, liabilities: value });
     child.groupLoan = { principal: value, rate: rate ?? getMarketLoanRate(), quarter: getSubQuarter(), by };
     noteStrategyStat('groupLoans');
-    logEvent(`🤲 ${parent.name} pożycza ${formatZl(value, 0)} spółce zależnej ${child.name} (pożyczka wewnątrzgrupowa, ${(child.groupLoan.rate * 100).toFixed(1)}%).`, 'company');
+    logEvent(`🤲 ${parent.name} pożycza ${formatZl(value, 0)} spółce zależnej ${child.name} (pożyczka wewnątrzgrupowa, ${formatNumberPl((child.groupLoan.rate * 100), 1)}%).`, 'company');
     return value;
 }
 
@@ -12943,7 +12943,7 @@ function subsidiarySecondaryOffering(child, parent = getParentOf(child)) {
     adjustCompanyCash(parent, proceeds);
     recordPayment('external:inwestorzy', parent, proceeds, `Oferta wtórna akcji ${child.symbol}`);
     refreshHeld(child);
-    releaseSubsidiary(child, parent, `oferta wtórna — matka ma ${(target / child.totalShares * 100).toFixed(0)}%`);
+    releaseSubsidiary(child, parent, `oferta wtórna — matka ma ${formatNumberPl((target / child.totalShares * 100), 0)}%`);
     return sell;
 }
 
@@ -13270,7 +13270,7 @@ function sellControllingStake(child, parent = getParentOf(child), buyer = null, 
     syncSubsidiaryLinks();
     child.tender = { buyerKind: buyer.kind, buyerId: buyer.kind === 'company' ? buyer.entity.symbol : buyer.id, buyerName: buyer.name, price, from: parent.symbol, until: getSubQuarter() + SUB_TENDER_QUARTERS, accepted: 0 };
     noteStrategyStat('subsSold');
-    logEvent(`🤝 ${parent.name} sprzedaje pakiet kontrolny ${child.name} (${(stake / child.totalShares * 100).toFixed(0)}%) — kupuje ${buyer.name} po ${formatZl(price)} (premia za kontrolę). Wezwanie na resztę akcji po tej samej cenie.`, 'market');
+    logEvent(`🤝 ${parent.name} sprzedaje pakiet kontrolny ${child.name} (${formatNumberPl((stake / child.totalShares * 100), 0)}%) — kupuje ${buyer.name} po ${formatZl(price)} (premia za kontrolę). Wezwanie na resztę akcji po tej samej cenie.`, 'market');
     runTenderForBots(child);
     const held = (playerPortfolio[child.symbol]?.shares || 0) + (playerWallet?.portfolio?.[child.symbol]?.shares || 0);
     if (held > 0 && typeof addMail === 'function') {
@@ -13332,10 +13332,10 @@ function playerTenderDecision(symbol, choice) {
 
 function getGroupRedFlag(stock) {
     const child = stock.groupLoan ? stock : null;
-    if (child && isOffMarketGroupLoan(child)) return { id: 'groupLoan', label: 'Transakcje z podmiotami powiązanymi', desc: `Pożyczka wewnątrzgrupowa ${(child.groupLoan.rate * 100).toFixed(1)}% vs rynek ${(getMarketLoanRate() * 100).toFixed(1)}% — warunki odbiegają od rynkowych o ponad 10%.` };
+    if (child && isOffMarketGroupLoan(child)) return { id: 'groupLoan', label: 'Transakcje z podmiotami powiązanymi', desc: `Pożyczka wewnątrzgrupowa ${formatNumberPl((child.groupLoan.rate * 100), 1)}% vs rynek ${formatNumberPl((getMarketLoanRate() * 100), 1)}% — warunki odbiegają od rynkowych o ponad 10%.` };
     for (const symbol of stock.subsidiaries || []) {
         const c = stocks.find(s => s.symbol === symbol);
-        if (c && isOffMarketGroupLoan(c)) return { id: 'groupLoan', label: 'Transakcje z podmiotami powiązanymi', desc: `Pożyczka dla ${c.name}: ${(c.groupLoan.rate * 100).toFixed(1)}% vs rynek ${(getMarketLoanRate() * 100).toFixed(1)}%.` };
+        if (c && isOffMarketGroupLoan(c)) return { id: 'groupLoan', label: 'Transakcje z podmiotami powiązanymi', desc: `Pożyczka dla ${c.name}: ${formatNumberPl((c.groupLoan.rate * 100), 1)}% vs rynek ${formatNumberPl((getMarketLoanRate() * 100), 1)}%.` };
     }
     return null;
 }
@@ -13351,7 +13351,7 @@ function playerSubsidiaryAction(childSymbol, action, value = null) {
     const child = stocks.find(s => s.symbol === childSymbol), parent = getParentOf(child);
     if (!child || !parent || !canFundControlAgm(parent)) { showToast('Sterować córką może tylko większościowiec matki.', 'warning'); return null; }
     let result = null;
-    if (action === 'transfer') { result = setProfitTransfer(child, value); showToast(`Transfer zysku ${child.name}: ${(result * 100).toFixed(0)}%.`, 'success'); }
+    if (action === 'transfer') { result = setProfitTransfer(child, value); showToast(`Transfer zysku ${child.name}: ${formatNumberPl((result * 100), 0)}%.`, 'success'); }
     else if (action === 'loan') { result = grantGroupLoan(parent, child, null, getMarketLoanRate() * (Number(value) || 1), 'player'); showToast(result ? `Pożyczka ${formatZl(result, 0)}${isOffMarketGroupLoan(child) ? ' — warunki nierynkowe: czerwona flaga' : ''}.` : 'Pożyczka niemożliwa (trwa już albo brak gotówki matki).', result ? 'success' : 'warning'); }
     else if (action === 'policy') { parent.groupPolicy = Boolean(value); applyGroupPolicy(parent); result = parent.groupPolicy; }
     else if (action === 'secondary') result = subsidiarySecondaryOffering(child, parent);

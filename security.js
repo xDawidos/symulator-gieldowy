@@ -40,7 +40,7 @@ function noteGeopoliticalShock() {
     const d = ensureDefense(), q = macro.quarter;
     d.boostUntil = Math.max(d.boostUntil, q + getRandomIntInRange(...DEFENSE_RULES.boostQuarters));
     d.shocks.push({ v: Math.round(getRandomInRange(...DEFENSE_RULES.shock) * 10) / 10, until: q + getRandomIntInRange(...DEFENSE_RULES.shockQuarters) });
-    if (typeof logSociety === 'function') logSociety(`🛡️ Szok geopolityczny: rząd podnosi wydatki obronne o 50% (${(getDefenseShare() * 100).toFixed(1)}% przychodów budżetu), poziom bezpieczeństwa spada.`);
+    if (typeof logSociety === 'function') logSociety(`🛡️ Szok geopolityczny: rząd podnosi wydatki obronne o 50% (${formatNumberPl((getDefenseShare() * 100), 1)}% przychodów budżetu), poziom bezpieczeństwa spada.`);
 }
 function getGeopoliticalShockSum() {
     if (typeof society !== 'object' || !society?.defense) return 0;

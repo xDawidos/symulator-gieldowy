@@ -312,7 +312,7 @@ function applyInfraFirstBonus(p, def) {
         stock.specialBonuses.push({ projectId: p.id, name: def.name, icon: p.type === 'airport' ? '✈️' : '⚓', growth: b.growth, valuation: b.valuation, until: null });
         stock.financialHealth = Math.min(5, (Number(stock.financialHealth) || 0) + b.health);
     }
-    logEvent(`🎉 Pierwsze ${p.type === 'airport' ? 'lotnisko' : 'port'} w kraju: spółki z sektorów ${b.sectors.join(', ')} dostają premię (przychody +${(b.growth * 100).toFixed(1)} pkt proc./kw., wycena +${(b.valuation * 100).toFixed(0)}%).`, 'city');
+    logEvent(`🎉 Pierwsze ${p.type === 'airport' ? 'lotnisko' : 'port'} w kraju: spółki z sektorów ${b.sectors.join(', ')} dostają premię (przychody +${formatNumberPl((b.growth * 100), 1)} pkt proc./kw., wycena +${formatNumberPl((b.valuation * 100), 0)}%).`, 'city');
 }
 
 /** Stare zapisy (decyzja 24): ukończony megaprojekt „Port lotniczy” / „Port morski” = 1 ukończone lotnisko / port S5 (premia została przy megaprojekcie). */

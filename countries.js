@@ -93,7 +93,7 @@ function executeForeignTakeover(stock, giant) {
     if (paid > 0) recordPayment('external:inwestor-zagraniczny', 'external:akcjonariusze', paid, 'Przejęcie przez zagranicznego inwestora');
     const q = typeof macro === 'object' ? macro.quarter : 0, sector = getMainSector(stock);
     (giantEventState.replacements ||= []).push({ due: q + 1 + Math.floor(Math.random() * 4), sector: sector || '', replaces: name, since: q }); // 0.16.9: w miejsce zdjętej spółki debiutuje nowa krajowa
-    const text = `🌍 ${giant.name} (${CURRENCIES[giant.currency]?.name || giant.currency}) przejmuje ${name} (${symbol}): wykup wszystkich akcjonariuszy po cenie ${formatNumberPl(offer, 2)} zł (premia ${(premium * 100).toFixed(0)}%). Spółka znika z giełdy; w ciągu 1–4 kwartałów w jej miejsce zadebiutuje nowa spółka krajowa.`;
+    const text = `🌍 ${giant.name} (${CURRENCIES[giant.currency]?.name || giant.currency}) przejmuje ${name} (${symbol}): wykup wszystkich akcjonariuszy po cenie ${formatNumberPl(offer, 2)} zł (premia ${formatNumberPl((premium * 100), 0)}%). Spółka znika z giełdy; w ciągu 1–4 kwartałów w jej miejsce zadebiutuje nowa spółka krajowa.`;
     logEvent(text, 'market');
     if (typeof pushNews === 'function') pushNews(text, null);
     if (heldByPlayer && typeof addMail === 'function') addMail({ sender: 'PULS', subject: `🌍 ${name}: przejęcie przez zagraniczny koncern`, body: `${text}\n\nTwoje akcje rozliczono gotówką po cenie wykupu.` });
@@ -946,7 +946,7 @@ function buyForeignShares(issuerId, quantity, opts = {}) {
     const over = quantity > room;
     if (over && !opts.overThreshold) {
         const o = getOversight(issuer.country);
-        return { ok: false, needsConfirm: true, room: Math.max(0, room), reason: `Próg wezwania w kraju ${def.name} to ${Math.round(o.callThreshold * 100)}% (nadzór: ${o.name}). Możesz dokupić najwyżej ${Math.max(0, room).toLocaleString('pl-PL')} akcji.` };
+        return { ok: false, needsConfirm: true, room: Math.max(0, room), reason: `Próg wezwania w kraju ${def.name} to ${Math.round(o.callThreshold * 100)}% (nadzór: ${o.name}). Możesz dokupić najwyżej ${formatInt(Math.max(0, room))} akcji.` };
     }
     const cur = issuer.currency, valueLocal = quantity * issuer.price, midPln = toPln(valueLocal, cur);
     const commissionPln = midPln * getCountryCommission(issuer.country);
@@ -1258,7 +1258,7 @@ function checkForeignBotInvariants() {
     for (const bot of getForeignBots()) {
         if (!isCountryJoined(bot.homeCountry)) problems.push(`bot ${bot.name} bez kraju ${bot.homeCountry}`);
         for (const issuer of getForeignIssuerList()) {
-            if (issuer.kind === 'share' && getBotStake(issuer, bot) > BOT_RULES.maxStake + 1e-9) problems.push(`bot ${bot.name} ma ${(getBotStake(issuer, bot) * 100).toFixed(0)}% ${issuer.id}`);
+            if (issuer.kind === 'share' && getBotStake(issuer, bot) > BOT_RULES.maxStake + 1e-9) problems.push(`bot ${bot.name} ma ${formatNumberPl((getBotStake(issuer, bot) * 100), 0)}% ${issuer.id}`);
         }
     }
     return problems;

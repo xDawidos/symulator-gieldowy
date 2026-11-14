@@ -377,7 +377,7 @@ function renderTiedMyProfile() {
     const me = playerProfile || {}, position = CAREER_POSITIONS[getPositionIndex(me.positionId)]?.name || '';
     return `<section class="tied-panel"><span class="net-avatar lg" aria-hidden="true">${escapeHtml(initials(me.name))}</span><h4 class="mt-2">${escapeHtml(me.name || 'Ty')}</h4>
         <span class="tied-meta">${escapeHtml(position)}${playerFund?.name ? ` · ${escapeHtml(playerFund.name)}` : ''}</span>
-        <dl class="tied-kv"><div><dt>Konto prywatne</dt><dd>${formatZl(playerWallet?.cash || 0, 2)}</dd></div><div><dt>Zaufanie klientów</dt><dd>${(playerFund?.trust ?? 0).toFixed(0)} / 100</dd></div><div><dt>Znajomi</dt><dd>${ensureTiedState().friends.length}</dd></div></dl>
+        <dl class="tied-kv"><div><dt>Konto prywatne</dt><dd>${formatZl(playerWallet?.cash || 0, 2)}</dd></div><div><dt>Zaufanie klientów</dt><dd>${formatNumberPl((playerFund?.trust ?? 0), 0)} / 100</dd></div><div><dt>Znajomi</dt><dd>${ensureTiedState().friends.length}</dd></div></dl>
         <h4 class="tied-section">${uiIcon('wpis', 14)} Wpis na ten kwartał</h4>${canPublishTiedPost() ? `<form class="tied-compose" onsubmit="tiedPublish(); return false">${Object.entries(TIED_PLAYER_POSTS).map(([id, text]) => `<label><input type="radio" name="tied-post" value="${id}" ${tiedView.draft === id ? 'checked' : ''} onchange="tiedView.draft='${id}'"> ${escapeHtml(text)}</label>`).join('')}<div class="btn-row"><button class="btn-primary btn-sm">Opublikuj</button></div></form>` : '<p class="tied-note">Wpis opublikowany. Następny w kolejnym kwartale.</p>'}</section>`;
 }
 function renderTiedMessages() {
