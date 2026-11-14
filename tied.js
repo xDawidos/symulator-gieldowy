@@ -386,7 +386,7 @@ function renderTiedMessages() {
         const sender = getMailSenderName(m.sender).replace(/^\P{L}+/u, '');
         return `<li><button class="tied-contact${m.read ? '' : ' is-new'}" onclick="tiedOpenMessage(${m.id})"><span class="net-avatar sm" aria-hidden="true">${escapeHtml(initials(sender))}</span><span><strong>${escapeHtml(sender)}${m.read ? '' : ' <span class="net-chip">Nowa</span>'}</strong><span class="text-sm">${escapeHtml(m.subject)}</span></span></button></li>`;
     }).join('');
-    return `<section class="tied-panel">${offers}${typeof renderTiedPromiseOffers === 'function' ? renderTiedPromiseOffers() : ''}${rows ? `<ul class="tied-list">${rows}</ul>` : offers ? '' : '<p class="text-sm text-muted">Brak wiadomości.</p>'}</section>`;
+    return `<section class="tied-panel">${offers}${typeof renderTiedPromiseOffers === 'function' ? renderTiedPromiseOffers() : ''}${rows ? `<ul class="tied-list">${rows}</ul>` : offers ? '' : renderEmptyState({ icon: 'komentarz', title: 'Brak wiadomości.', text: 'Inwestorzy i analitycy piszą tu, gdy fundusz zaczyna działać na rynku.' })}</section>`; // 0.18.6 O2
 }
 function renderTiedContacts() {
     const tied = ensureTiedState();
@@ -1038,7 +1038,7 @@ const tiedRefusePromise = id => { refusePromiseOffer(id); renderTiedPage(); };
 const PROMISE_STATUS = { live: ['te-chip live', 'zegar', 'W toku'], done: ['te-chip ok', 'ok', 'Spełniona'], failed: ['te-chip', 'zamknij', 'Niespełniona'], resigned: ['te-chip', 'zamknij', 'Rezygnacja'] };
 function renderTeamedPromises() {
     const list = ensurePromises().promises;
-    if (!list.length) return '<p class="fund-muted">Brak obietnic. Tu trafiają umowy z inwestorami przyjęte w Tied.</p>';
+    if (!list.length) return renderEmptyState({ icon: 'umowa', title: 'Brak obietnic.', text: 'Tu trafiają umowy z inwestorami przyjęte w Tied.' }); // 0.18.6 O2
     return `<ul class="te-notes">${list.map(promise => {
         const def = PROMISE_GOALS[promise.type], state = def.state(promise.goal), [chip, icon, label] = PROMISE_STATUS[promise.status];
         const cls = promise.status === 'done' ? ' is-done' : promise.status === 'live' ? '' : ' is-failed';

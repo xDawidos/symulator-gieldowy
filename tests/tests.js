@@ -17597,6 +17597,31 @@ group('0.18.5 Wydajność', () => {
 });
 
 group('0.18.6 Porządki', () => {
+    test('O2: renderEmptyState — 4 warianty (brak danych, przed sesją, zablokowane z postępem, w tabeli), ikona ukryta dla czytników, bez role=status', () => {
+        const wrap = html => { const d = document.createElement('table'); d.innerHTML = `<tbody>${html}</tbody>`; return d; };
+        const box = html => { const d = document.createElement('div'); d.innerHTML = html; return d.firstElementChild; };
+        const plain = box(renderEmptyState({ icon: 'teczka', title: 'Portfel jest pusty.', text: 'Kup pierwszą spółkę.', action: { label: 'Pokaż rynek', onclick: 'void 0' } }));
+        assert(plain.classList.contains('empty') && plain.querySelector('svg[aria-hidden="true"]') && plain.querySelector('b').textContent === 'Portfel jest pusty.' && plain.querySelector('button.act'), 'brak danych');
+        assert(!plain.hasAttribute('role'), 'bez role=status');
+        const wait = box(renderEmptyState({ variant: 'wait', title: 'Kursy pojawią się po pierwszej sesji.', action: { label: 'Rozpocznij grę', onclick: 'void 0', primary: true } }));
+        assert(wait.classList.contains('is-wait') && wait.querySelector('button.act.is-primary'), 'przed pierwszą sesją: przycisk główny');
+        const locked = box(renderEmptyState({ variant: 'locked', title: 'Aukcje odblokujesz później.', progress: { value: 32400, max: 50000, label: 'Aktywa 32 400 / 50 000 PLN' } }));
+        assert(locked.classList.contains('is-locked') && locked.querySelector('.prog i[role="img"]').getAttribute('aria-label').includes('32 400') && locked.querySelector('.prog i').style.getPropertyValue('--v') === '64.8%', 'zablokowane z postępem');
+        const row = wrap(renderEmptyState({ title: 'Brak aktywnych aukcji.', colspan: 4 })).querySelector('tr.empty-row td');
+        assert(row && row.colSpan === 4 && row.querySelector('.empty'), 'w tabeli');
+        assert(!box(renderEmptyState({ title: '<b>x</b>' })).querySelector('b b'), 'tytuł escapowany');
+    });
+    test('O2: pierwsze miejsca ze spisu — łańcuchy przed pierwszym kwartałem i aukcje bez trwającej aukcji pokazują stan pusty', () => {
+        const savedChain = chainState; try { chainState = null; assert(renderChainsPanel().includes('class="empty is-wait"'), 'łańcuchy przed kwartałem'); } finally { chainState = savedChain; }
+        const box = document.createElement('div'); box.id = 'bank-auctions-empty'; document.body.appendChild(box);
+        const saved = [currentTBillAuction, currentCollateralAuction];
+        try {
+            currentTBillAuction = null; currentCollateralAuction = null; updateAuctionsEmptyState();
+            assert(document.getElementById('bank-auctions-empty').querySelector('.empty'), 'brak aukcji: stan pusty');
+            currentTBillAuction = { quantityAvailable: 10, endTime: 0, bids: [] }; updateAuctionsEmptyState();
+            assertEq(document.getElementById('bank-auctions-empty').innerHTML, '', 'trwa aukcja: bez stanu pustego');
+        } finally { [currentTBillAuction, currentCollateralAuction] = saved; box.remove(); }
+    });
     test('O1: narzędzia debug w debug.js — włączony tryb buduje blok z tymi samymi przyciskami, wyłączony usuwa go z DOM', () => {
         const host = document.createElement('div'); host.className = 'debug-settings'; document.body.appendChild(host);
         let saved = null; try { saved = localStorage.getItem(DEBUG_MODE_KEY); } catch (e) { }

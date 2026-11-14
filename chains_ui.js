@@ -46,7 +46,7 @@ function getChainNodeView(g, country) {
 }
 
 function renderChainsPanel() {
-    if (typeof chainState === 'undefined' || !chainState?.cal) return '<p class="notice-inline">' + uiIcon('info', 14) + '<span>Dane pojawią się po pierwszym kwartale gry.</span></p>';
+    if (typeof chainState === 'undefined' || !chainState?.cal) return renderEmptyState({ variant: 'wait', title: 'Łańcuchy pojawią się po pierwszym kwartale gry.', text: 'Bilans dóbr, ceny wewnętrzne i handel liczą się raz na kwartał.' }); // 0.18.6 O2
     const cs = chainState.cal.countries, home = typeof getStartCountry === 'function' ? getStartCountry() : 'PL';
     if (!chainsView.country || !cs.includes(chainsView.country)) chainsView.country = cs.includes(home) ? home : cs[0];
     const chain = CHAINS[chainsView.chain] || CHAINS.metals, country = chainsView.country;

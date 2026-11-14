@@ -160,7 +160,7 @@ function renderForexTab() {
             <p class="text-sm fx-preview" id="fx-preview" aria-live="polite">Depozyt ${formatZl(f.notional / f.leverage, 0)}, spread ${formatZl(f.notional * MARGIN_RULES.entrySpread, 0)}, koszt utrzymania ok. ${formatZl(f.notional * (1 - 1 / f.leverage) * MARGIN_RULES.holdingCostYear, 0)} rocznie.</p>
             <div class="btn-row"><button class="btn-primary" onclick="forexUiOpen()">Otwórz pozycję</button></div></div>
         <p class="text-sm text-muted">Pozycje: ${formatZl(notional, 0)} z limitu ${formatZl(cap, 0)} (${MARGIN_RULES.fundLeverageCap}× aktywa funduszu).</p>
-        ${rows ? `<table class="asset-mini-table w-full"><thead><tr><th>Para</th><th>Kierunek</th><th class="text-right">Wartość</th><th class="text-right">Dźwignia</th><th class="text-right">Depozyt</th><th class="text-right">Kurs</th><th class="text-right">Wynik</th><th class="text-right">Kapitał / depozyt</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : '<p class="text-muted">Brak otwartych pozycji.</p>'}`;
+        ${rows ? `<table class="asset-mini-table w-full"><thead><tr><th>Para</th><th>Kierunek</th><th class="text-right">Wartość</th><th class="text-right">Dźwignia</th><th class="text-right">Depozyt</th><th class="text-right">Kurs</th><th class="text-right">Wynik</th><th class="text-right">Kapitał / depozyt</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : renderEmptyState({ icon: 'moneta', title: 'Brak otwartych pozycji walutowych.', text: 'Pozycję z dźwignią otworzysz formularzem powyżej.' })}`;
 }
 function forexUiSet() {
     const v = id => document.getElementById(id)?.value;

@@ -6115,3 +6115,16 @@ body.dark-mode .owned-badge, .owned-badge { background: transparent; color: var(
 .debug-genealogy { margin-top: 6px; width: 100%; }
 .debug-genealogy summary { cursor: pointer; }
 .debug-pre { font-size: 11px; max-height: 360px; overflow: auto; white-space: pre; }
+
+/* 0.18.6 O2 (makieta 22 §2): stan pusty — ramka przerywana „tu będzie treść”, ciągła na ciemniejszym tle „zablokowane” */
+.empty { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; align-items: start; padding: 14px; border: 1px dashed var(--ink-600); border-radius: 6px; color: var(--color-text-secondary); text-align: left; white-space: normal; }
+.empty > svg { grid-row: span 3; color: var(--color-text-muted); margin-top: 1px; }
+.empty b { color: var(--color-text-primary); font-weight: 600; }
+.empty p { margin: 0; }
+.empty .act { justify-self: start; margin-top: 6px; height: 32px; padding: 0 12px; border: 1px solid var(--ink-600); border-radius: 6px; background: var(--color-bg-raised); color: var(--color-text-primary); font: 600 12px var(--font-family-sans); cursor: pointer; }
+.empty .act.is-primary { border: 0; background: var(--amber-400); color: var(--ink-900); }
+.empty.is-locked { border-style: solid; background: var(--color-bg-sunken); }
+.empty .prog { display: grid; gap: 4px; margin-top: 6px; font-size: 12px; }
+.empty .prog i { display: block; height: 4px; border-radius: 2px; background: linear-gradient(to right, var(--color-text-secondary) var(--v), var(--ink-750) var(--v)); }
+tr.empty-row td { padding: 12px 8px; border-bottom: 0; }
+li.empty-li { list-style: none; padding: 0; }

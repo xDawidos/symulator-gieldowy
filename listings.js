@@ -540,7 +540,7 @@ function renderAntitrustInterventions() {
         ? `Progi interwencji (poziom ${Math.min(3, antitrustOffice.level)}): udział w sektorze ${pct(tier.sector)} po wzroście o ${pct(ANTITRUST_GROWTH)}, w przetargach ${pct(tier.tender)}, w kapitalizacji ${pct(tier.cap)}. Najpierw kara (${pct(tier.fine)} rocznych przychodów), po ${ANTITRUST_ORDER_AFTER} kw. nakaz podziału albo zakaz przejęć.`
         : 'Urząd na poziomie 0 nie interweniuje — rozwija go państwo wydatkami.';
     const rows = antitrustLog.slice(-5).reverse().map(e => `<li>kw. ${e.quarter}: ${escapeHtml(e.symbol)} — ${ANTITRUST_KIND_LABELS[e.kind] || e.kind}${e.amount > 0 ? ` (${formatZl(e.amount, 0)})` : ""}</li>`).join('');
-    const noRows = '<li class="text-muted">Brak interwencji.</li>';
+    const noRows = `<li class="empty-li">${renderEmptyState({ icon: 'waga', title: 'Brak interwencji.', text: 'Urząd antymonopolowy wkracza, gdy spółka albo grupa zbyt mocno dominuje na rynku.' })}</li>`; // 0.18.6 O2
     return `<p class="text-sm text-muted">${thresholds}</p><ul class="list-plain text-sm">${rows || noRows}</ul>`;
 }
 

@@ -543,6 +543,20 @@ function investmentIcon(inv, size = 18) {
 /** Kolor rangi giełdy (tokens.css: --exchange-*). */
 const EXCHANGE_TOKEN = { JUNK: 'junk', BRONZE: 'bronze', SILVER: 'silver', GOLD: 'gold', PLATINUM: 'platinum', RUBY: 'ruby', EMERALD: 'emerald', DIAMOND: 'diamond', INTERNET: 'internet' };
 
+/**
+ * 0.18.6 O2 (makieta 22 §2): stan pusty w 4 wariantach — brak danych (domyślny), przed pierwszą sesją (`wait`),
+ * zablokowane (`locked`, z postępem), w tabeli (`colspan` → `tr.empty-row`). Bez role=status: stan pusty jest stały.
+ * action: { label, onclick, primary } — onclick jako tekst atrybutu (jak w reszcie UI); progress: { value, max, label }.
+ */
+function renderEmptyState({ icon = 'info', title = '', text = '', action = null, variant = '', progress = null, colspan = 0 } = {}) {
+    const cls = `empty${variant === 'wait' ? ' is-wait' : variant === 'locked' ? ' is-locked' : ''}`;
+    const pct = progress && progress.max > 0 ? Math.max(0, Math.min(100, progress.value / progress.max * 100)) : 0;
+    const prog = progress ? `<div class="prog"><span>${escapeHtml(progress.label || '')}</span><i role="img" aria-label="${escapeHtml(progress.label || `${Math.round(pct)}%`)}" style="--v:${pct.toFixed(1)}%"></i></div>` : '';
+    const act = action ? `<button type="button" class="act${action.primary ? ' is-primary' : ''}" onclick="${escapeHtml(action.onclick || '')}">${escapeHtml(action.label)}</button>` : '';
+    const box = `<div class="${cls}">${uiIcon(variant === 'locked' ? 'klodka' : variant === 'wait' ? 'zegar' : icon, 20)}<b>${escapeHtml(title)}</b>${text ? `<p>${escapeHtml(text)}</p>` : ''}${prog}${act}</div>`;
+    return colspan ? `<tr class="empty-row"><td colspan="${colspan}">${box}</td></tr>` : box;
+}
+
 function uiIcon(name, size = 16, extraClass = '') {
     const path = UI_ICON_PATHS[name] || SECTOR_ICON_PATHS[name];
     if (!path) return '';
@@ -1478,7 +1492,7 @@ function renderChartSVGForStock(stock, svgAreaElement, width, height) {
         dataToDraw = aggregateCandles(fullHistory, playerChartSettings.candleInterval);
         historyForMapping = dataToDraw; // Do mapowania transakcji użyjemy zagregowanych danych
         if (dataToDraw.length === 0) {
-            svgAreaElement.innerHTML = `<p style="text-align: center; padding-top: 60px;">Brak danych do narysowania wykresu.</p>`;
+            svgAreaElement.innerHTML = renderEmptyState({ variant: 'wait', title: 'Wykres pojawi się po pierwszej sesji.', text: 'Świece liczą się od pierwszego notowania tej spółki.' }); // 0.18.6 O2
             return;
         }
         minPrice = Math.min(...dataToDraw.map(c => c.low));
@@ -1487,7 +1501,7 @@ function renderChartSVGForStock(stock, svgAreaElement, width, height) {
         historyForMapping = stock.foreignHistory ? stock.foreignHistory.map((price, n) => ({ price, time: n })) : (stock.lineHistory || []); // Do mapowania transakcji użyjemy pełnej, surowej historii
         dataToDraw = stock.foreignHistory ? [...stock.foreignHistory] : filterLineData(historyForMapping, playerChartSettings.lineInterval);
         if (dataToDraw.length === 0) {
-            svgAreaElement.innerHTML = `<p style="text-align: center; padding-top: 60px;">Brak danych do narysowania wykresu.</p>`;
+            svgAreaElement.innerHTML = renderEmptyState({ variant: 'wait', title: 'Wykres pojawi się po pierwszej sesji.', text: 'Linia kursu liczy się od pierwszego notowania tej spółki.' }); // 0.18.6 O2
             return;
         }
         minPrice = Math.min(...dataToDraw);
@@ -2588,7 +2602,7 @@ function displayPortfolio() {
         }
     }
 
-    body.innerHTML = rows.length ? rows.join('') : `<tr><td colspan="4"><div class="ms-empty"><b>Nie masz jeszcze pozycji${isPrivate ? ' na koncie prywatnym' : ''}.</b> Wybierz spółkę z listy i kliknij przycisk handlu.${isPrivate ? '' : ' Zaufanie klientów spada, gdy cały fundusz leży w gotówce.'}</div></td></tr>`; // makieta 18: pusty stan
+    body.innerHTML = rows.length ? rows.join('') : renderEmptyState({ icon: 'teczka', colspan: 4, title: `Nie masz jeszcze pozycji${isPrivate ? ' na koncie prywatnym' : ''}.`, text: `Wybierz spółkę z listy i kliknij przycisk handlu.${isPrivate ? '' : ' Zaufanie klientów spada, gdy cały fundusz leży w gotówce.'}`, action: { label: 'Pokaż rynek', onclick: "window.scrollTo({ top: 0, behavior: 'smooth' })" } }); // 0.18.6 O2
 
     // Pasywa
     const liabilities = document.getElementById('my-liabilities-list');
@@ -2596,7 +2610,7 @@ function displayPortfolio() {
         const loans = isPrivate ? [] : (playerFund?.pawnLoans || []);
         liabilities.innerHTML = loans.length
             ? loans.map(loan => `<li>Lombard: <strong class="loss">${formatZl(loan.principal)}</strong> [zastaw: ${loan.shares} ${escapeHtml(loan.symbol)}] · ${loan.weeksLeft} tyg.</li>`).join('')
-            : '<li>Brak zobowiązań.</li>';
+            : `<li class="empty-li">${renderEmptyState({ icon: 'waga', title: 'Brak zobowiązań.', text: 'Tu pojawią się pożyczki w lombardzie pod zastaw akcji funduszu.' })}</li>`; // 0.18.6 O2
     }
 
     // Nagłówek i kafelki zależnie od konta
@@ -5424,6 +5438,16 @@ function updateTBillAuctionSection() {
     } else {
         section.style.display = 'none';
     }
+    updateAuctionsEmptyState();
+}
+
+/** 0.18.6 O2: gdy nie trwa żadna aukcja (bonów ani akcji zastawnych), okno Banku pokazuje stan pusty zamiast niczego. */
+function updateAuctionsEmptyState() {
+    const box = document.getElementById('bank-auctions-empty');
+    if (!box) return;
+    const none = !(typeof currentTBillAuction !== 'undefined' && currentTBillAuction) && !(typeof currentCollateralAuction !== 'undefined' && currentCollateralAuction);
+    const html = none ? renderEmptyState({ icon: 'moneta', title: 'Brak aktywnych aukcji.', text: 'Aukcje bonów skarbowych ogłasza Bank Centralny, a aukcje akcji zastawnych powstają po niespłaconych pożyczkach. O nowej aukcji przeczytasz w wiadomościach.' }) : '';
+    if (box.innerHTML !== html) box.innerHTML = html;
 }
 
 // --- PONIŻEJ FUNKCJE Z BAZY ui.js (Bankowość Komercyjna) ---
@@ -5540,6 +5564,7 @@ function updateCollateralAuctionSection() {
     } else {
         section.style.display = 'none';
     }
+    updateAuctionsEmptyState();
 }
 
 function closeInteractionModal() {
@@ -5985,9 +6010,8 @@ function renderTendersList() {
     if (visibleTenders.length && typeof unlockAcademyEntry === 'function') unlockAcademyEntry('przetargKryteria');
 
     if (visibleTenders.length === 0) {
-        const empty = document.createElement('p');
-        empty.className = 'construction-empty';
-        empty.textContent = 'Brak otwartych lub realizowanych przetargów.';
+        const empty = document.createElement('div'); // 0.18.6 O2
+        empty.innerHTML = renderEmptyState({ icon: 'budownictwo', title: 'Brak otwartych lub realizowanych przetargów.', text: 'Spółki ogłaszają przetargi na budowy, gdy inwestują; nowe pojawiają się w czasie gry.' });
         fragment.appendChild(empty);
     }
 
@@ -6157,8 +6181,8 @@ function renderConstructionCompaniesList() {
 
         const list = document.createElement('ul');
         if (active.length === 0) {
-            const li = document.createElement('li');
-            li.textContent = 'Brak aktywnych budów';
+            const li = document.createElement('li'); li.className = 'empty-li'; // 0.18.6 O2
+            li.innerHTML = renderEmptyState({ icon: 'budownictwo', title: 'Brak aktywnych budów.', text: 'Spółka buduje po wygraniu przetargu.' });
             list.appendChild(li);
         }
         for (const project of active) {
@@ -6279,9 +6303,8 @@ function renderConstructionProjectsList() {
     const projects = constructionProjects.filter(project => !project.settled);
 
     if (projects.length === 0) {
-        const empty = document.createElement('p');
-        empty.className = 'construction-empty';
-        empty.textContent = 'Brak aktywnych budów.';
+        const empty = document.createElement('div'); // 0.18.6 O2
+        empty.innerHTML = renderEmptyState({ icon: 'budownictwo', title: 'Brak aktywnych budów.', text: 'Budowa rusza po rozstrzygnięciu przetargu.' });
         fragment.appendChild(empty);
     }
 
@@ -6574,9 +6597,8 @@ function renderConstructionHistoryList(companies = stocks) {
     const fragment = document.createDocumentFragment();
 
     if (rows.length === 0) {
-        const empty = document.createElement('p');
-        empty.className = 'construction-empty';
-        empty.textContent = 'Brak zakończonych lub anulowanych kontraktów.';
+        const empty = document.createElement('div'); // 0.18.6 O2
+        empty.innerHTML = renderEmptyState({ icon: 'umowa', title: 'Brak zakończonych lub anulowanych kontraktów.', text: 'Tu trafia historia rozliczonych budów.' });
 
         fragment.appendChild(empty);
         container.replaceChildren(fragment);
@@ -7198,7 +7220,7 @@ function renderPrivatePanel() {
         const value = (stock?.price || 0) * holding.shares;
         const pl = value - holding.avgPrice * holding.shares;
         return `<li>${symbol}: ${holding.shares} szt. · ${formatZl(value)} <span class="${pl >= 0 ? 'profit' : 'loss'}">(${pl >= 0 ? '+' : ''}${formatNumberPl(pl, 2)})</span></li>`;
-    }).join('') || '<li class="fund-muted">Brak prywatnych akcji.</li>';
+    }).join('') || `<li class="empty-li">${renderEmptyState({ icon: 'teczka', title: 'Brak akcji na koncie prywatnym.', text: 'Konto prywatne kupuje akcje po przełączeniu konta handlu na „Konto prywatne”.' })}</li>`; // 0.18.6 O2
 
     container.innerHTML = `
         <p>Konto prywatne: <strong>${formatZl(playerWallet.cash)}</strong>
@@ -7804,7 +7826,7 @@ function renderMailbox() {
                 <span class="mail-subject">${message.importance >= 3 ? `${uiIcon('alert', 14)} ` : ''}${message.isSpam ? '<span class="mail-tag">Reklama</span> ' : ''}${escapeHtml(message.subject)}
                     <span class="mail-snippet"> — ${escapeHtml(message.body.slice(0, 80))}</span></span>
                 <span class="mail-time">${formatMailTime(message.at)}</span>
-            </div>`).join('') : '<p class="fund-muted mail-empty">Brak wiadomości w tym folderze.</p>'}`;
+            </div>`).join('') : renderEmptyState({ icon: 'poczta', title: 'Brak wiadomości w tym folderze.', text: 'Wiadomości od zarządu, klientów i z prenumerat przychodzą w czasie gry.' })}`; // 0.18.6 O2
 
     const selected = mailbox.messages.find(m => m.id === mailView.selectedId);
     const layout = document.querySelector('.mail-layout');
@@ -8295,7 +8317,7 @@ function renderJuMarket() {
             <span class="ju-client-units">${formatNumberPl(client.units, 1)} udz. · ${formatZl(client.units * nav, 0)}</span>
             <span class="ju-satisfaction" title="Zadowolenie"><span style="width:${(client.satisfaction * 100).toFixed(0)}%"></span></span>
         </div>${card}`;
-    }).join('') || '<p class="text-muted">Brak klientów w tej grupie.</p>';
+    }).join('') || renderEmptyState({ icon: 'klienci', title: 'Brak klientów w tej grupie.', text: 'Zmień filtr albo poczekaj na nowych klientów: przychodzą po dobrych wynikach i kampaniach emisyjnych.' }); // 0.18.6 O2
 }
 
 // =================================================================================
