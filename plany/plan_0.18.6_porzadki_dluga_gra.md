@@ -11,7 +11,7 @@ Zgłoszenie użytkownika z 2026-11-13 (5 celów: debug, stany puste, formaty, pa
 | 3 | **0.18.8 Długa gra** | Etap 3: late game 50–100 lat | diagnoza i limity pamięci, skala kapitału, 3 automaty w Akademii, czarne łabędzie, podsumowania dekad (makieta 23) |
 | 4 | Cel gry | — | `plan_cel_gry.md`, numer nadamy przy planowaniu (po 0.18.8, przed 0.19.1) |
 
-Makiety 22 i 23 (`design/22_pierwsze_kroki.md`, `design/23_fazy_dekada.md`, commit beac246) **czekają na akceptację użytkownika**. Części, które z nich korzystają, ruszają po akceptacji.
+Makiety 22 i 23 (`design/22_pierwsze_kroki.md`, `design/23_fazy_dekada.md`, commit beac246) **zaakceptowane przez użytkownika 2026-11-14**. Wdrażają je części O2, O8, E1, E2, E3 i D6.
 
 ## Uzgodnienie z listą użytkownika (2026-11-14)
 
@@ -106,7 +106,7 @@ Stan w kodzie: partia **„Zieloni”** (`green`, `core.js:4872`) wchodzi na wyb
 - **Test:** nadsubskrypcja 3× daje przydział 1/3 i zwrot reszty; wycofanie daje pełny zwrot; niezmienniki 0 (zablokowana + wolna gotówka = gotówka przed zapisem).
 - **Bramka:** debiuty i „pop” pierwszego dnia jak w kontroli 0.18.4 ±20%, GIG ±0,5 pp.
 
-### O8. UI z makiet 22 i 23 (po akceptacji makiet)
+### O8. UI z makiet 22 i 23 (zaakceptowane 2026-11-14)
 
 - **Zakres:** (1) pola z etykietą (makieta 22 §3): widoczne `label for` dla pól z tabeli notki, chipy branż jako `fieldset` + `legend`; (2) akcent fazy rynku (makieta 23 §1): `data-phase` na `.app-main` tylko przy „Analityk indeksu” L4 i pokazanej fazie, `.phase-chip`, krawędź panelu rynku, ruch tylko przy `prefers-reduced-motion: no-preference`; (3) bezpiecznik giełdowy (makieta 23 §2): nowy `#circuit-breaker-banner` (`role=alert`, ikona zamiast emoji, bez wersalików i pulsowania, licznik `aria-hidden`); (4) usunięcie ukrytego wiersza konta prywatnego `.topbar-kpi[hidden]` z `index.html`.
 - **Pliki:** `index.html`, `ui.js` (`updateMoodKpi`, `updateCircuitBreakerUI`), `style.css`, `tokens.css` (zmienne fazy).
@@ -234,9 +234,9 @@ Implementujesz plan plany/plan_0.18.6_porzadki_dluga_gra.md w Capital Quest,
 w kolejności: 0.18.6 Porządki (Etap 1) → 0.18.7 Progresja i onboarding
 (Etap 2) → 0.18.8 Długa gra (Etap 3). Cel gry dopiero potem.
 Zacznij po scaleniu kontroli końcowej 0.18 (czat „Realizacja 0.18”).
-Części z makiet 22 i 23 (O2 warianty, O8, E1 kłódka, E2, E3, D6) ruszają
-dopiero po akceptacji tych makiet przez użytkownika
-(plany/design/22_pierwsze_kroki.md, plany/design/23_fazy_dekada.md).
+Makiety 22 i 23 są zaakceptowane (2026-11-14); wdrażaj je według notek
+plany/design/22_pierwsze_kroki.md i plany/design/23_fazy_dekada.md
+(części O2 warianty, O8, E1 kłódka, E2, E3, D6).
 
 Zasady: po polsku; część po części, commit po każdej, tylko swoje pliki;
 testy (design/narzedzia/run_tests.mjs) i przebiegi ×200 przed commitem;
