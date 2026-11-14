@@ -1354,24 +1354,23 @@
 
     <!-- Korporacja: zarząd, analitycy, współpraca, przejęcia -->
     <div id="corporation-overlay" class="intro-overlay" hidden onclick="if (event.target === this) closeCorporationModal()">
-      <div class="corp-modal bank-window" role="dialog" aria-labelledby="corporation-title">
-        <header class="bank-hero">
-          <div class="bank-emblem" aria-hidden="true"><svg class="ic" width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V5a1 1 0 0 1 1-1h9v17M14 9h5a1 1 0 0 1 1 1v11M8 8h2M8 12h2M8 16h2M3 21h18"/></svg></div>
-          <div>
-            <div class="bank-hero-kicker">Zarząd · menedżerowie · analitycy · cele</div>
-            <h2 class="bank-hero-title" id="corporation-title">Korporacja</h2>
-          </div>
-          <button class="close-btn" onclick="closeCorporationModal()" aria-label="Zamknij" style="margin-left: auto;">&times;</button>
+      <section class="wn wn--firm" role="dialog" aria-modal="true" aria-labelledby="corporation-title"><!-- 0.18.6 O6 (U6): wspólna rama okna -->
+        <header class="wn-head">
+          <div class="wn-emblem" aria-hidden="true"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V5a1 1 0 0 1 1-1h9v17M14 9h5a1 1 0 0 1 1 1v11M8 8h2M8 12h2M8 16h2M3 21h18"/></svg></div>
+          <div><h2 id="corporation-title" tabindex="-1">Korporacja</h2><p id="corporation-headline"></p></div>
+          <button class="wn-close" onclick="closeCorporationModal()" aria-label="Zamknij (Esc)"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
         </header>
-        <nav class="bank-tabs corp-tabs" role="tablist">
-          <button class="bank-tab-btn active" data-tab="firm" onclick="setCorporationTab('firm')">Firma</button>
-          <button class="bank-tab-btn" data-tab="board" onclick="setCorporationTab('board')">Zarząd</button>
-          <button class="bank-tab-btn" data-tab="analysts" onclick="setCorporationTab('analysts')">Analitycy</button>
-          <button class="bank-tab-btn" data-tab="cooperation" onclick="setCorporationTab('cooperation')">Współpraca</button>
-          <button class="bank-tab-btn" data-tab="takeovers" onclick="setCorporationTab('takeovers')">Przejęcia</button>
-        </nav>
-        <div id="corporation-body" class="corp-body"></div>
-      </div>
+        <div class="wn-body is-tabs">
+          <nav class="wn-tabs corp-tabs" role="tablist" aria-label="Zakładki Korporacji">
+            <button class="bank-tab-btn wn-tab active" role="tab" aria-selected="true" data-tab="firm" onclick="setCorporationTab('firm')">Firma</button>
+            <button class="bank-tab-btn wn-tab" role="tab" aria-selected="false" data-tab="board" onclick="setCorporationTab('board')">Zarząd</button>
+            <button class="bank-tab-btn wn-tab" role="tab" aria-selected="false" data-tab="analysts" onclick="setCorporationTab('analysts')">Analitycy</button>
+            <button class="bank-tab-btn wn-tab" role="tab" aria-selected="false" data-tab="cooperation" onclick="setCorporationTab('cooperation')">Współpraca</button>
+            <button class="bank-tab-btn wn-tab" role="tab" aria-selected="false" data-tab="takeovers" onclick="setCorporationTab('takeovers')">Przejęcia</button>
+          </nav>
+          <div id="corporation-body" class="wn-main corp-body"></div>
+        </div>
+      </section>
     </div>
 
     <!-- Powiadomienia (B2) -->

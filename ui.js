@@ -4926,6 +4926,8 @@ window.addEventListener('keydown', event => {
         // 0.14.5: najpierw poczta (nakładka), potem zwykłe okna; scenka startowa się nie zamyka
         const mail = document.getElementById('mail-overlay');
         if (mail && !mail.hidden) { closeMailbox(); return; }
+        const corp = document.getElementById('corporation-overlay'); // 0.18.6 O6: Esc zamyka też Korporację
+        if (corp && !corp.hidden) { closeCorporationModal(); return; }
         if (document.getElementById('game-confirm-modal')?.style.display === 'block') { closeGameConfirm(false); return; }
         closeVisibleModals();
     }
@@ -7489,16 +7491,26 @@ function openCorporationModal(tab = corporationTab) {
     setCorporationTab(tab);
 }
 
+/** 0.18.6 O6: jedno zdanie stanu w nagłówku Korporacji. */
+function getCorporationHeadline() {
+    const pos = typeof getPlayerPosition === 'function' ? getPlayerPosition()?.name : '';
+    const managers = corporation?.managers?.length || 0;
+    return `${pos ? `Twoje stanowisko: ${pos}. ` : ''}${managers ? `W korporacji pracuje ${managers} ${managers === 1 ? 'zarządca' : 'zarządców'} funduszy.` : ''}`.trim();
+}
+
 function closeCorporationModal() {
     document.getElementById('corporation-overlay').hidden = true;
 }
 
 function setCorporationTab(tab) {
     corporationTab = tab;
-    document.querySelectorAll('.corp-tabs button').forEach(button => button.classList.toggle('active', button.dataset.tab === tab));
+    document.querySelectorAll('.corp-tabs button').forEach(button => { const on = button.dataset.tab === tab; button.classList.toggle('active', on); button.setAttribute('aria-selected', String(on)); });
     const title = document.getElementById('corporation-title');
     if (title) title.textContent = `${corporation.name}`;
+    const head = document.getElementById('corporation-headline'); // 0.18.6 O6: zdanie stanu zamiast kickera
+    if (head) head.textContent = getCorporationHeadline();
     renderCorporationBody();
+    const body = document.getElementById('corporation-body'); if (body) body.scrollTop = 0;
 }
 
 /** Akcja z okna korporacji: wykonaj i odśwież widoki. */

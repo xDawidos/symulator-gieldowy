@@ -6131,3 +6131,8 @@ li.empty-li { list-style: none; padding: 0; }
 
 /* 0.18.6 O6 (U6): Bank w ramie .wn. Akcent okna neutralny niebieski, nie bursztyn: po R4 bursztyn znaczy „Twoje” (pytanie otwarte z makiety 19) */
 .wn--bank { --wn-accent: var(--blue-400); }
+
+/* 0.18.6 O6 (U6): Korporacja w ramie .wn wewnątrz nakładki (tło klikane zamyka okno jak dotąd) */
+#corporation-overlay > .wn { position: absolute; }
+#corporation-overlay .wn-main.corp-body { display: block; }
+#corporation-overlay .wn-main.corp-body > * + * { margin-top: 12px; }
