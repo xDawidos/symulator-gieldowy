@@ -118,7 +118,7 @@ const CRISIS_STAGES = ['spark', 'burst', 'spread', 'intervention', 'bottom', 're
 const CRISIS_STAGE_NAMES = { spark: 'Zapowiedź', burst: 'Wybuch', spread: 'Zarażanie', intervention: 'Interwencja', bottom: 'Dno', recovery: 'Odbicie' };
 const CRISIS_STAGE_LENGTHS = { spark: [1, 2], burst: [1, 1], spread: [1, 3], intervention: [1, 2], bottom: [1, 2] };
 const CRISIS_BASE_CHANCE = 0.015;     // pokrętło 0,5–2% na kwartał (0.16.2: 1% → 1,5%: 0,7–1,0 linii na 20 lat było dolną granicą celu 1–2)
-const CRISIS_QUIET_QUARTERS = 12;     // linia najwcześniej po tylu kwartałach bez krachu i linii
+const CRISIS_QUIET_QUARTERS = 10;     // linia najwcześniej po tylu kwartałach bez krachu i linii (0.18.6 O4, U2: 12 → 10)
 const CRISIS_REPLACES_CRASH = 0.40;   // szansa, że wylosowany krach jest linią
 const CRISIS_MAX_VICTIMS = 3;
 
@@ -151,7 +151,7 @@ const CRISIS_LINES = {
         rate: { kind: 'cut', total: [-0.005, -0.01], quarters: 2 }, state: null,
         victims: { sectors: ['Technologia', 'Gaming', 'Media'], subsectors: [['Finanse', 'Fintech']], banks: false },
         news: { burst: 'Indeks spółek technologicznych traci w tydzień kilkanaście procent. Inwestorzy wycofują się z firm bez zysków.', spread: 'Pękająca bańka zaraża Gaming i Media; startupom brakuje gotówki, a fundusze venture zamykają kurek.', intervention: 'Bank centralny obniża stopy, by złagodzić wyprzedaż akcji.', bottom: 'Technologia znalazła dno: przeżyją spółki z zyskami i gotówką.', recovery: 'Rynek wraca do wartości; technologia odbija wolniej niż reszta.' },
-        eligible: regime => ['bull', 'euphoria', 'distribution'].includes(regime.phase) && (activeSectorBubble ? ['Technologia', 'Gaming', 'Finanse'].includes(activeSectorBubble.sector) : regime.premium > 0.1)
+        eligible: regime => ['bull', 'euphoria', 'distribution'].includes(regime.phase) && (activeSectorBubble ? ['Technologia', 'Gaming', 'Finanse'].includes(activeSectorBubble.sector) : regime.premium > 0.05) // 0.18.6 O4: premia 0,10 → 0,05
     },
     oil: {
         id: 'oil', name: 'Szok naftowy', icon: '🛢️', svg: 'kryzys-ropa', year: 1973, recoveryQ: [4, 8], shape: 'U',
@@ -165,7 +165,7 @@ const CRISIS_LINES = {
         rate: { kind: 'hike', total: [0.01, 0.02], quarters: 2 }, state: 'fuelSubsidy',
         victims: { sectors: ['Transport i logistyka', 'Turystyka'], banks: false },
         news: { burst: 'Embargo naftowe: ropa drożeje o połowę, paliwa i bilety lotnicze drożeją z dnia na dzień.', spread: 'Drogie paliwo uderza w przewoźników, turystykę i przemysł. Inflacja przyspiesza mimo osłabienia gospodarki.', intervention: 'Bank centralny podnosi stopy, by walczyć z inflacją, choć gospodarka jest w recesji. Rząd dopłaca do paliw dla transportu.', bottom: 'Ceny ropy przestają rosnąć; firmy dostosowują się do droższej energii.', recovery: 'Gospodarka uczy się żyć z droższą energią; inflacja powoli słabnie.' },
-        eligible: regime => !['bear', 'capitulation'].includes(regime.phase)
+        eligible: regime => regime.phase !== 'capitulation' // 0.18.6 O4: szoki zewnętrzne także w bessie
     },
     black: {
         id: 'black', name: 'Czarny czwartek', icon: '🖤', svg: 'kryzys-czwartek', year: 1929, recoveryQ: [10, 16], shape: 'L',
@@ -179,7 +179,7 @@ const CRISIS_LINES = {
         rate: { kind: 'cut', total: [-0.015, -0.025], quarters: 3, delay: 2 }, state: 'publicWorks',
         victims: { sectors: ['Bankowość', 'Finanse', 'Przemysł', 'Budowlany'], banks: true, extra: 1 },
         news: { burst: 'Czarny czwartek na giełdzie: indeks traci w kilka dni więcej niż przez ostatnie lata. Inwestorzy sprzedają wszystko.', spread: 'Panika po krachu wycofuje depozyty z banków; spółki tracą zamówienia, a kredyt wysycha.', intervention: 'Bank centralny zwlekał z reakcją — dopiero teraz tnie stopy. Rząd ogłasza program robót publicznych.', bottom: 'Gospodarka jest na dnie. Giełda wciąż nie dowierza, że zaczyna się odbicie.', recovery: 'Powolne odbicie: na odbudowę po krachu potrzeba lat, nie kwartałów.' },
-        eligible: regime => regime.phase === 'euphoria' && regime.premium > 0.25
+        eligible: regime => ['euphoria', 'distribution'].includes(regime.phase) && regime.premium > 0.15 // 0.18.6 O4: także dystrybucja, premia 0,25 → 0,15
     },
     pandemic: {
         id: 'pandemic', name: 'Pandemia', icon: '🦠', svg: 'kryzys-pandemia', year: 2020, recoveryQ: [2, 4], shape: 'V',
@@ -198,7 +198,7 @@ const CRISIS_LINES = {
         rate: { kind: 'cut', total: [-0.02, -0.03], quarters: 1, floor: 0.005 }, state: 'relief',
         victims: { sectors: ['Turystyka', 'Usługi'], banks: false },
         news: { burst: 'Lockdown w wielu krajach: turystyka i usługi stają z dnia na dzień, a giełda gwałtownie traci.', spread: 'Restauracje, hotele i linie lotnicze liczą straty; rośnie popyt na leki, internet i gry.', intervention: 'Bank centralny tnie stopy do minimum, rząd ogłasza programy pomocowe dla turystyki i usług.', bottom: 'Obostrzenia powoli znikają; rynek patrzy już poza epidemię.', recovery: 'Szybkie odbicie w kształcie litery V — poza turystyką, która wraca wolniej.' },
-        eligible: regime => !['bear', 'capitulation'].includes(regime.phase)
+        eligible: regime => regime.phase !== 'capitulation' // 0.18.6 O4: szoki zewnętrzne także w bessie
     },
     supply: { // 0.18.1 P4: szósta linia — szok podażowy w łańcuchach (wariant losowany przy starcie; zdolność ogniw: getSupplyShockCapacity)
         id: 'supply', name: 'Szok podażowy', icon: '', svg: 'szok', year: 2021, recoveryQ: [4, 8], shape: 'U',
@@ -217,7 +217,7 @@ const CRISIS_LINES = {
         rate: { kind: 'hike', total: [0.0025, 0.005], quarters: 1 }, state: null,
         victims: { sectors: ['Motoryzacja', 'Przemysł'], banks: false },
         news: { burst: 'Łańcuch dostaw pęka: brakuje części i surowców, a ceny półproduktów rosną.', spread: 'Braki idą w dół łańcucha: huty, fabryki maszyn i motoryzacja tną produkcję, kupują drożej z zagranicy.', intervention: 'Rząd uruchamia rezerwy strategiczne i pomaga firmom przestawić dostawy na inne kraje.', bottom: 'Najgorsze za nami: dostawy z innych krajów domykają luki, ale zapasy są puste.', recovery: 'Szlaki i kopalnie wracają do pracy, a firmy odbudowują zapasy.' },
-        eligible: regime => !['bear', 'capitulation'].includes(regime.phase)
+        eligible: regime => regime.phase !== 'capitulation' // 0.18.6 O4: szoki zewnętrzne także w bessie
     }
 };
 

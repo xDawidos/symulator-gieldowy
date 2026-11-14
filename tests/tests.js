@@ -17597,6 +17597,26 @@ group('0.18.5 Wydajność', () => {
 });
 
 group('0.18.6 Porządki', () => {
+    test('O4 (U2): linia kryzysu nie rusza przed 10 kw. spokoju, po 10 kw. tak; szoki zewnętrzne także w bessie, Czarny czwartek przy dystrybucji z premią > 15%', () => {
+        resetWorld([makeCompany('AAA', { sector: ['Technologia'] }), makeCompany('BBB', { sector: ['Turystyka'] })]);
+        startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' }); initMarketRegimes();
+        marketCrash = createMarketCrashState(); marketHalt = createMarketHaltState(); macro.quarter = 40; mailbox = createMailbox();
+        assertEq(CRISIS_QUIET_QUARTERS, 10, 'spokój 10 kw.');
+        const regime = getMarketRegime('home'); regime.phase = 'bull'; regime.premium = 0.1;
+        const realRandom = Math.random;
+        try {
+            Math.random = () => 0;
+            crisisLine = null; crisisState.used = []; crisisState.lastEventQ = macro.quarter - 9; processCrisesQuarterly();
+            assert(!crisisLine, 'po 9 kw. bez linii');
+            crisisLine = null; crisisState.used = []; crisisState.lastEventQ = macro.quarter - 10; processCrisesQuarterly();
+            assert(crisisLine, 'po 10 kw. linia rusza');
+        } finally { Math.random = realRandom; crisisLine = null; sectorShocks = []; }
+        regime.phase = 'bear'; crisisState.used = [];
+        const bear = getEligibleCrisisLines(regime);
+        assert(['oil', 'pandemic', 'supply'].every(id => bear.includes(id)) && !bear.includes('banking'), `w bessie: ${bear}`);
+        regime.phase = 'capitulation'; assertEq(getEligibleCrisisLines(regime).length, 0, 'kapitulacja: bez nowych linii');
+        regime.phase = 'distribution'; regime.premium = 0.2; assert(getEligibleCrisisLines(regime).includes('black'), 'Czarny czwartek przy dystrybucji');
+    });
     test('O3: formatters.js — minus typograficzny, „—” dla NaN, NAV 4 miejsca, akcje z odmianą, pp ze znakiem, waluta EUR przy starcie z DE', () => {
         assertEq(formatNumberPl(-7.2, 2), '\u22127,20', 'minus typograficzny');
         assertEq(formatNumberPl(NaN), '—', 'NaN'); assertEq(formatZl(undefined), '—', 'kwota NaN'); assertEq(formatPp(NaN), '—', 'pp NaN');
