@@ -3166,42 +3166,7 @@ function formatSectorPremiumCell(premium, isBubble = false) {
     return `<span class="sector-premium ${cls}">${icon} ${sign}${pct}%</span>${badge}`;
 }
 
-/** Debug: ręczne wywołanie bańki sektorowej. */
-function debugTriggerSectorBubble(candId = 'ai', initialPremium = 0.35) {
-    const cand = SECTOR_BUBBLE_CANDIDATES.find(c => c.id === candId) || SECTOR_BUBBLE_CANDIDATES[0];
-    activeSectorBubble = {
-        candidateId: cand.id,
-        name: cand.name,
-        sector: cand.sector,
-        subsector: cand.subsector,
-        phase: 'inflating',
-        premium: initialPremium,
-        quarters: 1,
-        popDuration: 0,
-        popTarget: 0,
-        popStartPremium: 0,
-        recoveryQuarters: 0
-    };
-    sectorBubbleCooldown = 0;
-    updateAllSectorPremiums();
-    if (typeof logEvent === 'function') {
-        logEvent(`🛠️ [DEBUG] Wywołano bańkę sektorową: ${cand.name} (premia +${(initialPremium * 100).toFixed(0)}%).`, 'review');
-    }
-}
 
-/** Debug: natychmiastowe pęknięcie bańki sektorowej. */
-function debugPopSectorBubble() {
-    if (!activeSectorBubble) return;
-    activeSectorBubble.phase = 'popping';
-    activeSectorBubble.popDuration = 2;
-    activeSectorBubble.popTarget = -0.20;
-    activeSectorBubble.popStartPremium = activeSectorBubble.premium;
-    activeSectorBubble.quartersInPop = 0;
-    updateAllSectorPremiums();
-    if (typeof logEvent === 'function') {
-        logEvent(`🛠️ [DEBUG] Wymuszono pęknięcie bańki sektorowej: ${activeSectorBubble.name}.`, 'review');
-    }
-}
 
 // =================================================================================
 // 0.15 H4: KRACH, MARGIN CALL, BEZPIECZNIKI I REAKCJA INSTYTUCJI
@@ -3587,15 +3552,7 @@ function checkPlayerMarginCall() {
 
 // 0.15.3 W0 (naprawa B5): szok sektorowy (applySectorShock) jest stanem z czasem trwania w crises.js i sumuje się z bańką w updateAllSectorPremiums.
 
-/** Debug: ręczne wywołanie krachu rynkowego. */
-function debugTriggerMarketCrash() {
-    triggerMarketCrash();
-}
 
-/** Debug: ręczne wywołanie bezpiecznika giełdowego. */
-function debugTriggerMarketHalt(level = 1, durationSec = 15) {
-    triggerMarketHalt(level, durationSec, level === 1 ? -0.075 : (level === 2 ? -0.135 : -0.21));
-}
 
 // 0.15.4 P6: limit dominacji. Jedna spółka (Orzeł Telekom, Cortex, Biurowce Obsługi Rachunkowej) potrafiła mieć 20–33% kapitalizacji
 // rynku i niemal stale zasiadała w górnej trójce. Udział w kapitalizacji ponad próg obniża mnożnik wyceny (nasycenie rynku, regulatorzy,

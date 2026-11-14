@@ -17595,3 +17595,27 @@ group('0.18.5 Wydajność', () => {
         assert(shouldDrawUi(1210, 1) && shouldDrawUi(1211, 1), '×1: zawsze');
     });
 });
+
+group('0.18.6 Porządki', () => {
+    test('O1: narzędzia debug w debug.js — włączony tryb buduje blok z tymi samymi przyciskami, wyłączony usuwa go z DOM', () => {
+        const host = document.createElement('div'); host.className = 'debug-settings'; document.body.appendChild(host);
+        let saved = null; try { saved = localStorage.getItem(DEBUG_MODE_KEY); } catch (e) { }
+        const setMode = on => { try { localStorage.setItem(DEBUG_MODE_KEY, on ? '1' : '0'); } catch (e) { } applyDebugModeUi(); };
+        const speed = typeof currentSpeedMultiplier !== 'undefined' ? currentSpeedMultiplier : 1;
+        try {
+            setMode(true);
+            const tools = document.querySelectorAll('#debug-tools');
+            assertEq(tools.length, 1, 'jeden blok narzędzi');
+            const labels = [...tools[0].querySelectorAll('button')].map(b => b.textContent);
+            for (const t of ['Zakończ okres funduszu', 'Ocena zarządu teraz', 'Sprawdź spójność świata', 'Wywołaj bańkę', 'Pęknij bańkę', 'Ustaw (potwierdzona)'])
+                assert(labels.some(l => l.includes(t)), `przycisk „${t}”`);
+            assert(tools[0].querySelector('#debug-market-phase-select') && tools[0].querySelector('#debug-bubble-cand-select'), 'wybór fazy i bańki');
+            assert(!tools[0].querySelector('[style]'), 'bez stylów inline');
+            setMode(false);
+            assertEq(document.querySelectorAll('#debug-tools').length, 0, 'wyłączony: brak #debug-tools w DOM');
+        } finally {
+            try { if (saved === null) localStorage.removeItem(DEBUG_MODE_KEY); else localStorage.setItem(DEBUG_MODE_KEY, saved); } catch (e) { }
+            host.remove(); if (typeof setGameSpeed === 'function' && speed !== currentSpeedMultiplier) setGameSpeed(speed);
+        }
+    });
+});

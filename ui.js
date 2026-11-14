@@ -7371,7 +7371,7 @@ function displayXP() {
 // Scenka startowa: patrz intro.js (0.16.10).
 
 // =================================================================================
-// TRYB DEBUG (ustawienia): prędkości ×10/×50, dodawanie pieniędzy, wymuszenie okresu i oceny
+// TRYB DEBUG: flaga i pominięcie scenki (czyta je kod gry); narzędzia debug są w debug.js (0.18.6 O1)
 // =================================================================================
 
 const DEBUG_MODE_KEY = 'gra_inwestycyjna_debug_mode';
@@ -7380,22 +7380,6 @@ function isDebugMode() {
     try { return localStorage.getItem(DEBUG_MODE_KEY) === '1'; } catch (e) { return false; }
 }
 
-function applyDebugModeUi() {
-    const enabled = isDebugMode();
-    document.querySelectorAll('.debug-only').forEach(element => { element.hidden = !enabled; });
-    const tools = document.getElementById('debug-tools');
-    if (tools) tools.hidden = !enabled;
-    const button = document.getElementById('debug-toggle-btn');
-    if (button) button.textContent = `Tryb debug: ${enabled ? 'włączony' : 'wyłączony'}`;
-    const skipButton = document.getElementById('debug-skip-intro-btn');
-    if (skipButton) skipButton.textContent = `Pomijaj scenkę z babcią: ${isIntroSkipEnabled() ? 'tak' : 'nie'}`;
-    const phaseSelect = document.getElementById('debug-market-phase-select');
-    if (phaseSelect && typeof getMarketRegime === 'function') {
-        const regime = getMarketRegime('home');
-        if (regime?.phase) phaseSelect.value = regime.phase;
-    }
-    if (!enabled && currentSpeedMultiplier > 5) setGameSpeed(5);
-}
 
 const INTRO_SKIP_KEY = 'gra_inwestycyjna_skip_intro';
 
@@ -7403,85 +7387,13 @@ function isIntroSkipEnabled() {
     try { return localStorage.getItem(INTRO_SKIP_KEY) === '1'; } catch (e) { return false; }
 }
 
-/** Przełącznik w ustawieniach debug: kolejne nowe gry startują bez scenki z babcią. */
-function toggleIntroSkip() {
-    try { localStorage.setItem(INTRO_SKIP_KEY, isIntroSkipEnabled() ? '0' : '1'); } catch (e) { /* brak localStorage */ }
-    applyDebugModeUi();
-}
 
-function toggleDebugMode() {
-    try { localStorage.setItem(DEBUG_MODE_KEY, isDebugMode() ? '0' : '1'); } catch (e) { /* brak localStorage */ }
-    applyDebugModeUi();
-}
 
-function debugAddWallet(amount) {
-    playerWallet.cash += amount;
-    logEvent(`🛠️ [DEBUG] +${formatZl(amount, 0)} do portfela prywatnego.`, 'review');
-    refreshFundViews();
-}
 
-/** Dodaje gotówkę funduszowi bez nowych JU (NAV rośnie). */
-function debugAddFund(amount) {
-    playerCash += amount;
-    logEvent(`🛠️ [DEBUG] +${formatZl(amount, 0)} do gotówki funduszu.`, 'review');
-    refreshFundViews();
-}
 
-/** Zmienia relację z każdym: współpracownicy, inwestorzy, prezesi, wiceprezesi, dawne kontakty i VIP-y. */
-function debugShiftRelations(delta) {
-    const board = stocks.flatMap(stock => [stock.ceo, ...(stock.deputies || [])]).filter(person => person?.id).map(person => getCeoRelationKey(person.id));
-    const contacts = (playerProfile?.contacts || []).map(contact => getCeoRelationKey(contact.id));
-    const vips = [...(playerFund?.vip?.offers || []), ...(playerProfile?.tied?.vips || [])].map(vip => `vip:${vip.id}`);
-    const keys = new Set([...getRelationPeople().map(person => person.id), ...board, ...contacts, ...vips]);
-    keys.forEach(key => changeRelation(key, delta, 'debug'));
-    logEvent(`🛠️ [DEBUG] Relacje ${delta > 0 ? '+' : ''}${delta} z każdym (${keys.size} osób).`, 'review');
-    refreshFundViews();
-}
 
-function debugEndPeriod() {
-    if (playerFund) closeFundPeriod();
-    refreshFundViews();
-}
 
-function debugBoardReview() {
-    if (typeof runBoardEvaluation === 'function') runBoardEvaluation();
-    refreshFundViews();
-}
 
-/** 0.15: Ręczna zmiana fazy rynku w trybie debug. */
-function debugSetMarketPhase(phaseKey, forceConfirm = true) {
-    if (typeof getMarketRegime !== 'function' || typeof MARKET_PHASES === 'undefined') return;
-    const regime = getMarketRegime('home');
-    if (!regime || !MARKET_PHASES[phaseKey]) return;
-    const def = MARKET_PHASES[phaseKey];
-    regime.phase = phaseKey;
-    regime.quartersInPhase = 1;
-    regime.phaseLength = Math.floor(def.length[0] + (def.length[1] - def.length[0]) / 2);
-    regime.premiumTarget = (def.premium[0] + def.premium[1]) / 2;
-    if (forceConfirm) {
-        regime.shownPhase = phaseKey;
-        regime.shownSince = typeof macro !== 'undefined' && macro?.quarter ? Number(macro.quarter) : 1;
-    } else {
-        regime.shownPhase = null;
-    }
-    const gigVal = typeof getGigIndexValue === 'function' ? getGigIndexValue() : 1000;
-    regime.startGig = gigVal;
-    if (phaseKey === 'bull' || phaseKey === 'euphoria') {
-        regime.gigTrough = gigVal;
-        regime.gigPeak = gigVal;
-    } else if (phaseKey === 'bear' || phaseKey === 'capitulation') {
-        regime.gigPeak = gigVal;
-        regime.gigTrough = gigVal;
-    }
-    if (typeof logEvent === 'function') {
-        logEvent(`🛠️ [DEBUG] Ustawiono fazę rynku: ${def.name} (${forceConfirm ? 'potwierdzona' : 'w trakcie potwierdzania'}).`, 'market');
-    }
-    if (typeof updateMoodKpi === 'function') updateMoodKpi();
-    if (typeof renderMarketModal === 'function') {
-        const modal = document.getElementById('market-modal');
-        if (modal && modal.style.display !== 'none') renderMarketModal();
-    }
-}
 
 /**
  * Niezmienniki świata gry (testy i tryb debug): skończone liczby, brak ujemnej gotówki funduszy,
@@ -7557,17 +7469,7 @@ function checkWorldInvariants() {
     return problems;
 }
 
-function debugCheckInvariants() {
-    const problems = checkWorldInvariants();
-    const warnings = problems.warnings || [];
-    const note = warnings.length ? `, przycięcia: ${warnings.length}` : '';
-    showToast(problems.length ? `Naruszenia: ${problems.length}${note} (szczegóły w konsoli)` : `Świat gry spójny ✔${note}`, problems.length ? 'error' : warnings.length ? 'warning' : 'success', 6000);
-    if (problems.length) console.warn('[niezmienniki]', problems);
-    if (warnings.length) console.warn('[niezmienniki: przycięcia]', warnings);
-    return problems;
-}
 
-document.addEventListener('DOMContentLoaded', applyDebugModeUi);
 
 // =================================================================================
 // KARIERA I KORPORACJA (etap C)

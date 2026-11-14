@@ -6107,3 +6107,11 @@ body.dark-mode .owned-badge, .owned-badge { background: transparent; color: var(
   body.fund-drawer-open #portfolio { animation: msDrawerIn .2s ease-out; }
   @keyframes msDrawerIn { from { transform: translateY(24px); opacity: .6; } to { transform: none; opacity: 1; } }
 }
+
+/* 0.18.6 O1: narzędzia debug (dawniej style inline w index.html) */
+.debug-tools { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.debug-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 6px; width: 100%; }
+.debug-label { font-size: 12px; font-weight: 600; }
+.debug-genealogy { margin-top: 6px; width: 100%; }
+.debug-genealogy summary { cursor: pointer; }
+.debug-pre { font-size: 11px; max-height: 360px; overflow: auto; white-space: pre; }

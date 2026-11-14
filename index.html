@@ -594,49 +594,6 @@
         <div id="save-panel" class="save-panel pt-4"></div>
         <div class="debug-settings">
             <button id="debug-toggle-btn" onclick="toggleDebugMode()">Tryb debug: wyłączony</button>
-            <div id="debug-tools" class="debug-tools" hidden>
-                <button onclick="debugAddWallet(1000)">+1 000 zł prywatnie</button>
-                <button onclick="debugAddFund(10000)">+10 000 zł do funduszu</button>
-                <button onclick="debugEndPeriod()">Zakończ okres funduszu</button>
-                <button onclick="debugShiftRelations(10)">+10 relacji z każdym</button>
-                <button onclick="debugShiftRelations(-10)">-10 relacji z każdym</button>
-                <button onclick="debugBoardReview()">Ocena zarządu teraz</button>
-                <button onclick="debugCheckInvariants()">Sprawdź spójność świata</button>
-                <button id="debug-skip-intro-btn" onclick="toggleIntroSkip()">Pomijaj scenkę z babcią: nie</button>
-                <div class="debug-phase-row" style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-                    <label for="debug-market-phase-select" style="font-size:12px;font-weight:600;">Faza rynku:</label>
-                    <select id="debug-market-phase-select" onchange="debugSetMarketPhase(this.value)">
-                        <option value="accumulation">Akumulacja</option>
-                        <option value="bull">Hossa</option>
-                        <option value="euphoria">Euforia</option>
-                        <option value="distribution">Dystrybucja</option>
-                        <option value="bear">Bessa</option>
-                        <option value="capitulation">Kapitulacja</option>
-                    </select>
-                    <button type="button" onclick="debugSetMarketPhase(document.getElementById('debug-market-phase-select').value)">Ustaw (potwierdzona)</button>
-                    <button type="button" onclick="debugSetMarketPhase(document.getElementById('debug-market-phase-select').value, false)">Ustaw (potwierdzanie)</button>
-                </div>
-                <details class="debug-genealogy" style="margin-top:6px;" ontoggle="if (this.open) renderGenealogyDebug()">
-                    <summary style="font-size:12px;font-weight:600;cursor:pointer;">Mapa rodowa spółek (przejęcia, córki, usamodzielnienia)</summary>
-                    <button type="button" onclick="renderGenealogyDebug()">Odśwież</button>
-                    <pre id="debug-genealogy" style="font-size:11px;max-height:360px;overflow:auto;white-space:pre;"></pre>
-                </details>
-                <div class="debug-bubble-row" style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-                    <label for="debug-bubble-cand-select" style="font-size:12px;font-weight:600;">Bańka:</label>
-                    <select id="debug-bubble-cand-select">
-                        <option value="ai">Sztuczna inteligencja</option>
-                        <option value="fintech">Fintech</option>
-                        <option value="biotech">Biotechnologia</option>
-                        <option value="semiconductors">Półprzewodniki</option>
-                        <option value="drones">Drony</option>
-                        <option value="renewables">OZE</option>
-                        <option value="gaming">Gaming</option>
-                        <option value="realestate">Nieruchomości</option>
-                    </select>
-                    <button type="button" onclick="debugTriggerSectorBubble(document.getElementById('debug-bubble-cand-select').value)">Wywołaj bańkę</button>
-                    <button type="button" onclick="debugPopSectorBubble()">Pęknij bańkę</button>
-                </div>
-            </div>
         </div>
     </div>
 
@@ -1663,6 +1620,7 @@
 <script src="foreign_companies.js"></script>
 <script src="exchange_clock.js"></script>
 <script src="ui.js"></script>
+<script src="debug.js"></script>
 <script src="flags.js"></script>
 <script src="currency_ui.js"></script>
 <script src="countries_ui.js"></script>
