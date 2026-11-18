@@ -61,7 +61,7 @@ const TASKS = {
         when: c => c.deposits.length > 0, check: c => { const ok = c.deposits.some(d => (d.termWeeks || 0) >= 8); return { ...pct(ok ? 1 : 0, 1), text: ok ? 'jest' : 'brak' }; } },
     'mech.bonds': { cat: 'mech', title: 'Kup obligacje', teach: 'Uczy: obligacje to stały kupon i mniejsze wahania niż akcje.', go: ['Otwórz Bank', 'bank'], reward: { pln: 100 },
         when: c => c.q >= 2, check: c => ({ ...pct(c.bonds > 0 ? 1 : 0, 1), text: c.bonds > 0 ? formatZl(c.bonds, 0) : 'brak obligacji' }) },
-    'mech.stake': { cat: 'mech', title: 'Podnieś wartość swojej spółki o 10%', teach: 'Uczy: duży udział daje głos na WZA (dywidendy, inwestycje).', go: ['Pokaż rynek', 'market'], reward: { pln: 300 },
+    'mech.stake': { cat: 'mech', title: 'Podnieś wartość swojej spółki o 10%', teach: 'Uczy: duży udział daje głos na WZA (dywidendy, inwestycje).', go: ['Pokaż rynek', 'market'], reward: { pln: 200 }, // E4: pułap nagród ≤ 1 500 PLN na 6,5 roku
         when: c => c.holdings.some(([sym, h]) => { const s = c.stockOf(sym); return s?.totalShares > 0 && h.shares / s.totalShares >= 0.2; }),
         start: c => { const [sym] = c.holdings.find(([s, h]) => { const st = c.stockOf(s); return st?.totalShares > 0 && h.shares / st.totalShares >= 0.2; }); const s = c.stockOf(sym); return { symbol: sym, base: s.price * s.totalShares }; },
         check: (c, t) => { const s = c.stockOf(t.symbol); const cap = s ? s.price * s.totalShares : 0; return { ...pct(cap, t.base * 1.1), text: `${s?.name || t.symbol}: ${formatPct(t.base > 0 ? cap / t.base - 1 : 0, 1)} / +10%` }; } },
