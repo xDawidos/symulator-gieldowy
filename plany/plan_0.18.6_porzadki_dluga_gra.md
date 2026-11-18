@@ -122,19 +122,14 @@ Seria 24 × 6,5 roku, seria 20 × 20 lat (O4, O5) i testy, raport `raporty/kontr
 
 Bez zmiany balansu poza E0. E0 zmienia przydział poziomów giełd, więc ma własną bramkę rozkładu. Bramka: GIG i marże ±0,3 pp, 0 błędów, testy zielone.
 
-### E0. Poziomy giełd bez kursu (uwaga użytkownika 2026-11-14; kryteria rozstrzyga plan, decyzja 2026-11-18)
+### E0. Poziomy giełd bez kursu (uwaga użytkownika 2026-11-14; kryteria rozplanuje użytkownik)
 
 Uwaga użytkownika: kurs nie powinien być jedynym wyznacznikiem poziomu giełdy (Śmieciowa…Platynowa), a reguła nie powinna być widoczna dla gracza. Dziś poziom wynika z ceny (`getPriceTierKey`, `companies.js:1309`; progi `exchanges`, D6 w `raporty/decyzje_0.18.md`), giełdy elitarne z rankingu kapitalizacji, a ocena AAA–D (0.18.4) jest bramką awansu.
 
-- **Kryteria (rekomendacja planu, 2026-11-18):**
-  1. **Warunek wejścia: ocena publiczna** (jak w serii 6.3): Śmieciowa bez oceny; Brązowa i Srebrna — dowolna ocena widoczna publicznie; Złota ≥ BBB; Platynowa ≥ A. Spółka bez wymaganej oceny zostaje poziom niżej. Elitarne (Rubinowa ≥ A+, Szmaragdowa ≥ AA, Diamentowa AAA) dalej z rankingu kapitalizacji, wśród spółek z Platynowej.
-  2. **Wynik spółki** decyduje o poziomie w granicach dozwolonych przez ocenę: kapitalizacja 45%, płynność (średni obrót / free float, 4 kw.) 25%, zysk (zysk netto z 4 kw., ujemny = 0 pkt; marża ponad medianę sektora) 20%, kurs 10% (słaby czynnik, tylko żeby splity i bardzo niskie kursy nie były bez znaczenia). Każda cecha jako percentyl wśród spółek tego samego rynku (krajowe osobno, obce osobno).
-  3. **Progi wyniku** (startowe, percentyle): Śmieciowa < 10, Brązowa 10–43, Srebrna 43–75, Złota 75–93, Platynowa ≥ 93 (czyli ok. 7%; cel 5–10%).
-  4. **Histereza:** przegląd raz na kwartał; awans po 2 kwartałach z rzędu powyżej progu, spadek po 2 kwartałach poniżej progu minus 3 pkt. Spadek oceny poniżej wymogu poziomu działa od razu.
-  5. **Kalibracja:** czat realizacji kalibruje progi i wagi serią (24 × 6,5 roku i 10 × 20 lat), a wynik i ostateczne liczby zapisuje w `raporty/decyzje_0.18.md` (nowy wiersz D). Odstępstwo od rozkładu ±3 pp na poziom albo Platynowa poza 5–10% → strojenie progów, nie wag.
-- **Ukrycie reguły (zdecydowane):** na płytce giełdy i w karcie spółki nie ma progów kursu ani liczb wyniku. Po najechaniu na nazwę poziomu (także fokus klawiaturą) podpowiedź: wymagana ocena plus jedno zdanie bez liczb, np. Platynowa: „Dostęp od oceny A. Decydują też wielkość, płynność i zyski spółki.”; Brązowa i Srebrna: „Dostęp od oceny widocznej publicznie. Decydują też…”; Śmieciowa: „Dostęp bez oceny.”
-- **Pliki:** `companies.js` (`exchanges`, funkcja przydziału zamiast `getPriceTierKey`, wywołania przy wycenie i debiucie), `splits.js` (próg splitu nie może zależeć od poziomu), `listings.js` (ocena publiczna), `ui.js` (płytka giełdy z makiety 18, podpowiedź), `main.js` (licznik histerezy w zapisie; stary zapis zaczyna od obecnego poziomu).
-- **Test i bramka:** test przydziału (spółka bez oceny nie wchodzi na Złotą; histereza 2 kw.; spadek oceny działa od razu); rozkład poziomów jak w kontroli 0.18.0 ±3 pp na poziom, Platynowa 5–10%; podpowiedź bez liczb i kursu; GIG i marże ±0,3 pp; licencje gracza na giełdy bez zmian.
+- **Kryteria przydziału: do rozplanowania i dopisania przez użytkownika** (decyzja 2026-11-14). Do tego czasu ta część nie rusza. Propozycja z rozmowy, do odrzucenia lub zmiany: wynik z kapitalizacji (40%), oceny publicznej (25%), płynności (20%) i zysku z 4 kw. (15%), bez kursu, liczony jako percentyl; progi trzymające obecny rozkład (kontrola 0.18.0: Śmieciowa 9,8%, Brązowa 33,1%, Srebrna 31,6%, Złota 17,8%, Platynowa 5,6%); zmiana poziomu po 2 kwartałach; giełdy elitarne bez zmian (ranking), oceny dalej bramką awansu.
+- **Ukrycie reguły (zdecydowane):** na płytce giełdy i w karcie spółki nie ma progów kursu. Po najechaniu na nazwę poziomu (także fokus klawiaturą) podpowiedź: wymagana ocena plus jedno zdanie bez liczb, np. Platynowa: „Dostęp od oceny A. Decydują też wielkość, płynność i zyski spółki.”; Brązowa i Srebrna: „Dostęp od oceny widocznej publicznie…”; Śmieciowa: „Dostęp bez oceny…”. Dokładne teksty po ustaleniu kryteriów.
+- **Pliki (wstępnie):** `companies.js` (`exchanges`, przydział zamiast `getPriceTierKey`, `splits.js` jeśli split zależy od progu), `listings.js` (ocena), `ui.js` (płytka giełdy z makiety 18, podpowiedź), `main.js` (stan histerezy w zapisie).
+- **Test i bramka (wstępnie):** rozkład poziomów jak w kontroli 0.18.0 ±3 pp na poziom, Platynowa 5–10%; podpowiedź bez liczb i bez kursu; GIG i marże ±0,3 pp; spółka nie skacze między poziomami częściej niż raz na 2 kw.
 
 ### E1. Stopniowe odblokowywanie → przeniesione do 1.0
 
@@ -312,11 +307,9 @@ O8 makiety 22 §3 i 23 §1–2: pola z etykietą, akcent fazy (tylko L4),
 O9 kontrola raporty/kontrola_0.18.6.md.
 
 0.18.7 Progresja i onboarding (bramka: GIG i marże ±0,3 pp):
-E0 poziomy giełd bez kursu (kryteria w planie, rekomendacja 2026-11-18):
-   ocena publiczna jako warunek wejścia + wynik z kapitalizacji, płynności
-   i zysku (kurs ≤ 10%), percentyle, histereza 2 kw.; progi kalibrujesz
-   serią (Platynowa 5–10%) i zapisujesz decyzję w raporty/decyzje_0.18.md;
-   płytka bez progów kursu, podpowiedź „Dostęp od oceny X”.
+E0 poziomy giełd bez kursu: NIE ZACZYNAJ, dopóki użytkownik nie dopisze
+   kryteriów w planie. Zdecydowane już: płytka bez progów kursu, podpowiedź
+   „Dostęp od oceny X” + jedno zdanie bez liczb.
 E2 tasks.js według makiety 24: TeamedUP! → Zadania i oceny (kategorie
    Pierwsze kroki, Od zarządu, Rynek, Mechaniki), przypinanie do 3 na karcie
    panelu funduszu; zadania Rynek z jawnych faktów (bez nazwy fazy, max 2),
