@@ -468,7 +468,9 @@ const ECO_PRESSURE_RULES = {
     eventMult: 1,                     // szansa smogu i protestu × (1 + presja/100)
     strikeFrom: 30, strikeChance: 0.25, strikeMood: 12, // strajk ekologiczny: szansa 25% × presja/100 na kwartał u dużego emitenta
     officeShare: [0.15, 0.30], greenOfficeShare: [0.30, 0.40],
-    greensSupport: 0.05, greensPressure: 60, greensPollution: 50, greensChance: 0.5
+    greensSupport: 0.05, greensPressure: 60, greensPollution: 50, greensChance: 0.5,
+    esgBoost: 50, esgCashRelief: 0.9, // ESG u emitenta ponad limit: szansa × (1 + 50 × presja/100), wymóg gotówki ≥ przychody × (1 − 0,9 × presja/100) (strojenie po serii o45b)
+    lawFrom: 70, lawChance: 0.08 // przy presji ≥ 70 rząd z szansą 8%/kw. zapowiada wyższą politykę klimatyczną
 };
 const ECO_STRIKE_TEXTS = ['Strajk ekologiczny w {name}: załoga odmawia pracy przy instalacjach bez filtrów.', 'Pracownicy {name} przerywają zmianę i żądają planu ograniczenia emisji.', 'Strajk w {name}: związkowcy i mieszkańcy razem pod bramą zakładu.'];
 /** Presja ekologiczna (0–100); stary zapis bez pola: start z bieżącego zanieczyszczenia. */
@@ -484,6 +486,8 @@ function processEcoPressure(e) {
     const p = getEcoPressure(e), target = getEcoPressureTarget(e);
     e.pressure = +clampValue(p + (target - p) * (target > p ? ECO_PRESSURE_RULES.up : ECO_PRESSURE_RULES.down), 0, 100).toFixed(2);
     if (e.pressure >= ECO_PRESSURE_RULES.strikeFrom && Math.random() < ECO_PRESSURE_RULES.strikeChance * e.pressure / 100) runEcoStrike(e);
+    const climate = Number(society?.laws?.climatePolicy) || 0; // 0.18.6 O5: rząd odpowiada na presję zaostrzeniem polityki klimatycznej
+    if (e.pressure >= ECO_PRESSURE_RULES.lawFrom && society && !society.pendingLaw && climate < SOCIAL_LAWS.climatePolicy.levels.length - 1 && typeof announceLawChange === 'function' && Math.random() < ECO_PRESSURE_RULES.lawChance) announceLawChange('climatePolicy', 1, undefined, 'presja ekologiczna');
     return e.pressure;
 }
 function runEcoStrike(e = society.energy) {
@@ -646,7 +650,8 @@ function orderEsg(stock) {
 function processAiEsg(e) {
     for (const stock of stocks) {
         if (!canOrderEsg(stock) || getStockEmissionFactor(stock) <= getEmissionLimit(e)) continue;
-        if (Math.random() < ENERGY_OFFICE_RULES.aiEsgChance && (Number(stock.cash) || 0) > getStockRevenue(stock) && !(typeof canFundControlAgm === 'function' && canFundControlAgm(stock))) orderEsg(stock);
+        const p = getEcoPressure(e) / 100; // 0.18.6 O5: presja ekologiczna przyspiesza ESG u emitentów ponad limit (sprzężenie zwrotne: czyściej → mniejsza presja)
+        if (Math.random() < ENERGY_OFFICE_RULES.aiEsgChance * (1 + ECO_PRESSURE_RULES.esgBoost * p) && (Number(stock.cash) || 0) > getStockRevenue(stock) * (1 - ECO_PRESSURE_RULES.esgCashRelief * p) && !(typeof canFundControlAgm === 'function' && canFundControlAgm(stock))) orderEsg(stock);
     }
 }
 
