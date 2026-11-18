@@ -783,7 +783,7 @@ function processIpoOffersWeekly() {
 // =================================================================================
 // Kalibracja (seria e0a i gra w roku 6): kwantyle kapitalizacji / mediana — 10%: 0,01, 43%: 0,42, 75%: 8, 93%: 124 (rozkład bardzo skośny);
 // progi startowe planu 0,3 / 0,9 / 2,2 / 5 dawały Śmieciową 35% i Platynową z elitarnymi 22%.
-const TIER_RULES = { BRONZE: 0.02, SILVER: 0.45, GOLD: 8, PLATINUM: 100, ffSilver: 0.15, ffGold: 0.20, lossQ: 4, junkLossCap: 1.0, confirmQ: 2 };
+const TIER_RULES = { BRONZE: 0.015, SILVER: 0.45, GOLD: 8, PLATINUM: 80, ffSilver: 0.15, ffGold: 0.20, lossQ: 4, junkLossCap: 1.0, confirmQ: 2 };
 const TIER_HINTS = {
     JUNK: 'Dostęp zależy od wielkości i zysków spółki.', BRONZE: 'Dostęp zależy od wielkości i zysków spółki.', SILVER: 'Dostęp zależy od wielkości i zysków spółki.', GOLD: 'Dostęp zależy od wielkości i zysków spółki.',
     PLATINUM: 'Dostęp od oceny A. Decydują też wielkość, płynność i zyski spółki.',

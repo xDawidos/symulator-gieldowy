@@ -1476,13 +1476,18 @@ function runWeeklyTick() {
 
 }
 
+/** 0.18.7: krok przed advanceMacroQuarter nie może zatrzymać licznika kwartałów (2 zawieszenia na 82 gry 20-letnie z E0) — błąd do konsoli i do `quarterStepErrors`. */
+let quarterStepErrors = [];
+function runQuarterStep(name, fn) {
+    try { fn(); } catch (e) { console.error(`[kwartał] ${name}:`, e); if (quarterStepErrors.length < 10) quarterStepErrors.push(`${name}: ${String(e && e.stack || e).slice(0, 300)}`); }
+}
 /** Pętla kwartalna gry. */
 function runQuarterlyTick() {
         if (isGamePaused) return;
         noteQuarterForSpeedStats();
-        reviewCompanyPlacements();
+        runQuarterStep('reviewCompanyPlacements', reviewCompanyPlacements);
         ensureAllStockSegments(); // 0.14 T1a: nowe i zmienione spółki — sektory z rejestru, segmenty
-        processEliteExchangesQuarterly(); // Rubin / Szmaragd / Diament, spółki zależne (finance.js)
+        runQuarterStep('processEliteExchangesQuarterly', processEliteExchangesQuarterly); // Rubin / Szmaragd / Diament, spółki zależne (finance.js)
         payBondCoupons(); // kupony kwartalne (finance.js)
         processPublicInvestmentFunding(); // BC → spółki państwowe, miasto → spółki miejskie (investments.js)
         processGovernanceQuarter(); // walne zgromadzenia (governance.js)

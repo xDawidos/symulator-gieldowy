@@ -1406,7 +1406,7 @@ const PROBE_018 = `(function () {
     T.reit = {}; let reitQ = -1;
     const sampleReits = () => { if (macro.quarter === reitQ) return; reitQ = macro.quarter; for (const x of stocks.filter(y => y.assetType === 'REIT' && !y.isBankrupt)) { const e = T.reit[x.symbol] || (T.reit[x.symbol] = { type: x.reit?.type || '?', idx: 1, p: x.price, n: 0 }); if (e.p > 0 && x.price > 0) { e.idx *= x.price / e.p * (1 + (typeof getTrailingDividendYield === 'function' ? getTrailingDividendYield(x) : 0) / 4); e.n++; } e.p = x.price; } };
     const origSample = s.sample; s.sample = function () { sampleReits(); const r = origSample.apply(this, arguments); if (!first && macro.quarter >= (s.startQ ?? 0) + 1) { const u = unitRows(); if (Object.keys(u).length) first = u; } return r; };
-    const origFinish = s.finish; s.finish = function () { const r = origFinish.apply(this, arguments); r.p018 = { tiers: T.tiers || [], knf: typeof knfRules === 'object' ? knfRules.history : [], prof: Object.fromEntries(Object.entries(T.prof).map(([k, v]) => [k, [Math.round(v.ms), v.n]])), start: first, end: unitRows(), chains: T.q, chainMs: T.ms, gain: T.gainRes, reit: Object.fromEntries(Object.entries(T.reit).map(([k, e]) => [k, { type: e.type, cagr: e.n > 3 ? +(Math.pow(e.idx, 4 / e.n) - 1).toFixed(4) : null }])) }; return r; };
+    const origFinish = s.finish; s.finish = function () { const r = origFinish.apply(this, arguments); r.p018 = { tiers: T.tiers || [], qerr: typeof quarterStepErrors === 'object' ? quarterStepErrors : [], knf: typeof knfRules === 'object' ? knfRules.history : [], prof: Object.fromEntries(Object.entries(T.prof).map(([k, v]) => [k, [Math.round(v.ms), v.n]])), start: first, end: unitRows(), chains: T.q, chainMs: T.ms, gain: T.gainRes, reit: Object.fromEntries(Object.entries(T.reit).map(([k, e]) => [k, { type: e.type, cagr: e.n > 3 ? +(Math.pow(e.idx, 4 / e.n) - 1).toFixed(4) : null }])) }; return r; };
 })();`;
 
 // 0.17 S0b: łączna kapitalizacja rynku (PLN; GPW i spółki krajów dołączonych) i udział spółek krajowych w przejęciach D3. Wynik: pole s017.
@@ -1554,7 +1554,7 @@ async function oneRun(index) {
             // 0.16.4: okno wydarzenia (np. połączenie giełd) pauzuje grę — w przebiegu nikt go nie zamknie, więc wznawiamy; brak postępu = błąd, nie wieczne czekanie
             if (w.eval('isGamePaused')) w.eval('togglePauseGame()');
             w.__vt.advance(quarterMs / 10); await yieldNow();
-            if (++stuck > 5000) throw new Error('przebieg stoi w kwartale ' + (q - startQ) + ' (pauza: ' + w.eval('isGamePaused') + ')');
+            if (++stuck > 5000) throw new Error('przebieg stoi w kwartale ' + (q - startQ) + ' (pauza: ' + w.eval('isGamePaused') + ') · ostatnie błędy: ' + (w.__vt.errors || []).slice(-3).join(' | '));
         }
         msPerQuarter.push(performance.now() - t0);
         q = w.eval('macro.quarter');

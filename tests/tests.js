@@ -17834,7 +17834,7 @@ group('0.18.7 Progresja i onboarding', () => {
     });
     test('E0a: poziom bez kursu — Platynowa tylko z oceną ≥ A, split nie zmienia poziomu, zmiana po 2 kw., utrata oceny = spadek od razu, kandydat zamawia audyt', () => {
         const list = []; for (let i = 0; i < 20; i++) { const c = makeCompany(`T${i}`); c.price = 100; c.totalShares = 10000; list.push(c); }
-        const big = list[0]; big.totalShares = 10000 * 150; big.exchange = 'GOLD'; // 150 × mediana (próg Platynowej 100×)
+        const big = list[0]; big.totalShares = 10000 * 150; big.exchange = 'GOLD'; // 150 × mediana (próg Platynowej 80×)
         resetWorld(list); macro.quarter = 10; tierMedianCache.q = null;
         big.fundamentals = { history: [1, 2, 3, 4].map(() => ({ netIncome: 1000 })) };
         delete big.rating;
