@@ -1962,8 +1962,6 @@ function renderStockTableRow(stock, isSubsidiary, parentSymbol, stockTableBody, 
     infoButton.setAttribute('aria-label', `Karta spółki ${stock.name}`);
     infoButton.title = 'Karta spółki';
     infoButton.onclick = () => openDescriptionModal(stock.symbol);
-    topLine.appendChild(infoButton);
-    topLine.insertAdjacentHTML('beforeend', favoriteButtonHtml(stock.symbol, stock.name));
 
     const metaLine = document.createElement('div');
     metaLine.className = 'stock-meta';
@@ -1974,6 +1972,8 @@ function renderStockTableRow(stock, isSubsidiary, parentSymbol, stockTableBody, 
     const metaRest = `${parentNote}${spinNote}${marketId !== 'GPW' ? ` · ${getMarketBadgeText(stock)}` : ''}${typeof getCompanyCountryNote === 'function' ? ` · ${getCompanyCountryNote(stock)}` : ''}${stock.isDividendAristocrat ? ' · dywidendowy arystokrata' : ''}`;
     metaLine.innerHTML = `${escapeHtml(primarySector)} · <span class="ms-tick">${escapeHtml(stock.symbol)}</span>${escapeHtml(metaRest)}`; // makieta 18 cz. 3: ticker w Condensed (bez osobnej kolumny — nazwa zostaje szeroka)
     metaLine.title = metaLine.textContent; // pełny opis, gdy wiersz jest ucięty
+    metaLine.prepend(infoButton); // 0.18.6 O6 (D50): karta i gwiazdka w linii opisu — nazwa ma całą szerokość kolumny
+    infoButton.insertAdjacentHTML('afterend', favoriteButtonHtml(stock.symbol, stock.name));
 
 
     identityWrap.appendChild(topLine);

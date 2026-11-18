@@ -2905,8 +2905,8 @@ body.dark-mode #stock-table,
 }
 #stock-table th, #stock-table td { box-sizing: border-box; }
 #stock-table .col-name { width: auto; }
-#stock-table .col-price { width: 148px; } /* 0.15.4 P1: „17 418,77 PLN” (mono, nowrap) wystawało pod pigułkę zmiany przy 108 px */
-#stock-table .col-change { width: 150px; } /* makieta 18: wykres 7 sesji + zmiana */
+#stock-table .col-price { width: 132px; } /* 0.18.6 O6: „17 418,77 PLN” w Plex Mono 14 px to ok. 125 px */ /* 0.15.4 P1: „17 418,77 PLN” (mono, nowrap) wystawało pod pigułkę zmiany przy 108 px */
+#stock-table .col-change { width: 140px; } /* makieta 18: wykres 7 sesji + zmiana */
 #stock-table .col-avail { width: 112px; }
 #stock-table .col-owned { width: 64px; }
 #stock-table .col-actions { width: 56px; }
@@ -6143,3 +6143,21 @@ body #internet-modal.wn-host, body #internet-modal.wn-host[data-country] { backg
 .wn--net > .wn-close { position: absolute; top: 6px; right: 8px; z-index: 2; color: var(--net-muted); }
 .wn--net > .wn-close:hover { background: var(--net-card); color: var(--net-text); }
 @media (min-width: 641px) { #internet-modal.wn-host { width: min(1120px, calc(100vw - 48px)) !important; height: min(86vh, 820px); max-height: none !important; } }
+
+/* 0.18.6 O6 (D50): karta i gwiazdka spółki na początku linii opisu */
+.stock-meta > .info-btn { vertical-align: middle; margin-right: 2px; }
+.stock-meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 0.18.6 O6 (D50, makieta 18 R8): pasek telefonu w jednym wierszu — menu, NAV, gotówka, przycisk sesji, ⋯; prędkość w menu ⋯ */
+.menu-speed { display: none; }
+@media (max-width: 640px) {
+  .topbar { grid-template-columns: auto minmax(0, 1fr) auto; padding-block: var(--space-1); gap: var(--space-2); }
+  .topbar .topbar-kpi-group { display: flex; gap: var(--space-3); overflow: hidden; }
+  .topbar .topbar-kpi { min-width: 0; }
+  .topbar .topbar-kpi-label { font-size: 10px; }
+  .topbar .topbar-kpi-val { font-size: 13px; }
+  .topbar .topbar-kpi:nth-child(n+3), .topbar .speed-segmented, .topbar .topbar-date, .topbar .ms-state { display: none; }
+  .topbar .topbar-controls { width: auto; flex-wrap: nowrap; }
+  .topbar .btn-pause { padding-inline: var(--space-3); min-width: 0; }
+  .topbar-menu .menu-speed { display: flex; gap: 4px; padding: 4px 8px; }
+  .topbar-menu .menu-speed button { flex: 1; }
+}
