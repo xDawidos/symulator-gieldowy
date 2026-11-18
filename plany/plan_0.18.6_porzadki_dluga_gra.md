@@ -7,7 +7,7 @@ Zgłoszenie użytkownika z 2026-11-13 (5 celów: debug, stany puste, formaty, pa
 | Kolejność | Wersja | Etap użytkownika | Zakres |
 |---|---|---|---|
 | 1 | **0.18.6 Porządki** | Etap 1: porządki i spójność | `debug.js`, stany puste (makieta 22), jedno formatowanie, z decyzji U1–U8: kryzysy (U2), presja ekologiczna (U7), ramy okien (U6), zapisy na IPO (U5); z makiet 22 i 23: pola z etykietą, akcent fazy, bezpiecznik |
-| 2 | **0.18.7 Progresja i onboarding** | Etap 2 | stopniowe odblokowywanie (E1), Pierwsze kroki z premią na konto prywatne (E2, makieta 22), wskazówki o fazie (E3, makieta 23) |
+| 2 | **0.18.7 Progresja i onboarding** | Etap 2 | poziomy giełd bez kursu (E0), system zadań z premią na konto prywatne (E2, makieta 22), wskazówki o fazie (E3, makieta 23) |
 | 3 | **0.18.8 Długa gra** | Etap 3: late game 50–100 lat | diagnoza i limity pamięci, skala kapitału, 3 automaty w Akademii, czarne łabędzie, podsumowania dekad (makieta 23) |
 | 4 | Cel gry | — | `plan_cel_gry.md`, numer nadamy przy planowaniu (po 0.18.8, przed 0.19.1) |
 
@@ -19,7 +19,7 @@ Makiety 22 i 23 (`design/22_pierwsze_kroki.md`, `design/23_fazy_dekada.md`, comm
 |---|---|---|
 | Etap 1: globalny moduł formatowania (PLN, 2 albo 4 miejsca dla NAV, polskie spacje i przecinki) | **O3** | zgodne; 4 miejsca tylko dla NAV / udziału (makieta 18: „10,4210 PLN”), kwoty 2, liczby akcji 0 |
 | Etap 1: panel debug poza `index.html`, tylko `?debug=1` lub localhost | **O1** | **różnica:** użytkownik 2026-11-14 potwierdził, że przycisk w Ustawieniach na razie zostaje; `?debug=1` / localhost w „Odłożone” |
-| Etap 2: Progressive Disclosure (obligacje korporacyjne, aukcje hipoteczne, Miasto) po progach NAV lub szkoleniach | **E1** (dawne D3) | „Aukcje hipoteczne” w grze nie istnieją; najbliższe to aukcje akcji zastawnych (`startCollateralAuction`). Miasto: blokujemy obecne okno inwestycji miejskich, a Miasta 2 (0.19.2) dostają tylko szkielet reguły w rejestrze |
+| Etap 2: Progressive Disclosure (obligacje korporacyjne, aukcje hipoteczne, Miasto) po progach NAV lub szkoleniach | **1.0** (dawne D3, potem E1; przeniesione 2026-11-18, `plan_1.0.md`) | „Aukcje hipoteczne” w grze nie istnieją; najbliższe to aukcje akcji zastawnych (`startCollateralAuction`). Miasto: blokujemy obecne okno inwestycji miejskich, a Miasta 2 (0.19.2) dostają tylko szkielet reguły w rejestrze |
 | Etap 2: 4 zadania „Pierwsze kroki” z premią na konto prywatne | **E2** (nowe) | według makiety 22: 4 × 50 PLN; dopisek 2026-11-14: E2 to ogólny system zadań według makiety 24 (TeamedUP! + przypinanie do 3, kategorie Rynek i Mechaniki) |
 | Etap 3: 3 automaty w Akademii | **D4** | auto-rolowanie lokat bez zmian; „limity aukcyjne” zawężone do bonów skarbowych z limitem gotówki; rebalancing klas aktywów zastąpiony **alertem koncentracji sektora (tylko alert, bez automatycznej sprzedaży)**, decyzja 2026-11-14 |
 | Etap 3: czarne łabędzie co 15–25 lat (stopy, zaufanie klientów, sektory) i podsumowanie dekady | **D5, D6** | skrócenie spokoju z U2 zostaje w O4 (bez dublowania); skutki łabędzi uzupełnione o stopy i zaufanie klientów; dekada w TeamedUP! (makieta 23) |
@@ -61,7 +61,7 @@ O0–O3, O6 i O8 bez zmiany balansu (GIG i marże ±0,3 pp, szum). O4, O5 i O7 z
 
 ### O2. Stany puste
 
-- **Zakres:** jeden komponent `renderEmptyState({ icon, title, text, action })` według makiety 22 (§2) w 4 wariantach: brak danych, przed pierwszą sesją, zablokowane (używane od E1), w tabeli (`tr.empty-row`). Stosujemy go w kontenerach ze spisu O0, najpierw w tych, które gracz widzi w pierwszych minutach (portfel, pozycje, poczta, Tied, klienci, kontrakty, łańcuchy przed pierwszym kwartałem). Do tego jeden stan „ładowanie przed pierwszym tickiem” dla tabel rynku. Teksty według `design/04_teksty.md`.
+- **Zakres:** jeden komponent `renderEmptyState({ icon, title, text, action })` według makiety 22 (§2) w 4 wariantach: brak danych, przed pierwszą sesją, zablokowane (nieużywane do 1.0), w tabeli (`tr.empty-row`). Stosujemy go w kontenerach ze spisu O0, najpierw w tych, które gracz widzi w pierwszych minutach (portfel, pozycje, poczta, Tied, klienci, kontrakty, łańcuchy przed pierwszym kwartałem). Do tego jeden stan „ładowanie przed pierwszym tickiem” dla tabel rynku. Teksty według `design/04_teksty.md`.
 - **Pliki:** `ui.js` (komponent), moduły UI ze spisu (`ui.js`, `energy_ui.js`, `chains_ui.js`, `countries_ui.js`, `currency_ui.js`, `internet.js`, `tied.js`, `learning.js`), `style.css`.
 - **Test:** świeża gra przed pierwszym tickiem: żaden kontener ze spisu nie jest pusty (test DOM po kolei otwiera okna); stary zapis bez danych łańcuchów pokazuje stan pusty.
 - **Design:** ekran 1 z listy niżej.
@@ -120,22 +120,25 @@ Seria 24 × 6,5 roku, seria 20 × 20 lat (O4, O5) i testy, raport `raporty/kontr
 
 ## 0.18.7 Progresja i onboarding (Etap 2)
 
-Bez zmiany balansu (blokady dotyczą tylko gracza; przebiegi bez UI je ignorują). E0 zmienia przydział poziomów giełd, więc ma własną bramkę rozkładu. Bramka: GIG i marże ±0,3 pp, 0 błędów, testy zielone.
+Bez zmiany balansu poza E0. E0 zmienia przydział poziomów giełd, więc ma własną bramkę rozkładu. Bramka: GIG i marże ±0,3 pp, 0 błędów, testy zielone.
 
-### E0. Poziomy giełd bez kursu (uwaga użytkownika 2026-11-14; kryteria rozplanuje użytkownik)
+### E0. Poziomy giełd bez kursu (uwaga użytkownika 2026-11-14; kryteria rozstrzyga plan, decyzja 2026-11-18)
 
 Uwaga użytkownika: kurs nie powinien być jedynym wyznacznikiem poziomu giełdy (Śmieciowa…Platynowa), a reguła nie powinna być widoczna dla gracza. Dziś poziom wynika z ceny (`getPriceTierKey`, `companies.js:1309`; progi `exchanges`, D6 w `raporty/decyzje_0.18.md`), giełdy elitarne z rankingu kapitalizacji, a ocena AAA–D (0.18.4) jest bramką awansu.
 
-- **Kryteria przydziału: do rozplanowania i dopisania przez użytkownika** (decyzja 2026-11-14). Do tego czasu ta część nie rusza. Propozycja z rozmowy, do odrzucenia lub zmiany: wynik z kapitalizacji (40%), oceny publicznej (25%), płynności (20%) i zysku z 4 kw. (15%), bez kursu, liczony jako percentyl; progi trzymające obecny rozkład (kontrola 0.18.0: Śmieciowa 9,8%, Brązowa 33,1%, Srebrna 31,6%, Złota 17,8%, Platynowa 5,6%); zmiana poziomu po 2 kwartałach; giełdy elitarne bez zmian (ranking), oceny dalej bramką awansu.
-- **Ukrycie reguły (zdecydowane):** na płytce giełdy i w karcie spółki nie ma progów kursu. Po najechaniu na nazwę poziomu (także fokus klawiaturą) podpowiedź: wymagana ocena plus jedno zdanie bez liczb, np. Platynowa: „Dostęp od oceny A. Decydują też wielkość, płynność i zyski spółki.”; Brązowa i Srebrna: „Dostęp od oceny widocznej publicznie…”; Śmieciowa: „Dostęp bez oceny…”. Dokładne teksty po ustaleniu kryteriów.
-- **Pliki (wstępnie):** `companies.js` (`exchanges`, przydział zamiast `getPriceTierKey`, `splits.js` jeśli split zależy od progu), `listings.js` (ocena), `ui.js` (płytka giełdy z makiety 18, podpowiedź), `main.js` (stan histerezy w zapisie).
-- **Test i bramka (wstępnie):** rozkład poziomów jak w kontroli 0.18.0 ±3 pp na poziom, Platynowa 5–10%; podpowiedź bez liczb i bez kursu; GIG i marże ±0,3 pp; spółka nie skacze między poziomami częściej niż raz na 2 kw.
+- **Kryteria (rekomendacja planu, 2026-11-18):**
+  1. **Warunek wejścia: ocena publiczna** (jak w serii 6.3): Śmieciowa bez oceny; Brązowa i Srebrna — dowolna ocena widoczna publicznie; Złota ≥ BBB; Platynowa ≥ A. Spółka bez wymaganej oceny zostaje poziom niżej. Elitarne (Rubinowa ≥ A+, Szmaragdowa ≥ AA, Diamentowa AAA) dalej z rankingu kapitalizacji, wśród spółek z Platynowej.
+  2. **Wynik spółki** decyduje o poziomie w granicach dozwolonych przez ocenę: kapitalizacja 45%, płynność (średni obrót / free float, 4 kw.) 25%, zysk (zysk netto z 4 kw., ujemny = 0 pkt; marża ponad medianę sektora) 20%, kurs 10% (słaby czynnik, tylko żeby splity i bardzo niskie kursy nie były bez znaczenia). Każda cecha jako percentyl wśród spółek tego samego rynku (krajowe osobno, obce osobno).
+  3. **Progi wyniku** (startowe, percentyle): Śmieciowa < 10, Brązowa 10–43, Srebrna 43–75, Złota 75–93, Platynowa ≥ 93 (czyli ok. 7%; cel 5–10%).
+  4. **Histereza:** przegląd raz na kwartał; awans po 2 kwartałach z rzędu powyżej progu, spadek po 2 kwartałach poniżej progu minus 3 pkt. Spadek oceny poniżej wymogu poziomu działa od razu.
+  5. **Kalibracja:** czat realizacji kalibruje progi i wagi serią (24 × 6,5 roku i 10 × 20 lat), a wynik i ostateczne liczby zapisuje w `raporty/decyzje_0.18.md` (nowy wiersz D). Odstępstwo od rozkładu ±3 pp na poziom albo Platynowa poza 5–10% → strojenie progów, nie wag.
+- **Ukrycie reguły (zdecydowane):** na płytce giełdy i w karcie spółki nie ma progów kursu ani liczb wyniku. Po najechaniu na nazwę poziomu (także fokus klawiaturą) podpowiedź: wymagana ocena plus jedno zdanie bez liczb, np. Platynowa: „Dostęp od oceny A. Decydują też wielkość, płynność i zyski spółki.”; Brązowa i Srebrna: „Dostęp od oceny widocznej publicznie. Decydują też…”; Śmieciowa: „Dostęp bez oceny.”
+- **Pliki:** `companies.js` (`exchanges`, funkcja przydziału zamiast `getPriceTierKey`, wywołania przy wycenie i debiucie), `splits.js` (próg splitu nie może zależeć od poziomu), `listings.js` (ocena publiczna), `ui.js` (płytka giełdy z makiety 18, podpowiedź), `main.js` (licznik histerezy w zapisie; stary zapis zaczyna od obecnego poziomu).
+- **Test i bramka:** test przydziału (spółka bez oceny nie wchodzi na Złotą; histereza 2 kw.; spadek oceny działa od razu); rozkład poziomów jak w kontroli 0.18.0 ±3 pp na poziom, Platynowa 5–10%; podpowiedź bez liczb i kursu; GIG i marże ±0,3 pp; licencje gracza na giełdy bez zmian.
 
-### E1. Stopniowe odblokowywanie (dawne D3)
+### E1. Stopniowe odblokowywanie → przeniesione do 1.0
 
-- **Zakres:** rejestr `UNLOCKS` (zakładka lub funkcja → warunek: NAV / aktywa funduszu, stanowisko, certyfikat Akademii, rok gry). Progi startowe (do akceptacji): Bank od startu (lokaty, potrzebne w Pierwszych krokach); aukcje bonów skarbowych po certyfikacie „Obligacje” albo aktywach ≥ 50 tys.; **obligacje korporacyjne** (`index.html:781`) po tym samym certyfikacie albo aktywach ≥ 100 tys.; **aukcje akcji zastawnych** (w liście użytkownika „aukcje hipoteczne”; aukcji hipotecznych w grze nie ma) po stanowisku Zarządca funduszu; Budownictwo i Państwo → Łańcuchy po 1. roku; okno **Miasto** (dziś inwestycje miejskie) po certyfikacie albo 2. roku. **Miasta 2 (0.19.2):** w rejestrze tylko szkielet reguły (`city2: { requires: 'version-0.19.2' }`), bez ekranu. Zablokowana zakładka jest widoczna z kłódką i warunkiem (wariant „zablokowane” stanu pustego z makiety 22, z postępem „Aktywa 32 400 / 50 000 PLN”). Stare zapisy i piaskownica: wszystko odblokowane. Ustawienie „Pokaż wszystko od startu”.
-- **Pliki:** `unlocks.js` (nowy, bez DOM), `ui.js` (pasek boczny, przyciski), `learning.js` (certyfikaty jako warunek), `index.html`, `main.js` (zapis odblokowań).
-- **Test:** nowa gra: zakładki z warunkiem pokazują kłódkę i warunek; spełnienie warunku odblokowuje i wysyła wiadomość; stary zapis ma wszystko odblokowane; przebiegi bez UI ignorują blokady (boty bez zmian).
+Decyzja użytkownika 2026-11-18: E1 przechodzi do wersji 1.0 (ostatniej wersji gry), `plan_1.0.md`. W 0.18.7 nic nie jest blokowane; wariant „zablokowane” stanu pustego (O2) zostaje w komponencie, ale nieużywany.
 
 ### E2. System zadań (makiety 22 i 24, zaakceptowane 2026-11-14)
 
@@ -150,7 +153,7 @@ Dopisek użytkownika: makieta 22 pokazuje wygląd okna zadań w ogóle; zadania 
 | `id`, `cat` | identyfikator i kategoria: `start` (Pierwsze kroki), `board` (Od zarządu), `market` (Rynek), `mech` (Mechaniki) | `mech.deposit13` |
 | `title`, `teach`, `go` | tytuł, „Uczy: …” (mechanika i kurs Akademii), przycisk przejścia | „Otwórz Bank” |
 | `source` | kto daje zadanie: system, szef, firma informacyjna, Akademia | `academy` |
-| `when(state)` | warunek pojawienia się (jawny fakt, posiadanie czegoś, odblokowanie z E1) | GIG ≥ 20% poniżej szczytu |
+| `when(state)` | warunek pojawienia się (jawny fakt, posiadanie czegoś) | GIG ≥ 20% poniżej szczytu |
 | `check(state)` | postęp i wykonanie, z danych gry | 2 000 / 5 000 PLN |
 | `reward` | PLN na konto prywatne albo punkty oceny zarządu; nic do aktywów funduszu | `{ pln: 150 }` |
 | `expires` | „bez terminu”, data gry albo fakt (np. odbicie GIG o 10%) | `{ until: 'gigRebound10' }` |
@@ -160,7 +163,7 @@ Dopisek użytkownika: makieta 22 pokazuje wygląd okna zadań w ogóle; zadania 
 - **Pierwsze kroki:** 4 zadania z makiety 22, po 50 PLN. Znikają po wykonaniu wszystkich.
 - **Od zarządu:** dzisiejsze targety okresu i cele zarządu (punkty oceny i premia jak dziś).
 - **Rynek** (zadania „fazowe”, 100–150 PLN): uruchamiane przez **jawne fakty**, nie wewnętrzną fazę (faza jest ukryta do L4, makieta 23): spadek GIG ≥ 20% od szczytu („Kup tanio w spadkach”, do odbicia GIG o 10%), 18 miesięcy wzrostów („Zabezpiecz zyski: ≥ 15% w gotówce lub obligacjach”), krach, bezpiecznik. Tekst opisuje fakt („GIG jest 22% poniżej szczytu”), bez nazwy fazy. Wygasają, gdy fakt minie.
-- **Mechaniki** (zadania wzrostu wartości, 50–300 PLN): pojawiają się, gdy gracz ma to, czego zadanie uczy (np. ≥ 20% spółki → „Podnieś wartość spółki o 10%: WZA, dywidendy”; pierwsza lokata na 13 tygodni; dywersyfikacja; obligacje po E1; kampania i klienci; Tied; IPO; łańcuchy; surowce). Każde jest powiązane z kursem w Akademii.
+- **Mechaniki** (zadania wzrostu wartości, 50–300 PLN): pojawiają się, gdy gracz ma to, czego zadanie uczy (np. ≥ 20% spółki → „Podnieś wartość spółki o 10%: WZA, dywidendy”; pierwsza lokata na 13 tygodni; dywersyfikacja; obligacje; kampania i klienci; Tied; IPO; łańcuchy; surowce). Każde jest powiązane z kursem w Akademii.
 - **Limity aktywnych:** najwyżej 2 „Rynek” i 3 „Mechaniki” naraz; losowanie bez powtórzeń ostatnich 6 `id` w kategorii.
 
 **Cykl zadania:** wykonane daje nagrodę od razu, zostaje 1 kwartał na liście jako wykonane, potem trafia do historii; z panelu znika (zwalnia miejsce). Wygasłe znika bez kary.
@@ -206,7 +209,7 @@ Seria 24 × 6,5 roku z gracza-aktywnego (blokady włączone w UI), testy, zrzuty
 - **Pliki:** `player.js`, `core.js` (handel), `ui.js` (informacja o poślizgu w formularzu).
 - **Test:** zlecenie 10% obrotu spółki ma poślizg zgodny z tabelą; przebieg 6,5 roku: GIG i marże ±0,5 pp (krótka gra nie może się zmienić).
 
-### D4. Automatyzacja portfela (odblokowywana w Akademii)
+### D4. Automatyzacja portfela (po certyfikatach Akademii, bez rejestru odblokowań z 1.0)
 
 - **Zakres:** trzy ulepszenia w zakładce Akademia, każde po certyfikacie, ze wspólnym oknem „Automaty” (przegląd, włącz/wyłącz, dziennik ostatnich 20 akcji):
   1. **Auto-rolowanie lokat terminowych:** po zapadnięciu lokata odnawia się na ten sam okres w banku z najwyższą stopą, który przyjmuje depozyty funduszu (`canBankTakeFundDeposits`); próg minimalnej stopy.
@@ -250,7 +253,7 @@ Testy, seria 24 × 6,5 roku i 10 × 20 lat (GIG ±0,5 pp i w 10–13% dla 20 lat
 | 15 | 0.18.7 | **TeamedUP! → Zadania i oceny** — makieta 24 (zaakceptowana) | 4 kategorie, filtr, licznik przypiętych 3, karta zadania (Uczy, postęp, nagroda, termin, Przypnij) | `tasks.js`, `getPlayerTargets` |
 | 16 | 0.18.7 | **Podpowiedź poziomu giełdy** (do zaprojektowania po E0) | po najechaniu na nazwę poziomu: wymagana ocena + jedno zdanie bez liczb; płytka giełdy bez progów kursu | `exchanges`, ocena z 0.18.4 |
 | 14 | 0.18.7 | **Wskazówki o fazie** — makieta 23 §4 | wpis Tied i mail subskrypcji z wiarygodnością | `regime`, subskrypcje |
-| 3 | 0.18.7 | **Zakładka zablokowana** | kłódka w pasku bocznym, w środku warunek i postęp („Aktywa 32 / 50 tys. PLN”, „Certyfikat: Obligacje”) | `unlocks.js` |
+| 3 | 1.0 | **Zakładka zablokowana** (przeniesione 2026-11-18, `plan_1.0.md`) | kłódka w pasku bocznym, w środku warunek i postęp („Aktywa 32 / 50 tys. PLN”, „Certyfikat: Obligacje”) | `unlocks.js` |
 | 4 | 0.18.8 | **Okno „Automaty”** (do zaprojektowania) | auto-rolowanie, auto-udział w aukcjach bonów, alert koncentracji: stan, parametry, ostatnie akcje, warunek odblokowania | `automation.js` |
 | 5 | 0.18.8 | **Baner „Czarny łabędź”** | wariant banera kryzysu: typ, kraje, linie, czas trwania | `crises.js` (`BLACK_SWANS`) |
 | 6 | 0.18.8 | **Raport dekady** — makieta 23 §3 (TeamedUP!) + Ranking → Historia (do zaprojektowania) | GIG, inflacja, sektory, kryzysy, rządy, fundusz wobec GIG, kamienie milowe; lista dekad | `history.js` |
@@ -260,7 +263,7 @@ Testy, seria 24 × 6,5 roku i 10 × 20 lat (GIG ±0,5 pp i w 10–13% dla 20 lat
 
 - **Debug tylko na localhost albo z `?debug=1`** (lista użytkownika 2026-11-14; decyzja 2026-11-13 i 2026-11-14: na razie przycisk zostaje w Ustawieniach). Po O1 wystarczy warunek ładowania `debug.js` (localhost albo parametr) i zmiana w testach.
 - Mierzenie, czy gra 50–100 lat utrzymuje gracza: nie teraz.
-- Miasta jako obiekty: 0.19.2 Miasta 2 (`plan_0.19.md`; używają rejestru odblokowań z E1).
+- Miasta jako obiekty: 0.19.2 Miasta 2 (`plan_0.19.md`; rejestr odblokowań dopiero w 1.0, `plan_1.0.md`).
 - Automatyczny rebalancing (klasy aktywów lub koncentracja): decyzja 2026-11-14, tylko alert.
 
 ## Co nie zostało sprawdzone
@@ -276,7 +279,7 @@ w kolejności: 0.18.6 Porządki (Etap 1) → 0.18.7 Progresja i onboarding
 Zacznij po scaleniu kontroli końcowej 0.18 (czat „Realizacja 0.18”).
 Makiety 22 i 23 są zaakceptowane (2026-11-14); wdrażaj je według notek
 plany/design/22_pierwsze_kroki.md i plany/design/23_fazy_dekada.md
-(części O2 warianty, O8, E1 kłódka, E2, E3, D6).
+(części O2 warianty, O8, E2, E3, D6).
 
 Zasady: po polsku; część po części, commit po każdej, tylko swoje pliki;
 testy (design/narzedzia/run_tests.mjs) i przebiegi ×200 przed commitem;
@@ -309,14 +312,11 @@ O8 makiety 22 §3 i 23 §1–2: pola z etykietą, akcent fazy (tylko L4),
 O9 kontrola raporty/kontrola_0.18.6.md.
 
 0.18.7 Progresja i onboarding (bramka: GIG i marże ±0,3 pp):
-E1 unlocks.js: progi (aktywa, stanowisko, certyfikat, rok) dla aukcji
-   bonów, obligacji korporacyjnych, aukcji akcji zastawnych, Budownictwa,
-   Łańcuchów i okna Miasto; dla Miast 2 tylko szkielet reguły; kłódka
-   z warunkiem i postępem (wariant „zablokowane”); stare zapisy odblokowane.
-   Progi pokaż mi przed wdrożeniem.
-E0 poziomy giełd bez kursu: NIE ZACZYNAJ, dopóki użytkownik nie dopisze
-   kryteriów w planie. Zdecydowane już: płytka bez progów kursu, podpowiedź
-   „Dostęp od oceny X” + jedno zdanie bez liczb.
+E0 poziomy giełd bez kursu (kryteria w planie, rekomendacja 2026-11-18):
+   ocena publiczna jako warunek wejścia + wynik z kapitalizacji, płynności
+   i zysku (kurs ≤ 10%), percentyle, histereza 2 kw.; progi kalibrujesz
+   serią (Platynowa 5–10%) i zapisujesz decyzję w raporty/decyzje_0.18.md;
+   płytka bez progów kursu, podpowiedź „Dostęp od oceny X”.
 E2 tasks.js według makiety 24: TeamedUP! → Zadania i oceny (kategorie
    Pierwsze kroki, Od zarządu, Rynek, Mechaniki), przypinanie do 3 na karcie
    panelu funduszu; zadania Rynek z jawnych faktów (bez nazwy fazy, max 2),

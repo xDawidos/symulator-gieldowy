@@ -76,7 +76,7 @@ Cel: polityka dotyczy wszystkich otwartych krajów, partie się zmieniają, grac
 - **Szpitale i uniwersytety** zależą od miasta (potrzeby i klasy z 0.19.1).
 - **Prąd:** miasta mają własne zużycie prądu (dopisek z 0.17.2), do zbalansowania i pomiaru.
 - **Poziom życia** z 0.19.1 S3 liczony na miasto.
-- **Okno „Miasto”:** dziś okno inwestycji miejskich (`openCityInvestmentModal`). Miasta 2 korzystają z rejestru odblokowań z 0.18.7 E1 (szkielet reguły `city2`).
+- **Okno „Miasto”:** dziś okno inwestycji miejskich (`openCityInvestmentModal`). Rejestr odblokowań przeniesiony do 1.0 (`plan_1.0.md`); Miasta 2 są dostępne bez blokady, a 1.0 dopisze im regułę.
 - **Podsumowanie dekady** (0.18.8 D6, makieta 23): od 0.19.2 dochodzi komórka „Wkład w Miasto”.
 - **Mapa szlaków** (makieta 16): karta kraju dostaje listę miast (przed 0.19.2 „kraj bez miast”).
 
