@@ -1498,17 +1498,20 @@ group('Banki, lombard, obligacje, giełdy elitarne (etap E2)', () => {
             const c = makeCompany(`P${i}`, { name: `Platyna ${i}` });
             c.exchange = 'PLATINUM';
             c.price = 2000 + i * 100;
-            c.totalShares = 1000000; // kapitalizacja 2–3,1 mld (progi: Rubin 1,5 mld, Szmaragd 2,5 mld)
+            c.totalShares = 1000000; // kapitalizacja 2–3,1 mld; 0.18.7 E0b: progi względne do mediany (małe spółki niżej)
+            c.fundamentals = { history: Array.from({ length: 8 }, () => ({ netIncome: 1e6 })) }; c.dividendStreak = 4;
             return c;
         });
-        resetWorld(companies);
-        startNewCareer({});
-        assignEliteExchanges();
+        const small = Array.from({ length: 30 }, (_, i) => { const c = makeCompany(`S${i}`); c.price = 10; c.totalShares = 10000; return c; });
+        resetWorld([...companies, ...small]);
+        startNewCareer({}); macro.quarter = 10; if (typeof tierMedianCache === 'object') tierMedianCache.q = null;
+        companies.forEach(c => { c.rating = { grade: 'AA', q: 10, until: 14, auditor: 'aud1' }; });
+        assignEliteExchanges(true);
         assert(!stocks.some(s => s.exchange === 'DIAMOND'), 'bez Diamentu przed 30 min');
         assert(stocks.filter(s => s.exchange === 'EMERALD').length === 3 && stocks.filter(s => s.exchange === 'RUBY').length === 6, 'Szmaragd 3, Rubin 6');
         playerFund.clockMs = 31 * 60000;
-        assignEliteExchanges();
-        assert(stocks.find(s => s.exchange === 'DIAMOND')?.symbol === 'P11', 'Diament = największa');
+        assignEliteExchanges(true);
+        assert(stocks.find(s => s.exchange === 'DIAMOND')?.symbol === 'P11', 'Diament = najlepszy wynik (największa)');
         assert(stocks.find(s => s.symbol === 'P11').volatilityFactor < 1, 'premia stabilności');
         playerProfile.positionId = 'board';
         syncExchangeAccessWithPosition();
@@ -14850,7 +14853,7 @@ group('0.16.9 W3 Spółki zagraniczne jak krajowe', () => {
         for (const i of getCountryIssuers('DE')) {
             const t = getForeignTier(i), pln = toPln(i.price, i.currency);
             assert(t.linked && exchanges[t.key], `${i.id}: poziom z naszych giełd`);
-            if (!isEliteExchange(t.key)) assert(pln >= exchanges[t.key].minPrice && pln < exchanges[t.key].maxPrice, `${i.id}: cena ${pln.toFixed(0)} zł mieści się w progach ${t.key}`);
+            if (!isEliteExchange(t.key)) assertEq(t.key, getTierTargetKey(i, true), `${i.id}: poziom z reguły bez kursu (0.18.7 E0a)`);
         }
         const cz = getCountryIssuers('CZ')[0], tc = getForeignTier(cz);
         assert(!tc.linked && tc.label.startsWith(`${COUNTRY_DEFS.CZ.operator.id}:`), 'kraj niepołączony: poziom wewnątrz giełdy kraju');
@@ -14861,11 +14864,11 @@ group('0.16.9 W3 Spółki zagraniczne jak krajowe', () => {
         joinCountry('DE'); countryState.DE.link = 'intl';
         const list = getCountryIssuers('DE');
         list.forEach(i => { i.price = fromPln(60, i.currency); });
-        list[0].price = fromPln(3000, list[0].currency); // 10 mln akcji × 3000 zł = 30 mld zł
-        list[1].price = fromPln(1600, list[1].currency); // 16 mld zł
+        list[0].price = fromPln(90000, list[0].currency); // 0.18.7 E0b: ok. 1500 × mediany (próg Szmaragdowej 4 × 100×; akcji jest różnie dużo)
+        list[1].price = fromPln(80000, list[1].currency);
         foreignEliteCache.q = -1;
         assertEq(getForeignTier(list[0]).key, 'EMERALD', 'największa kapitalizacja → Szmaragd');
-        assertEq(getForeignTier(list[1]).key, 'EMERALD', 'druga też ≥ 2,5 mld zł');
+        assertEq(getForeignTier(list[1]).key, 'EMERALD', 'druga też ≥ progu (4 × próg Platynowej)');
         assert(list.slice(2).every(i => getForeignTier(i).key !== 'EMERALD' && getForeignTier(i).key !== 'RUBY'), 'tanie spółki bez poziomów elitarnych');
         const count = list.filter(i => getForeignTier(i).key === 'EMERALD').length; assert(count <= ELITE_EXCHANGES.EMERALD.limit, 'limit Szmaragdu');
     }));
@@ -17075,7 +17078,7 @@ group('0.18.0 Porządki przed grafem', () => {
         initFxState(); resetForeignIssuers();
         try {
             joinCountry('DE'); countryState.DE.link = 'intl';
-            for (const i of getCountryIssuers('DE')) { const t = getForeignTier(i); if (!isEliteExchange(t.key)) assertEq(t.key, getPriceTierKey(toPln(i.price, i.currency)), `${i.id}: ten sam próg`); }
+            for (const i of getCountryIssuers('DE')) { const t = getForeignTier(i); if (!isEliteExchange(t.key)) assertEq(t.key, getTierTargetKey(i, true), `${i.id}: ta sama reguła co krajowe (0.18.7 E0a: bez kursu)`); }
         } finally { resetForeignIssuers(); initFxState(); }
     });
 
@@ -17479,15 +17482,14 @@ group('0.18.4 Audyt, oceny, IPO, sufity', () => {
         const g = auditStock(s); assert(RATING_GRADES.includes(g) && s.rating.until === 14, 'ocena na 4 kw.');
         s.rating.grade = 'BB'; assertEq(getPublicRating(s), null, 'słaba ocena niewidoczna');
         s.rating.grade = 'AA'; assert(getPublicRating(s), 'AA widoczna');
-        assert(meetsRatingGate(s, 'GOLD') && meetsRatingGate(s, 'PLATINUM'), 'bramka'); s.rating.grade = 'BB'; assert(!meetsRatingGate(s, 'GOLD'), 'BB nie wchodzi na Złotą');
+        assert(meetsRatingGate(s, 'GOLD') && meetsRatingGate(s, 'PLATINUM'), 'bramka'); s.rating.grade = 'BB'; assert(meetsRatingGate(s, 'GOLD') && !meetsRatingGate(s, 'PLATINUM'), 'BB: Złota bez oceny, Platynowa od A (0.18.7 E0a)');
         s.rating = { grade: 'A', q: 10, until: 14, auditor: 'aud5', bribed: true }; const p0 = s.price;
         revealBribedRating(s); assert(s.rating.revealed && ratingState.banned.aud5 > 10, 'licencja'); assert(s.marketBehavior || s.price <= p0 || true, 'efekt kursu zlecony');
         const poor = stocks[1]; poor.cash = 0; poor.rating = { grade: 'A', q: 10, until: 14, auditor: 'aud4', bribed: true }; const neg = [];
         const adj0 = adjustCompanyCash; adjustCompanyCash = (st, d, ...r) => { const out = adj0(st, d, ...r); if (st.cash < 0) neg.push(st.cash); return out; };
         try { revealBribedRating(poor); } finally { adjustCompanyCash = adj0; }
         assertEq(neg.length, 0, 'kara bez ujemnej gotówki (najpierw kredyt)');
-        const t = stocks[1]; t.price = 500; t.exchange = 'SILVER'; delete t.rating; reviewCompanyPlacements();
-        assert(t.exchange === 'SILVER' && t.awaitingAudit, 'bez oceny zostaje na Srebrnej do audytu');
+        const t = stocks[1]; t.price = 500; t.exchange = 'SILVER'; delete t.rating;
     });
     test('A3: IPO — dyskonto 5–15%, prowizja opiekuna dla banku inwestycyjnego, ocena przy debiucie', () => {
         resetWorld([makeCompany('AAA')]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' }); initializeCommercialBanks();
@@ -17564,12 +17566,9 @@ group('0.18.5 Wydajność', () => {
         const css = await (await fetch('../style.css', { cache: 'no-store' })).text();
         assert(/prefers-reduced-motion:\s*no-preference\)\s*\{\s*\.price-main\.flash-up/.test(css), 'podświetlenie tylko w no-preference');
     });
-    test('makieta 18 cz. 2: reguła wejścia giełdy (kurs, ocena), klasa t-* płytki z poziomu giełdy', () => {
-        assertEq(getExchangeRuleText('JUNK'), 'kurs do 20 PLN', 'Śmieciowa');
-        assertEq(getExchangeRuleText('BRONZE'), 'kurs 20–75 PLN', 'Brązowa');
-        assertEq(getExchangeRuleText('GOLD'), 'kurs 400–800 PLN, ocena BBB', 'Złota z bramką oceny');
-        assertEq(getExchangeRuleText('PLATINUM'), 'kurs od 800 PLN, ocena A', 'Platynowa');
-        assert(getExchangeRuleText('RUBY').includes('ranking'), 'elitarne z rankingu');
+    test('makieta 18 cz. 2 + 0.18.7 E0a: podpowiedź poziomu słowami (bez kursu i liczb), klasa t-* płytki z poziomu giełdy', () => {
+        for (const key of Object.keys(exchanges)) assert(getExchangeRuleText(key) && !/\d/.test(getExchangeRuleText(key)) && !/kurs/i.test(getExchangeRuleText(key)), `podpowiedź ${key} bez liczb i kursu`);
+        assert(getExchangeRuleText('PLATINUM').includes('oceny A'), 'Platynowa: ocena A');
         const c = makeCompany('AAA'); c.segments = [{ sector: 'Technologia', subsector: null, share: 1 }]; c.sector = getSectorsFromSegments(c.segments); c.exchange = 'GOLD'; c.price = 500; resetWorld([c]);
         const table = document.createElement('table'), body = document.createElement('tbody'); body.id = 'stock-table-body'; table.appendChild(body); document.body.appendChild(table);
         const saved = { filter: sectorFilterState, level: currentMarketLevel, owned: ownedOnlyFilter, fav: favoritesOnlyFilter, market: selectedMarketOperator };
@@ -17577,7 +17576,7 @@ group('0.18.5 Wydajność', () => {
             sectorFilterState = { sector: 'all', subsector: null, secondary: false, type: 'all' }; currentMarketLevel = 'ALL'; ownedOnlyFilter = false; favoritesOnlyFilter = false; selectedMarketOperator = 'GPW';
             displayStocks();
             const live = document.getElementById('stock-table-body'), head = live.querySelector('tr.ms-ex');
-            assert(head && head.classList.contains('t-gold') && head.textContent.includes('ocena BBB'), `płytka Złotej: ${head?.className}`);
+            assert(head && head.classList.contains('t-gold') && head.querySelector('.ex-name').title === TIER_HINTS.GOLD, `płytka Złotej: ${head?.className}`);
             assertEq(live.querySelector('tr[data-symbol="AAA"]').dataset.level, 'GOLD', 'wiersz niesie poziom (szyna z CSS)');
         } finally { sectorFilterState = saved.filter; currentMarketLevel = saved.level; ownedOnlyFilter = saved.owned; favoritesOnlyFilter = saved.fav; selectedMarketOperator = saved.market; table.remove(); }
     });
@@ -17765,6 +17764,66 @@ group('0.18.6 Porządki', () => {
 });
 
 group('0.18.7 Progresja i onboarding', () => {
+    test('E0d: KNF zapowiada zmianę zasad kwartał wcześniej, spółki notowane mają rok przejściowy, najwyżej jedna zmiana na 2 lata', () => {
+        const old = makeCompany('OLD'); old.marketSinceQ = 2; resetWorld([old]); macro.quarter = 20; knfRules = createKnfRules(); mailbox = createMailbox();
+        const base = getListingRequirements('GPW').cap;
+        assert(announceKnfRuleChange(1, 'po krachu na giełdzie'), 'zapowiedź');
+        assertEq(getListingRequirements('GPW').cap, base, 'przed wejściem w życie bez zmian');
+        macro.quarter = 21; assertEq(processKnfRulesQuarterly(), 'applied', 'wchodzi w życie po kwartale');
+        assert(getListingRequirements('GPW').cap > base, 'nowe spółki: wyższy wymóg');
+        assertEq(getListingRequirements('GPW', old).cap, base, 'spółka notowana: okres przejściowy');
+        macro.quarter = 25; assert(getListingRequirements('GPW', old).cap > base, 'po roku zasady obowiązują wszystkich');
+        const realRandom = Math.random; Math.random = () => 0;
+        try { macro.quarter = 27; assertEq(processKnfRulesQuarterly(), null, 'przed upływem 2 lat bez nowej zmiany'); } finally { Math.random = realRandom; }
+        assert(mailbox.messages.some(m => m.sender === 'KNF'), 'mail KNF');
+    });
+    test('E0c: zmiany poziomu — najwyżej 6 wiadomości na kwartał (reszta zbiorczo), bez emoji, kurs ±2–4% (Diamentowa ±5%)', () => {
+        const list = Array.from({ length: 9 }, (_, i) => makeCompany(`Z${i}`)); resetWorld(list);
+        const logs = [], effects = [], logReal = logEvent, effReal = applyPriceEffect;
+        logEvent = (t, c) => logs.push(t); applyPriceEffect = (sym, v) => effects.push(v);
+        try {
+            list.slice(0, 8).forEach(s => noteTierChange(s, 'BRONZE', 'SILVER'));
+            noteTierChange(list[8], 'EMERALD', 'DIAMOND');
+            flushTierEvents();
+        } finally { logEvent = logReal; applyPriceEffect = effReal; }
+        assertEq(logs.length, 7, '6 wiadomości + zbiorcza');
+        assert(/Diamentową/.test(logs[0]), 'Diamentowa na początku');
+        assert(!logs.some(t => /\p{Extended_Pictographic}/u.test(t)), 'bez emoji');
+        assert(effects.slice(0, 8).every(v => v >= 0.02 && v <= 0.04) && effects[8] === 0.05, `kurs ${effects}`);
+    });
+    test('E0b: elitarne z warunków — bez oceny A+ nie ma Rubinowej, bez dywidendy nie ma Szmaragdowej, zmiana po 2 kw., Diamentowa zmienia się po 2 kw. przewagi', () => {
+        const big = Array.from({ length: 4 }, (_, i) => { const c = makeCompany(`E${i}`); c.price = 1000 + i * 500; c.totalShares = 1e6; c.exchange = 'PLATINUM'; c.fundamentals = { history: Array.from({ length: 8 }, () => ({ netIncome: 1e6 })) }; c.dividendStreak = 4; return c; });
+        const small = Array.from({ length: 20 }, (_, i) => { const c = makeCompany(`M${i}`); c.price = 10; c.totalShares = 10000; return c; });
+        resetWorld([...big, ...small]); startNewCareer({}); macro.quarter = 10; tierMedianCache.q = null; playerFund.clockMs = 31 * 60000;
+        big.forEach(c => { c.rating = { grade: 'AA', q: 10, until: 14, auditor: 'aud1' }; });
+        big[0].rating.grade = 'A'; assert(!eliteQualifies(big[0], 'RUBY'), 'A to za mało na Rubinową');
+        big[1].dividendStreak = 0; assert(eliteQualifies(big[1], 'RUBY') && !eliteQualifies(big[1], 'EMERALD'), 'bez dywidendy: Rubinowa, nie Szmaragdowa');
+        assignEliteExchanges(true);
+        assertEq(big[3].exchange, 'DIAMOND', 'Diamentowa: najlepszy wynik');
+        // E2 rośnie ponad E3: Diamentowa przechodzi dopiero po 2 kw. przewagi
+        big[2].price = 5000; assignEliteExchanges();
+        assertEq(big[3].exchange, 'DIAMOND', 'po 1 kw. przewagi bez zmiany');
+        assignEliteExchanges();
+        assertEq(big[2].exchange, 'DIAMOND', 'po 2 kw. przewagi zmiana');
+    });
+    test('E0a: poziom bez kursu — Platynowa tylko z oceną ≥ A, split nie zmienia poziomu, zmiana po 2 kw., utrata oceny = spadek od razu, kandydat zamawia audyt', () => {
+        const list = []; for (let i = 0; i < 20; i++) { const c = makeCompany(`T${i}`); c.price = 100; c.totalShares = 10000; list.push(c); }
+        const big = list[0]; big.totalShares = 10000 * 150; big.exchange = 'GOLD'; // 150 × mediana (próg Platynowej 100×)
+        resetWorld(list); macro.quarter = 10; tierMedianCache.q = null;
+        big.fundamentals = { history: [1, 2, 3, 4].map(() => ({ netIncome: 1000 })) };
+        delete big.rating;
+        assertEq(getTierTargetKey(big), 'GOLD', 'bez oceny nie ma Platynowej');
+        assert(decideTierChange(big) === null && big.awaitingAudit, 'kandydat zamawia audyt');
+        big.rating = { grade: 'A', q: 10, until: 14, auditor: 'aud1' };
+        assertEq(getTierTargetKey(big), 'PLATINUM', 'z oceną A: Platynowa');
+        assertEq(decideTierChange(big), null, '1. kwartał: czeka');
+        assertEq(decideTierChange(big), 'PLATINUM', '2. kwartał: awans');
+        big.exchange = 'PLATINUM';
+        const p0 = getTierTargetKey(big); big.price /= 5; big.totalShares *= 5; tierMedianCache.q = null;
+        assertEq(getTierTargetKey(big), p0, 'split nie zmienia poziomu');
+        big.rating.until = 9; // ocena wygasła
+        assertEq(decideTierChange(big), 'GOLD', 'utrata oceny: spadek od razu');
+    });
     test('E3: wskazówka o fazie bez nazwy fazy; po zmianie fazy najwyżej jedna na kanał; wiarygodność maila rośnie z prenumeratą', () => {
         resetWorld([makeCompany('AAA')]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' }); initMarketRegimes(); mailbox = createMailbox();
         const names = Object.values(MARKET_PHASES).map(p => p.name.toLowerCase());

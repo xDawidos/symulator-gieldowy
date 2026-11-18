@@ -968,34 +968,67 @@ function getGameClockMs() {
     return playerFund?.clockMs ?? 0;
 }
 
-/** Ranking kapitalizacji spółek z Platynowej i wyżej → przydział do giełd elitarnych. */
-function assignEliteExchanges() {
+// 0.18.7 E0b: elitarne z warunków i progów względnych (wielokrotności progu Platynowej) zamiast minCap 1,5 / 2,5 mld.
+// Rubinowa (≤ 6): ocena ≥ A+, zysk 8 kw. z rzędu, kapitalizacja ≥ 2 × próg Platynowej; Szmaragdowa (≤ 3): ocena ≥ AA, dywidenda
+// ≥ 4 kw. z rzędu (dividendStreak), ≥ 4 × próg; Diamentowa (1): najlepszy wynik (kapitalizacja 50%, zysk 4 kw. 25%, ocena 25%)
+// spośród spełniających Szmaragdową (gdy brak — Rubinową). Zmiana poziomu po 2 kw.; Diamentowa zmienia się po 2 kw. przewagi innej spółki.
+const ELITE_RULES = { RUBY: { capMult: 2, grade: 'A+', profitQ: 8 }, EMERALD: { capMult: 4, grade: 'AA', divQ: 4 }, confirmQ: 2, diamondLeadQ: 2 };
+let eliteState = { challenger: null, n: 0 };
+function getPlatinumCapThreshold() { return (typeof getTierMedianCap === 'function' ? getTierMedianCap('home') : 0) * (typeof TIER_RULES === 'object' ? TIER_RULES.PLATINUM : 5); }
+function eliteQualifies(stock, tier) {
+    const r = ELITE_RULES[tier], rating = typeof getValidRating === 'function' ? getValidRating(stock) : null, plat = getPlatinumCapThreshold();
+    if (!r || !rating || !(plat > 0) || ratingIndex(rating.grade) < ratingIndex(r.grade) || getMarketCap(stock) < plat * r.capMult) return false;
+    if (r.profitQ) { const h = stock.fundamentals?.history || []; if (h.length < r.profitQ || !h.slice(-r.profitQ).every(x => (Number(x.netIncome) || 0) > 0)) return false; }
+    if (r.divQ && !((Number(stock.dividendStreak) || 0) >= r.divQ)) return false;
+    return true;
+}
+function getDiamondScore(stock, pool) {
+    const maxCap = Math.max(1, ...pool.map(getMarketCap)), maxNi = Math.max(1, ...pool.map(s => Math.max(0, getNetIncome4q(s) || 0)));
+    const ri = stock.rating ? ratingIndex(stock.rating.grade) / (RATING_GRADES.length - 1) : 0;
+    return 0.5 * getMarketCap(stock) / maxCap + 0.25 * Math.max(0, getNetIncome4q(stock) || 0) / maxNi + 0.25 * ri;
+}
+/** Przydział do elitarnych. `immediate` (start gry, wczytanie): bez okresu potwierdzenia; na starcie pula dostaje audyt. */
+function assignEliteExchanges(immediate = false) {
     const pool = stocks
         .filter(s => !s.assetType && !s.isBankStock && !s.isBankrupt && !s.isSubsidiaryOf &&
             (s.exchange === 'PLATINUM' || isEliteExchange(s.exchange)))
         .sort((a, b) => getMarketCap(b) - getMarketCap(a));
+    if (immediate && typeof auditStock === 'function') for (const s of pool) if (!getValidRating(s)) auditStock(s);
 
     const target = {};
-    let index = 0;
-    if (getGameClockMs() >= ELITE_EXCHANGES.DIAMOND.minGameMs && pool[0]) target[pool[index++].symbol] = 'DIAMOND';
-    let emeralds = 0;
-    while (index < pool.length && emeralds < ELITE_EXCHANGES.EMERALD.limit && getMarketCap(pool[index]) >= ELITE_EXCHANGES.EMERALD.minCap) {
-        target[pool[index++].symbol] = 'EMERALD';
-        emeralds++;
+    if (getGameClockMs() >= ELITE_EXCHANGES.DIAMOND.minGameMs) {
+        let cands = pool.filter(s => eliteQualifies(s, 'EMERALD'));
+        if (!cands.length) cands = pool.filter(s => eliteQualifies(s, 'RUBY'));
+        const best = cands.sort((a, b) => getDiamondScore(b, pool) - getDiamondScore(a, pool))[0];
+        const holder = pool.find(s => s.exchange === 'DIAMOND' && cands.includes(s));
+        let diamond = best;
+        if (holder && best && holder !== best && !immediate) { // zmiana dopiero po 2 kw. przewagi innej spółki
+            eliteState = eliteState.challenger === best.symbol ? { challenger: best.symbol, n: eliteState.n + 1 } : { challenger: best.symbol, n: 1 };
+            diamond = eliteState.n >= ELITE_RULES.diamondLeadQ ? best : holder;
+        } else eliteState = { challenger: null, n: 0 };
+        if (diamond) target[diamond.symbol] = 'DIAMOND';
     }
-    for (let rubies = 0; index < pool.length && rubies < ELITE_EXCHANGES.RUBY.limit && getMarketCap(pool[index]) >= ELITE_EXCHANGES.RUBY.minCap; rubies++) target[pool[index++].symbol] = 'RUBY';
+    for (const tier of ['EMERALD', 'RUBY']) {
+        let n = 0;
+        for (const s of pool) if (!target[s.symbol] && n < ELITE_EXCHANGES[tier].limit && eliteQualifies(s, tier)) { target[s.symbol] = tier; n++; }
+    }
 
     const changes = [];
     for (const stock of pool) {
-        const next = target[stock.symbol] || 'PLATINUM';
-        if (next === stock.exchange) { applyEliteBonuses(stock); continue; }
-        const up = exchanges[next].level > exchanges[stock.exchange].level;
+        let next = target[stock.symbol] || 'PLATINUM';
+        if (next !== stock.exchange && next !== 'DIAMOND' && stock.exchange !== 'DIAMOND' && !immediate) { // potwierdzenie przez 2 kw. (poza Diamentową)
+            stock.elitePending = stock.elitePending?.target === next ? { target: next, n: stock.elitePending.n + 1 } : { target: next, n: 1 };
+            if (stock.elitePending.n < ELITE_RULES.confirmQ) next = stock.exchange;
+        }
+        if (next === stock.exchange) { if (target[stock.symbol] === stock.exchange || (!target[stock.symbol] && stock.exchange === 'PLATINUM')) delete stock.elitePending; applyEliteBonuses(stock); continue; }
+        delete stock.elitePending;
+        const from = stock.exchange;
         stock.exchange = next;
         applyEliteBonuses(stock);
-        applyPriceEffect(stock.symbol, up ? 0.03 : -0.03, up ? 'positive' : 'negative', 'review');
-        logEvent(`${up ? '📈 AWANS' : '📉 SPADEK'}: ${stock.name} ${up ? 'wchodzi na' : 'spada na'} ${getExchangeAcc(next)} (kapitalizacja ${formatPLNShort(getMarketCap(stock))}).`, 'market');
+        noteTierChange(stock, from, next); // 0.18.7 E0c: wydarzenie, kurs, Tied, poczta
         changes.push([stock.symbol, next]);
     }
+    flushTierEvents();
     return changes;
 }
 
@@ -1168,7 +1201,7 @@ function runDiamondStrategy() {
 
 /** Co kwartał: przydział giełd elitarnych, zależne, Diament. */
 function processEliteExchangesQuarterly() {
-    assignEliteExchanges();
+    assignEliteExchanges(); // kwartalnie: z okresem potwierdzenia (0.18.7 E0b)
     for (const stock of stocks.filter(s => isEliteExchange(s.exchange) && !s.isBankrupt)) {
         const def = ELITE_EXCHANGES[stock.exchange];
         const count = (stock.subsidiaries || []).length;

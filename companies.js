@@ -7421,17 +7421,8 @@ function reviewCompanyPlacements() {
 
         const currentExchangeKey = stock.exchange;
         const currentLevel = exchanges[currentExchangeKey].level;
-        let correctExchangeKey = getPriceTierKey(stock.price);
-        if (typeof meetsRatingGate === 'function' && exchanges[correctExchangeKey] && exchanges[correctExchangeKey].level > (exchanges[currentExchangeKey]?.level ?? 0) && !meetsRatingGate(stock, correctExchangeKey)) { // 0.18.4 A2: awans na Złotą/Platynową wymaga oceny
-            stock.awaitingAudit = true;
-            const below = Object.keys(exchanges).filter(k => !exchanges[k].rankBased && exchanges[k].level < exchanges[correctExchangeKey].level && exchanges[k].level >= (exchanges[currentExchangeKey]?.level ?? 0) && meetsRatingGate(stock, k)).sort((a, b) => exchanges[b].level - exchanges[a].level)[0];
-            correctExchangeKey = below || currentExchangeKey; // zostaje na poprzednim poziomie do audytu
-        }
-
-
+        const correctExchangeKey = decideTierChange(stock); // 0.18.7 E0a: poziom z wielkości, płynności, zysku i oceny (bez kursu), zmiana po 2 kw.
         if (!correctExchangeKey || correctExchangeKey === currentExchangeKey) return;
-        // Giełdy elitarne przydziela ranking kapitalizacji (assignEliteExchanges, finance.js).
-        if (exchanges[currentExchangeKey]?.rankBased && correctExchangeKey === 'PLATINUM') return;
 
         promotionOccurred = true;
         const newExchange = exchanges[correctExchangeKey];
@@ -7447,9 +7438,7 @@ function reviewCompanyPlacements() {
         // --- KONIEC POPRAWKI ---
 
         if (newExchange.level > currentLevel) { // Logika dla AWANSU
-            const magnitude = (Math.random() * 0.05) + 0.03;
-            message = `📈 AWANS: ${stock.name} przechodzi na ${getExchangeAcc(correctExchangeKey)}!`;
-            applyPriceEffect(stock.symbol, magnitude, 'positive', 'review');
+            message = ''; // 0.18.7 E0c: wiadomość i efekt kursu w noteTierChange
             
             const newLimitRange = SHARE_LIMIT_RANGES[correctExchangeKey];
             if (newLimitRange) stock.maxShares = getRandomIntInRange(newLimitRange.min, newLimitRange.max);
@@ -7465,16 +7454,15 @@ function reviewCompanyPlacements() {
                 }
             }
         } else { // Logika dla SPADKU
-            const magnitude = ((Math.random() * 0.05) + 0.03) * -1;
-            message = `📉 SPADEK: ${stock.name} spada na ${getExchangeAcc(correctExchangeKey)}.`;
-            applyPriceEffect(stock.symbol, magnitude, 'negative', 'review');
+            message = '';
 
             const newLimitRange = SHARE_LIMIT_RANGES[correctExchangeKey];
             if (newLimitRange) stock.maxShares = getRandomIntInRange(newLimitRange.min, newLimitRange.max);
         }
 
-        logEvent(message, 'review');
+        if (typeof noteTierChange === 'function') noteTierChange(stock, currentExchangeKey, correctExchangeKey, message); else logEvent(message, 'review');
     });
+    if (typeof flushTierEvents === 'function') flushTierEvents();
 
     if (promotionOccurred) {
         displayStocks(getCurrentInputValues());

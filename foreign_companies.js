@@ -300,13 +300,15 @@ function getForeignEliteMap() {
     const linked = typeof getLinkedCountries === 'function' ? getLinkedCountries() : [];
     const key = macro.quarter * 1000 + linked.length;
     if (foreignEliteCache.q === key && foreignEliteCache.size === foreignIssuerCount()) return foreignEliteCache.map;
-    const pool = getHomeListedIssuers().filter(i => !i.tradeHalted && toPln(i.price, i.currency) >= exchanges.PLATINUM.minPrice)
+    const plat = typeof getTierMedianCap === 'function' ? getTierMedianCap('foreign') * TIER_RULES.PLATINUM : 0; // 0.18.7 E0b: progi względne (bez ocen audytora dla obcych)
+    const pool = getHomeListedIssuers().filter(i => !i.tradeHalted && (typeof getTierTargetKey === 'function' ? getTierTargetKey(i, true) === 'PLATINUM' : toPln(i.price, i.currency) >= exchanges.PLATINUM.minPrice))
         .map(i => ({ i, cap: toPln(i.price * i.shares, i.currency) })).sort((a, b) => b.cap - a.cap);
     const map = {};
     let idx = 0;
     for (const tier of FOREIGN_ELITE_ORDER) {
         const def = ELITE_EXCHANGES[tier];
-        for (let n = 0; idx < pool.length && n < def.limit && pool[idx].cap >= def.minCap; n++) map[pool[idx++].i.id] = tier;
+        const minCap = plat > 0 && typeof ELITE_RULES === 'object' && ELITE_RULES[tier] ? plat * ELITE_RULES[tier].capMult : def.minCap;
+        for (let n = 0; idx < pool.length && n < def.limit && pool[idx].cap >= minCap; n++) map[pool[idx++].i.id] = tier;
     }
     foreignEliteCache = { q: key, size: foreignIssuerCount(), map };
     return map;
@@ -316,7 +318,7 @@ function foreignIssuerCount() { return Object.keys(foreignIssuers).length; }
 /** Poziom giełdy spółki: kraj połączony → nasze poziomy (Śmieciowa…Platynowa po cenie w PLN, Szmaragd/Rubin po kapitalizacji); inny kraj → własne poziomy giełdy kraju. */
 function getForeignTier(i) {
     const pln = toPln(i.price, i.currency), linked = isIssuerOnHomeList(i);
-    let key = getPriceTierKey(pln);
+    let key = linked && typeof getTierTargetKey === 'function' ? getTierTargetKey(i, true) : getPriceTierKey(pln); // 0.18.7 E0a: obce z naszej listy bez kursu (mediana obcych)
     if (linked) {
         key = getForeignEliteMap()[i.id] || key;
         return { key, level: exchanges[key].level, linked: true, label: exchanges[key].name, exchange: key };

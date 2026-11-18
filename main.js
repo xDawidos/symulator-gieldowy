@@ -234,7 +234,7 @@ function buildSaveSnapshot({ compact = 0 } = {}) {
         currencies: typeof getCurrencySnapshot === 'function' ? getCurrencySnapshot() : undefined, // 0.16.1 G2: kursy, gotówka w walutach (v16)
         forex: typeof getForexSnapshot === 'function' ? getForexSnapshot() : undefined, // 0.16.4 G21: pozycje z depozytem (pole opcjonalne v16)
         commodities: typeof getCommoditiesSnapshot === 'function' ? getCommoditiesSnapshot() : undefined, // 0.17 S1: ceny surowców (pole opcjonalne)
-        ratings: typeof getRatingSnapshot === 'function' ? getRatingSnapshot() : undefined, listingHistory: typeof listingHistory === 'object' ? listingHistory : undefined, ipoStats: typeof ipoStats === 'object' ? ipoStats : undefined, // 0.18.4 A2–A4 (pola opcjonalne)
+        ratings: typeof getRatingSnapshot === 'function' ? getRatingSnapshot() : undefined, knfRules: typeof getKnfRulesSnapshot === 'function' ? getKnfRulesSnapshot() : undefined, listingHistory: typeof listingHistory === 'object' ? listingHistory : undefined, ipoStats: typeof ipoStats === 'object' ? ipoStats : undefined, // 0.18.4 A2–A4 (pola opcjonalne)
         chains: typeof getChainsSnapshot === 'function' ? getChainsSnapshot() : undefined, // 0.18.1 P2: bilans łańcuchów (pole opcjonalne; stary zapis: stan buduje pierwszy kwartał)
         antitrustOffice, antitrustLog, // 0.15.6 E5: poziom urzędu antymonopolowego i interwencje (pola opcjonalne)
         subcontractLog, subcontractorDeals, subcontractorAcquisitionCount, // 0.15.5 B2–B3: okno zleceń podwykonawców, przejęcia pionowe (pola opcjonalne)
@@ -644,6 +644,7 @@ function applySaveSnapshot(snapshot) {
     if (typeof applyCommoditiesSnapshot === 'function') applyCommoditiesSnapshot(snapshot.commodities); // 0.17 S1: stary zapis → ceny średnie
     if (typeof applyChainsSnapshot === 'function') applyChainsSnapshot(snapshot.chains); // 0.18.1 P2
     if (typeof applyRatingSnapshot === 'function') applyRatingSnapshot(snapshot.ratings); // 0.18.4
+    if (typeof applyKnfRulesSnapshot === 'function') applyKnfRulesSnapshot(snapshot.knfRules); // 0.18.7 E0d
     if (typeof listingHistory === 'object') listingHistory = Array.isArray(snapshot.listingHistory) ? snapshot.listingHistory.slice(-120) : [];
     if (typeof ipoStats === 'object') ipoStats = { ipos: 0, withdrawn: 0, fees: 0, ...(snapshot.ipoStats || {}) };
     if (typeof commodityMetalsMigration === 'object' && commodityMetalsMigration && typeof splitMetalsContracts === 'function') { // 0.18.1 P1: pozycje gracza na MET-* → IRON + COP po połowie
@@ -1526,6 +1527,7 @@ function runQuarterlyTick() {
         if (typeof processGiantEventQuarterly === 'function') processGiantEventQuarterly(); // 0.16.1 G3: „Gigant wkracza na scenę” (countries.js)
         if (typeof processCountriesQuarterly === 'function') processCountriesQuarterly(); // 0.16.2 G5: rynki zagraniczne, bilety, boty (countries.js)
         if (typeof processRatingsQuarterly === 'function') processRatingsQuarterly(); // 0.18.4 A2: audyty i oceny
+        if (typeof processKnfRulesQuarterly === 'function') processKnfRulesQuarterly(); // 0.18.7 E0d: KNF zmienia zasady wejścia
         if (typeof noteTaskQuarter === 'function') noteTaskQuarter(); // 0.18.7 E2
         if (typeof processListingsQuarterly === 'function') processListingsQuarterly(); // 0.15.6: wymogi utrzymania, rynki NH i prywatny (listings.js)
         if (typeof enforceListingLimitQuarterly === 'function') enforceListingLimitQuarterly(); // 0.15.4 P5: powyżej 115 spółek krajowych wymuszone wycofanie najsłabszych
@@ -2083,7 +2085,7 @@ function createNewWorld() {
     initCityModel();
     // Holdingi bez ceny startowej (wyliczanej z NAV dopiero przy pierwszym ticku) dostają cenę = NAV.
     stocks.filter(stock => stock.assetType === 'Holding' && !(stock.price > 0)).forEach(stock => { stock.price = Math.max(0.01, getExternalFundValue(stock)); });
-    assignEliteExchanges(); // giełdy Rubinowa i Szmaragdowa od startu (Diamentowa po 30 min gry)
+    assignEliteExchanges(true); // giełdy elitarne od startu (Diamentowa po 30 min gry); 0.18.7 E0b: audyt puli i przydział bez okresu potwierdzenia
     maintainStartupCount(); // inkubator startuje z kilkoma startupami
     initMarketOperators(); // GPW i przyszli operatorzy rynków (markets.js)
     initDefenseSector(); // spółki zbrojeniowe i fundusz Gwardia (defense.js)

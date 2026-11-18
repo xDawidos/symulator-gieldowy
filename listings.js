@@ -25,9 +25,9 @@ function getListingRequirementMultiplier() {
 }
 
 /** Wymogi wejścia na rynek (GPW z mnożnikiem; NH i PRV stałe). */
-function getListingRequirements(marketId) {
+function getListingRequirements(marketId, stock = null) {
     const base = LISTING_REQUIREMENTS[marketId] || LISTING_REQUIREMENTS.PRV;
-    const mult = marketId === 'GPW' ? getListingRequirementMultiplier() : 1;
+    const mult = marketId === 'GPW' ? getListingRequirementMultiplier() * (typeof getKnfListingMult === 'function' ? getKnfListingMult(stock) : 1) : 1; // 0.18.7 E0d: × mnożnik KNF
     return { ...base, cap: base.cap * mult, freeFloat: Math.min(0.5, base.freeFloat * mult), mult };
 }
 
@@ -37,7 +37,7 @@ function isInnovativeCompany(stock) {
 
 /** Czy spółka spełnia wymogi wejścia na rynek; `failed` wymienia niespełnione (cap, freeFloat, profit). Debiut startupu nie ma historii zysków (profit pomijany). */
 function meetsListingRequirements(stock, marketId, { debut = false } = {}) {
-    const req = getListingRequirements(marketId);
+    const req = getListingRequirements(marketId, debut ? null : stock);
     const failed = [];
     if (getMarketCapValue(stock) < req.cap) failed.push('cap');
     const total = Math.max(1, Number(stock.totalShares) || 0);
@@ -576,13 +576,13 @@ function processListingsQuarterly() {
 // (Wielka Trójka myli się rzadziej), przekupstwo zawyża ocenę o 2 stopnie; ujawnienie = spadek kursu, kara, utrata licencji audytora, śledztwo.
 // Spółki ujawniają tylko oceny ≥ A (błąd selekcji: „brak oceny” często znaczy słaba). Ocena jest bramką awansu na Złotą (≥ BBB) i Platynową (≥ A).
 // =================================================================================
-const RATING_GRADES = ['D', 'C', 'CCC', 'B', 'BB', 'BBB', 'A', 'AA', 'AAA'];
+const RATING_GRADES = ['D', 'C', 'CCC', 'B', 'BB', 'BBB', 'A', 'A+', 'AA', 'AAA']; // 0.18.7 E0b: A+ (próg Rubinowej)
 const RATING_RULES = { validQ: 4, randomPerQ: 2, publicFrom: 'A', bribeChance: 0.03, bribeBoost: 2, revealChance: 0.25, revealDrop: -0.15, fineShare: 0.02, licenseLossQ: 8 };
 const AUDITORS = [
     { id: 'aud1', name: 'Biegły & Wspólnicy', big: true, noise: 0.10 }, { id: 'aud2', name: 'Bilans Global', big: true, noise: 0.10 }, { id: 'aud3', name: 'Audyt Centralny', big: true, noise: 0.12 },
     { id: 'aud4', name: 'Saldo Plus', big: false, noise: 0.30 }, { id: 'aud5', name: 'Rachunek s.c.', big: false, noise: 0.35 }, { id: 'aud6', name: 'Księgi Rzetelne', big: false, noise: 0.30 }
 ];
-const GATE_BY_TIER = { GOLD: 'BBB', PLATINUM: 'A' };
+const GATE_BY_TIER = { PLATINUM: 'A' }; // 0.18.7 E0a: ocena tylko od Platynowej (wcześniej Złota ≥ BBB)
 let ratingState = { banned: {}, log: [], stats: { audits: 0, bribes: 0, reveals: 0 } };
 function resetRatings() { ratingState = { banned: {}, log: [], stats: { audits: 0, bribes: 0, reveals: 0 } }; }
 function ratingIndex(grade) { return RATING_GRADES.indexOf(grade); }
@@ -773,4 +773,168 @@ function processIpoOffersWeekly() {
         if (typeof addMail === 'function') addMail({ sender: 'Dom Maklerski', subject: `Przydział akcji: ${startup.name}`, body: `Debiut po ${formatZl(startup.price, 2)}. Zapis ${formatZl(amount, 0)}: przydział ${formatShares(r.shares)} (${formatNumberPl(r.ratio * 100, 0)}% zapisu po redukcji) za ${formatZl(r.cost, 0)}, zwrot ${formatZl(r.refund, 0)}.`, importance: 2, symbol: startup.symbol });
         if (typeof logFundTrade === 'function' && r.shares > 0) logFundTrade(startup.symbol, 'buy');
     }
+}
+
+
+// =================================================================================
+// 0.18.7 E0a: POZIOMY GIEŁD BEZ KURSU (kryteria użytkownika 2026-11-18). Kapitalizacja względem mediany rynku (krajowe i obce
+// osobno) + free float + zysk netto z 4 kw.; Platynowa wymaga ważnej oceny ≥ A (twarda bramka). Zmiana poziomu najwyżej
+// co 2 kwartały (warunek spełniony 2 przeglądy z rzędu); utrata oceny na Platynowej = spadek od razu. Split nie zmienia poziomu.
+// =================================================================================
+// Kalibracja (seria e0a i gra w roku 6): kwantyle kapitalizacji / mediana — 10%: 0,01, 43%: 0,42, 75%: 8, 93%: 124 (rozkład bardzo skośny);
+// progi startowe planu 0,3 / 0,9 / 2,2 / 5 dawały Śmieciową 35% i Platynową z elitarnymi 22%.
+const TIER_RULES = { BRONZE: 0.03, SILVER: 0.45, GOLD: 8, PLATINUM: 100, ffSilver: 0.15, ffGold: 0.20, lossQ: 4, junkLossCap: 1.0, confirmQ: 2 };
+const TIER_HINTS = {
+    JUNK: 'Dostęp zależy od wielkości i zysków spółki.', BRONZE: 'Dostęp zależy od wielkości i zysków spółki.', SILVER: 'Dostęp zależy od wielkości i zysków spółki.', GOLD: 'Dostęp zależy od wielkości i zysków spółki.',
+    PLATINUM: 'Dostęp od oceny A. Decydują też wielkość, płynność i zyski spółki.',
+    RUBY: 'Dostęp od oceny A+ i stałych zysków.', EMERALD: 'Dostęp od oceny AA i regularnej dywidendy.', DIAMOND: 'Tylko najlepsza spółka rynku.'
+};
+let tierMedianCache = { q: null, home: 0, foreign: 0 };
+function medianOf(values) { const v = values.filter(x => x > 0).sort((a, b) => a - b); return v.length ? (v.length % 2 ? v[(v.length - 1) / 2] : (v[v.length / 2 - 1] + v[v.length / 2]) / 2) : 0; }
+/** Mediana kapitalizacji (PLN) spółek krajowych albo obcych z naszej listy; liczona raz na kwartał. */
+function getTierMedianCap(kind = 'home') {
+    const q = typeof macro === 'object' ? macro.quarter : 0;
+    if (tierMedianCache.q !== q) {
+        const home = stocks.filter(s => !s.assetType && !s.isBankrupt && s.price > 0).map(s => s.price * (s.totalShares || 0));
+        const foreign = typeof getHomeListedIssuers === 'function' ? getHomeListedIssuers().map(i => toPln(i.price * i.shares, i.currency)) : [];
+        tierMedianCache = { q, home: medianOf(home), foreign: medianOf(foreign) };
+    }
+    return tierMedianCache[kind] || 0;
+}
+function getNetIncome4q(stock) {
+    const h = stock?.fundamentals?.history || [];
+    return h.length >= 4 ? h.slice(-4).reduce((s, x) => s + (Number(x.netIncome) || 0), 0) : null;
+}
+function hasLossStreak(stock, n = TIER_RULES.lossQ) { const h = stock?.fundamentals?.history || []; return h.length >= n && h.slice(-n).every(x => (Number(x.netIncome) || 0) < 0); }
+/** Poziom docelowy z reguły (bez kursu). `foreign`: spółka obca z naszej listy (bez oceny audytora — Platynowa z wielkości i zysku). */
+function getTierTargetKey(stock, foreign = false) {
+    const med = getTierMedianCap(foreign ? 'foreign' : 'home');
+    if (!(med > 0)) return stock.exchange && exchanges[stock.exchange] && !exchanges[stock.exchange].rankBased ? stock.exchange : 'BRONZE';
+    const cap = foreign ? toPln(stock.price * stock.shares, stock.currency) : stock.price * (stock.totalShares || 0), m = cap / med;
+    const ff = !foreign && stock.totalShares > 0 ? getFreeFloatShares(stock) / stock.totalShares : 1, ni = getNetIncome4q(stock);
+    if (m < TIER_RULES.BRONZE || (hasLossStreak(stock) && m < TIER_RULES.junkLossCap)) return 'JUNK';
+    const goldOk = ff >= TIER_RULES.ffGold && (ni === null || ni > 0);
+    const sh = 1 + (foreign || typeof getKnfTierShift !== 'function' ? 0 : getKnfTierShift(stock)); // 0.18.7 E0d: KNF przesuwa progi Złotej i Platynowej
+    if (m >= TIER_RULES.PLATINUM * sh && goldOk && (foreign || meetsRatingGate(stock, 'PLATINUM'))) return 'PLATINUM';
+    if (m >= TIER_RULES.GOLD * sh && goldOk) return 'GOLD';
+    if (m >= TIER_RULES.SILVER && ff >= TIER_RULES.ffSilver) return 'SILVER';
+    return 'BRONZE';
+}
+/** Spełnia wszystko na Platynową poza oceną (kandydat do audytu). */
+function isPlatinumCandidate(stock) {
+    const med = getTierMedianCap('home'), ni = getNetIncome4q(stock);
+    return med > 0 && stock.price * (stock.totalShares || 0) / med >= TIER_RULES.PLATINUM && stock.totalShares > 0 && getFreeFloatShares(stock) / stock.totalShares >= TIER_RULES.ffGold && (ni === null || ni > 0);
+}
+/**
+ * Przegląd kwartalny: poziom docelowy z potwierdzeniem przez 2 przeglądy; utrata oceny na Platynowej → spadek od razu.
+ * Zwraca klucz nowego poziomu albo null (bez zmiany). Kandydaci na Platynową bez ważnej oceny zamawiają audyt.
+ */
+function decideTierChange(stock) {
+    const current = stock.exchange;
+    if ((isPlatinumCandidate(stock) || stock.exchange === 'PLATINUM' || exchanges[stock.exchange]?.rankBased) && !getValidRating(stock, (typeof macro === 'object' ? macro.quarter : 0) + 1)) stock.awaitingAudit = true; // audyt, zanim ocena wygaśnie (kandydaci, Platynowa i elitarne)
+    const target = getTierTargetKey(stock);
+    if (exchanges[current]?.rankBased) { if (target === 'PLATINUM') { delete stock.tierPending; return null; } }
+    if (target === current) { delete stock.tierPending; return null; }
+    const ratingLoss = (current === 'PLATINUM' || exchanges[current]?.rankBased) && !meetsRatingGate(stock, 'PLATINUM');
+    if (!ratingLoss) {
+        stock.tierPending = stock.tierPending?.target === target ? { target, n: stock.tierPending.n + 1 } : { target, n: 1 };
+        if (stock.tierPending.n < TIER_RULES.confirmQ) return null;
+    }
+    delete stock.tierPending;
+    return target;
+}
+
+
+// =================================================================================
+// 0.18.7 E0c: WYDARZENIA PRZY ZMIANACH POZIOMU — awans, spadek, nowa Diamentowa, utrata Diamentowej. Kurs: awans +2…+4%
+// (napływ funduszy indeksowych), spadek −2…−4%, Diamentowa ±5%. Najwyżej 6 wiadomości na kwartał, reszta zbiorczo. Wpis analityka
+// na Tied (najwyżej 2 na kwartał), mail do gracza, gdy fundusz albo konto prywatne ma akcje. Bez emoji.
+// =================================================================================
+const TIER_EVENT_RULES = { maxNews: 6, maxTied: 2, up: [0.02, 0.04], down: [-0.04, -0.02], diamond: 0.05 };
+let tierEventBuffer = [];
+function noteTierChange(stock, from, to, extra = '') {
+    const up = (exchanges[to]?.level ?? 0) > (exchanges[from]?.level ?? 0);
+    const kind = to === 'DIAMOND' ? 'diamond-in' : from === 'DIAMOND' ? 'diamond-out' : up ? 'up' : 'down';
+    const effect = kind === 'diamond-in' ? TIER_EVENT_RULES.diamond : kind === 'diamond-out' ? -TIER_EVENT_RULES.diamond : getRandomInRange(...(up ? TIER_EVENT_RULES.up : TIER_EVENT_RULES.down));
+    if (typeof applyPriceEffect === 'function') applyPriceEffect(stock.symbol, effect, effect > 0 ? 'positive' : 'negative', 'review');
+    tierEventBuffer.push({ stock, from, to, kind, extra });
+}
+function tierChangeText(e) {
+    const where = getExchangeAcc(e.to);
+    if (e.kind === 'diamond-in') return `${e.stock.name} zostaje spółką Diamentową — najlepszą spółką rynku.${e.extra}`;
+    if (e.kind === 'diamond-out') return `${e.stock.name} traci miejsce na Giełdzie Diamentowej i przechodzi na ${where}.${e.extra}`;
+    return e.kind === 'up' ? `Awans: ${e.stock.name} przechodzi na ${where}. Fundusze indeksowe dokupują akcje.${e.extra}` : `Spadek: ${e.stock.name} przechodzi na ${where}. Fundusze indeksowe sprzedają akcje.${e.extra}`;
+}
+/** Koniec przeglądu kwartalnego: wiadomości (≤ 6, reszta zbiorczo), Tied, poczta gracza. */
+function flushTierEvents() {
+    if (!tierEventBuffer.length) return 0;
+    const list = tierEventBuffer.sort((a, b) => (b.kind.startsWith('diamond') ? 2 : 0) - (a.kind.startsWith('diamond') ? 2 : 0) || (exchanges[b.to]?.level ?? 0) - (exchanges[a.to]?.level ?? 0));
+    tierEventBuffer = [];
+    list.slice(0, TIER_EVENT_RULES.maxNews).forEach(e => logEvent(tierChangeText(e), 'market'));
+    if (list.length > TIER_EVENT_RULES.maxNews) logEvent(`Kolejne ${list.length - TIER_EVENT_RULES.maxNews} ${list.length - TIER_EVENT_RULES.maxNews === 1 ? 'spółka zmieniła' : 'spółki zmieniły'} poziom giełdy w tym kwartale.`, 'market');
+    if (typeof addTiedPost === 'function') list.filter(e => e.kind !== 'down').slice(0, TIER_EVENT_RULES.maxTied).forEach(e => addTiedPost({ author: getRandomElement(['Marta Wilk', 'Paweł Sowa', 'Ewa Kruk', 'Adam Lis']), role: 'Analityk', symbol: e.stock.symbol, kind: 'opinion', text: `${tierChangeText(e)} Zmiana poziomu zwykle przesuwa popyt funduszy indeksowych na kilka tygodni.` }));
+    for (const e of list) {
+        const held = (typeof playerPortfolio === 'object' && playerPortfolio[e.stock.symbol]?.shares > 0) || (typeof playerWallet === 'object' && playerWallet?.portfolio?.[e.stock.symbol]?.shares > 0);
+        if (held && typeof addMail === 'function') addMail({ sender: 'Dom Maklerski', subject: `Zmiana poziomu: ${e.stock.name}`, body: `${tierChangeText(e)} Masz akcje tej spółki.`, importance: 2, symbol: e.stock.symbol });
+    }
+    return list.length;
+}
+
+
+// =================================================================================
+// 0.18.7 E0d: KNF ZMIENIA ZASADY WEJŚCIA. Drugi mnożnik wymogów GPW (`knfRules.mult`) i przesunięcie progów Złotej i Platynowej.
+// Zapowiedź kwartał wcześniej; spółki już notowane mają 4 kwartały przejściowe. Najwyżej jedna zmiana na 2 lata; siła zależy
+// od skuteczności KNF. Zaostrzenie: afera ratingowa, krach, przepełniony rynek; poluzowanie: długa hossa, mało debiutów.
+// =================================================================================
+const KNF_RULE_RULES = { minGapQ: 8, transitionQ: 4, chance: 0.25, step: [0.10, 0.20], multMin: 0.8, multMax: 1.4, bullQ: 8, lowDebuts: 2 };
+function createKnfRules() { return { mult: 1, prevMult: 1, shift: 0, prevShift: 0, pending: null, lastChangeQ: -99, effectiveQ: -99, history: [] }; }
+let knfRules = createKnfRules();
+const knfQ = () => (typeof macro === 'object' ? Number(macro.quarter) || 0 : 0);
+const inKnfTransition = stock => knfQ() < knfRules.effectiveQ + KNF_RULE_RULES.transitionQ && (stock?.marketSinceQ ?? -99) < knfRules.effectiveQ;
+/** Mnożnik wymogów GPW od KNF; spółka notowana przed zmianą ma okres przejściowy (łagodniejszy z obu). */
+function getKnfListingMult(stock = null) { return stock && inKnfTransition(stock) ? Math.min(knfRules.mult, knfRules.prevMult) : knfRules.mult; }
+/** Przesunięcie progów Złotej i Platynowej (ułamek progu kapitalizacji); okres przejściowy jak wyżej. */
+function getKnfTierShift(stock = null) { return stock && inKnfTransition(stock) ? Math.min(knfRules.shift, knfRules.prevShift) : knfRules.shift; }
+function getKnfEffectiveness() { return typeof getInstitutionEffectiveness === 'function' && typeof oversight === 'object' && oversight?.knf ? getInstitutionEffectiveness(oversight.knf) : 0.5; }
+function knfRuleReason() {
+    const q = knfQ();
+    if ((ratingState?.log || []).some(e => e.q >= q - 2)) return { dir: 1, why: 'po aferze ratingowej' };
+    if ((typeof marketCrash === 'object' && marketCrash?.active) || (marketCrash?.startQuarter ?? -99) >= q - 2) return { dir: 1, why: 'po krachu na giełdzie' };
+    if (typeof getListedCompanyCount === 'function' && getListedCompanyCount() >= LISTING_MULT_TO) return { dir: 1, why: 'przy przepełnionym rynku' };
+    const r = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null;
+    if (r && ['bull', 'euphoria'].includes(r.phase) && (r.quartersInPhase || 0) >= KNF_RULE_RULES.bullQ) return { dir: -1, why: 'w długiej hossie' };
+    const debuts = stocks.filter(s => !s.assetType && Number(s.marketSinceQ) >= q - 4).length;
+    if (q >= 8 && debuts <= KNF_RULE_RULES.lowDebuts) return { dir: -1, why: 'przy małej liczbie debiutów' };
+    return null;
+}
+function announceKnfRuleChange(dir, why) {
+    const step = (KNF_RULE_RULES.step[0] + (KNF_RULE_RULES.step[1] - KNF_RULE_RULES.step[0]) * getKnfEffectiveness()) * dir;
+    const mult = Math.max(KNF_RULE_RULES.multMin, Math.min(KNF_RULE_RULES.multMax, knfRules.mult * (1 + step)));
+    const shift = Math.max(-0.2, Math.min(0.4, knfRules.shift + step));
+    if (Math.abs(mult - knfRules.mult) < 1e-6 && Math.abs(shift - knfRules.shift) < 1e-6) return null;
+    knfRules.pending = { dir, why, mult, shift, effectiveQ: knfQ() + 1 };
+    const text = `KNF ${dir > 0 ? 'zaostrza' : 'łagodzi'} zasady wejścia na GPW ${why}: od przyszłego kwartału wymogi wielkości i free floatu ${dir > 0 ? 'rosną' : 'maleją'} o ${formatNumberPl(Math.abs(mult / knfRules.mult - 1) * 100, 0)}%, zmieniają się też progi wyższych poziomów. Spółki już notowane mają rok przejściowy.`;
+    if (typeof logEvent === 'function') logEvent(text, 'market');
+    if (typeof addMail === 'function') addMail({ sender: 'KNF', subject: `Zmiana zasad wejścia na GPW`, body: text, importance: 2 });
+    return knfRules.pending;
+}
+/** Co kwartał: wejście w życie zapowiedzi albo nowa zapowiedź (najwyżej raz na 2 lata). */
+function processKnfRulesQuarterly() {
+    const q = knfQ(), p = knfRules.pending;
+    if (p && q >= p.effectiveQ) {
+        knfRules = { ...knfRules, prevMult: knfRules.mult, prevShift: knfRules.shift, mult: p.mult, shift: p.shift, pending: null, lastChangeQ: q, effectiveQ: q, history: [...knfRules.history, { q, dir: p.dir, why: p.why }].slice(-10) };
+        return 'applied';
+    }
+    if (p || q - knfRules.lastChangeQ < KNF_RULE_RULES.minGapQ || Math.random() >= KNF_RULE_RULES.chance) return null;
+    const reason = knfRuleReason();
+    return reason ? announceKnfRuleChange(reason.dir, reason.why) : null;
+}
+function getKnfRulesSnapshot() { return knfRules; }
+function applyKnfRulesSnapshot(snap) { knfRules = { ...createKnfRules(), ...(snap && typeof snap === 'object' ? snap : {}) }; }
+/** Państwo → Nadzór: obowiązujące wymogi GPW (jawne), bez progów poziomów. */
+function renderKnfRulesCard() {
+    const req = getListingRequirements('GPW'), last = knfRules.history[knfRules.history.length - 1], p = knfRules.pending;
+    return `<article class="bank-card mt-3"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('waga', 20)}</span><div><h4>Zasady wejścia na GPW (KNF)</h4><span class="bank-card-type">wymogi wejścia i utrzymania</span></div></header>
+        <dl class="bank-card-rates"><div><dt>Kapitalizacja</dt><dd>od ${formatZl(req.cap, 0)}</dd></div><div><dt>Free float</dt><dd>od ${formatNumberPl(req.freeFloat * 100, 0)}%</dd></div><div><dt>Zysk</dt><dd>${req.profit ? 'wymagany (poza spółkami innowacyjnymi)' : 'nie'}</dd></div></dl>
+        <p class="text-sm text-muted">${p ? `Zapowiedź: KNF ${p.dir > 0 ? 'zaostrzy' : 'złagodzi'} zasady od kw. ${p.effectiveQ} (${escapeHtml(p.why)}).` : last ? `Ostatnia zmiana w kw. ${last.q}: ${last.dir > 0 ? 'zaostrzenie' : 'poluzowanie'} ${escapeHtml(last.why)}.` : 'Zasady bez zmian od startu gry.'} Progi wyższych poziomów giełdy nie są jawne.</p></article>`;
 }

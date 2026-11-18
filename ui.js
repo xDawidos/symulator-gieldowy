@@ -1820,14 +1820,8 @@ function getPriceFlashClass(stock) {
 }
 
 /** Makieta 18: reguła wejścia na giełdę w nagłówku listy („kurs 400–800 PLN, ocena BBB”). */
-function getExchangeRuleText(key) {
-    const ex = exchanges[key];
-    if (!ex) return '';
-    if (ex.rankBased) return 'miejsce w rankingu wartości';
-    const gate = typeof GATE_BY_TIER === 'object' ? GATE_BY_TIER[key] : null;
-    const price = ex.minPrice <= 0 ? `kurs do ${formatNumberPl(ex.maxPrice, 0)} PLN` : ex.maxPrice === Infinity ? `kurs od ${formatNumberPl(ex.minPrice, 0)} PLN` : `kurs ${formatNumberPl(ex.minPrice, 0)}–${formatNumberPl(ex.maxPrice, 0)} PLN`;
-    return gate ? `${price}, ocena ${gate}` : price;
-}
+/** 0.18.7 E0a: reguła wejścia jest ukryta — na płytce tylko podpowiedź słowami (bez progów i liczb), decyzja 2026-11-14. */
+function getExchangeRuleText(key) { return typeof TIER_HINTS === 'object' ? TIER_HINTS[key] || '' : ''; }
 
 function renderStockTableRow(stock, isSubsidiary, parentSymbol, stockTableBody, childrenByParent, hasAnalystSkill, previousInputValues) {
     const exchangeData = exchanges[stock.exchange];
@@ -1976,6 +1970,8 @@ function renderStockTableRow(stock, isSubsidiary, parentSymbol, stockTableBody, 
     const metaRest = `${parentNote}${spinNote}${marketId !== 'GPW' ? ` · ${getMarketBadgeText(stock)}` : ''}${typeof getCompanyCountryNote === 'function' ? ` · ${getCompanyCountryNote(stock)}` : ''}${stock.isDividendAristocrat ? ' · dywidendowy arystokrata' : ''}`;
     metaLine.innerHTML = `${escapeHtml(primarySector)} · <span class="ms-tick">${escapeHtml(stock.symbol)}</span>${escapeHtml(metaRest)}`; // makieta 18 cz. 3: ticker w Condensed (bez osobnej kolumny — nazwa zostaje szeroka)
     metaLine.title = metaLine.textContent; // pełny opis, gdy wiersz jest ucięty
+    const pubRating = typeof getPublicRating === 'function' ? getPublicRating(stock) : null; // 0.18.7 E0a: ocena publiczna (≥ A) w wierszu listy
+    if (pubRating) metaLine.insertAdjacentHTML('afterbegin', `<span class="rating-chip" title="Ocena audytora, ważna do kw. ${pubRating.until}">${uiIcon('audyt', 12)} ${escapeHtml(pubRating.grade)}</span> `);
     metaLine.prepend(infoButton); // 0.18.6 O6 (D50): karta i gwiazdka w linii opisu — nazwa ma całą szerokość kolumny
     infoButton.insertAdjacentHTML('afterend', favoriteButtonHtml(stock.symbol, stock.name));
 
@@ -2362,7 +2358,7 @@ function displayStocks(previousInputValues = {}) {
       headerCell.colSpan = STOCK_TABLE_COLS;
       const collapsedEx = Boolean(exchangeCollapseState[exchangeKey]);
       // 0.14.5: kwadrat w kolorze rangi + nazwa bez emoji + liczba spółek; przycisk dla klawiatury
-      headerCell.innerHTML = `<h4 class="my-1 exchange-title"><button type="button" class="exchange-toggle ex-plate" aria-expanded="${!collapsedEx}" onclick="event.stopPropagation(); toggleExchangeVisibility('${exchangeKey}')"><span class="exchange-name ex-name">${escapeHtml(stripEmoji(exchange.name))}</span><span class="ex-rule">${getExchangeRuleText(exchangeKey)}</span><span class="exchange-meta ex-count">${stocksOnThisExchange.length} ${stocksOnThisExchange.length === 1 ? 'spółka' : stocksOnThisExchange.length % 10 >= 2 && stocksOnThisExchange.length % 10 <= 4 && (stocksOnThisExchange.length % 100 < 12 || stocksOnThisExchange.length % 100 > 14) ? 'spółki' : 'spółek'}</span>${uiIcon(collapsedEx ? 'chevron-right' : 'chevron-down', 16, 'exchange-chevron')}</button></h4>`;
+      headerCell.innerHTML = `<h4 class="my-1 exchange-title"><button type="button" class="exchange-toggle ex-plate" aria-expanded="${!collapsedEx}" onclick="event.stopPropagation(); toggleExchangeVisibility('${exchangeKey}')"><span class="exchange-name ex-name" title="${escapeHtml(getExchangeRuleText(exchangeKey))}">${escapeHtml(stripEmoji(exchange.name))}</span><span class="sr-only">${escapeHtml(getExchangeRuleText(exchangeKey))}</span><span class="exchange-meta ex-count">${stocksOnThisExchange.length} ${stocksOnThisExchange.length === 1 ? 'spółka' : stocksOnThisExchange.length % 10 >= 2 && stocksOnThisExchange.length % 10 <= 4 && (stocksOnThisExchange.length % 100 < 12 || stocksOnThisExchange.length % 100 > 14) ? 'spółki' : 'spółek'}</span>${uiIcon(collapsedEx ? 'chevron-right' : 'chevron-down', 16, 'exchange-chevron')}</button></h4>`;
     }
 
     const sectorCounts = new Map();
@@ -8423,7 +8419,7 @@ function updateStateModalContent() {
     } else if (stateTab === 'markets') {
         body.innerHTML = renderMarketsPanel() + (typeof renderListingHistoryCard === 'function' ? renderListingHistoryCard() : ''); // 0.18.4 A4 (Z13)
     } else if (stateTab === 'oversight') {
-        body.innerHTML = renderOversightPanel();
+        body.innerHTML = renderOversightPanel() + (typeof renderKnfRulesCard === 'function' ? renderKnfRulesCard() : ''); // 0.18.7 E0d
     } else if (stateTab === 'taxes') {
         body.innerHTML = `
             <table class="asset-mini-table w-full">
