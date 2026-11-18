@@ -260,7 +260,7 @@ Testy, seria 24 × 6,5 roku i 10 × 20 lat (GIG ±0,5 pp i w 10–13% dla 20 lat
 
 - **Debug tylko na localhost albo z `?debug=1`** (lista użytkownika 2026-11-14; decyzja 2026-11-13 i 2026-11-14: na razie przycisk zostaje w Ustawieniach). Po O1 wystarczy warunek ładowania `debug.js` (localhost albo parametr) i zmiana w testach.
 - Mierzenie, czy gra 50–100 lat utrzymuje gracza: nie teraz.
-- Miasta jako obiekty: 0.19.2 (używają rejestru odblokowań z E1).
+- Miasta jako obiekty: 0.19.2 Miasta 2 (`plan_0.19.md`; używają rejestru odblokowań z E1).
 - Automatyczny rebalancing (klasy aktywów lub koncentracja): decyzja 2026-11-14, tylko alert.
 
 ## Co nie zostało sprawdzone
