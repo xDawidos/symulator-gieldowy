@@ -117,9 +117,9 @@ function pruneSectorShocks() {
 const CRISIS_STAGES = ['spark', 'burst', 'spread', 'intervention', 'bottom', 'recovery'];
 const CRISIS_STAGE_NAMES = { spark: 'Zapowiedź', burst: 'Wybuch', spread: 'Zarażanie', intervention: 'Interwencja', bottom: 'Dno', recovery: 'Odbicie' };
 const CRISIS_STAGE_LENGTHS = { spark: [1, 2], burst: [1, 1], spread: [1, 3], intervention: [1, 2], bottom: [1, 2] };
-const CRISIS_BASE_CHANCE = 0.015;     // pokrętło 0,5–2% na kwartał (0.16.2: 1% → 1,5%: 0,7–1,0 linii na 20 lat było dolną granicą celu 1–2)
+const CRISIS_BASE_CHANCE = 0.025;     // pokrętło na kwartał (0.16.2: 1% → 1,5%; 0.18.6 O4: 1,5% → 2,5% — przy spokoju 10 kw. ścieżka losowa była otwarta ok. 37 kw. na 20 lat, czyli 0,5 linii)
 const CRISIS_QUIET_QUARTERS = 10;     // linia najwcześniej po tylu kwartałach bez krachu i linii (0.18.6 O4, U2: 12 → 10)
-const CRISIS_REPLACES_CRASH = 0.40;   // szansa, że wylosowany krach jest linią
+const CRISIS_REPLACES_CRASH = 0.60;   // szansa, że wylosowany krach jest linią (0.18.6 O4: 40% → 60%; krachy to główna droga do linii, 1,35 na 20 lat)
 const CRISIS_MAX_VICTIMS = 3;
 
 const CRISIS_LINES = {
