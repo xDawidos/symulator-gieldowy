@@ -17597,6 +17597,27 @@ group('0.18.5 Wydajność', () => {
 });
 
 group('0.18.6 Porządki', () => {
+    test('O8: każdy select ma etykietę; akcent fazy tylko z L4 (= shownPhase); bezpiecznik bez emoji i wersalików, licznik ukryty dla czytników; ruch tylko bez reduced-motion', async () => {
+        const html = await (await fetch('../index.html', { cache: 'no-store' })).text();
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const bare = [...doc.querySelectorAll('select')].filter(sel => !sel.getAttribute('aria-label') && !doc.querySelector(`label[for="${sel.id}"]`) && !sel.closest('label') && sel.style.display !== 'none' && sel.id !== 'sector-filter');
+        assertEq(bare.map(s => s.id).join(','), '', 'select bez etykiety');
+        const cb = doc.getElementById('circuit-breaker-banner');
+        assert(cb.getAttribute('role') === 'alert' && cb.querySelector('.cb-time[aria-hidden="true"]') && !/[\u{1F300}-\u{1FAFF}]/u.test(cb.textContent) && !/[A-ZĄĆĘŁŃÓŚŹŻ]{6,}/.test(cb.textContent), 'baner bezpiecznika');
+        assert(!doc.querySelector('.topbar-kpi[hidden]'), 'bez ukrytego wiersza konta prywatnego');
+        const main = document.createElement('div'); main.className = 'app-main'; const slot = document.createElement('div'); slot.id = 'topbar-mood-slot'; document.body.prepend(main, slot);
+        const saved = skills.indexAnalystLvl1.unlockedLevel, regime = getMarketRegime('home'), shown = regime?.shownPhase;
+        try {
+            skills.indexAnalystLvl1.unlockedLevel = 0; updateMoodKpi();
+            assert(!document.querySelector('.app-main').hasAttribute('data-phase'), 'bez L4: brak data-phase');
+            skills.indexAnalystLvl1.unlockedLevel = 4; regime.shownPhase = 'bear'; updateMoodKpi();
+            assertEq(document.querySelector('.app-main').dataset.phase, 'bear', 'z L4: data-phase = shownPhase');
+            regime.shownPhase = null; updateMoodKpi();
+            assert(!document.querySelector('.app-main').hasAttribute('data-phase'), 'w trakcie potwierdzania: brak');
+        } finally { skills.indexAnalystLvl1.unlockedLevel = saved; regime.shownPhase = shown; main.remove(); slot.remove(); }
+        const css = await (await fetch('../style.css', { cache: 'no-store' })).text();
+        assert(/no-preference\)\s*\{\s*\.app-main\[data-phase="euphoria"\] \.phase-chip/.test(css) && /no-preference\)\s*\{\s*\.cb\.is-new/.test(css), 'animacje tylko w no-preference');
+    });
     test('O7 (U5): zapis funduszu na IPO — blokada gotówki w NAV, nadsubskrypcja 3× daje 1/3 przydziału i zwrot reszty, odłożony debiut = pełny zwrot', () => {
         resetWorld([makeCompany('AAA')]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
         const s = makeCompany('IPOX'); s.assetType = 'Startup'; s.stage = 'development'; stocks.push(s);

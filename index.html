@@ -344,10 +344,6 @@
       <span class="topbar-kpi-label">Gotówka funduszu</span>
       <span class="topbar-kpi-val" id="cash">10 000,00 PLN</span>
     </div>
-    <div class="topbar-kpi" hidden>
-      <span class="topbar-kpi-label">Konto prywatne</span>
-      <span class="topbar-kpi-val" id="topbar-daily-pnl">100,00 PLN</span>
-    </div>
     <div class="topbar-kpi">
       <span class="topbar-kpi-label">Zaufanie klientów</span>
       <span class="topbar-kpi-val" id="topbar-trust">—</span>
@@ -384,13 +380,12 @@
 </header>
 
     <!-- 0.15 H4: Baner bezpiecznika giełdowego (Market Circuit Breaker) -->
-    <div id="circuit-breaker-banner" class="circuit-breaker-banner" style="display: none;" role="alert" aria-live="assertive">
-      <div class="circuit-breaker-content">
-        <span class="circuit-breaker-icon">🚨</span>
-        <span class="circuit-breaker-text" id="circuit-breaker-text">HANDEL WSTRZYMANY — BEZPIECZNIK GIEŁDOWY</span>
-        <span class="circuit-breaker-timer" id="circuit-breaker-timer">00s</span>
-      </div>
-    </div>
+    <section id="circuit-breaker-banner" class="cb" hidden role="alert" aria-labelledby="cb-t" aria-describedby="cb-d"><!-- 0.18.6 O8 (makieta 23 §2) -->
+      <span class="cb-ic" aria-hidden="true"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM5.6 5.6l12.8 12.8"/></svg></span>
+      <div><h3 id="cb-t">Handel wstrzymany: bezpiecznik giełdowy <span class="cb-lv" id="cb-lv" role="img" aria-label="poziom 1 z 3"><i></i><i></i><i></i></span></h3>
+        <p id="cb-d"></p></div>
+      <div class="cb-time" aria-hidden="true"><b id="circuit-breaker-timer">0</b><small>s</small><span class="cb-bar"><i id="cb-bar"></i></span></div>
+    </section>
 
     <main class="dashboard-layout">
       <section class="dashboard-market">
@@ -416,11 +411,11 @@
     </div>
     <div class="market-filters" id="market-filters">
     <!-- Chipy sektorów -->
-    <div class="sector-chips" id="sector-chips" role="group" aria-label="Filtr sektorów">
+    <fieldset class="sector-chips" id="sector-chips"><legend class="sr-only">Filtr sektorów</legend><!-- 0.18.6 O8: grupa pól z legendą (makieta 22 §3) -->
       <button type="button" class="sector-chip owned-chip" aria-pressed="false" onclick="toggleOwnedFilter(this)" title="Pokaż tylko spółki, które masz w funduszu lub na koncie prywatnym"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8h18v12H3zM8 8V5h8v3M3 13h18M11 13v2h2v-2"/></svg> Posiadane</button>
       <button type="button" class="sector-chip owned-chip" aria-pressed="false" onclick="toggleFavoritesFilter(this)" title="Pokaż tylko ulubione spółki (gwiazdka przy nazwie spółki dodaje ją albo usuwa)"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg> Ulubione</button>
       <!-- 0.14 T1c: chipy sektorów pogrupowane z liczbą spółek (renderSectorFilters) -->
-    </div>
+    </fieldset>
     <div class="sector-filter-extra" id="sector-filter-extra"></div>
 
     <!-- Poziomy rynku jako taby (0.14.5: kwadrat w kolorze rangi zamiast emoji) -->
@@ -614,7 +609,7 @@
                 <button type="button" class="speed-btn" id="chart-type-line-btn" title="Pokaż wykres liniowy"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5M4 19h16M8 15l3-4 3 2 5-6"/></svg> Linia</button>
             </div>
             <div class="chart-controls-group">
-                <label for="line-chart-interval-select">Okres:</label>
+                <label for="line-chart-interval-select" class="field-label">Okres wykresu liniowego</label>
                 <select class="va-middle" id="line-chart-interval-select" style="display: none;">
                     <option value="1000">co tik (sekunda gry)</option>
                     <option value="5000">co 5 tików</option>
@@ -623,6 +618,7 @@
                     <option value="120000">co 2 tygodnie gry</option>
                     <option value="300000">co kwartał gry</option>
                 </select>
+                <label for="candle-chart-interval-select" class="field-label" hidden>Świeca wykresu</label>
                 <select class="va-middle" id="candle-chart-interval-select" style="display: none;">
                     <option value="15000">świeca 15 tików</option>
                     <option value="30000">świeca 30 tików</option>
@@ -887,6 +883,7 @@
             <div id="policy-management-section" class="bank-section">
                 <h4>Polityka dywidendowa</h4>
                 <p>Jako akcjonariusz większościowy, możesz wpłynąć na strategię dywidendową spółki.</p>
+                <label for="policy-select" class="field-label">Polityka dywidendowa</label>
                 <select id="policy-select" onchange="setDividendPolicy(this.dataset.symbol, this.value)">
                     <option value="Growth">Wzrost — 0% zysku (wszystko w kapitał)</option>
                     <option value="Balanced">Zachęta — 1–10% zysku</option>
@@ -1090,6 +1087,7 @@
                  <button id="rd-unlock-tier4-btn">Odblokuj · 10 000 PLN</button>
              </div>
              <div id="rd-tier4-unlocked" style="display: none;">
+                 <label for="rd-specialization-select" class="field-label">Specjalizacja badań</label>
                  <select id="rd-specialization-select"></select>
                  <button id="rd-change-spec-btn">Zmień</button>
              </div>
@@ -1173,8 +1171,9 @@
         <h3 id="sell-shares-title">Sprzedaj akcje bankowi inwestycyjnemu</h3>
         <div class="bank-section">
             <p>Bank: <strong id="sell-shares-bank-name"></strong></p>
-            <p>Wybierz spółkę, której akcje chcesz sprzedać:</p>
-            <select class="w-full mb-2" id="sell-shares-stock-select"></select>
+            <label for="sell-shares-stock-select" class="field-label">Spółka do sprzedaży</label>
+            <select class="w-full mb-2" id="sell-shares-stock-select" aria-describedby="sell-shares-hint"></select>
+            <small id="sell-shares-hint" class="text-muted">Lista pokazuje spółki, których akcje ma fundusz.</small>
             <div>
                 <label for="sell-shares-quantity">Ilość:</label>
                 <input class="w-sm" type="number" id="sell-shares-quantity" min="1" value="1">

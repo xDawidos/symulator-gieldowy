@@ -829,7 +829,9 @@ function updateMoodKpi() {
     if (!slot) return;
 
     const hasL4 = typeof getSkillLevel === 'function' && getSkillLevel('indexAnalystLvl1') >= 4;
+    const main = document.querySelector('.app-main');
     if (!hasL4) {
+        main?.removeAttribute('data-phase'); // 0.18.6 O8: akcent fazy tylko z L4
         slot.innerHTML = '';
         const tooltip = document.getElementById('mood-tooltip');
         if (tooltip) tooltip.hidden = true;
@@ -844,6 +846,8 @@ function updateMoodKpi() {
     const z = typeof getSentimentZone === 'function' ? getSentimentZone(sentiment) : { key: 'neutral', word: 'neutralnie' };
     const isConfirming = !regime.shownPhase;
     const pInfo = !isConfirming ? (MARKET_PHASES[regime.shownPhase] || MARKET_PHASES.bull) : null;
+    const changed = main && !isConfirming && main.dataset.phase && main.dataset.phase !== regime.shownPhase;
+    if (main) { if (isConfirming) main.removeAttribute('data-phase'); else main.dataset.phase = regime.shownPhase; } // 0.18.6 O8 (makieta 23 §1)
 
     const qAgo = (regime.quartersInPhase && regime.quartersInPhase > 1)
         ? (regime.quartersInPhase === 2 ? '1 kw. temu' : `${regime.quartersInPhase - 1} kw. temu`)
@@ -851,7 +855,7 @@ function updateMoodKpi() {
 
     const phaseMarkup = isConfirming
         ? `<span class="market-phase">${uiIcon('info', 16)}<span class="phase-name">—</span><span class="mood-confirming">potwierdzanie</span></span>`
-        : `<span class="market-phase ${pInfo.css}">${uiIcon(pInfo.icon, 16)}<span class="phase-name">${escapeHtml(pInfo.name)}</span></span>`;
+        : `<span class="market-phase phase-chip ${pInfo.css}${changed ? ' is-changed' : ''}">${uiIcon(pInfo.icon, 16)}<span class="phase-name">${escapeHtml(pInfo.name)}</span></span>`;
 
     const ariaLabel = isConfirming
         ? `Nastrój rynku: potwierdzanie fazy, ${sentiment} — ${z.word}`
@@ -2459,6 +2463,7 @@ function showPriceHistoryModal(symbol) {
             lineIntervalSelect.style.display = 'inline-block';
             candleIntervalSelect.style.display = 'none';
         }
+        for (const sel of [lineIntervalSelect, candleIntervalSelect]) { const lab = document.querySelector(`label[for="${sel.id}"]`); if (lab) lab.hidden = sel.style.display === 'none'; } // 0.18.6 O8
         updateChartTypeButtons();
 
     };
@@ -9394,21 +9399,23 @@ function updateCircuitBreakerUI() {
     if (!banner) return;
 
     if (typeof isMarketHalted === 'function' && isMarketHalted()) {
-        banner.style.display = 'block';
-        const timerEl = document.getElementById('circuit-breaker-timer');
-        const textEl = document.getElementById('circuit-breaker-text');
+        // 0.18.6 O8 (makieta 23 §2): bez emoji, wersalików i pulsowania; licznik ukryty dla czytników (nie jest czytany co sekundę)
         const remaining = typeof getMarketHaltRemainingSeconds === 'function' ? getMarketHaltRemainingSeconds() : 0;
         const level = typeof marketHalt !== 'undefined' ? (marketHalt.level || 1) : 1;
-        const dropPct = typeof marketHalt !== 'undefined' && marketHalt.lastDropPct ? Math.abs(marketHalt.lastDropPct * 100).toFixed(1) : '10.0';
-
-        if (timerEl) {
-            timerEl.textContent = Number.isFinite(remaining) ? `${remaining}s` : 'do końca tygodnia';
-        }
-        if (textEl) {
-            textEl.textContent = `BEZPIECZNIK GIEŁDOWY: POZIOM ${level} (-${dropPct}% GIG) — SESJA ZAWIESZONA NA`;
-        }
+        const drop = typeof marketHalt !== 'undefined' && marketHalt.lastDropPct ? Math.abs(marketHalt.lastDropPct * 100) : 10;
+        const total = { 1: 15, 2: 30, 3: 60 }[level] || 15;
+        if (banner.hidden) { banner.hidden = false; banner.classList.add('is-new'); setTimeout(() => banner.classList.remove('is-new'), 600); }
+        const lv = document.getElementById('cb-lv');
+        if (lv) { lv.setAttribute('aria-label', `poziom ${level} z 3`); lv.style.setProperty('--lv', level); }
+        const desc = document.getElementById('cb-d');
+        const text = `GIG spadł o ${formatNumberPl(drop, 1)}% od początku tygodnia. Zlecenia czekają do wznowienia sesji. Kolejne progi: −10% wstrzymuje handel na 15 s, −13% na 30 s, −20% na 60 s.`;
+        if (desc && desc.textContent !== text) desc.textContent = text;
+        const timerEl = document.getElementById('circuit-breaker-timer');
+        if (timerEl) timerEl.textContent = Number.isFinite(remaining) ? String(remaining) : '—';
+        const bar = document.getElementById('cb-bar');
+        if (bar) bar.style.setProperty('--left', `${Math.max(0, Math.min(100, (Number(remaining) || 0) / total * 100))}%`);
     } else {
-        banner.style.display = 'none';
+        banner.hidden = true;
     }
 }
 

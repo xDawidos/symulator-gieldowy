@@ -6164,3 +6164,43 @@ body #internet-modal.wn-host, body #internet-modal.wn-host[data-country] { backg
 
 /* 0.18.6 O7: kwoty gracza (bursztyn = „Twoje”, R4) */
 .text-mine { color: var(--amber-400); font-weight: 600; }
+
+/* 0.18.6 O8 (makieta 22 §3): widoczne etykiety pól */
+.field-label { display: block; margin: 6px 0 2px; font-size: 12px; color: var(--color-text-muted); }
+fieldset.sector-chips { border: 0; margin: 0; padding: 0; min-inline-size: 0; }
+/* 0.18.6 O8 (makieta 23 §1): akcent fazy rynku — tylko z L4, tylko dla fazy pokazanej */
+.app-main[data-phase="accumulation"] { --phase-c: var(--color-phase-accumulation); }
+.app-main[data-phase="bull"] { --phase-c: var(--color-phase-bull); }
+.app-main[data-phase="euphoria"] { --phase-c: var(--color-phase-euphoria); }
+.app-main[data-phase="distribution"] { --phase-c: var(--color-phase-distribution); }
+.app-main[data-phase="bear"] { --phase-c: var(--color-phase-bear); }
+.app-main[data-phase="capitulation"] { --phase-c: var(--color-phase-capitulation); }
+.app-main[data-phase] { --phase-soft: color-mix(in srgb, var(--phase-c) 12%, transparent); --phase-line: color-mix(in srgb, var(--phase-c) 70%, transparent); }
+.app-main[data-phase] .phase-chip { padding: 1px 8px; border: 1px solid var(--phase-line); border-radius: 999px; background: var(--phase-soft); color: var(--phase-c); }
+.app-main[data-phase] #market { box-shadow: inset 0 2px 0 var(--phase-line); }
+.app-main[data-phase="bear"] .ms-spark, .app-main[data-phase="capitulation"] .ms-spark { opacity: .75; }
+@media (prefers-reduced-motion: no-preference) {
+  .app-main[data-phase="euphoria"] .phase-chip { animation: phase-shine 4s ease-in-out infinite; }
+  .phase-chip.is-changed { animation: phase-ring .9s ease-out 1; }
+  @keyframes phase-shine { 50% { background: color-mix(in srgb, var(--phase-c) 24%, transparent); } }
+  @keyframes phase-ring { from { box-shadow: 0 0 0 0 var(--phase-line); } to { box-shadow: 0 0 0 8px transparent; } }
+}
+/* 0.18.6 O8 (makieta 23 §2): bezpiecznik giełdowy — czerwona krawędź, bez pulsowania i wersalików */
+.cb { position: sticky; top: calc(var(--size-ticker) + var(--size-topbar)); z-index: 40; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 16px; border-left: 4px solid var(--red-400); background: color-mix(in srgb, var(--red-400) 9%, var(--color-bg-surface)); color: var(--color-text-primary); }
+.cb[hidden] { display: none; }
+.cb-ic { color: var(--red-400); }
+.cb h3 { margin: 0; font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.cb p { margin: 2px 0 0; font-size: 13px; color: var(--color-text-secondary); }
+.cb-lv { display: inline-flex; gap: 2px; }
+.cb-lv i { width: 10px; height: 4px; border-radius: 1px; background: var(--ink-600); }
+.cb-lv i:nth-child(-n + 1) { background: var(--red-400); }
+.cb-lv[aria-label^="poziom 2"] i:nth-child(-n + 2), .cb-lv[aria-label^="poziom 3"] i { background: var(--red-400); }
+.cb-time { display: grid; justify-items: end; gap: 2px; font-family: var(--font-family-mono); }
+.cb-time b { font-size: 22px; line-height: 1; }
+.cb-time small { color: var(--color-text-muted); }
+.cb-bar { display: block; width: 72px; height: 3px; border-radius: 2px; background: var(--ink-700); }
+.cb-bar i { display: block; height: 100%; width: var(--left, 100%); border-radius: 2px; background: var(--red-400); }
+@media (prefers-reduced-motion: no-preference) {
+  .cb.is-new { animation: cb-in .5s ease-out 1; }
+  @keyframes cb-in { from { transform: translateY(-8px); opacity: 0; } to { transform: none; opacity: 1; } }
+}
