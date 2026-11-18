@@ -122,14 +122,70 @@ Seria 24 × 6,5 roku, seria 20 × 20 lat (O4, O5) i testy, raport `raporty/kontr
 
 Bez zmiany balansu poza E0. E0 zmienia przydział poziomów giełd, więc ma własną bramkę rozkładu. Bramka: GIG i marże ±0,3 pp, 0 błędów, testy zielone.
 
-### E0. Poziomy giełd bez kursu (uwaga użytkownika 2026-11-14; kryteria rozplanuje użytkownik)
+### E0. Poziomy giełd (kryteria ustalone z użytkownikiem 2026-11-18)
 
-Uwaga użytkownika: kurs nie powinien być jedynym wyznacznikiem poziomu giełdy (Śmieciowa…Platynowa), a reguła nie powinna być widoczna dla gracza. Dziś poziom wynika z ceny (`getPriceTierKey`, `companies.js:1309`; progi `exchanges`, D6 w `raporty/decyzje_0.18.md`), giełdy elitarne z rankingu kapitalizacji, a ocena AAA–D (0.18.4) jest bramką awansu.
+Słowa użytkownika: różne giełdy mają różne progi wejścia, najzwyklejsze, czyli kapitalizacja i coś jeszcze (Brązowa–Złota); Platynowa wymaga też oceny od A z firmy audytowej; Rubinowa, Szmaragdowa „jeszcze coś”, a Diamentowa dla najlepszej spółki; wydarzenia przy zmianach poziomów; KNF może zmieniać zasady wejścia na GPW i na niektóre poziomy. Do tego: ocena jest **twardą bramką awansu**, a poziom zmienia się **najwyżej co 2 kwartały**.
 
-- **Kryteria przydziału: do rozplanowania i dopisania przez użytkownika** (decyzja 2026-11-14). Do tego czasu ta część nie rusza. Propozycja z rozmowy, do odrzucenia lub zmiany: wynik z kapitalizacji (40%), oceny publicznej (25%), płynności (20%) i zysku z 4 kw. (15%), bez kursu, liczony jako percentyl; progi trzymające obecny rozkład (kontrola 0.18.0: Śmieciowa 9,8%, Brązowa 33,1%, Srebrna 31,6%, Złota 17,8%, Platynowa 5,6%); zmiana poziomu po 2 kwartałach; giełdy elitarne bez zmian (ranking), oceny dalej bramką awansu.
-- **Ukrycie reguły (zdecydowane):** na płytce giełdy i w karcie spółki nie ma progów kursu. Po najechaniu na nazwę poziomu (także fokus klawiaturą) podpowiedź: wymagana ocena plus jedno zdanie bez liczb, np. Platynowa: „Dostęp od oceny A. Decydują też wielkość, płynność i zyski spółki.”; Brązowa i Srebrna: „Dostęp od oceny widocznej publicznie…”; Śmieciowa: „Dostęp bez oceny…”. Dokładne teksty po ustaleniu kryteriów.
-- **Pliki (wstępnie):** `companies.js` (`exchanges`, przydział zamiast `getPriceTierKey`, `splits.js` jeśli split zależy od progu), `listings.js` (ocena), `ui.js` (płytka giełdy z makiety 18, podpowiedź), `main.js` (stan histerezy w zapisie).
-- **Test i bramka (wstępnie):** rozkład poziomów jak w kontroli 0.18.0 ±3 pp na poziom, Platynowa 5–10%; podpowiedź bez liczb i bez kursu; GIG i marże ±0,3 pp; spółka nie skacze między poziomami częściej niż raz na 2 kw.
+**Stan w kodzie (sprawdzone 2026-11-18):**
+- Poziomy Śmieciowa–Platynowa wynikają z kursu (`getPriceTierKey`, `companies.js:1309`, progi `exchanges`, D6). Bramka oceny: `GATE_BY_TIER = { GOLD: 'BBB', PLATINUM: 'A' }` (`listings.js:585`).
+- Elitarne: `assignEliteExchanges` (`finance.js:972`) bierze spółki z Platynowej i wyżej, sortuje po kapitalizacji: Diamentowa = pierwsza (od 30 min gry, bez progu), Szmaragdowa najwyżej 3 z `minCap` 2,5 mld, Rubinowa najwyżej 6 z `minCap` 1,5 mld.
+- Ocena publiczna (`getPublicRating`, `listings.js:619`, `publicFrom: 'A'`) **jest** widoczna, ale tylko jako kafelek „Ocena” w karcie spółki krajowej (`ui.js:4417`). Nie ma jej w wierszu listy spółek ani w karcie spółki obcej. Oceny poniżej A są celowo ukryte (selekcja ujawnień z serii 6.4), więc gracz rzadko ją widzi.
+- KNF: wymogi wejścia na rynki (`LISTING_REQUIREMENTS`, `listings.js:6`) mają już mnożnik zależny od liczby spółek (`LISTING_MULT_*`), a skuteczność KNF (`getInstitutionEffectiveness(oversight.knf)`) wpływa na nadzór (`listings.js:504`).
+
+**Diagnoza: czemu elitarne pustoszeją w długiej grze** (z kodu, bez przebiegu):
+1. **Pula elitarnych to tylko Platynowa**, a Platynowa zależy od kursu ≥ 800 zł. Split (od 1000 zł do ≤ 700 zł, D6) wyrzuca największe spółki z puli, choć ich kapitalizacja się nie zmienia.
+2. **Ocena A jest wymagana do Platynowej**, a oceny ważą 4 kwartały i powstają losowo (2 na kwartał). Duża spółka bez ważnej oceny wypada z puli.
+3. **Progi `minCap` są absolutne** (1,5 i 2,5 mld), a spółki startują od kilkudziesięciu milionów. W kryzysie kapitalizacje spadają i nikt nie spełnia progu. Diamentowa nie ma progu, więc zostaje „jedna diamentowa i reszta na platynie”, tak jak opisuje użytkownik.
+
+**E0 dzielimy na cztery części, każda z własną bramką.**
+
+#### E0a. Przydział Śmieciowa–Platynowa i ukrycie reguły
+
+- **Progi względne** (odporne na długą grę i inflację): kapitalizacja jako wielokrotność **mediany kapitalizacji spółek tego samego rynku** (krajowe osobno, obce osobno), plus jeden lub dwa proste warunki. Kursu nie ma w regule.
+
+| Poziom | Kapitalizacja (× mediana) | Dodatkowo | Ocena |
+|---|---|---|---|
+| Śmieciowa | < 0,3 albo zysk ujemny 4 kw. z rzędu przy < 1,0 | — | — |
+| Brązowa | ≥ 0,3 | — | — |
+| Srebrna | ≥ 0,9 | free float ≥ 15% | — |
+| Złota | ≥ 2,2 | zysk netto z 4 kw. > 0 i free float ≥ 20% | — |
+| Platynowa | ≥ 5 | jak Złota | **≥ A** (ważna ocena audytora, twarda bramka) |
+
+  Wartości startowe dobrane do rozkładu z kontroli 0.18.0 (Śmieciowa ok. 10%, Brązowa 33%, Srebrna 32%, Złota 18%, Platynowa ok. 6%); czat realizacji kalibruje je serią.
+- **Ocena tylko od Platynowej** (zmiana: dziś Złota wymaga BBB). Uzasadnienie: użytkownik mówi o progu „kapitalizacja i coś jeszcze” dla Brązowej–Złotej, a ocenę wymienia dopiero przy Platynowej. `GATE_BY_TIER` traci `GOLD`.
+- **Najwyżej jedna zmiana poziomu co 2 kwartały:** przegląd raz na kwartał; awans, gdy warunki są spełnione 2 kwartały z rzędu; spadek, gdy nie są spełnione 2 kwartały z rzędu. Wyjątek: utrata wymaganej oceny daje spadek od razu.
+- **Audyt dla kandydatów:** spółka spełniająca warunki Platynowej (albo już na niej) zamawia audyt, gdy ocena wygasa (seria 6.4: spółki same kupują audyt). Bez tego pula Platynowej wysycha jak w diagnozie, pkt 2. Losowe oceny (2 na kwartał) zostają dla reszty.
+- **Ukrycie reguły (decyzja 2026-11-14):** na płytce giełdy i w karcie spółki nie ma progów ani liczb. Po najechaniu na nazwę poziomu (także fokus klawiaturą) jest podpowiedź: Śmieciowa–Złota „Dostęp zależy od wielkości i zysków spółki.”; Platynowa „Dostęp od oceny A. Decydują też wielkość, płynność i zyski spółki.”; elitarne według E0b.
+- **Ocena widoczna dla gracza:** kafelek „Ocena” także w karcie spółki obcej oraz mały znacznik oceny w wierszu listy spółek (tylko ocena publiczna, czyli ≥ A). Projekt: ekran 17 na liście designu.
+- **Pliki:** `companies.js` (`exchanges` bez `minPrice` w regule, nowa funkcja przydziału w miejsce `getPriceTierKey` i wywołań w `companies.js:7427–7434`, licznik 2 kw.), `listings.js` (`GATE_BY_TIER`, audyt kandydatów), `splits.js` (split dalej po kursie, ale bez skutku dla poziomu), `ui.js` (płytka, podpowiedź, znacznik oceny, karta obcej), `main.js` (licznik w zapisie; stary zapis startuje od obecnego poziomu).
+- **Test:** spółka bez oceny A nie wchodzi na Platynową; split nie zmienia poziomu; zmiana poziomu najwcześniej po 2 kw.; utrata oceny daje spadek od razu; podpowiedź bez liczb.
+- **Bramka:** rozkład jak w kontroli 0.18.0 ±3 pp na poziom, Platynowa 5–10%, GIG i marże ±0,3 pp, licencje gracza bez zmian.
+
+#### E0b. Giełdy elitarne
+
+- **Pula:** spółki z Platynowej (już bez zależności od kursu, więc split nie wyrzuca).
+- **Rubinowa** (najwyżej 6): ocena ≥ A+, zysk dodatni 8 kwartałów z rzędu, kapitalizacja ≥ 2 × próg Platynowej.
+- **Szmaragdowa** (najwyżej 3): ocena ≥ AA, dywidenda w każdym z ostatnich 4 kwartałów, kapitalizacja ≥ 4 × próg Platynowej.
+- **Diamentowa** (dokładnie 1, od 30 min gry): najlepsza spółka, czyli najwyższy wynik w puli spełniającej warunki Szmaragdowej (kapitalizacja 50%, zysk 4 kw. 25%, ocena 25%); jeśli nikt nie spełnia, najlepsza z Rubinowej.
+- **Progi względne** (wielokrotności progu Platynowej, który sam jest względny) zastępują `minCap` 1,5 i 2,5 mld, więc działają w każdej długości gry. Zmiana poziomu też najwyżej co 2 kwartały (Diamentowa: zmiana po 2 kwartałach przewagi innej spółki).
+- **Podpowiedzi:** Rubinowa „Dostęp od oceny A+ i stałych zysków.”, Szmaragdowa „Dostęp od oceny AA i regularnej dywidendy.”, Diamentowa „Tylko najlepsza spółka rynku.”
+- **Pliki:** `finance.js` (`ELITE_EXCHANGES`, `assignEliteExchanges`), `listings.js` (oceny A+, AA).
+- **Bramka:** seria 10 × 20 lat: od 3. roku w ≥ 90% kwartałów jest 3–6 spółek na Rubinowej, 1–3 na Szmaragdowej i dokładnie 1 na Diamentowej (także po 15. roku); Diamentowa zmienia właściciela 1–4 razy na 20 lat; GIG ±0,3 pp.
+
+#### E0c. Wydarzenia przy zmianach poziomów
+
+- **Rodzaje:** awans, spadek, debiut od razu na wyższym poziomie, nowa spółka Diamentowa, utrata Diamentowej.
+- **Skutki:** wiadomość w Gazecie (`logEvent`, rubryka rynku), wpis analityka na Tied, wpływ na kurs (awans: napływ funduszy indeksowych +2…+4% w 1–2 tygodnie; spadek: odpływ −2…−4%; Diamentowa: ±5%), mail do gracza, jeśli fundusz albo konto prywatne ma akcje. Teksty bez emoji (dziś `📈 AWANS` w `finance.js:997`), ikony SVG. Bez nowych okien modalnych.
+- **Pliki:** `finance.js`, `companies.js` (zmiany Śmieciowa–Platynowa), `tied.js`, `ui.js` (Gazeta), poczta gracza.
+- **Bramka:** najwyżej 6 wiadomości o zmianach poziomu na kwartał (reszta zbiorczo: „5 spółek zmieniło poziom”); efekty kursowe średnio zero w serii (GIG ±0,3 pp).
+
+#### E0d. KNF zmienia zasady wejścia
+
+- **Mechanizm:** KNF ogłasza zmianę zasad z wyprzedzeniem 1 kwartału, obowiązuje od następnego; spółki już notowane mają **okres przejściowy 4 kwartałów**. Podpięte pod istniejące `LISTING_REQUIREMENTS` i mnożnik `LISTING_MULT_*` (`listings.js:6–31`) jako drugi mnożnik `knfMult` (wymogi wejścia na GPW: kapitalizacja, free float, zysk) oraz przesunięcie progów wybranych poziomów (Złota, Platynowa: ±10–20% progu kapitalizacji albo wymóg oceny o jeden stopień).
+- **Kiedy:** zaostrzenie po aferze ratingowej (ujawnione przekupstwo audytora, 0.18.4 A2), po krachu albo przy przepełnieniu rynku; poluzowanie w długiej hossie i przy małej liczbie debiutów. Najwyżej jedna zmiana na 2 lata; siła zależy od skuteczności KNF (`getInstitutionEffectiveness`).
+- **Widoczność:** mail KNF i wiadomość w Gazecie, wpis w oknie Państwa → nadzór (lista obowiązujących zasad bez liczb poziomów, tylko wymogi GPW, które są jawne).
+- **Pliki:** `listings.js`, `finance.js` (oversight.knf), `ui.js`, `main.js` (stan zasad w zapisie).
+- **Bramka:** w serii 20 lat 1–4 zmiany zasad; debiuty na grę w ±20% względem bazy; rozkład poziomów nadal w bramce E0a.
 
 ### E1. Stopniowe odblokowywanie → przeniesione do 1.0
 
@@ -246,7 +302,9 @@ Testy, seria 24 × 6,5 roku i 10 × 20 lat (GIG ±0,5 pp i w 10–13% dla 20 lat
 | 12 | 0.18.6 | **Akcent fazy i bezpiecznik** — makieta 23 §1–2 | chip fazy (od L4), krawędź rynku; baner bezpiecznika z licznikiem | `regime.shownPhase`, `updateCircuitBreakerUI` |
 | 13 | 0.18.7 | **Karta przypiętych zadań** — makiety 22 i 24 (zaakceptowane) | do 3 przypiętych: kategoria, postęp, nagroda, termin, odepnij | `playerProfile.tasks.pinned` |
 | 15 | 0.18.7 | **TeamedUP! → Zadania i oceny** — makieta 24 (zaakceptowana) | 4 kategorie, filtr, licznik przypiętych 3, karta zadania (Uczy, postęp, nagroda, termin, Przypnij) | `tasks.js`, `getPlayerTargets` |
-| 16 | 0.18.7 | **Podpowiedź poziomu giełdy** (do zaprojektowania po E0) | po najechaniu na nazwę poziomu: wymagana ocena + jedno zdanie bez liczb; płytka giełdy bez progów kursu | `exchanges`, ocena z 0.18.4 |
+| 16 | 0.18.7 | **Podpowiedź poziomu giełdy** (E0a, E0b; do zaprojektowania) | po najechaniu na nazwę poziomu: wymagana ocena + jedno zdanie bez liczb; płytka giełdy bez progów kursu | `exchanges`, ocena z 0.18.4 |
+| 17 | 0.18.7 | **Ocena w wierszu spółki i w karcie spółki obcej** (E0a; do zaprojektowania) | mały znacznik oceny publicznej (≥ A) w wierszu listy; kafelek „Ocena” jak w karcie krajowej | `getPublicRating` |
+| 18 | 0.18.7 | **Zmiana poziomu i zasady KNF** (E0c, E0d; do zaprojektowania) | wpis w Gazecie i mail o awansie, spadku, Diamentowej; ogłoszenie KNF z datą wejścia i okresem przejściowym | `assignEliteExchanges`, `LISTING_REQUIREMENTS` |
 | 14 | 0.18.7 | **Wskazówki o fazie** — makieta 23 §4 | wpis Tied i mail subskrypcji z wiarygodnością | `regime`, subskrypcje |
 | 3 | 1.0 | **Zakładka zablokowana** (przeniesione 2026-11-18, `plan_1.0.md`) | kłódka w pasku bocznym, w środku warunek i postęp („Aktywa 32 / 50 tys. PLN”, „Certyfikat: Obligacje”) | `unlocks.js` |
 | 4 | 0.18.8 | **Okno „Automaty”** (do zaprojektowania) | auto-rolowanie, auto-udział w aukcjach bonów, alert koncentracji: stan, parametry, ostatnie akcje, warunek odblokowania | `automation.js` |
@@ -307,9 +365,19 @@ O8 makiety 22 §3 i 23 §1–2: pola z etykietą, akcent fazy (tylko L4),
 O9 kontrola raporty/kontrola_0.18.6.md.
 
 0.18.7 Progresja i onboarding (bramka: GIG i marże ±0,3 pp):
-E0 poziomy giełd bez kursu: NIE ZACZYNAJ, dopóki użytkownik nie dopisze
-   kryteriów w planie. Zdecydowane już: płytka bez progów kursu, podpowiedź
-   „Dostęp od oceny X” + jedno zdanie bez liczb.
+E0a poziomy Śmieciowa–Platynowa: progi względne (× mediana kapitalizacji
+    rynku) + zysk / free float, bez kursu; ocena tylko od Platynowej (≥ A,
+    twarda bramka; GOLD wypada z GATE_BY_TIER); zmiana najwyżej co 2 kw.;
+    kandydaci do Platynowej sami zamawiają audyt; podpowiedź bez liczb;
+    ocena publiczna w wierszu listy i w karcie spółki obcej. Kalibruj progi
+    serią (Platynowa 5–10%) i zapisz decyzję w raporty/decyzje_0.18.md.
+E0b elitarne: pula = Platynowa; Rubinowa ≤ 6 (A+, zysk 8 kw., 2× próg),
+    Szmaragdowa ≤ 3 (AA, dywidenda 4 kw., 4× próg), Diamentowa = 1 najlepsza;
+    bramka 20 lat: 3–6 / 1–3 / 1 w ≥ 90% kwartałów od 3. roku.
+E0c wydarzenia zmian poziomu: Gazeta, Tied, mail posiadaczom, efekt kursu
+    (średnio zero), bez emoji, ≤ 6 wiadomości na kwartał.
+E0d KNF: zmiana zasad wejścia na GPW i progów Złotej/Platynowej, ogłoszenie
+    1 kw. wcześniej, okres przejściowy 4 kw., najwyżej raz na 2 lata.
 E2 tasks.js według makiety 24: TeamedUP! → Zadania i oceny (kategorie
    Pierwsze kroki, Od zarządu, Rynek, Mechaniki), przypinanie do 3 na karcie
    panelu funduszu; zadania Rynek z jawnych faktów (bez nazwy fazy, max 2),
