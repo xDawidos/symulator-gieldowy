@@ -7019,6 +7019,7 @@ function showFundFlowPanel() {
 
 function displayFundPanel() {
     if (!playerFund) return;
+    if (typeof renderPinnedTasks === 'function') renderPinnedTasks(); // 0.18.7 E2
     const openBox = document.getElementById('fund-open-subscriptions');
     if (openBox) openBox.checked = isFundOpenForSubscriptions(); // B5: domyślnie otwarta
     renderFundFlowReasons();
@@ -7836,13 +7837,16 @@ function renderTeamedTasks() {
         return `<li>Okres ${r.periodNumber}: ocena ${me?.score ?? '—'}/100 · ${escapeHtml(CAREER_POSITIONS[getPositionIndex(me?.from)].name)} → ${escapeHtml(CAREER_POSITIONS[getPositionIndex(me?.to)].name)}</li>`;
     }).join('');
     const last = (corporation?.lastGoals || []).map(g => `<li>${g.done ? '[wykonane]' : '[niewykonane]'} ${escapeHtml(g.label)}</li>`).join('');
-    return `<article class="mail-article"><h3>Zadania od szefostwa</h3>
+    const board = `<article class="mail-article"><h3>Zadania od szefostwa</h3>
         <p class="fund-muted">Termin oceny zarządu: za ${left} ${left === 1 ? 'okres' : 'okresy'} funduszu. Spełnione zadanie: +${GOAL_MET_BONUS} pkt oceny (cel awansowy +${GOAL_MET_BONUS * GOAL_PROMOTION_MULT}) i premia z budżetu korporacji; niespełnione: −${GOAL_MISSED_PENALTY} pkt. Awans wymaga oceny ≥ ${PROMOTION_SCORE}.</p>
         <h4>Targety okresu</h4><ul class="list-plain firm-targets te-tasks">${targets.map(row).join('') || '<li class="fund-muted">Brak.</li>'}</ul>
         <h4>Cele zarządu na ten cykl</h4><ul class="list-plain firm-targets te-tasks">${goals.map(row).join('') || '<li class="fund-muted">Zarząd nie wyznaczył jeszcze zadań.</li>'}</ul>
         ${queue.length ? `<p class="fund-muted">Zarząd zapowiada ${queue.length} ${queue.length === 1 ? 'kolejne zadanie' : 'kolejne zadania'}: pierwsze za ${Math.max(0, Math.min(...queue.map(i => i.at)) - q)} kw.</p>` : ''}
         ${last ? `<h4>Poprzedni cykl</h4><ul class="list-plain text-sm">${last}</ul>` : ''}
         <h4>Ostatnie oceny zarządu</h4>${reviews ? `<ul class="list-plain text-sm">${reviews}</ul>` : '<p class="fund-muted">Brak ocen.</p>'}</article>`;
+    if (typeof renderTaskList !== 'function' || !playerProfile) return board;
+    if (playerProfile.tasks || ensureTaskState()) { playerProfile.tasks.seenBoss = true; evaluateTasks(); } // 0.18.7 E2: „Przeczytaj zadanie od szefa”
+    return renderTaskList().replace('BOARD', board); // 0.18.7 E2: Od zarządu jako kategoria listy zadań
 }
 
 /** TeamedUP!: zatrudnianie analityków z poziomu aplikacji (hireAnalyst — jak w oknie Firma). */
@@ -9576,4 +9580,70 @@ function downloadListingHistoryCsv() {
     const blob = new Blob(['\uFEFF' + getListingHistoryCsv()], { type: 'text/csv;charset=utf-8' }), a = document.createElement('a');
     a.href = URL.createObjectURL(blob); a.download = `liczba_spolek_kw${macro.quarter}.csv`; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+// =================================================================================
+// 0.18.7 E2 (makiety 22 i 24): lista zadań w TeamedUP! i karta przypiętych w panelu funduszu.
+// =================================================================================
+const TASK_GO = { market: () => window.scrollTo({ top: 0, behavior: 'smooth' }), bank: () => openBankModal(), teamedup: () => openTeamedUp('tasks'), internet: () => openInternetPage('startupy'), fund: () => scrollToMyFund() };
+function runTaskGo(kind) { if (TASK_GO[kind]) TASK_GO[kind](); }
+let tasksPanelOpen = true;
+function taskProgressHtml(p, label) {
+    const v = p.max > 0 ? Math.round(p.value / p.max * 100) : 0;
+    return `<div class="tk-prog"><i role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${v}" aria-valuetext="${escapeHtml(p.text || `${v}%`)}" aria-label="Postęp: ${escapeHtml(label)}" style="--v:${v}%"></i><span class="n">${escapeHtml(p.text || `${v}%`)}</span></div>`;
+}
+function taskRewardHtml(def) { return def.reward?.pln ? `<span class="tk-reward">+${formatZl(def.reward.pln, 0)}</span>` : ''; }
+function taskCardHtml(task, ctx, done = false) {
+    const def = TASKS[task.id], cat = TASK_CATS[def.cat], st = playerProfile.tasks, pinned = st.pinned.includes(task.id), full = st.pinned.length >= TASK_RULES.pinMax;
+    const p = done ? { value: 1, max: 1, text: 'wykonane' } : getTaskProgress(task, ctx);
+    const pin = done ? '' : `<button type="button" class="tk-pin" aria-pressed="${pinned}" ${!pinned && full ? 'disabled aria-describedby="tk-pin-full"' : ''} onclick="toggleTaskPinFromUi('${task.id}')">${uiIcon('karteczka', 14)} ${pinned ? 'Przypięte' : 'Przypnij'}</button>`;
+    return `<li class="tk-task c-${def.cat}${pinned ? ' is-pinned' : ''}${done ? ' is-done' : ''}">
+        <div class="tk-top"><span class="tk-cat">${uiIcon(cat.icon, 14)} ${cat.name}</span></div>
+        <h4>${escapeHtml(def.title)}${done ? '<span class="sr-only">, wykonane</span>' : ''}</h4>
+        <p>${task.fact ? `${escapeHtml(task.fact)} ` : ''}<small>${escapeHtml(def.teach)}</small></p>
+        ${taskProgressHtml(p, def.title)}
+        <div class="tk-foot">${taskRewardHtml(def)}<span class="tk-exp">${uiIcon('zegar', 12)} ${escapeHtml(def.expiresText || 'bez terminu')}</span>${done ? '' : `<button type="button" class="btn-ghost btn-sm" onclick="runTaskGo('${def.go[1]}')">${escapeHtml(def.go[0])}</button>`}${pin}</div></li>`;
+}
+/** TeamedUP! → Zadania i oceny: filtr kategorii, licznik przypiętych, grupy zadań (Od zarządu niżej, z danych zarządu). */
+function renderTaskList() {
+    const st = ensureTaskState(); if (!st) return '';
+    const ctx = getTaskContext(), q = ctx.q;
+    const byCat = cat => st.active.filter(t => TASKS[t.id]?.cat === cat);
+    const doneRecent = cat => st.done.filter(d => TASKS[d.id]?.cat === cat && q - d.q <= TASK_RULES.doneKeepQ);
+    const count = cat => cat === 'board' ? (typeof getPlayerTargets === 'function' ? getPlayerTargets().length : 0) : byCat(cat).length;
+    const cats = ['start', 'board', 'market', 'mech'];
+    const radios = [['all', 'Wszystkie', cats.reduce((s, c) => s + count(c), 0)], ...cats.map(c => [c, TASK_CATS[c].name, count(c)])]
+        .map(([v, n, k], i) => `<label><input type="radio" name="tk-filter" value="${v}"${i === 0 ? ' checked' : ''} onchange="document.getElementById('tk-list').dataset.filter = this.value"><span>${n} <b>${k}</b></span></label>`).join('');
+    const dots = Array.from({ length: TASK_RULES.pinMax }, (_, i) => `<i class="${i < st.pinned.length ? 'on' : ''}"></i>`).join('');
+    const group = cat => {
+        const list = [...byCat(cat).map(t => taskCardHtml(t, ctx)), ...doneRecent(cat).map(d => taskCardHtml({ id: d.id }, ctx, true))];
+        if (!list.length) return cat === 'start' ? '' : `<section class="tk-group" data-cat="${cat}"><h3 class="tk-grp">${TASK_CATS[cat].name} <small>${TASK_CATS[cat].when}</small></h3>${renderEmptyState({ icon: TASK_CATS[cat].icon, title: 'Brak zadań w tej kategorii.', text: `Pojawiają się ${TASK_CATS[cat].when}.` })}</section>`;
+        return `<section class="tk-group" data-cat="${cat}"><h3 class="tk-grp">${TASK_CATS[cat].name} <small>${TASK_CATS[cat].when}</small></h3><ul class="tk-tasks">${list.join('')}</ul></section>`;
+    };
+    return `<div class="tk-bar"><fieldset class="tk-cats"><legend class="sr-only">Kategoria zadań</legend>${radios}</fieldset>
+        <span class="tk-pins" id="tk-pin-full">${dots} Przypięte ${st.pinned.length} z ${TASK_RULES.pinMax}${st.pinned.length >= TASK_RULES.pinMax ? '. Odepnij jedno, żeby przypiąć inne.' : ''}</span></div>
+        <div class="sr-only" role="status" aria-live="polite">${escapeHtml(st.message || '')}</div>
+        <div id="tk-list" class="tk-list" data-filter="all">${group('start')}${group('market')}${group('mech')}<section class="tk-group" data-cat="board"><h3 class="tk-grp">${TASK_CATS.board.name} <small>${TASK_CATS.board.when}</small></h3>BOARD</section></div>`;
+}
+/** Panel funduszu → karta „Zadania”: najwyżej 3 przypięte. */
+function renderPinnedTasks() {
+    const box = document.getElementById('fund-tasks'); if (!box) return;
+    const st = playerProfile?.tasks ? ensureTaskState() : null; if (!st) { box.innerHTML = ''; return; }
+    evaluateTasks(); // 0.18.7 E2: sprawdzenie po transakcji i odświeżeniu panelu (refreshFundViews), bez osobnej pętli
+    const ctx = getTaskContext();
+    const items = st.pinned.map(id => st.active.find(t => t.id === id)).filter(Boolean).map(t => {
+        const def = TASKS[t.id];
+        return `<li class="tk-pt-item c-${def.cat}"><b>${escapeHtml(def.title)}</b>${taskRewardHtml(def)}<button type="button" class="tk-pt-unpin" aria-label="Odepnij: ${escapeHtml(def.title)}" onclick="toggleTaskPinFromUi('${t.id}')">${uiIcon('zamknij', 14)}</button>${taskProgressHtml(getTaskProgress(t, ctx), def.title)}<span class="tk-exp">${escapeHtml(def.expiresText || 'bez terminu')}</span></li>`;
+    }).join('');
+    const html = `<button type="button" class="tk-pt-head" id="pt-title" aria-expanded="${tasksPanelOpen}" aria-controls="tk-pt-list" onclick="tasksPanelOpen = !tasksPanelOpen; renderPinnedTasks()">${uiIcon('karteczka', 16)} <b>Zadania</b> <span class="n">${st.pinned.length} z ${TASK_RULES.pinMax} przypiętych</span>${uiIcon('chevron-down', 14)}</button>
+        <div id="tk-pt-list" ${tasksPanelOpen ? '' : 'hidden'}>${items ? `<ul class="tk-pt-list">${items}</ul>` : `<div class="tk-pt-empty">${renderEmptyState({ icon: 'karteczka', title: 'Nic nie jest przypięte.', text: 'Wybierz zadanie w TeamedUP! i kliknij Przypnij.' })}</div>`}
+        <div class="tk-pt-foot"><span>Wszystkie: ${st.active.length}</span><button type="button" class="btn-ghost btn-sm" onclick="openTeamedUp('tasks')">Otwórz TeamedUP!</button></div></div>
+        <div class="sr-only" role="status" aria-live="polite">${escapeHtml(st.message || '')}</div>`;
+    if (box.innerHTML !== html) box.innerHTML = html;
+}
+function toggleTaskPinFromUi(id) {
+    const r = toggleTaskPin(id), def = TASKS[id];
+    if (playerProfile?.tasks) playerProfile.tasks.message = r.ok ? `${r.pinned ? 'Przypięto' : 'Odpięto'}: ${def?.title || id}.` : (r.reason || '');
+    renderPinnedTasks();
+    if (teamedView?.pane === 'tasks' && !document.getElementById('teamedup-overlay')?.hidden) renderTeamedUp();
 }

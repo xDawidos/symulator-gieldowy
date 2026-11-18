@@ -17763,3 +17763,37 @@ group('0.18.6 Porządki', () => {
         }
     });
 });
+
+group('0.18.7 Progresja i onboarding', () => {
+    test('E2: zadania — Pierwsze kroki przypięte, nagroda raz, czwarte przypięcie zablokowane, limity 2/3, „Rynek” wygasa po odbiciu GIG, bez nazwy fazy, stary zapis bez Pierwszych kroków', () => {
+        resetWorld([makeCompany('AAA'), makeCompany('BBB'), makeCompany('CCC')]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+        const st = playerProfile.tasks;
+        assert(st.pinned.length === 3 && st.pinned.every(id => TASKS[id].cat === 'start'), 'na starcie 3 przypięte Pierwsze kroki');
+        const w0 = playerWallet.cash;
+        playerPortfolio.AAA = { shares: 10, avgPrice: 100 };
+        evaluateTasks(); evaluateTasks();
+        assertEq(playerWallet.cash - w0, 50, 'nagroda raz (dwa sprawdzenia)');
+        assert(st.pinned.includes('start.boss'), 'wolne miejsce dopina kolejny krok');
+        const saved = JSON.parse(JSON.stringify(st)); playerProfile.tasks = saved; evaluateTasks();
+        assertEq(playerWallet.cash - w0, 50, 'po wczytaniu bez drugiej nagrody');
+        // limit 3 przypiętych
+        playerProfile.tasks.active.push({ id: 'mech.bonds', since: 0 });
+        const r = toggleTaskPin('mech.bonds');
+        assert(!r.ok && /Przypięte 3 z 3/.test(r.reason), 'czwarte przypięcie zablokowane z opisem');
+        // „Rynek”: spadek GIG ≥ 20% od szczytu → zadanie, odbicie o 10% → wygasa
+        const t = playerProfile.tasks; t.active = t.active.filter(x => TASKS[x.id].cat === 'start'); t.lastEnd = {};
+        const gig = marketIndexes.find(i => i.id === 'GIG'); t.gigPeak = 1000; gig.value = 750;
+        evaluateTasks();
+        const dip = t.active.find(x => x.id === 'market.dip');
+        assert(dip && /poniżej szczytu/.test(dip.fact), 'zadanie z jawnym faktem o GIG');
+        const names = Object.values(MARKET_PHASES).map(p => p.name.toLowerCase());
+        const texts = Object.values(TASKS).map(d => `${d.title} ${d.teach} ${d.expiresText || ''}`.toLowerCase()).concat([dip.fact.toLowerCase()]);
+        assert(!texts.some(x => names.some(n => x.includes(n))), 'żaden tekst nie zawiera nazwy fazy');
+        assert(t.active.filter(x => TASKS[x.id].cat === 'market').length <= 2 && t.active.filter(x => TASKS[x.id].cat === 'mech').length <= 3, 'limity 2 i 3');
+        gig.value = 750 * 1.11; evaluateTasks();
+        assert(!t.active.some(x => x.id === 'market.dip'), 'wygasa po odbiciu GIG o 10%');
+        // stary zapis: bez stanu zadań → bez Pierwszych kroków
+        delete playerProfile.tasks; ensureTaskState();
+        assert(!playerProfile.tasks.active.some(x => TASKS[x.id].cat === 'start'), 'stary zapis bez Pierwszych kroków');
+    });
+});

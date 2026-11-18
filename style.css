@@ -6204,3 +6204,53 @@ fieldset.sector-chips { border: 0; margin: 0; padding: 0; min-inline-size: 0; }
   .cb.is-new { animation: cb-in .5s ease-out 1; }
   @keyframes cb-in { from { transform: translateY(-8px); opacity: 0; } to { transform: none; opacity: 1; } }
 }
+
+/* 0.18.7 E2 (makiety 22 i 24): zadania — lista w TeamedUP! i karta przypiętych; kolory kategorii nie są bursztynem (R4) */
+.c-start { --cat-c: var(--color-text-secondary); } .c-board { --cat-c: var(--blue-400); } .c-market { --cat-c: var(--teal-400); } .c-mech { --cat-c: var(--violet-400); }
+.tk-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+.tk-pins { font-size: 12px; color: var(--color-text-secondary); display: inline-flex; align-items: center; gap: 6px; }
+.tk-pins i { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--ink-400); }
+.tk-pins i.on { background: var(--color-text-secondary); border-color: var(--color-text-secondary); }
+.tk-cats { margin: 0; padding: 0; border: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.tk-cats label { position: relative; }
+.tk-cats input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.tk-cats span { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border: 1px solid var(--ink-600); border-radius: 999px; color: var(--color-text-secondary); font-size: 12px; }
+.tk-cats span b { font: 400 11px var(--font-family-mono); color: var(--color-text-muted); }
+.tk-cats input:checked + span { border-color: var(--color-text-primary); color: var(--color-text-primary); background: var(--color-bg-raised); }
+.tk-cats input:focus-visible + span { outline: 2px solid var(--color-text-primary); outline-offset: 2px; }
+.tk-list:not([data-filter="all"]) .tk-group { display: none; }
+.tk-list[data-filter="start"] .tk-group[data-cat="start"], .tk-list[data-filter="board"] .tk-group[data-cat="board"], .tk-list[data-filter="market"] .tk-group[data-cat="market"], .tk-list[data-filter="mech"] .tk-group[data-cat="mech"] { display: block; }
+.tk-grp { margin: 18px 0 8px; font-family: var(--font-family-cond); font-size: 15px; font-weight: 600; display: flex; align-items: baseline; gap: 10px; }
+.tk-grp small { font-family: var(--font-family-sans); font-weight: 400; font-size: 12px; color: var(--color-text-muted); }
+.tk-tasks { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 10px; }
+.tk-task { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--ink-700); border-left: 3px solid var(--cat-c, var(--ink-600)); border-radius: 6px; background: var(--color-bg-raised); }
+.tk-task.is-pinned { border-color: var(--ink-500); border-left-color: var(--cat-c); }
+.tk-task.is-done { opacity: .7; }
+.tk-cat { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--cat-c, var(--color-text-secondary)); }
+.tk-task h4 { margin: 0; font-size: 14px; font-weight: 600; }
+.tk-task p { margin: 0; color: var(--color-text-secondary); }
+.tk-task p small { display: block; color: var(--color-text-muted); font-size: 12px; margin-top: 2px; }
+.tk-prog { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; align-items: center; font-size: 12px; }
+.tk-prog i { height: 6px; border-radius: 3px; background: linear-gradient(to right, var(--color-text-secondary) var(--v), var(--color-bg-sunken) var(--v)); }
+.tk-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-size: 12px; }
+.tk-reward { font: 600 12px var(--font-family-mono); color: var(--amber-400); }
+.tk-exp { display: inline-flex; align-items: center; gap: 4px; color: var(--color-text-muted); }
+.tk-pin { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border: 1px solid var(--ink-600) !important; border-radius: 6px; background: none !important; color: var(--color-text-secondary); font: 600 12px var(--font-family-sans); cursor: pointer; }
+.tk-pin[aria-pressed="true"] { border-color: var(--color-text-secondary) !important; color: var(--color-text-primary); background: var(--color-bg-surface) !important; }
+.tk-pin:disabled { opacity: .45; cursor: not-allowed; }
+.pt { border: 1px solid var(--ink-700); border-radius: 6px; background: var(--color-bg-surface); margin-bottom: 12px; }
+.pt:empty { display: none; }
+.tk-pt-head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 12px; border: 0 !important; background: none !important; color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: 6px; }
+.tk-pt-head b { font-weight: 600; } .tk-pt-head .n { color: var(--color-text-muted); font-size: 12px; }
+.tk-pt-head .ic:last-child { margin-left: auto; color: var(--color-text-muted); transition: transform .15s; }
+.tk-pt-head[aria-expanded="false"] .ic:last-child { transform: rotate(-90deg); }
+.tk-pt-list { margin: 0; padding: 0 12px 4px; list-style: none; }
+.tk-pt-item { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 3px 6px; padding: 8px 0 8px 10px; border-top: 1px solid var(--ink-800); border-left: 2px solid var(--cat-c); }
+.tk-pt-item b { font-weight: 600; font-size: 13px; }
+.tk-pt-item .tk-prog, .tk-pt-item .tk-exp { grid-column: 1 / -1; }
+.tk-pt-item .tk-exp { font-size: 12px; }
+.tk-pt-unpin { width: 28px; height: 28px; display: grid; place-items: center; border: 0 !important; border-radius: 4px; background: none !important; color: var(--color-text-muted); cursor: pointer; }
+.tk-pt-unpin:hover { color: var(--color-text-primary); background: var(--color-bg-raised) !important; }
+.tk-pt-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 12px 10px; border-top: 1px solid var(--ink-800); font-size: 12px; color: var(--color-text-muted); }
+.tk-pt-empty { padding: 4px 12px 12px; }
+@media (prefers-reduced-motion: reduce) { .tk-pt-head .ic { transition: none; } }

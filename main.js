@@ -1429,6 +1429,7 @@ function runWeeklyTick() {
         if (typeof resetMarketHaltWeekly === 'function') resetMarketHaltWeekly(marketIndexes.find(idx => idx.id === 'GIG')?.value);
         if (typeof checkAcademyTriggers === 'function') checkAcademyTriggers(); // N1: hasła Akademii przy pierwszym kontakcie
         if (typeof checkMentorTasks === 'function') checkMentorTasks();
+        if (typeof noteTaskWeek === 'function') noteTaskWeek(); // 0.18.7 E2: zadania raz na tydzień
         if (typeof checkAchievements === 'function') checkAchievements(); // N4: zadania mentora i certyfikaty
 
         // Fundusz gracza: opłata za zarządzanie, zaufanie, decyzje klientów
@@ -1524,6 +1525,7 @@ function runQuarterlyTick() {
         if (typeof processGiantEventQuarterly === 'function') processGiantEventQuarterly(); // 0.16.1 G3: „Gigant wkracza na scenę” (countries.js)
         if (typeof processCountriesQuarterly === 'function') processCountriesQuarterly(); // 0.16.2 G5: rynki zagraniczne, bilety, boty (countries.js)
         if (typeof processRatingsQuarterly === 'function') processRatingsQuarterly(); // 0.18.4 A2: audyty i oceny
+        if (typeof noteTaskQuarter === 'function') noteTaskQuarter(); // 0.18.7 E2
         if (typeof processListingsQuarterly === 'function') processListingsQuarterly(); // 0.15.6: wymogi utrzymania, rynki NH i prywatny (listings.js)
         if (typeof enforceListingLimitQuarterly === 'function') enforceListingLimitQuarterly(); // 0.15.4 P5: powyżej 115 spółek krajowych wymuszone wycofanie najsłabszych
         processAwaitingListings(); // P1: startupy czekające na wolne miejsce na giełdzie

@@ -1811,6 +1811,7 @@ function startNewCareer(profile = {}) {
 
     playerFund = createPlayerFund();
     playerFund.startGig = getBenchmarkValue(); // makieta 18 (R7): wynik „wobec GIG” od startu gry
+    if (typeof createTaskState === 'function') playerProfile.tasks = createTaskState(true); // 0.18.7 E2: Pierwsze kroki przypięte
     const nav = FUND_START_CASH / FUND_START_UNITS;
 
     // Kilkunastu startowych klientów; JU rozdzielone wg typowej wpłaty.

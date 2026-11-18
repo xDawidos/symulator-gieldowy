@@ -717,6 +717,7 @@ function subscribeIpo(symbol, amount) {
     if (typeof canAccessExchange === 'function' && !canAccessExchange('BRONZE', startup)) return { ok: false, reason: 'Debiut jest na Giełdzie Brązowej, do której Twoje stanowisko nie daje dostępu.' };
     playerCash -= amount;
     startup.ipoOffer.amount += amount;
+    if (playerProfile?.tasks) playerProfile.tasks.ipoSubscribed = true; // 0.18.7 E2: zadanie „Złóż zapis na IPO”
     return { ok: true, amount: startup.ipoOffer.amount };
 }
 function subscribeIpoFromUi(symbol) {
