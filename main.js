@@ -1430,6 +1430,7 @@ function runWeeklyTick() {
         if (typeof checkAcademyTriggers === 'function') checkAcademyTriggers(); // N1: hasła Akademii przy pierwszym kontakcie
         if (typeof checkMentorTasks === 'function') checkMentorTasks();
         if (typeof noteTaskWeek === 'function') noteTaskWeek(); // 0.18.7 E2: zadania raz na tydzień
+        if (typeof processPhaseHintsWeekly === 'function') processPhaseHintsWeekly(); // 0.18.7 E3: wskazówki o fazie
         if (typeof checkAchievements === 'function') checkAchievements(); // N4: zadania mentora i certyfikaty
 
         // Fundusz gracza: opłata za zarządzanie, zaufanie, decyzje klientów

@@ -17765,6 +17765,26 @@ group('0.18.6 Porządki', () => {
 });
 
 group('0.18.7 Progresja i onboarding', () => {
+    test('E3: wskazówka o fazie bez nazwy fazy; po zmianie fazy najwyżej jedna na kanał; wiarygodność maila rośnie z prenumeratą', () => {
+        resetWorld([makeCompany('AAA')]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' }); initMarketRegimes(); mailbox = createMailbox();
+        const names = Object.values(MARKET_PHASES).map(p => p.name.toLowerCase());
+        for (const ind of [{ top: 4, bottom: 0, debuts: 3, sent: 80 }, { top: 0, bottom: 4, debuts: 0, sent: 20 }, { top: 1, bottom: 1, debuts: 1, sent: 50 }])
+            for (const r of [() => 0.9, () => 0.1]) { const text = getPhaseHintText(ind, r).toLowerCase(); assert(!names.some(n => text.includes(n)), `bez nazwy fazy: ${text}`); }
+        const regime = getMarketRegime('home'); regime.phase = 'bull';
+        const realRandom = Math.random;
+        try {
+            Math.random = () => 0.99; // bez losowych wskazówek
+            processPhaseHintsWeekly(); regime.phase = 'euphoria'; processPhaseHintsWeekly();
+            macro.quarter += 1;
+            const tied0 = getTiedPosts().length, mail0 = mailbox.messages.length;
+            processPhaseHintsWeekly(); processPhaseHintsWeekly(); processPhaseHintsWeekly();
+            assertEq(getTiedPosts().length - tied0, 1, 'jedna wskazówka na Tied');
+            assert(mailbox.messages.length - mail0 <= 1, 'najwyżej jedna wskazówka mailem');
+        } finally { Math.random = realRandom; }
+        mailbox.subscriptions.PULS = null; assertEq(getHintMailCredibility(), 0, 'bez prenumeraty brak maila');
+        mailbox.subscriptions.PULS = 'free'; const free = getHintMailCredibility();
+        mailbox.subscriptions.PULS = 'premium'; assert(getHintMailCredibility() > free, 'premium bardziej wiarygodne');
+    });
     test('E2: zadania — Pierwsze kroki przypięte, nagroda raz, czwarte przypięcie zablokowane, limity 2/3, „Rynek” wygasa po odbiciu GIG, bez nazwy fazy, stary zapis bez Pierwszych kroków', () => {
         resetWorld([makeCompany('AAA'), makeCompany('BBB'), makeCompany('CCC')]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
         const st = playerProfile.tasks;

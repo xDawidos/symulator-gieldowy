@@ -1085,3 +1085,54 @@ Object.assign(ACADEMY_ENTRIES, {
         ]
     }
 });
+
+// =================================================================================
+// 0.18.7 E3 (makieta 23 §4): WSKAZÓWKI O FAZIE RYNKU — objawy z danych gry, bez nazwy fazy. Kanały: wpis analityka na Tied
+// i mail „Barometr Rynku” od Pulsu Rynku (wymaga prenumeraty). Wiarygodność: Tied 1–2 z 3, mail darmowy 2, premium 3.
+// Szum: jeden wskaźnik może być odczytany błędnie. Generowanie: kwartał po zmianie fazy (raz na kanał) i losowo co kilka tygodni.
+// =================================================================================
+const PHASE_HINT_RULES = { delayQ: 1, weeklyChance: 0.08, noise: 0.25, analysts: ['Marta Wilk', 'Paweł Sowa', 'Ewa Kruk', 'Adam Lis'] };
+const CRED_WORDS = ['niska', 'średnia', 'wysoka'];
+/** 5 wskaźników jak przed szczytem (top) i jak przy dnie (bottom); 0–5 każdy. */
+function getPhaseIndicators() {
+    const r = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null;
+    const q = typeof macro === 'object' ? Number(macro.quarter) || 0 : 0;
+    const gq = mailbox?.phaseHints?.gigQ || [], gig = typeof getBenchmarkValue === 'function' ? getBenchmarkValue() : 0;
+    const gigMove = gq.length && gq[0] > 0 && gig > 0 ? gig / gq[0] - 1 : 0; // GIG wobec początku poprzedniego kwartału
+    const debuts = stocks.filter(s => !s.assetType && Number(s.marketSinceQ) >= q - 1).length;
+    const prem = Number(r?.premium) || 0, sent = Number(r?.sentiment) || 50;
+    const crash = Boolean(typeof marketCrash === 'object' && marketCrash?.active) || Boolean(typeof isMarketHalted === 'function' && isMarketHalted());
+    const top = [prem > 0.1, debuts >= 3, sent > 65, gigMove > 0.08, prem > 0.2].filter(Boolean).length;
+    const bottom = [prem < -0.1, debuts === 0, sent < 35, gigMove < -0.08, crash].filter(Boolean).length;
+    return { top, bottom, debuts, sent, prem };
+}
+function getPhaseHintText(ind = getPhaseIndicators(), rnd = Math.random) {
+    let { top, bottom } = ind;
+    if (rnd() < PHASE_HINT_RULES.noise) { if (top >= bottom) top = Math.max(0, Math.min(5, top + (rnd() < 0.5 ? -1 : 1))); else bottom = Math.max(0, Math.min(5, bottom + (rnd() < 0.5 ? -1 : 1))); }
+    if (top < 2 && bottom < 2) return `Barometr Rynku: żaden z 5 wskaźników nie odstaje od normy. Debiutów w kwartale: ${ind.debuts}, nastroje ${ind.sent}/100.`;
+    return top >= bottom ? `Barometr Rynku: ${top} z 5 wskaźników jak przed szczytem — wysokie wyceny, ${ind.debuts} ${ind.debuts === 1 ? 'debiut' : 'debiuty'} w kwartale, nastroje ${ind.sent}/100.`
+        : `Barometr Rynku: ${bottom} z 5 wskaźników jak przy dnie — niskie wyceny, mało debiutów, nastroje ${ind.sent}/100.`;
+}
+function credText(level) { return `Wiarygodność: ${'▮'.repeat(level)}${'▯'.repeat(3 - level)} ${CRED_WORDS[level - 1]}`; }
+/** Wiarygodność maila: zależy od prenumeraty Pulsu Rynku (brak → mail nie przychodzi). */
+function getHintMailCredibility() { const sub = mailbox?.subscriptions?.PULS; return sub === 'premium' ? 3 : sub ? 2 : 0; }
+function issuePhaseHint(channel) {
+    const text = getPhaseHintText();
+    if (channel === 'tied') {
+        const author = getRandomElement(PHASE_HINT_RULES.analysts), cred = Math.random() < 0.5 ? 1 : 2;
+        return addTiedPost({ author, role: 'Analityk', symbol: 'GIG', kind: 'opinion', text: `${text} ${credText(cred)}.` });
+    }
+    const cred = getHintMailCredibility();
+    if (!cred) return null;
+    return addMail({ sender: 'PULS', subject: 'Barometr Rynku', body: `${text} ${credText(cred)}.`, importance: 2 });
+}
+/** Co tydzień (main.js): wskazówka kwartał po zmianie fazy (raz na kanał) i losowo co kilka tygodni. */
+function processPhaseHintsWeekly() {
+    if (!mailbox) return;
+    const r = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null, q = typeof macro === 'object' ? Number(macro.quarter) || 0 : 0;
+    const h = mailbox.phaseHints || (mailbox.phaseHints = { phase: r?.phase || null, dueQ: null, sent: {} });
+    if (h.lastQ !== q) { h.lastQ = q; h.gigQ = [...(h.gigQ || []), typeof getBenchmarkValue === 'function' ? getBenchmarkValue() : 0].slice(-2); }
+    if (r?.phase && r.phase !== h.phase) { h.phase = r.phase; h.dueQ = q + PHASE_HINT_RULES.delayQ; h.sent = {}; }
+    if (h.dueQ !== null && q >= h.dueQ) { for (const ch of ['tied', 'mail']) if (!h.sent[ch]) { issuePhaseHint(ch); h.sent[ch] = true; } h.dueQ = null; return; }
+    if (Math.random() < PHASE_HINT_RULES.weeklyChance) issuePhaseHint(Math.random() < 0.5 ? 'tied' : 'mail');
+}
