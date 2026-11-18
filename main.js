@@ -1465,6 +1465,9 @@ function runWeeklyTick() {
         if (typeof processBuildingIncome === 'function') {
             processBuildingIncome();
         }
+        if (typeof processIpoOffersWeekly === 'function') { // 0.18.6 O7: koniec zapisów na IPO
+            processIpoOffersWeekly();
+        }
 
         if (playerCash > 0) displayCash(); //
 

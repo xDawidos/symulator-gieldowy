@@ -3542,7 +3542,8 @@ const STARTUP_STAGE_INFO = {
     overfunding: { label: 'Nadsubskrypcja', icon: 'wzrost', step: 0 },
     development: { label: 'Rozwój', icon: 'atom', step: 1 },
     financial_complications: { label: 'Komplikacje', icon: 'alert', step: 1 },
-    awaitingListing: { label: 'Czeka na giełdę', icon: 'zegar', step: 2 }
+    awaitingListing: { label: 'Czeka na giełdę', icon: 'zegar', step: 2 },
+    ipoOffer: { label: 'Zapisy na akcje', icon: 'debiut', step: 2 } // 0.18.6 O7
 };
 
 function displayStartups(previousInputValues = {}) {
@@ -3679,6 +3680,14 @@ function displayStartups(previousInputValues = {}) {
                     actionsCell.innerHTML = 'Zablokowane';
                 }
                 break;
+
+            case 'ipoOffer': { // 0.18.6 O7 (U5): zapisy funduszu na akcje w debiucie
+                const offer = startup.ipoOffer || { weeksLeft: 0, amount: 0 };
+                fundingCell.innerHTML = `<strong>${uiIcon('debiut', 14)} Zapisy na akcje: ${offer.weeksLeft} tyg. do debiutu</strong><span class="text-sm text-muted">Cena emisyjna ustalana w dniu debiutu (zwykle 25–50 PLN przed dyskontem). Przy nadsubskrypcji przydział jest redukowany.</span>`;
+                progressCell.innerHTML = offer.amount > 0 ? `<span class="text-sm">Twój zapis: <strong class="text-mine">${formatZl(offer.amount, 0)}</strong> (zablokowane do przydziału)</span>` : '<span class="text-sm text-muted">Fundusz nie złożył zapisu.</span>';
+                actionsCell.innerHTML = `<label class="sr-only" for="ipo-sub-${startup.symbol}">Kwota zapisu (${getBaseCurrency()})</label><input type="number" id="ipo-sub-${startup.symbol}" class="w-xs" min="1" step="100" value="${previousInputValues[`ipo-sub-${startup.symbol}`] || 1000}"> <button type="button" onclick="subscribeIpoFromUi('${startup.symbol}')">Zapisz się</button>`;
+                break;
+            }
 
             case 'awaitingListing': { // P1: gotowy do debiutu, giełda pełna
                 const waited = (typeof macro === 'object' ? macro.quarter : 0) - (startup.awaitingListing?.since || 0);

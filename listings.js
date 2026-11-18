@@ -691,3 +691,85 @@ function getListingHistoryCsv() {
     const head = ['kwartał', 'łącznie', 'obce_na_liście', ...tiers].join(';');
     return [head, ...listingHistory.map(r => [r.q, r.total, r.foreign, ...tiers.map(t => r.by[t] || 0)].join(';'))].join('\n');
 }
+
+
+// =================================================================================
+// 0.18.6 O7 (U5): ZAPISY FUNDUSZU GRACZA NA IPO. Udany startup z inkubatora otwiera zapisy na 3 tygodnie gry (stage 'ipoOffer').
+// Zapis blokuje gotówkę funduszu (liczy się do NAV); przy debiucie przydział z wolnego obrotu, redukowany proporcjonalnie do popytu
+// reszty rynku; nadwyżka wraca. Debiut odłożony (pełna giełda, wycofanie) = pełny zwrot. Pułap: próg wezwania (getTenderThreshold).
+// =================================================================================
+const IPO_OFFER_RULES = { weeks: 3, demand: [0.6, 3.0], hotDemand: 1.5 };
+function openIpoOffer(startup, multiplier) {
+    if (!startup || startup.operatorStartup) return false;
+    startup.stage = 'ipoOffer';
+    startup.ipoOffer = { weeksLeft: IPO_OFFER_RULES.weeks, multiplier, amount: 0, since: typeof macro === 'object' ? macro.quarter : 0 };
+    logEvent(`${startup.name}: zapisy na akcje w debiucie potrwają ${IPO_OFFER_RULES.weeks} tygodnie. Fundusz może złożyć zapis w inkubatorze (Internet → Startupy).`, 'market');
+    return true;
+}
+/** Gotówka zablokowana w zapisach (składnik aktywów funduszu, getFundAssets). */
+function getFundIpoLockedValue() { return stocks.reduce((sum, s) => sum + (s.stage === 'ipoOffer' ? Number(s.ipoOffer?.amount) || 0 : 0), 0); }
+function subscribeIpo(symbol, amount) {
+    const startup = stocks.find(s => s.symbol === symbol && s.stage === 'ipoOffer');
+    amount = Math.floor(Number(amount));
+    if (!startup || !playerFund) return { ok: false, reason: 'Zapisy na tę spółkę są zamknięte.' };
+    if (!(amount > 0)) return { ok: false, reason: 'Podaj kwotę zapisu.' };
+    if (amount > playerCash) return { ok: false, reason: `Za mało gotówki funduszu (wolne ${formatZl(playerCash, 0)}).` };
+    if (typeof canAccessExchange === 'function' && !canAccessExchange('BRONZE', startup)) return { ok: false, reason: 'Debiut jest na Giełdzie Brązowej, do której Twoje stanowisko nie daje dostępu.' };
+    playerCash -= amount;
+    startup.ipoOffer.amount += amount;
+    return { ok: true, amount: startup.ipoOffer.amount };
+}
+function subscribeIpoFromUi(symbol) {
+    const input = document.getElementById(`ipo-sub-${symbol}`);
+    const r = subscribeIpo(symbol, Number(input?.value) * (typeof getBaseScale === 'function' ? getBaseScale() : 1));
+    if (typeof showToast === 'function') showToast(r.ok ? `Zapis przyjęty: ${formatZl(r.amount, 0)} zablokowane do przydziału.` : r.reason, r.ok ? 'success' : 'warning');
+    if (typeof refreshFundViews === 'function') refreshFundViews();
+    if (typeof displayStartups === 'function') displayStartups();
+}
+/** Przydział po debiucie. `others` = popyt reszty rynku w akcjach (test go podaje, gra losuje). Zwraca { shares, cost, refund }. */
+function settleIpoSubscription(startup, amount, others = null) {
+    const price = Number(startup.price) || 0, free = Math.max(0, (startup.totalShares || 0) - (startup.sharesHeld || 0));
+    const wanted = price > 0 ? Math.floor(amount / price) : 0;
+    if (others === null) {
+        const phase = typeof getMarketRegime === 'function' ? getMarketRegime('home')?.phase : null;
+        others = Math.round(free * getRandomInRange(...IPO_OFFER_RULES.demand) * (['bull', 'euphoria'].includes(phase) ? IPO_OFFER_RULES.hotDemand : 1));
+    }
+    const ratio = wanted + others > 0 ? Math.min(1, free / (wanted + others)) : 0;
+    const held = playerPortfolio[startup.symbol]?.shares || 0;
+    const cap = typeof getTenderThreshold === 'function' ? Math.max(0, Math.floor(startup.totalShares * getTenderThreshold()) - 1 - held) : Infinity;
+    const shares = Math.max(0, Math.min(Math.floor(wanted * ratio), cap, free));
+    const cost = shares * price, refund = amount - cost;
+    playerCash += refund;
+    if (shares > 0) {
+        const h = playerPortfolio[startup.symbol] || { shares: 0, avgPrice: price, assetType: 'stock' };
+        h.avgPrice = (h.avgPrice * h.shares + cost) / (h.shares + shares); h.shares += shares;
+        playerPortfolio[startup.symbol] = h;
+        startup.sharesHeld += shares;
+        startup.cash = (Number(startup.cash) || 0) + cost;
+    }
+    return { shares, cost, refund, ratio };
+}
+function refundIpoSubscription(startup, why) {
+    const amount = Number(startup.ipoOffer?.amount) || 0;
+    if (amount > 0) {
+        playerCash += amount;
+        if (typeof addMail === 'function') addMail({ sender: 'Dom Maklerski', subject: `Zwrot zapisu: ${startup.name}`, body: `${why} Zapis ${formatZl(amount, 0)} wraca w całości na rachunek funduszu.`, importance: 2, symbol: startup.symbol });
+    }
+    delete startup.ipoOffer;
+}
+/** Co tydzień: koniec zapisów → debiut i przydział albo zwrot, gdy debiut się nie odbył. */
+function processIpoOffersWeekly() {
+    for (const startup of stocks.filter(s => s.assetType === 'Startup' && s.stage === 'ipoOffer')) {
+        const offer = startup.ipoOffer || (startup.ipoOffer = { weeksLeft: 0, multiplier: 1.5, amount: 0 });
+        if (--offer.weeksLeft > 0) continue;
+        startup.stage = 'development';
+        handleSuccessfulIPO(startup, offer.multiplier);
+        if (startup.assetType === 'Startup') { refundIpoSubscription(startup, `Debiut ${startup.name} został odłożony.`); continue; }
+        const amount = Number(offer.amount) || 0;
+        delete startup.ipoOffer;
+        if (!(amount > 0)) continue;
+        const r = settleIpoSubscription(startup, amount);
+        if (typeof addMail === 'function') addMail({ sender: 'Dom Maklerski', subject: `Przydział akcji: ${startup.name}`, body: `Debiut po ${formatZl(startup.price, 2)}. Zapis ${formatZl(amount, 0)}: przydział ${formatShares(r.shares)} (${formatNumberPl(r.ratio * 100, 0)}% zapisu po redukcji) za ${formatZl(r.cost, 0)}, zwrot ${formatZl(r.refund, 0)}.`, importance: 2, symbol: startup.symbol });
+        if (typeof logFundTrade === 'function' && r.shares > 0) logFundTrade(startup.symbol, 'buy');
+    }
+}

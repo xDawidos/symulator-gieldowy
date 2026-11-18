@@ -6161,3 +6161,6 @@ body #internet-modal.wn-host, body #internet-modal.wn-host[data-country] { backg
   .topbar-menu .menu-speed { display: flex; gap: 4px; padding: 4px 8px; }
   .topbar-menu .menu-speed button { flex: 1; }
 }
+
+/* 0.18.6 O7: kwoty gracza (bursztyn = „Twoje”, R4) */
+.text-mine { color: var(--amber-400); font-weight: 600; }

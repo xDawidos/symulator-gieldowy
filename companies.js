@@ -7617,8 +7617,8 @@ function finalizeStartup(startup) {
 
         // 0.18.4 A3: w bessie słaba emisja jest wycofywana (startup czeka w kolejce i próbuje w kolejnym kwartale)
         if (typeof shouldWithdrawIpo === 'function' && shouldWithdrawIpo(startup)) { parkStartupForListing(startup, successMultiplier); if (typeof ipoStats === 'object') ipoStats.withdrawn++; logEvent(`IPO ${startup.name} wycofane: bessa i słaby popyt na emisję. Spółka spróbuje w kolejnym kwartale.`, 'market'); return; }
-        // Wywołanie funkcji pomocniczej, która zajmie się całym procesem IPO
-        handleSuccessfulIPO(startup, successMultiplier);
+        // Wywołanie funkcji pomocniczej, która zajmie się całym procesem IPO; 0.18.6 O7: najpierw 3 tygodnie zapisów
+        if (!(typeof openIpoOffer === 'function' && openIpoOffer(startup, successMultiplier))) handleSuccessfulIPO(startup, successMultiplier);
     }
     displayStartups(getCurrentStartupInputValues());
 }

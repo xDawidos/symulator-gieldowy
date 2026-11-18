@@ -10200,16 +10200,16 @@ group('0.15.3: Wielkie Kryzysy (szoki sektorowe, silnik linii, 5 linii, reakcje 
         assertEq(starts, 0, 'żadna linia w okresie spokoju');
     });
 
-    test('W1: linia zastępuje krach w 40% przypadków (bez Zapowiedzi)', () => {
+    test('W1: linia zastępuje krach w 60% przypadków (0.18.6 O4) (bez Zapowiedzi)', () => {
         world();
         const seeded = Math.random;
         try {
             Math.random = () => 0.1;
-            assert(maybeReplaceCrashWithCrisisLine(), 'losowanie < 40% — linia');
+            assert(maybeReplaceCrashWithCrisisLine(), 'losowanie < 60% — linia');
             assertEq(crisisLine.stage, 'burst', 'od razu Wybuch');
             crisisLine = null; sectorShocks = []; crisisState.used = [];
             Math.random = () => 0.9;
-            assert(!maybeReplaceCrashWithCrisisLine(), 'losowanie ≥ 40% — zwykły krach');
+            assert(!maybeReplaceCrashWithCrisisLine(), 'losowanie ≥ 60% — zwykły krach');
         } finally { Math.random = seeded; }
     });
 
@@ -17597,6 +17597,38 @@ group('0.18.5 Wydajność', () => {
 });
 
 group('0.18.6 Porządki', () => {
+    test('O7 (U5): zapis funduszu na IPO — blokada gotówki w NAV, nadsubskrypcja 3× daje 1/3 przydziału i zwrot reszty, odłożony debiut = pełny zwrot', () => {
+        resetWorld([makeCompany('AAA')]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+        const s = makeCompany('IPOX'); s.assetType = 'Startup'; s.stage = 'development'; stocks.push(s);
+        assert(openIpoOffer(s, 2) && s.stage === 'ipoOffer', 'zapisy otwarte');
+        playerCash = 100000; const nav0 = getFundNav();
+        const r0 = subscribeIpo('IPOX', 30000);
+        assert(r0.ok && playerCash === 70000 && getFundIpoLockedValue() === 30000, 'gotówka zablokowana');
+        assert(Math.abs(getFundNav() - nav0) < 1e-9, 'zablokowana gotówka liczy się do NAV');
+        assert(!subscribeIpo('IPOX', 1e9).ok, 'zapis ponad gotówkę odrzucony');
+        // debiut: 3000 akcji w wolnym obrocie po 10 PLN; fundusz chce 3000, reszta rynku 6000 → nadsubskrypcja 3×
+        s.assetType = undefined; s.stage = undefined; s.price = 10; s.totalShares = 100000; s.sharesHeld = 97000; delete playerPortfolio.IPOX;
+        const savedTender = getTenderThreshold; getTenderThreshold = () => 0.5;
+        let r; try { r = settleIpoSubscription(s, 30000, 6000); } finally { getTenderThreshold = savedTender; }
+        assertEq(r.shares, 1000, 'przydział 1/3'); assertEq(r.refund, 20000, 'zwrot reszty');
+        assertEq(playerCash, 90000, 'zablokowane + wolne = gotówka przed zapisem − koszt akcji');
+        assertEq(playerPortfolio.IPOX.shares, 1000, 'akcje w portfelu');
+        // odłożony debiut: pełny zwrot
+        const t = makeCompany('IPOY'); t.assetType = 'Startup'; stocks.push(t); openIpoOffer(t, 2); subscribeIpo('IPOY', 5000);
+        const cash = playerCash; refundIpoSubscription(t, 'Debiut odłożony.');
+        assertEq(playerCash, cash + 5000, 'pełny zwrot'); assert(!t.ipoOffer, 'zapis zamknięty');
+    });
+    test('O6 (U6): Bank, Korporacja i Internet w ramie .wn, bez kickerów z kropkami; na telefonie prędkość w menu ⋯', async () => {
+        const html = await (await fetch('../index.html', { cache: 'no-store' })).text();
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        for (const id of ['bank-modal', 'corporation-overlay', 'internet-modal']) {
+            const host = doc.getElementById(id);
+            assert(host && host.querySelector('section.wn'), `${id}: rama .wn`);
+            assert(!host.querySelector('.bank-hero-kicker'), `${id}: bez kickera`);
+        }
+        assert(doc.querySelectorAll('#bank-modal .wn-tabs [role="tab"]').length === 3 && doc.querySelectorAll('#corporation-overlay .wn-tabs [role="tab"]').length === 5, 'zakładki z rolą tab');
+        assert(doc.querySelector('#topbar-menu .menu-speed button'), 'prędkość w menu ⋯');
+    });
     test('O5 (U7): presja ekologiczna — rośnie przy zanieczyszczeniu 70, spada przy 40; smog i protest ×2 przy 100; UEiE 15 → 30% (z Zielonymi do 40%); Zieloni od 50 przy presji ≥ 60', () => {
         const e = { pollution: 70, stats: { events: {} } };
         const realRandom = Math.random;
