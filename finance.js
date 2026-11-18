@@ -972,7 +972,7 @@ function getGameClockMs() {
 // Rubinowa (≤ 6): ocena ≥ A+, zysk 8 kw. z rzędu, kapitalizacja ≥ 2 × próg Platynowej; Szmaragdowa (≤ 3): ocena ≥ AA, dywidenda
 // ≥ 4 kw. z rzędu (dividendStreak), ≥ 4 × próg; Diamentowa (1): najlepszy wynik (kapitalizacja 50%, zysk 4 kw. 25%, ocena 25%)
 // spośród spełniających Szmaragdową (gdy brak — Rubinową). Zmiana poziomu po 2 kw.; Diamentowa zmienia się po 2 kw. przewagi innej spółki.
-const ELITE_RULES = { RUBY: { capMult: 2, grade: 'A+', profitQ: 8 }, EMERALD: { capMult: 4, grade: 'AA', divQ: 4 }, confirmQ: 2, diamondLeadQ: 2 };
+const ELITE_RULES = { RUBY: { capMult: 2, grade: 'A+', profitQ: 8 }, EMERALD: { capMult: 3, grade: 'AA', divQ: 4 }, confirmQ: 2, diamondLeadQ: 4, diamondMargin: 0.15 }; // kalibracja e0f → e0g: Szmaragdowa 4 → 3 × próg, Diamentowa 4 kw. przewagi o ≥ 15%
 let eliteState = { challenger: null, n: 0 };
 function getPlatinumCapThreshold() { return (typeof getTierMedianCap === 'function' ? getTierMedianCap('home') : 0) * (typeof TIER_RULES === 'object' ? TIER_RULES.PLATINUM : 5); }
 function eliteQualifies(stock, tier) {
@@ -1000,10 +1000,11 @@ function assignEliteExchanges(immediate = false) {
         let cands = pool.filter(s => eliteQualifies(s, 'EMERALD'));
         if (!cands.length) cands = pool.filter(s => eliteQualifies(s, 'RUBY'));
         const best = cands.sort((a, b) => getDiamondScore(b, pool) - getDiamondScore(a, pool))[0];
-        const holder = pool.find(s => s.exchange === 'DIAMOND' && cands.includes(s));
+        const holder = pool.find(s => s.exchange === 'DIAMOND' && eliteQualifies(s, 'RUBY')); // posiadacz traci miejsce od razu dopiero bez warunków Rubinowej
         let diamond = best;
-        if (holder && best && holder !== best && !immediate) { // zmiana dopiero po 2 kw. przewagi innej spółki
-            eliteState = eliteState.challenger === best.symbol ? { challenger: best.symbol, n: eliteState.n + 1 } : { challenger: best.symbol, n: 1 };
+        if (holder && best && holder !== best && !immediate) { // zmiana dopiero po 4 kw. wyraźnej przewagi innej spółki
+            if (getDiamondScore(best, pool) < getDiamondScore(holder, pool) * (1 + ELITE_RULES.diamondMargin)) { eliteState = { challenger: null, n: 0 }; }
+            else eliteState = eliteState.challenger === best.symbol ? { challenger: best.symbol, n: eliteState.n + 1 } : { challenger: best.symbol, n: 1 };
             diamond = eliteState.n >= ELITE_RULES.diamondLeadQ ? best : holder;
         } else eliteState = { challenger: null, n: 0 };
         if (diamond) target[diamond.symbol] = 'DIAMOND';

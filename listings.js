@@ -783,7 +783,7 @@ function processIpoOffersWeekly() {
 // =================================================================================
 // Kalibracja (seria e0a i gra w roku 6): kwantyle kapitalizacji / mediana — 10%: 0,01, 43%: 0,42, 75%: 8, 93%: 124 (rozkład bardzo skośny);
 // progi startowe planu 0,3 / 0,9 / 2,2 / 5 dawały Śmieciową 35% i Platynową z elitarnymi 22%.
-const TIER_RULES = { BRONZE: 0.03, SILVER: 0.45, GOLD: 8, PLATINUM: 100, ffSilver: 0.15, ffGold: 0.20, lossQ: 4, junkLossCap: 1.0, confirmQ: 2 };
+const TIER_RULES = { BRONZE: 0.02, SILVER: 0.45, GOLD: 8, PLATINUM: 100, ffSilver: 0.15, ffGold: 0.20, lossQ: 4, junkLossCap: 1.0, confirmQ: 2 };
 const TIER_HINTS = {
     JUNK: 'Dostęp zależy od wielkości i zysków spółki.', BRONZE: 'Dostęp zależy od wielkości i zysków spółki.', SILVER: 'Dostęp zależy od wielkości i zysków spółki.', GOLD: 'Dostęp zależy od wielkości i zysków spółki.',
     PLATINUM: 'Dostęp od oceny A. Decydują też wielkość, płynność i zyski spółki.',
@@ -870,12 +870,18 @@ function flushTierEvents() {
     if (!tierEventBuffer.length) return 0;
     const list = tierEventBuffer.sort((a, b) => (b.kind.startsWith('diamond') ? 2 : 0) - (a.kind.startsWith('diamond') ? 2 : 0) || (exchanges[b.to]?.level ?? 0) - (exchanges[a.to]?.level ?? 0));
     tierEventBuffer = [];
+    const heldOf = s => (typeof playerPortfolio === 'object' ? playerPortfolio[s.symbol]?.shares || 0 : 0) + (typeof playerWallet === 'object' ? playerWallet?.portfolio?.[s.symbol]?.shares || 0 : 0);
+    if (typeof addMail === 'function') { // makieta 27: jeden wpis Gazety Ekonomicznej na kwartał (≤ 6 opisanych zmian, reszta zbiorczo)
+        const lines = list.slice(0, TIER_EVENT_RULES.maxNews).map(e => `• ${tierChangeText(e)}${heldOf(e.stock) ? ` Masz ${formatShares(heldOf(e.stock))}.` : ''}`);
+        if (list.length > TIER_EVENT_RULES.maxNews) lines.push(`• Kolejne ${list.length - TIER_EVENT_RULES.maxNews} spółek zmieniło poziom.`);
+        addMail({ sender: 'OBSER', subject: `Gazeta Ekonomiczna: przegląd poziomów giełd — ${list.length} ${list.length === 1 ? 'zmiana' : list.length < 5 ? 'zmiany' : 'zmian'}`, body: lines.join('\n'), importance: 1 });
+    }
     list.slice(0, TIER_EVENT_RULES.maxNews).forEach(e => logEvent(tierChangeText(e), 'market'));
     if (list.length > TIER_EVENT_RULES.maxNews) logEvent(`Kolejne ${list.length - TIER_EVENT_RULES.maxNews} ${list.length - TIER_EVENT_RULES.maxNews === 1 ? 'spółka zmieniła' : 'spółki zmieniły'} poziom giełdy w tym kwartale.`, 'market');
     if (typeof addTiedPost === 'function') list.filter(e => e.kind !== 'down').slice(0, TIER_EVENT_RULES.maxTied).forEach(e => addTiedPost({ author: getRandomElement(['Marta Wilk', 'Paweł Sowa', 'Ewa Kruk', 'Adam Lis']), role: 'Analityk', symbol: e.stock.symbol, kind: 'opinion', text: `${tierChangeText(e)} Zmiana poziomu zwykle przesuwa popyt funduszy indeksowych na kilka tygodni.` }));
     for (const e of list) {
         const held = (typeof playerPortfolio === 'object' && playerPortfolio[e.stock.symbol]?.shares > 0) || (typeof playerWallet === 'object' && playerWallet?.portfolio?.[e.stock.symbol]?.shares > 0);
-        if (held && typeof addMail === 'function') addMail({ sender: 'Dom Maklerski', subject: `Zmiana poziomu: ${e.stock.name}`, body: `${tierChangeText(e)} Masz akcje tej spółki.`, importance: 2, symbol: e.stock.symbol });
+        if (held && typeof addMail === 'function') addMail({ sender: 'Dom Maklerski', subject: `Zmiana poziomu: ${e.stock.name}`, body: `${tierChangeText(e)} Masz ${formatShares(heldOf(e.stock))}. Czego się spodziewać: fundusze indeksowe zwykle ${e.kind === 'down' || e.kind === 'diamond-out' ? 'sprzedają' : 'kupują'} przez 1–2 tygodnie; kurs może się zmienić, ale nie musi.`, importance: 2, symbol: e.stock.symbol });
     }
     return list.length;
 }
@@ -913,9 +919,11 @@ function announceKnfRuleChange(dir, why) {
     const shift = Math.max(-0.2, Math.min(0.4, knfRules.shift + step));
     if (Math.abs(mult - knfRules.mult) < 1e-6 && Math.abs(shift - knfRules.shift) < 1e-6) return null;
     knfRules.pending = { dir, why, mult, shift, effectiveQ: knfQ() + 1 };
-    const text = `KNF ${dir > 0 ? 'zaostrza' : 'łagodzi'} zasady wejścia na GPW ${why}: od przyszłego kwartału wymogi wielkości i free floatu ${dir > 0 ? 'rosną' : 'maleją'} o ${formatNumberPl(Math.abs(mult / knfRules.mult - 1) * 100, 0)}%, zmieniają się też progi wyższych poziomów. Spółki już notowane mają rok przejściowy.`;
-    if (typeof logEvent === 'function') logEvent(text, 'market');
-    if (typeof addMail === 'function') addMail({ sender: 'KNF', subject: `Zmiana zasad wejścia na GPW`, body: text, importance: 2 });
+    const q = knfQ(), now = getListingRequirements('GPW'), ratio = mult / knfRules.mult;
+    const text = `KNF ${dir > 0 ? 'zaostrza' : 'łagodzi'} zasady wejścia na GPW ${why}. Obowiązują od ${formatQuarterDate(q + 1)}, spółki już notowane mają okres przejściowy do ${formatQuarterDate(q + 1 + KNF_RULE_RULES.transitionQ)}.`;
+    if (typeof logEvent === 'function') logEvent(`KNF ${dir > 0 ? 'zaostrza' : 'łagodzi'} zasady wejścia od ${formatQuarterDate(q + 1)}.`, 'market');
+    if (typeof addMail === 'function') addMail({ sender: 'KNF', subject: `Zmiana zasad wejścia na GPW`, importance: 2, // makieta 27: oś czasu + co się zmienia (GPW z liczbami, poziomy bez liczb)
+        body: `${text}\nOś czasu: ogłoszenie ${formatQuarterDate(q)} → obowiązuje od ${formatQuarterDate(q + 1)} → koniec okresu przejściowego ${formatQuarterDate(q + 1 + KNF_RULE_RULES.transitionQ)}.\nCo się zmienia:\n• GPW, kapitalizacja: ${formatZl(now.cap, 0)} → ${formatZl(now.cap * ratio, 0)}\n• GPW, free float: ${formatNumberPl(now.freeFloat * 100, 0)}% → ${formatNumberPl(Math.min(0.5, now.freeFloat * ratio) * 100, 0)}%\n• Złota i Platynowa: ${dir > 0 ? 'wyższy' : 'niższy'} próg wielkości` });
     return knfRules.pending;
 }
 /** Co kwartał: wejście w życie zapowiedzi albo nowa zapowiedź (najwyżej raz na 2 lata). */

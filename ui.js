@@ -1820,6 +1820,12 @@ function getPriceFlashClass(stock) {
 }
 
 /** Makieta 18: reguła wejścia na giełdę w nagłówku listy („kurs 400–800 PLN, ocena BBB”). */
+/** 0.18.7 E0a (makieta 25): podpowiedź poziomu — wymagana ocena (jeśli jest) + zdanie bez liczb. Ta sama na płytce i w karcie spółki. */
+const TIER_TIP_GRADES = { PLATINUM: 'A', RUBY: 'A+', EMERALD: 'AA' };
+function renderExchangeTip(key, idSuffix = '') {
+    const grade = TIER_TIP_GRADES[key];
+    return `<span class="ex-tip" role="tooltip" id="ex-tip-${key}${idSuffix}">${grade ? `<span class="req">${uiIcon('zweryfikowany', 12)} Wymagana ocena ${grade}</span>` : ''}<span class="why">${escapeHtml(getExchangeRuleText(key))}</span></span>`;
+}
 /** 0.18.7 E0a: reguła wejścia jest ukryta — na płytce tylko podpowiedź słowami (bez progów i liczb), decyzja 2026-11-14. */
 function getExchangeRuleText(key) { return typeof TIER_HINTS === 'object' ? TIER_HINTS[key] || '' : ''; }
 
@@ -1971,7 +1977,7 @@ function renderStockTableRow(stock, isSubsidiary, parentSymbol, stockTableBody, 
     metaLine.innerHTML = `${escapeHtml(primarySector)} · <span class="ms-tick">${escapeHtml(stock.symbol)}</span>${escapeHtml(metaRest)}`; // makieta 18 cz. 3: ticker w Condensed (bez osobnej kolumny — nazwa zostaje szeroka)
     metaLine.title = metaLine.textContent; // pełny opis, gdy wiersz jest ucięty
     const pubRating = typeof getPublicRating === 'function' ? getPublicRating(stock) : null; // 0.18.7 E0a: ocena publiczna (≥ A) w wierszu listy
-    if (pubRating) metaLine.insertAdjacentHTML('afterbegin', `<span class="rating-chip" title="Ocena audytora, ważna do kw. ${pubRating.until}">${uiIcon('audyt', 12)} ${escapeHtml(pubRating.grade)}</span> `);
+    if (pubRating) metaLine.insertAdjacentHTML('afterbegin', `<span class="rt${ratingIndex(pubRating.grade) >= ratingIndex('AA') ? ' is-top' : ''}" title="Ocena audytora, ważna do kw. ${pubRating.until}">${escapeHtml(pubRating.grade)}<span class="sr-only">: ocena audytora</span></span> `); // makieta 26
     metaLine.prepend(infoButton); // 0.18.6 O6 (D50): karta i gwiazdka w linii opisu — nazwa ma całą szerokość kolumny
     infoButton.insertAdjacentHTML('afterend', favoriteButtonHtml(stock.symbol, stock.name));
 
@@ -2358,7 +2364,7 @@ function displayStocks(previousInputValues = {}) {
       headerCell.colSpan = STOCK_TABLE_COLS;
       const collapsedEx = Boolean(exchangeCollapseState[exchangeKey]);
       // 0.14.5: kwadrat w kolorze rangi + nazwa bez emoji + liczba spółek; przycisk dla klawiatury
-      headerCell.innerHTML = `<h4 class="my-1 exchange-title"><button type="button" class="exchange-toggle ex-plate" aria-expanded="${!collapsedEx}" onclick="event.stopPropagation(); toggleExchangeVisibility('${exchangeKey}')"><span class="exchange-name ex-name" title="${escapeHtml(getExchangeRuleText(exchangeKey))}">${escapeHtml(stripEmoji(exchange.name))}</span><span class="sr-only">${escapeHtml(getExchangeRuleText(exchangeKey))}</span><span class="exchange-meta ex-count">${stocksOnThisExchange.length} ${stocksOnThisExchange.length === 1 ? 'spółka' : stocksOnThisExchange.length % 10 >= 2 && stocksOnThisExchange.length % 10 <= 4 && (stocksOnThisExchange.length % 100 < 12 || stocksOnThisExchange.length % 100 > 14) ? 'spółki' : 'spółek'}</span>${uiIcon(collapsedEx ? 'chevron-right' : 'chevron-down', 16, 'exchange-chevron')}</button></h4>`;
+      headerCell.innerHTML = `<h4 class="my-1 exchange-title"><button type="button" class="exchange-toggle ex-plate${ELITE_EXCHANGES[exchangeKey] ? ' is-elite' : ''}" aria-describedby="ex-tip-${exchangeKey}" aria-expanded="${!collapsedEx}" onclick="event.stopPropagation(); toggleExchangeVisibility('${exchangeKey}')"><span class="exchange-name ex-name">${escapeHtml(stripEmoji(exchange.name))}</span>${renderExchangeTip(exchangeKey)}${ELITE_EXCHANGES[exchangeKey] ? `<span class="ex-cap">${ELITE_EXCHANGES[exchangeKey].limit} ${ELITE_EXCHANGES[exchangeKey].limit === 1 ? 'miejsce' : ELITE_EXCHANGES[exchangeKey].limit < 5 ? 'miejsca' : 'miejsc'}</span>` : ''}<span class="exchange-meta ex-count">${stocksOnThisExchange.length} ${stocksOnThisExchange.length === 1 ? 'spółka' : stocksOnThisExchange.length % 10 >= 2 && stocksOnThisExchange.length % 10 <= 4 && (stocksOnThisExchange.length % 100 < 12 || stocksOnThisExchange.length % 100 > 14) ? 'spółki' : 'spółek'}</span>${uiIcon(collapsedEx ? 'chevron-right' : 'chevron-down', 16, 'exchange-chevron')}</button></h4>`;
     }
 
     const sectorCounts = new Map();
@@ -4410,6 +4416,8 @@ function renderCompanyCard() {
         tile('C/WK', f?.pbRatio ? formatNumberPl(f.pbRatio, 2) : '—', 'Cena / wartość księgowa na akcję. Poniżej 1 = rynek wycenia spółkę niżej niż jej majątek netto.', '', vs(f?.pbRatio, med?.pb, { format: v => formatNumberPl(v, 2) })),
         tile('Stopa dywidendy', `${formatNumberPl(dividendYield * 100, 2)}%`, 'Dywidendy z ostatniego roku / kurs.', '', dividendYield > 0 ? vs(dividendYield, med?.dy, { lowerIsCheap: false, format: pctFmt, labels: ['wyższa', 'niższa'] }) : ''),
         tile('Zadłużenie', debtRatio === null ? '—' : `${formatNumberPl(debtRatio * 100, 0)}%`, 'Zobowiązania / aktywa. Powyżej ~70% spółka jest mocno zadłużona.', debtRatio > 0.7 ? 'text-down' : '', vs(debtRatio, med?.debt, { format: pctFmt, labels: ['niższe', 'wyższe'] })),
+        exchanges[stock.exchange] ? tile('Giełda', escapeHtml(stripEmoji(exchanges[stock.exchange].name)), `${TIER_TIP_GRADES[stock.exchange] ? `Wymagana ocena ${TIER_TIP_GRADES[stock.exchange]}. ` : ''}${getExchangeRuleText(stock.exchange)}`) : '', // 0.18.7 E0a (makieta 25)
+        foreign ? tile('Ocena', 'Brak oceny publicznej', 'Ocena poniżej A albo brak audytu. Publiczne są oceny od A.') : '', // makieta 26: karta spółki obcej
         typeof getPublicRating === 'function' && !foreign ? (r => tile('Ocena', r ? `${uiIcon('audyt', 14)} ${r.grade}` : 'brak oceny', r ? `Ocena kredytowa od audytora, ważna do kw. ${r.until}. Spółki ujawniają tylko oceny od A w górę.` : 'Spółka nie ujawnia oceny. Brak oceny często znaczy, że ocena jest niska (spółki pokazują tylko A i wyżej).', '', r?.revealed ? '<em class="text-down">przekupiony audyt</em>' : ''))(getPublicRating(stock)) : '', // 0.18.4 A2
         tile('Kondycja', `${formatNumberPl(health, 1)} · ${healthLabel}`, 'Kondycja finansowa od −5 (bankructwo) do +5.', health >= 1 ? 'text-up' : health <= -2 ? 'text-down' : ''),
         sectorPremiumTile(),

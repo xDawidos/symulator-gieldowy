@@ -17576,7 +17576,7 @@ group('0.18.5 Wydajność', () => {
             sectorFilterState = { sector: 'all', subsector: null, secondary: false, type: 'all' }; currentMarketLevel = 'ALL'; ownedOnlyFilter = false; favoritesOnlyFilter = false; selectedMarketOperator = 'GPW';
             displayStocks();
             const live = document.getElementById('stock-table-body'), head = live.querySelector('tr.ms-ex');
-            assert(head && head.classList.contains('t-gold') && head.querySelector('.ex-name').title === TIER_HINTS.GOLD, `płytka Złotej: ${head?.className}`);
+            assert(head && head.classList.contains('t-gold') && head.querySelector('.ex-tip[role=tooltip] .why')?.textContent === TIER_HINTS.GOLD && head.querySelector('.ex-plate').getAttribute('aria-describedby') === 'ex-tip-GOLD', `płytka Złotej: ${head?.className}`); // makieta 25
             assertEq(live.querySelector('tr[data-symbol="AAA"]').dataset.level, 'GOLD', 'wiersz niesie poziom (szyna z CSS)');
         } finally { sectorFilterState = saved.filter; currentMarketLevel = saved.level; ownedOnlyFilter = saved.owned; favoritesOnlyFilter = saved.fav; selectedMarketOperator = saved.market; table.remove(); }
     });
@@ -17777,6 +17777,30 @@ group('0.18.7 Progresja i onboarding', () => {
         try { macro.quarter = 27; assertEq(processKnfRulesQuarterly(), null, 'przed upływem 2 lat bez nowej zmiany'); } finally { Math.random = realRandom; }
         assert(mailbox.messages.some(m => m.sender === 'KNF'), 'mail KNF');
     });
+    test('E0c (makieta 27): jeden wpis Gazety Ekonomicznej na kwartał (≤ 6 opisanych), mail Domu Maklerskiego tylko przy akcjach gracza, KNF bez liczb przy poziomach', () => {
+        const list = Array.from({ length: 8 }, (_, i) => makeCompany(`G${i}`)); resetWorld(list); mailbox = createMailbox();
+        const savedPf = playerPortfolio; playerPortfolio = { G1: { shares: 10, avgPrice: 1 } };
+        const logReal = logEvent, effReal = applyPriceEffect; logEvent = () => {}; applyPriceEffect = () => {};
+        try { list.forEach(s => noteTierChange(s, 'BRONZE', 'SILVER')); flushTierEvents(); } finally { logEvent = logReal; applyPriceEffect = effReal; playerPortfolio = savedPf; }
+        const gaz = mailbox.messages.filter(m => m.sender === 'OBSER');
+        assertEq(gaz.length, 1, 'jeden wpis Gazety');
+        assertEq(gaz[0].body.split('\n').length, 7, '6 opisanych + zbiorcza');
+        assert(!/\p{Extended_Pictographic}/u.test(gaz[0].body + gaz[0].subject), 'bez emoji');
+        const dm = mailbox.messages.filter(m => m.sender === 'Dom Maklerski');
+        assert(dm.length === 1 && dm[0].symbol === 'G1' && /Czego się spodziewać/.test(dm[0].body), 'mail tylko do posiadacza, z oczekiwanym efektem');
+        macro.quarter = 20; knfRules = createKnfRules(); announceKnfRuleChange(1, 'po krachu na giełdzie');
+        const knf = mailbox.messages.find(m => m.sender === 'KNF');
+        assert(/Oś czasu/.test(knf.body), 'oś czasu');
+        const tierLine = knf.body.split('\n').find(l => /Złota/.test(l));
+        assert(tierLine && !/\d/.test(tierLine), `poziomy bez liczb: ${tierLine}`);
+    });
+    test('E0a (makiety 25, 26): podpowiedzi z unikalnymi id, bez cyfr poza oceną, Platynowa z oceną A', () => {
+        const tips = Object.keys(exchanges).map(k => renderExchangeTip(k));
+        const ids = tips.map(t => t.match(/id="([^"]+)"/)[1]);
+        assertEq(new Set(ids).size, ids.length, 'unikalne id');
+        assert(tips.every(t => !/\d/.test(t.replace(/<[^>]+>/g, ''))), 'bez cyfr');
+        assert(renderExchangeTip('PLATINUM').includes('Wymagana ocena A'), 'Platynowa: ocena A');
+    });
     test('E0c: zmiany poziomu — najwyżej 6 wiadomości na kwartał (reszta zbiorczo), bez emoji, kurs ±2–4% (Diamentowa ±5%)', () => {
         const list = Array.from({ length: 9 }, (_, i) => makeCompany(`Z${i}`)); resetWorld(list);
         const logs = [], effects = [], logReal = logEvent, effReal = applyPriceEffect;
@@ -17791,7 +17815,7 @@ group('0.18.7 Progresja i onboarding', () => {
         assert(!logs.some(t => /\p{Extended_Pictographic}/u.test(t)), 'bez emoji');
         assert(effects.slice(0, 8).every(v => v >= 0.02 && v <= 0.04) && effects[8] === 0.05, `kurs ${effects}`);
     });
-    test('E0b: elitarne z warunków — bez oceny A+ nie ma Rubinowej, bez dywidendy nie ma Szmaragdowej, zmiana po 2 kw., Diamentowa zmienia się po 2 kw. przewagi', () => {
+    test('E0b: elitarne z warunków — bez oceny A+ nie ma Rubinowej, bez dywidendy nie ma Szmaragdowej, zmiana po 2 kw., Diamentowa zmienia się po 4 kw. wyraźnej przewagi', () => {
         const big = Array.from({ length: 4 }, (_, i) => { const c = makeCompany(`E${i}`); c.price = 1000 + i * 500; c.totalShares = 1e6; c.exchange = 'PLATINUM'; c.fundamentals = { history: Array.from({ length: 8 }, () => ({ netIncome: 1e6 })) }; c.dividendStreak = 4; return c; });
         const small = Array.from({ length: 20 }, (_, i) => { const c = makeCompany(`M${i}`); c.price = 10; c.totalShares = 10000; return c; });
         resetWorld([...big, ...small]); startNewCareer({}); macro.quarter = 10; tierMedianCache.q = null; playerFund.clockMs = 31 * 60000;
@@ -17803,8 +17827,10 @@ group('0.18.7 Progresja i onboarding', () => {
         // E2 rośnie ponad E3: Diamentowa przechodzi dopiero po 2 kw. przewagi
         big[2].price = 5000; assignEliteExchanges();
         assertEq(big[3].exchange, 'DIAMOND', 'po 1 kw. przewagi bez zmiany');
+        assignEliteExchanges(); assignEliteExchanges();
+        assertEq(big[3].exchange, 'DIAMOND', 'po 3 kw. przewagi bez zmiany');
         assignEliteExchanges();
-        assertEq(big[2].exchange, 'DIAMOND', 'po 2 kw. przewagi zmiana');
+        assertEq(big[2].exchange, 'DIAMOND', 'po 4 kw. wyraźnej przewagi zmiana (kalibracja e0g)');
     });
     test('E0a: poziom bez kursu — Platynowa tylko z oceną ≥ A, split nie zmienia poziomu, zmiana po 2 kw., utrata oceny = spadek od razu, kandydat zamawia audyt', () => {
         const list = []; for (let i = 0; i < 20; i++) { const c = makeCompany(`T${i}`); c.price = 100; c.totalShares = 10000; list.push(c); }
