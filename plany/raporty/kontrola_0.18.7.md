@@ -63,7 +63,7 @@ e0y (25 × 20 lat z zabezpieczeniem): 0 zawieszeń, `qerr` pusty we wszystkich g
 
 ## E5: skale audytorów i wiele ocen (polecenie użytkownika 2026-11-19)
 
-Decyzje F13–F15. Każdy audytor ma własną skalę (litery, punkty, gwiazdki, klasy), tylko w wyświetlaniu; spółka może mieć oceny kilku firm; do bramek liczy się najniższa ważna, w wierszu najlepsza publiczna z „+N”, w karcie lista. **Lista ocen w karcie i „+N” w znaczniku zrobione bez nowej makiety — czekają na zgodność z designem (rozszerzenie makiety 26).** Testy: 1118/1118 (skale w obie strony dla 6 audytorów × 10 ocen, „95/100 ≈ AA”, trzech audytorów z różną oceną, ujawnienie unieważnia jedną, migracja `stock.rating` → `stock.ratings`).
+Decyzje F13–F15. Każdy audytor ma własną skalę (litery, punkty, gwiazdki, klasy), tylko w wyświetlaniu; spółka może mieć oceny kilku firm; do bramek liczy się najniższa ważna, w wierszu najlepsza publiczna z „+N”, w karcie lista. Lista ocen i „+N” wyrównane do uzupełnionej makiety 26 (e5a063e, do akceptacji): ocena główna środkowa, kolory ocen, tabela „Oceny audytorów” z podpowiedzią przeliczenia skali (F16). Testy: 1118/1118 (skale w obie strony dla 6 audytorów × 10 ocen, „95/100 ≈ AA”, trzech audytorów z różną oceną, ujawnienie unieważnia jedną, migracja `stock.rating` → `stock.ratings`).
 
 Seria e5a + e5b (25 gier × 6,5 roku, 25 × 20 lat) wobec e0h / e0hx:
 

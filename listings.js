@@ -582,13 +582,15 @@ const AUDITORS = [
     { id: 'aud1', name: 'Biegły & Wspólnicy', big: true, noise: 0.10, scale: 'letters' }, { id: 'aud2', name: 'Bilans Global', big: true, noise: 0.10, scale: 'points' }, { id: 'aud3', name: 'Audyt Centralny', big: true, noise: 0.12, scale: 'stars' },
     { id: 'aud4', name: 'Saldo Plus', big: false, noise: 0.30, scale: 'letters' }, { id: 'aud5', name: 'Rachunek s.c.', big: false, noise: 0.35, scale: 'classes' }, { id: 'aud6', name: 'Księgi Rzetelne', big: false, noise: 0.30, scale: 'points' }
 ];
-// 0.18.7 E5: skale audytorów — tylko zapis przy wyświetlaniu; gra liczy na RATING_GRADES (indeks 0 = D … 9 = AAA).
+// 0.18.7 E5 (makieta 26): skale audytorów — tylko zapis przy wyświetlaniu; gra liczy na RATING_GRADES (indeks 0 = D … 9 = AAA).
+// `tip`: przeliczenie w podpowiedzi (część publiczna, od A); A+ to stopień pośredni (punkty 84–87, 3½ gwiazdki, klasa III+).
 const RATING_SCALES = {
-    letters: { name: 'litery AAA–D', marks: RATING_GRADES },
-    points: { name: 'punkty 0–100', marks: ['10', '25', '35', '45', '55', '65', '75', '84', '92', '98'], floors: [0, 20, 30, 40, 50, 60, 70, 80, 88, 96], suffix: '/100' }, // odczyt: przedział od `floors`
-    stars: { name: 'gwiazdki 1–5', marks: ['½', '1', '1½', '2', '2½', '3', '3½', '4', '4½', '5'], suffix: '★' },
-    classes: { name: 'klasy I–V', marks: ['V b', 'V a', 'IV b', 'IV a', 'III b', 'III a', 'II b', 'II a', 'I b', 'I a'], prefix: 'klasa ' }
+    letters: { name: 'Skala literowa', tip: 'AAA, AA, A+, A, BBB… Litery jak na skali wspólnej.', marks: RATING_GRADES },
+    points: { name: 'Skala punktowa 0–100', tip: '95–100 = AAA, 88–94 = AA, 84–87 = A+, 80–83 = A, poniżej 80 niepubliczna.', marks: ['10', '30', '45', '55', '65', '75', '82', '86', '91', '97'], floors: [0, 25, 40, 50, 60, 70, 80, 84, 88, 95], suffix: '/100' }, // odczyt: przedział od `floors`
+    stars: { name: 'Gwiazdki 1–5', tip: '5 gwiazdek = AAA, 4 = AA, 3½ = A+, 3 = A, mniej niepubliczna.', marks: ['0', '½', '1', '1½', '2', '2½', '3', '3½', '4', '5'], suffix: '★' },
+    classes: { name: 'Klasy I–V', tip: 'Klasa I = AAA, II = AA, III+ = A+, III = A, IV i V niepubliczne.', marks: ['V−', 'V', 'V+', 'IV−', 'IV', 'IV+', 'III', 'III+', 'II', 'I'], prefix: 'klasa ' }
 };
+const getAuditorScale = id => RATING_SCALES[getAuditor(id)?.scale] || RATING_SCALES.letters;
 const getAuditor = id => AUDITORS.find(a => a.id === id) || null;
 /** Ocena w zapisie audytora (np. „90/100”, „4½★”, „klasa I b”). */
 function formatAuditorGrade(grade, auditorId) {
@@ -649,8 +651,8 @@ function getValidRatings(stock, q = (typeof macro === 'object' ? macro.quarter :
 function getValidRating(stock, q = (typeof macro === 'object' ? macro.quarter : 0)) { return getValidRatings(stock, q).reduce((lo, r) => (!lo || ratingIndex(r.grade) < ratingIndex(lo.grade) ? r : lo), null); }
 /** Oceny publiczne: tylko ≥ A (spółki nie chwalą się słabszymi), od najlepszej. */
 function getPublicRatings(stock) { return getValidRatings(stock).filter(r => ratingIndex(r.grade) >= ratingIndex(RATING_RULES.publicFrom)).sort((a, b) => ratingIndex(b.grade) - ratingIndex(a.grade)); }
-/** Ocena w wierszu listy: najlepsza publiczna (spółka pokazuje najlepszą), inaczej null („brak oceny”). */
-function getPublicRating(stock) { return getPublicRatings(stock)[0] || null; }
+/** Ocena główna (wiersz listy, karta): środkowa z ocen publicznych (przy parzystej liczbie niższa ze środkowych), inaczej null („brak oceny”). Makieta 26. */
+function getPublicRating(stock) { const list = getPublicRatings(stock); return list[Math.floor(list.length / 2)] || null; }
 /** Bramka awansu: czy spółka może wejść na poziom `tier` (bez oceny albo za niska → zostaje). */
 function meetsRatingGate(stock, tier) {
     const need = GATE_BY_TIER[tier];

@@ -17777,18 +17777,19 @@ group('0.18.7 Progresja i onboarding', () => {
         try { macro.quarter = 27; assertEq(processKnfRulesQuarterly(), null, 'przed upływem 2 lat bez nowej zmiany'); } finally { Math.random = realRandom; }
         assert(mailbox.messages.some(m => m.sender === 'KNF'), 'mail KNF');
     });
-    test('E5: skale audytorów w obie strony, kilku audytorów z różną oceną (wiąże najniższa, w wierszu najlepsza z „+N”), przekupstwo unieważnia jedną ocenę, migracja starego zapisu', () => {
+    test('E5: skale audytorów w obie strony, kilku audytorów z różną oceną (wiąże najniższa, w wierszu środkowa z „+N”), przekupstwo unieważnia jedną ocenę, migracja starego zapisu', () => {
         for (const a of AUDITORS) for (const g of RATING_GRADES) assertEq(parseAuditorGrade(formatAuditorGrade(g, a.id), a.id), g, `${a.id} ${g}`);
-        assertEq(formatAuditorGrade('AA', 'aud2'), '92/100', 'punkty'); assertEq(parseAuditorGrade('95/100', 'aud2'), 'AA', '95 ≈ AA (przedział 88–95)'); assertEq(parseAuditorGrade('96/100', 'aud2'), 'AAA', '96 ≈ AAA');
+        assertEq(formatAuditorGrade('AA', 'aud2'), '91/100', 'punkty'); assertEq(parseAuditorGrade('94/100', 'aud2'), 'AA', '88–94 = AA (makieta 26)'); assertEq(parseAuditorGrade('95/100', 'aud2'), 'AAA', '95–100 = AAA');
+        assertEq(formatAuditorGrade('AA', 'aud5'), 'klasa II', 'klasy'); assertEq(formatAuditorGrade('AA', 'aud3'), '4★', 'gwiazdki: 4 = AA');
         assertEq(formatAuditorGrade('AAA', 'aud3'), '5★', 'gwiazdki'); assert(ratingCompareText({ grade: 'AA', auditor: 'aud2' }).includes('≈ AA'), 'odpowiednik na skali wspólnej');
         const s = makeCompany('MUL'); resetWorld([s]); macro.quarter = 10; resetRatings();
         s.rating = { grade: 'AA', q: 9, until: 13, auditor: 'aud2' }; // stary zapis
         assertEq(getRatings(s).length, 1, 'migracja: lista z jednej oceny'); assert(!('rating' in s) && s.ratings[0].grade === 'AA', 'stare pole usunięte');
         s.ratings.push({ grade: 'A', q: 10, until: 14, auditor: 'aud1' }, { grade: 'AAA', q: 10, until: 14, auditor: 'aud4', bribed: true });
         assertEq(getValidRating(s).grade, 'A', 'wiąże najniższa');
-        assertEq(getPublicRating(s).grade, 'AAA', 'w wierszu najlepsza publiczna');
-        assert(renderRatingChip(s, getPublicRating(s)).includes('+2'), '„+2” przy trzech ocenach');
-        assertEq((renderRatingList(getPublicRatings(s)).match(/<li>/g) || []).length, 3, 'lista ocen w karcie');
+        assertEq(getPublicRating(s).grade, 'AA', 'ocena główna: środkowa z publicznych (makieta 26)');
+        const chip = renderRatingChip(s, getPublicRating(s)); assert(chip.includes('g-AA') && chip.includes('+2') && chip.includes('oraz 2 inne oceny'), '„+2”, kolor i tekst dla czytnika');
+        const tbl = renderRatingList(getPublicRatings(s)); assertEq((tbl.match(/<tr>/g) || []).length, 4, 'tabela: nagłówek + 3 oceny'); assert(tbl.includes('role="tooltip"') && tbl.includes('Skala punktowa 0–100'), 'podpowiedź przeliczenia skali');
         revealBribedRating(s); assertEq(getValidRatings(s).length, 2, 'ujawnienie unieważnia tylko przekupioną ocenę');
         assertEq(getValidRatings(s).find(r => r.auditor === 'aud2').grade, 'AA', 'pozostałe bez zmian');
         auditStock(s, true); assertEq(getRatings(s).filter(r => r.auditor === 'aud2' || r.auditor === 'aud1').length, 2, 'audyt zlecony odnawia ocenę dotychczasowego audytora (bez dubla)');
