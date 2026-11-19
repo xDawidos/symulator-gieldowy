@@ -386,7 +386,7 @@ PRESETS['ceo'] = PRESETS['gracz-aktywny'] + 'playerProfile.positionId = "ceo";';
 // =================================================================================
 // 0.17.1 T0: presety wielkich testów. Każdy zapisuje wynik w window.__t171 (pole s017.t171).
 // =================================================================================
-PRESETS['automaty'] = PRESETS['gracz-aktywny'] + `(function () { if (!playerProfile) return; playerProfile.mentor = { ...(playerProfile.mentor || {}), certificates: { ...(playerProfile.mentor?.certificates || {}), risk: 0, analyst: 0 } }; const a = getAutomation(); a.deposits.on = a.tbills.on = a.sector.on = true; playerHasTBillAccess = true; })();`; // 0.18.8 D4: wszystkie automaty włączone
+PRESETS['automaty'] = PRESETS['gracz-aktywny'] + `(function () { if (!playerProfile) return; const m = getMentor(); m.certificates = { ...m.certificates, risk: 0, analyst: 0 }; const a = getAutomation(); a.deposits.on = a.tbills.on = a.sector.on = true; playerHasTBillAccess = true; })();`; // 0.18.8 D4: wszystkie automaty włączone
 PRESETS['bierny'] = ''; // gracz nic nie robi: baza GIG, liczby spółek i limitów
 PRESETS['wejscia'] = ''; // to samo co bierny; miary debiutów, limitu spółek i koncentracji są w sondzie P0156
 // Dźwignia: forex 1:10 do limitu 3 × aktywa i zastaw wszystkich akcji w lombardzie. Mierzy margin call, zamknięcia automatyczne,

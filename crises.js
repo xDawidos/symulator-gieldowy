@@ -480,7 +480,7 @@ function noteMacroShockForCrises(event) {
 
 /** Podsumowanie do przebiegów symulacyjnych (tests/przebiegi.html). */
 function crisisSummary() {
-    return { history: crisisState.history, used: crisisState.used, signals: crisisState.signals, spurious: crisisState.spurious, active: crisisLine ? { id: crisisLine.id, stage: crisisLine.stage } : null, shocks: sectorShocks.length };
+    return { history: crisisState.history, used: crisisState.used, signals: crisisState.signals, spurious: crisisState.spurious, active: crisisLine ? { id: crisisLine.id, stage: crisisLine.stage } : null, shocks: sectorShocks.length, swans: typeof blackSwanState === 'object' ? blackSwanState.history : [] }; // 0.18.8 D5: łabędzie w przebiegach
 }
 
 // --- reakcje banku centralnego i państwa (W3) ---
