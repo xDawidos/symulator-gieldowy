@@ -1524,6 +1524,7 @@ function runQuarterlyTick() {
         if (typeof advanceMarketRegimeQuarterly === 'function') advanceMarketRegimeQuarterly(); // 0.15 H2a: fazy rynku
         if (typeof advanceSectorBubblesQuarterly === 'function') advanceSectorBubblesQuarterly(); // 0.15 H3: bańki sektorowe
         if (typeof processCrisesQuarterly === 'function') processCrisesQuarterly(); // 0.15.3: etapy linii kryzysu, nowa linia, scenariusz startowy
+        if (typeof processBlackSwansQuarterly === 'function') runQuarterStep('processBlackSwansQuarterly', processBlackSwansQuarterly); // 0.18.8 D5: czarne łabędzie
         if (typeof checkMarketCrashQuarterly === 'function') checkMarketCrashQuarterly(); // 0.15 H4: sprawdzanie warunków krachu rynkowego
         advanceEconomyCycle(); // nowa faza koniunktury przed raportami
         advanceMacroQuarter(); // inflacja, bezrobocie, cykle sektorów, wybory (macro.js)

@@ -20,13 +20,14 @@ function createCrisisState() {
 }
 
 function resetCrises() {
+    if (typeof createBlackSwanState === 'function') blackSwanState = createBlackSwanState(); // 0.18.8 D5
     sectorShocks = [];
     crisisLine = null;
     crisisState = createCrisisState();
 }
 
 function crisisSnapshot() {
-    return { sectorShocks, crisisLine, crisisState, nextSectorShockId };
+    return { sectorShocks, crisisLine, crisisState, nextSectorShockId, blackSwans: typeof blackSwanState === 'object' ? blackSwanState : undefined }; // 0.18.8 D5
 }
 
 function applyCrisisSnapshot(snapshot) {
@@ -34,6 +35,7 @@ function applyCrisisSnapshot(snapshot) {
     crisisLine = snapshot?.crisisLine || null;
     crisisState = { ...createCrisisState(), ...(snapshot?.crisisState || {}) };
     nextSectorShockId = Number(snapshot?.nextSectorShockId) || 1;
+    if (typeof applyBlackSwanSnapshot === 'function') applyBlackSwanSnapshot(snapshot?.blackSwans); // 0.18.8 D5
 }
 
 function crisisQuarter() { return Number(macro?.quarter) || 0; }
@@ -738,3 +740,62 @@ function renderCrisisSectionBase() {
 }
 
 function renderCrisisSection() { return renderCrisisSectionBase() + renderCrisisCountries(); } // 0.16.2 G9: sekcja „Kryzys” z krajami i opóźnieniem zarażenia
+
+// =================================================================================
+// 0.18.8 D5: CZARNE ŁABĘDZIE — rzadkie zdarzenia ponad liniami i poza ich budżetem: 1 na 15–25 lat (losowy odstęp),
+// pierwszy najwcześniej po 10. roku. Każdy uruchamia 1–2 linie z CRISIS_LINES (pierwszą wolną; nie zużywa ich budżetu),
+// rusza kilka krajów naraz (fazy rynków, szoki sektorów z `country`) i tymczasowo zmienia stopy, zaufanie klientów i sektory.
+// =================================================================================
+const BLACK_SWAN_RULES = { firstQ: 40, gapQ: [60, 100], countries: 3, holdQ: 3 };
+const BLACK_SWANS = {
+    pandemic: { name: 'Pandemia globalna', lines: ['pandemic'], rate: { kind: 'cut', total: [-0.015, -0.025], quarters: 2 }, trust: -8, regime: 'capitulation',
+        sectors: [['Turystyka', -0.35], ['Lotnictwo', -0.30], ['Medycyna', 0.15], ['Magazyny', 0.10]], news: 'Nowy wirus rozlewa się po świecie. Granice się zamykają, linie lotnicze uziemiają samoloty.' },
+    war: { name: 'Wojna regionalna', lines: ['oil', 'supply'], rate: { kind: 'hike', total: [0.01, 0.02], quarters: 2 }, trust: -6, regime: 'capitulation',
+        sectors: [['Obronność', 0.25], ['Energia', 0.15], ['Transport i logistyka', -0.20], ['Turystyka', -0.20]], news: 'Wybucha wojna w regionie. Ropa drożeje skokowo, szlaki handlowe są zablokowane.' },
+    currency: { name: 'Upadek waluty', lines: ['banking'], rate: { kind: 'hike', total: [0.02, 0.04], quarters: 2 }, trust: -10, regime: 'capitulation',
+        sectors: [['Finanse', -0.25], ['Bankowość', -0.20], ['Wydobycie', 0.10]], news: 'Waluta sąsiedniego kraju traci połowę wartości w tydzień. Kapitał ucieka z całego regionu.' },
+    techRevolution: { name: 'Rewolucja technologiczna', positive: true, lines: [], rate: null, trust: 6, regime: 'euphoria',
+        sectors: [['Technologia', 0.35], ['Sztuczna inteligencja', 0.40], ['Półprzewodniki', 0.30], ['Media', -0.10]], news: 'Przełom technologiczny zmienia gospodarkę. Firmy wydają rekordowe kwoty na nowe narzędzia.' },
+    bankSystem: { name: 'Krach systemu bankowego', lines: ['banking', 'black'], rate: { kind: 'cut', total: [-0.02, -0.03], quarters: 3 }, trust: -12, regime: 'capitulation',
+        sectors: [['Bankowość', -0.40], ['Finanse', -0.35], ['Nieruchomości', -0.25]], news: 'Kilka największych banków świata wstrzymuje wypłaty jednego dnia. Rynki międzybankowe zamarzają.' }
+};
+function createBlackSwanState() { return { nextQ: null, active: null, history: [] }; }
+let blackSwanState = createBlackSwanState();
+const swanGap = () => getRandomIntInRange(...BLACK_SWAN_RULES.gapQ);
+
+/** Uruchamia łabędzia `id` (wymuszenie w testach i w debug). Zwraca wpis historii. */
+function startBlackSwan(id = getRandomElement(Object.keys(BLACK_SWANS))) {
+    const def = BLACK_SWANS[id]; if (!def) return null;
+    const q = crisisQuarter(), countries = (typeof getJoinedCountries === 'function' ? getJoinedCountries() : []).sort(() => Math.random() - 0.5).slice(0, BLACK_SWAN_RULES.countries);
+    // linie: pierwsza wolna; poza budżetem częstości (used i lastEventQ wracają do stanu sprzed łabędzia)
+    const before = { used: [...crisisState.used], last: crisisState.lastEventQ };
+    const lineId = !crisisLine && !crisisState.pendingImport ? def.lines.find(l => CRISIS_LINES[l]) : null;
+    if (lineId) { startCrisisLine(lineId, { forced: true, skipSpark: true, arrived: true }); crisisState.used = before.used; crisisState.lastEventQ = before.last; if (crisisLine) crisisLine.swan = id; }
+    if (def.rate && !crisisState.rate) { const total = rangeFloat(def.rate.total); crisisState.rate = { kind: def.rate.kind, total: 0, perQuarter: total / def.rate.quarters, quartersLeft: def.rate.quarters, delay: 0, floor: 0.0025 }; }
+    if (playerFund && def.trust) playerFund.trust = Math.max(0, Math.min(100, (Number(playerFund.trust) || 50) + def.trust));
+    for (const [sector, premium] of def.sectors) {
+        addSectorShock(sector, premium, { rampQ: 1, holdQ: BLACK_SWAN_RULES.holdQ, fadeQ: 4, lineId: `swan:${id}`, startQ: crisisTime() });
+        for (const c of countries) addSectorShock(sector, premium, { rampQ: 1, holdQ: BLACK_SWAN_RULES.holdQ, fadeQ: 4, lineId: `swan:${id}`, country: c, startQ: crisisTime() });
+    }
+    for (const c of countries) { const r = typeof marketRegimes === 'object' ? marketRegimes[c] : null; if (r) { r.phase = def.regime; r.quartersInPhase = 1; r.phaseLength = 2; } }
+    const entry = { id, name: def.name, q, line: lineId, countries, positive: Boolean(def.positive) };
+    blackSwanState.active = { ...entry, untilQ: q + BLACK_SWAN_RULES.holdQ + 1 };
+    blackSwanState.history = [...blackSwanState.history, entry].slice(-10);
+    const where = countries.length ? ` Dotyka też: ${countries.map(c => COUNTRY_DEFS?.[c]?.name || c).join(', ')}.` : '';
+    if (typeof logEvent === 'function') logEvent(`Czarny łabędź: ${def.name}. ${def.news}${where}`, 'macro');
+    if (typeof pushNews === 'function') pushNews(`Czarny łabędź: ${def.name}. ${def.news}`);
+    if (typeof addMail === 'function') addMail({ sender: 'OBSER', subject: `Czarny łabędź: ${def.name}`, body: `${def.news}${where}${lineId ? ` Rusza linia kryzysu: ${CRISIS_LINES[lineId].name}.` : ''}`, importance: 3 });
+    if (typeof showBlackSwanBanner === 'function') showBlackSwanBanner(blackSwanState.active);
+    return entry;
+}
+/** Co kwartał: harmonogram (pierwszy po 10. roku, potem co 15–25 lat) i wygaszenie banera. */
+function processBlackSwansQuarterly() {
+    const q = crisisQuarter();
+    if (blackSwanState.nextQ === null) blackSwanState.nextQ = Math.max(BLACK_SWAN_RULES.firstQ, q + swanGap());
+    if (blackSwanState.active && q >= blackSwanState.active.untilQ) blackSwanState.active = null;
+    if (q < blackSwanState.nextQ) return null;
+    blackSwanState.nextQ = q + swanGap();
+    return startBlackSwan();
+}
+function getBlackSwanSnapshot() { return blackSwanState; }
+function applyBlackSwanSnapshot(snap) { blackSwanState = { ...createBlackSwanState(), ...(snap && typeof snap === 'object' ? snap : {}) }; if (!Array.isArray(blackSwanState.history)) blackSwanState.history = []; }

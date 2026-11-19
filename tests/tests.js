@@ -17764,6 +17764,25 @@ group('0.18.6 Porządki', () => {
 });
 
 group('0.18.8 Długa gra', () => {
+    test('D5: czarny łabędź poza budżetem linii — wymuszony uruchamia linię, stopy, zaufanie i szoki sektorów, potem wraca do normy; harmonogram: 0 w 6,5 roku, 1–3 w 50 latach', () => {
+        resetWorld([makeCompany('SW1')]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' }); resetCrises(); macro.quarter = 50; mailbox = createMailbox();
+        const used0 = [...crisisState.used], last0 = crisisState.lastEventQ, trust0 = playerFund.trust;
+        const e = startBlackSwan('pandemic');
+        assert(e && crisisLine?.id === 'pandemic' && crisisLine.swan === 'pandemic', 'uruchamia swoją linię');
+        assertEq(JSON.stringify(crisisState.used), JSON.stringify(used0), 'poza budżetem: used bez zmian'); assertEq(crisisState.lastEventQ, last0, 'poza budżetem: spokój bez zmian');
+        assert(crisisState.rate && playerFund.trust < trust0, 'stopy i zaufanie');
+        const shocks = sectorShocks.filter(x => x.lineId === 'swan:pandemic'); assert(shocks.length >= 4, 'szoki sektorów');
+        assert(blackSwanState.active && mailbox.messages.some(m => /Czarny łabędź/.test(m.subject)) && !mailbox.messages.some(m => /\p{Extended_Pictographic}/u.test(m.subject + m.body)), 'mail bez emoji');
+        macro.quarter = 50 + 10; pruneSectorShocks(); assertEq(sectorShocks.filter(x => x.lineId === 'swan:pandemic').length, 0, 'szoki wygasają');
+        processBlackSwansQuarterly(); assertEq(blackSwanState.active, null, 'baner wygasa');
+        const real = startBlackSwan; let n = 0; startBlackSwan = () => { n++; return {}; };
+        try {
+            for (let run = 0; run < 20; run++) {
+                blackSwanState = createBlackSwanState(); n = 0; for (let q = 0; q <= 26; q++) { macro.quarter = q; processBlackSwansQuarterly(); } assertEq(n, 0, 'gra 6,5-letnia bez łabędzi');
+                blackSwanState = createBlackSwanState(); n = 0; for (let q = 0; q <= 200; q++) { macro.quarter = q; processBlackSwansQuarterly(); } assert(n >= 1 && n <= 3, `50 lat: ${n}`);
+            }
+        } finally { startBlackSwan = real; resetCrises(); }
+    });
     test('D6: raport dekady co 10 lat z kompletem pól, 3 raporty po 30 latach, ≤ 2 KB na dekadę; wiadomość Kroniki Rynku w TeamedUP!, Historia w Rankingu', () => {
         const list = Array.from({ length: 6 }, (_, i) => { const c = makeCompany(`H${i}`); c.price = 100; c.totalShares = 1e5; return c; });
         resetWorld(list); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' }); mailbox = createMailbox(); macro.quarter = 0; decadeState = createDecadeState();

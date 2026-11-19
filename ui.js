@@ -9620,6 +9620,21 @@ function showCrisisBanner(line, stage) {
     el.classList.remove('is-anim'); void el.offsetWidth; el.classList.add('is-anim'); // animacja od nowa przy każdym etapie
     return el;
 }
+/** 0.18.8 D5: wariant banera kryzysu „Czarny łabędź” — typ, kraje, linia, czas trwania (ekran 5 listy designu czeka na makietę). */
+function showBlackSwanBanner(swan) {
+    if (typeof document === 'undefined' || !swan) return null;
+    let el = document.getElementById('crisis-banner');
+    if (!el) { el = document.createElement('div'); el.id = 'crisis-banner'; el.className = 'crisis-banner'; el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite'); document.body.appendChild(el); }
+    el.dataset.line = 'swan'; el.dataset.stage = swan.positive ? 'positive' : 'swan'; el.hidden = false;
+    const countries = swan.countries.map(c => COUNTRY_DEFS?.[c]?.name || c);
+    el.innerHTML = `<svg class="crisis-banner-chart" viewBox="0 0 64 32" aria-hidden="true"><polyline points="${swan.positive ? '2,28 14,24 22,25 32,16 40,18 50,8 62,4' : '2,6 14,9 22,7 32,22 40,20 50,27 62,28'}"/></svg>
+        <div class="crisis-banner-text"><strong>${uiIcon('alert', 16)} Czarny łabędź: ${escapeHtml(swan.name)}</strong>
+        <span class="crisis-banner-stage">${countries.length ? `Kraje: Polska, ${escapeHtml(countries.join(', '))}` : 'Cały rynek'}${swan.line ? ` · linia: ${escapeHtml(CRISIS_LINES[swan.line]?.name || swan.line)}` : ''} · ok. ${swan.untilQ - swan.q} kw.</span>
+        <span class="crisis-banner-hint">Co to znaczy dla Ciebie: ${swan.positive ? 'wybrane sektory drożeją, klienci chętniej wpłacają.' : 'stopy procentowe i zaufanie klientów się zmieniają, część sektorów mocno traci.'}</span></div>
+        <button type="button" class="btn-ghost-icon crisis-banner-close" aria-label="Zamknij baner kryzysu" onclick="closeCrisisBanner()">${uiIcon('zamknij', 16)}</button>`;
+    el.classList.remove('is-anim'); void el.offsetWidth; el.classList.add('is-anim');
+    return el;
+}
 function closeCrisisBanner() { const el = document.getElementById('crisis-banner'); if (el) el.hidden = true; }
 
 
