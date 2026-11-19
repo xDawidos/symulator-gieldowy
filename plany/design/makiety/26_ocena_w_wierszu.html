@@ -262,7 +262,10 @@ tr.co td:first-child { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--tier) 
 /* ===== Blok do gry 1: znacznik oceny publicznej w wierszu spółki (E0a; projekt plany/design/26_ocena_w_wierszu.md) ===== */
 /* Tylko ocena publiczna (≥ A). Poniżej A znacznika nie ma: brak to też informacja, ale bez etykiety „brak”. */
 .rt { display: inline-flex; align-items: center; height: 18px; padding: 0 5px; border: 1px solid var(--ink-500); border-radius: 3px; font: 600 11px var(--font-family-mono); color: var(--color-text-secondary); flex: none; }
-.rt.is-top { border-color: var(--color-text-secondary); color: var(--color-text-primary); } /* AA i AAA: mocniejsza ramka, bez nowego koloru */
+.rt { --rt-c: var(--color-text-secondary); border-color: color-mix(in srgb, var(--rt-c) 60%, transparent); color: var(--rt-c); gap: 3px; }
+/* kolory ocen: poza zielenią/czerwienią (kurs) i bursztynem (R4); zawsze z literami */
+.rt.g-A, .rt.g-Ap { --rt-c: var(--blue-400); } .rt.g-AA { --rt-c: var(--teal-400); } .rt.g-AAA { --rt-c: var(--violet-400); }
+.rt .cnt { font-weight: 400; font-size: 10px; color: var(--color-text-muted); } /* liczba audytorów, gdy więcej niż 1 */
 
 /* ===== Blok do gry 2: kafelek „Ocena” w karcie spółki obcej (jak w karcie krajowej, ui.js renderCompanyCard) ===== */
 .card { max-width: 640px; border: 1px solid var(--ink-700); border-radius: 6px; background: var(--color-bg-surface); padding: 14px 16px; }
@@ -275,6 +278,12 @@ tr.co td:first-child { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--tier) 
 .kpi > strong { font-weight: 600; }
 .kpi > small { display: block; font-size: 12px; color: var(--color-text-muted); }
 .kpi.is-rating strong { font: 600 18px var(--font-family-mono); }
+.rl { margin: 4px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.rl li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 8px; align-items: baseline; font-size: 12px; }
+.rl li > span:first-child { color: var(--color-text-secondary); }
+.rl li small { grid-column: 1 / -1; color: var(--color-text-muted); }
+.kpi.is-rating { grid-column: span 2; }
+@media (max-width: 640px) { .kpi.is-rating { grid-column: auto; } }
 .kpi.is-none strong { font: 400 13px var(--font-family-sans); color: var(--color-text-secondary); }
 </style></head><body>
 <!-- KOPIA img/ikony/sprite.svg -->
@@ -438,26 +447,27 @@ tr.co td:first-child { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--tier) 
 
 
 <h1 class="frame-title">1. Znacznik oceny w wierszu listy spółek</h1>
-<p class="frame-sub">Mały znacznik przy nazwie, tylko dla oceny publicznej (A i wyżej). Oceny poniżej A są ukryte jak dziś, więc spółki z nimi nie mają znacznika. Kolor zostaje neutralny: ocena to fakt, nie „dobrze/źle” (zielony i czerwony są dla zmian kursu).</p>
+<p class="frame-sub">Mały znacznik przy nazwie, tylko dla oceny publicznej (A i wyżej). Oceny poniżej A są ukryte jak dziś, więc spółki z nimi nie mają znacznika. Kolor według oceny: A i A+ niebieski, AA morski, AAA fioletowy (bez zieleni i czerwieni kursu, bez bursztynu). Przy kilku audytorach znacznik pokazuje ocenę główną (środkową) i liczbę ocen; pełna lista w karcie spółki.</p>
 <div class="wrap"><table><caption class="sr">Spółki na giełdach Rubinowej, Platynowej i Złotej</caption>
   <thead><tr><th>Ticker</th><th>Spółka</th><th class="r">Kurs</th><th class="r">Zmiana</th><th class="r hide-sm">Masz</th></tr></thead>
   <tbody id="rows"></tbody></table></div>
 
 <h1 class="frame-title">2. Kafelek „Ocena” w karcie spółki obcej</h1>
-<p class="frame-sub">Ten sam kafelek co w karcie spółki krajowej: ocena dużą czcionką, audytor i ważność. Bez oceny publicznej: zdanie zamiast pustego pola.</p>
+<p class="frame-sub">Kafelek „Oceny”: ocena główna dużą czcionką i lista audytorów z ich oceną i ważnością. Audytor może mieć własną skalę (np. punkty 0–100). Bez oceny publicznej: krótkie zdanie.</p>
 <div class="wrap" style="display:grid;gap:16px">
   <section class="card" aria-labelledby="c1"><header><h3 id="c1">Nordhamn Steel</h3><span class="tk">NRDS</span><span class="flag">Szwecja, Giełda Platynowa (Sztokholm)</span></header>
-    <div class="kpis"><div class="kpi is-rating"><span>Ocena</span><strong aria-describedby="r1">AA</strong><small id="r1">Audyt: Nordic Rating, ważna do R6 kw.2</small></div><div class="kpi"><span>Kapitalizacja</span><strong class="n">41,2 mld SEK</strong><small>≈ 15,3 mld PLN</small></div><div class="kpi"><span>Kurs</span><strong class="n">218,40 SEK</strong><small class="up">▲ +1,4%</small></div></div></section>
+    <div class="kpis"><div class="kpi is-rating"><span>Oceny</span><strong aria-describedby="r1"><span class="rt g-AA" style="font-size:16px;height:26px;padding:0 8px">AA</span></strong><small id="r1">ocena główna z 3 audytorów</small>
+      <ul class="rl" aria-label="Oceny audytorów"><li><span>Nordic Rating</span><span class="rt g-AAA">AAA</span><small>ważna do R6 kw.2</small></li><li><span>Baltic Credit</span><span class="rt g-AA">AA</span><small>ważna do R6 kw.1</small></li><li><span>Scoreline</span><span class="rt g-AA" title="Skala punktowa 0–100; 90 odpowiada AA">90/100</span><small>skala punktowa, ważna do R5 kw.4</small></li></ul></div><div class="kpi"><span>Kapitalizacja</span><strong class="n">41,2 mld SEK</strong><small>≈ 15,3 mld PLN</small></div><div class="kpi"><span>Kurs</span><strong class="n">218,40 SEK</strong><small class="up">▲ +1,4%</small></div></div></section>
   <section class="card" aria-labelledby="c2"><header><h3 id="c2">Brno Chemie</h3><span class="tk">BRCH</span><span class="flag">Czechy, Giełda Srebrna (Praga)</span></header>
-    <div class="kpis"><div class="kpi is-none"><span>Ocena</span><strong>Brak oceny publicznej</strong><small>Ocena poniżej A albo brak audytu. Publiczne są oceny od A.</small></div><div class="kpi"><span>Kapitalizacja</span><strong class="n">2,8 mld CZK</strong><small>≈ 0,5 mld PLN</small></div><div class="kpi"><span>Kurs</span><strong class="n">412,00 CZK</strong><small class="down">▼ −0,8%</small></div></div></section>
+    <div class="kpis"><div class="kpi is-none"><span>Ocena</span><strong>Brak oceny publicznej</strong></div><div class="kpi"><span>Kapitalizacja</span><strong class="n">2,8 mld CZK</strong><small>≈ 0,5 mld PLN</small></div><div class="kpi"><span>Kurs</span><strong class="n">412,00 CZK</strong><small class="down">▼ −0,8%</small></div></div></section>
 </div>
 
 <script>
 const R = [
-  ['ruby', 'Giełda Rubinowa', [['BRST', 'Bractwo Stali', 'Przemysł', 'AA', '1 612,00', 0.9, 40], ['WSB', 'Wawelski Bank', 'Finanse', 'A+', '688,20', -0.4, 0]]],
-  ['platinum', 'Giełda Platynowa', [['HKT', 'Huta Katowice', 'Przemysł', 'A', '412,30', 1.2, 3], ['PEN', 'Polska Energia', 'Energia', null, '388,10', -0.2, 0]]],
-  ['gold', 'Giełda Złota', [['BDMX', 'Budimix', 'Budownictwo', null, '451,00', 0.3, 0], ['NRL', 'NeuroLab', 'Technologia', 'A', '205,40', 2.8, 12]]],
+  ['ruby', 'Giełda Rubinowa', [['BRST', 'Bractwo Stali', 'Przemysł', ['AA', 3], '1 612,00', 0.9, 40], ['WSB', 'Wawelski Bank', 'Finanse', ['A+', 1], '688,20', -0.4, 0]]],
+  ['platinum', 'Giełda Platynowa', [['HKT', 'Huta Katowice', 'Przemysł', ['A', 2], '412,30', 1.2, 3], ['PEN', 'Polska Energia', 'Energia', null, '388,10', -0.2, 0]]],
+  ['gold', 'Giełda Złota', [['BDMX', 'Budimix', 'Budownictwo', null, '451,00', 0.3, 0], ['NRL', 'NeuroLab', 'Technologia', ['A', 1], '205,40', 2.8, 12]]],
 ];
-document.getElementById('rows').innerHTML = R.map(([t, name, list]) => `<tr class="ex t-${t}"><th colspan="5" scope="colgroup">${name}</th></tr>` + list.map(([tk, nm, sec, rt, px, ch, mine]) => `<tr class="co t-${t}"><td class="tk">${tk}</td><td><span class="nm"><b>${nm}</b>${rt ? `<span class="rt${['AA', 'AAA'].includes(rt) ? ' is-top' : ''}" title="Ocena audytora ${rt}">${rt}<span class="sr">: ocena audytora</span></span>` : ''}<span class="tag hide-sm">${sec}</span></span></td><td class="r n">${px}</td><td class="r n ${ch > 0 ? 'up' : 'down'}">${ch > 0 ? '▲ +' : '▼ −'}${Math.abs(ch).toFixed(1).replace('.', ',')}%</td><td class="r n hide-sm">${mine || '—'}</td></tr>`).join('')).join('');
+document.getElementById('rows').innerHTML = R.map(([t, name, list]) => `<tr class="ex t-${t}"><th colspan="5" scope="colgroup">${name}</th></tr>` + list.map(([tk, nm, sec, rt, px, ch, mine]) => `<tr class="co t-${t}"><td class="tk">${tk}</td><td><span class="nm"><b>${nm}</b>${rt ? `<span class="rt g-${rt[0].replace('+', 'p')}" title="Ocena główna ${rt[0]}${rt[1] > 1 ? ` z ${rt[1]} audytorów` : ''}">${rt[0]}${rt[1] > 1 ? `<span class="cnt" aria-hidden="true">×${rt[1]}</span>` : ''}<span class="sr">: ocena audytora${rt[1] > 1 ? `, główna z ${rt[1]}` : ''}</span></span>` : ''}<span class="tag hide-sm">${sec}</span></span></td><td class="r n">${px}</td><td class="r n ${ch > 0 ? 'up' : 'down'}">${ch > 0 ? '▲ +' : '▼ −'}${Math.abs(ch).toFixed(1).replace('.', ',')}%</td><td class="r n hide-sm">${mine || '—'}</td></tr>`).join('')).join('');
 </script>
 </body></html>

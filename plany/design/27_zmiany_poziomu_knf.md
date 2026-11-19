@@ -7,7 +7,7 @@ Makieta: [makiety/27_zmiany_poziomu_knf.html](makiety/27_zmiany_poziomu_knf.html
 |---|---|---|
 | **Gazeta Ekonomiczna** (Poczta, jak dziś mail o stopach) | jeden wpis na kwartał „Przegląd poziomów giełd: N zmian”; najwyżej 6 zmian z opisem (spółka, poziom → poziom, jedno zdanie dlaczego), reszta jednym zdaniem; przy spółkach, które masz: „masz 40 akcji” bursztynem | `article.mail[aria-labelledby]`, `.chg.is-up/.is-down/.is-diamond` (ikona `faza-hossa` / `faza-bessa` / `diament` / `blokada` dla spadku po utracie oceny), `.lvl.t-*` (poziom słowem w kolorze metalu), `.mine` |
 | **Mail do posiadacza** (Poczta, od biura maklerskiego) | tylko gdy fundusz albo konto prywatne ma akcje; ile masz, dlaczego awans, czego się spodziewać („fundusze indeksowe zwykle kupują przez 1–2 tygodnie; kurs może wzrosnąć, ale nie musi”), przycisk „Pokaż kartę” | `.expect` (ikona `info`), `button` |
-| **Tied** | wpis analityka przy Diamentowej i dużych spadkach | wzór wpisu z makiety 23 §4 |
+| **Tied** | wpis analityka przy Diamentowej i dużych spadkach. Zmiany opisujemy „zmienia poziom z [stary] na [nowy]” (poprawka 2026-11-19, zamiast „traci Diamentową”) | wzór wpisu z makiety 23 §4 |
 | **Pasek wiadomości** | „Bractwo Stali na Diamentowej”, „Huta Katowice awansuje na Platynową” — ikona i słowo, **bez emoji** (dziś `📈 AWANS` w `finance.js:997`) | `.ticker span` |
 
 ## E0d: KNF zmienia zasady
