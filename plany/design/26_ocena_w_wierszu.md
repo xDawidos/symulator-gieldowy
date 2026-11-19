@@ -1,4 +1,4 @@
-# 26. Ocena w wierszu spółki i w karcie spółki obcej (E0a; ekran 17) — DO AKCEPTACJI
+# 26. Ocena w wierszu spółki i w karcie spółki obcej (E0a, E5; ekran 17) — DO AKCEPTACJI
 
 Makieta: [makiety/26_ocena_w_wierszu.html](makiety/26_ocena_w_wierszu.html) (samodzielna). Plan: 0.18.7 E0a „Ocena widoczna dla gracza”.
 
@@ -7,8 +7,10 @@ Makieta: [makiety/26_ocena_w_wierszu.html](makiety/26_ocena_w_wierszu.html) (sam
 |---|---|---|
 | Znacznik w wierszu | przy nazwie spółki mała ramka z oceną (A, A+, AA, AAA), **tylko ocena publiczna (≥ A)**. Poniżej A znacznika nie ma (oceny poniżej A są ukryte, seria 6.4) | `span.rt.g-*` z `title` i tekstem dla czytnika „: ocena audytora” (`.sr`) |
 | Kolor (poprawka 2026-11-19) | A i A+ niebieski (`--blue-400`), AA morski (`--teal-400`), AAA fioletowy (`--violet-400`); zawsze z literami. Bez zieleni i czerwieni (kurs) i bez bursztynu (R4) | `.rt.g-A/.g-Ap/.g-AA/.g-AAA` (`--rt-c`) |
-| Kilku audytorów (poprawka 2026-11-19) | znacznik pokazuje ocenę główną i liczbę ocen („AA ×3”); czytnik: „ocena audytora, główna z 3” | `.rt .cnt[aria-hidden]` |
-| Kafelek „Oceny” w karcie spółki (krajowej i obcej) | ocena główna dużą czcionką + „ocena główna z 3 audytorów” + lista: audytor, jego ocena w kolorze, ważność. Audytor może mieć własną skalę, np. punkty 0–100 („90/100”, z podpowiedzią „90 odpowiada AA”) | `.kpi.is-rating`, `ul.rl[aria-label] > li` |
+| Kilku audytorów (E5, 2026-11-19) | znacznik pokazuje ocenę główną i „+2” (ile innych ocen); czytnik: „ocena główna, oraz 2 inne oceny” | `.rt .cnt[aria-hidden]` |
+| Karta spółki (krajowej i obcej) | kafelek „Ocena główna” (+ „środkowa z 4 ocen”) i pod kafelkami tabela „Oceny audytorów”: audytor, **ocena w jego skali**, **odpowiednik na skali wspólnej** (kolorowy znacznik), data wystawienia, ważna do | `table.rl` z `caption`, `th[scope=col]`; data wystawienia `.hide-sm` na telefonie |
+| Skale audytorów (E5, tylko wygląd) | litery (AAA), punkty 0–100 (95/100), gwiazdki 1–5 (★★★★, piąta przygaszona; czytnik „4 z 5 gwiazdek”), klasy I–V (klasa II). Gra liczy na jednej skali | `SCALES` w makiecie |
+| Podpowiedź przeliczenia | ocena w skali audytora to przycisk; po najechaniu, fokusie albo dotknięciu: nazwa skali i przeliczenie, np. „Skala punktowa 0–100: 95–100 = AAA, 88–94 = AA, 80–87 = A, poniżej 80 niepubliczna” | `button.rs[aria-describedby]` + `span.rs-tip[role=tooltip]`, `data-open`, Esc zamyka |
 | Bez oceny publicznej | samo „Brak oceny publicznej”, bez wyjaśnienia (poprawka 2026-11-19) | `.kpi.is-none` |
 
 Telefon: znacznik zostaje (przed tagiem branży, który się chowa), nazwa skraca się wielokropkiem.

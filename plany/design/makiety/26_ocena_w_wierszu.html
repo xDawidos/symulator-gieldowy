@@ -265,7 +265,7 @@ tr.co td:first-child { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--tier) 
 .rt { --rt-c: var(--color-text-secondary); border-color: color-mix(in srgb, var(--rt-c) 60%, transparent); color: var(--rt-c); gap: 3px; }
 /* kolory ocen: poza zielenią/czerwienią (kurs) i bursztynem (R4); zawsze z literami */
 .rt.g-A, .rt.g-Ap { --rt-c: var(--blue-400); } .rt.g-AA { --rt-c: var(--teal-400); } .rt.g-AAA { --rt-c: var(--violet-400); }
-.rt .cnt { font-weight: 400; font-size: 10px; color: var(--color-text-muted); } /* liczba audytorów, gdy więcej niż 1 */
+.rt .cnt { font-weight: 400; font-size: 10px; color: var(--color-text-muted); } /* „+2” = jeszcze 2 inne oceny (lista w karcie spółki) */
 
 /* ===== Blok do gry 2: kafelek „Ocena” w karcie spółki obcej (jak w karcie krajowej, ui.js renderCompanyCard) ===== */
 .card { max-width: 640px; border: 1px solid var(--ink-700); border-radius: 6px; background: var(--color-bg-surface); padding: 14px 16px; }
@@ -278,12 +278,17 @@ tr.co td:first-child { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--tier) 
 .kpi > strong { font-weight: 600; }
 .kpi > small { display: block; font-size: 12px; color: var(--color-text-muted); }
 .kpi.is-rating strong { font: 600 18px var(--font-family-mono); }
-.rl { margin: 4px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; }
-.rl li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 8px; align-items: baseline; font-size: 12px; }
-.rl li > span:first-child { color: var(--color-text-secondary); }
-.rl li small { grid-column: 1 / -1; color: var(--color-text-muted); }
-.kpi.is-rating { grid-column: span 2; }
-@media (max-width: 640px) { .kpi.is-rating { grid-column: auto; } }
+.rl { margin-top: 12px; border: 0; background: none; }
+.rl caption { text-align: left; padding: 0 0 4px; font-size: 12px; font-weight: 600; color: var(--color-text-muted); }
+.rl th, .rl td { padding: 6px 8px 6px 0; }
+.rl td { color: var(--color-text-secondary); }
+/* ocena w skali audytora: przycisk z podpowiedzią przeliczenia (wzór z makiet 18 i 25) */
+.rs-wrap { position: relative; display: inline-block; }
+.rs { padding: 0; border: 0; background: none; color: var(--color-text-primary); font: 600 13px var(--font-family-mono); cursor: help; }
+.rs-tip { position: absolute; left: 0; top: calc(100% + 4px); z-index: 4; width: max-content; max-width: min(280px, calc(100vw - 48px)); padding: 8px 10px; border: 1px solid var(--ink-600); border-radius: 6px; background: var(--ink-950); color: var(--color-text-primary); font: 400 12px var(--font-family-sans); box-shadow: 0 8px 20px rgba(0, 0, 0, .5); visibility: hidden; white-space: normal; }
+.rs-tip b { display: block; margin-bottom: 2px; }
+.rs:hover + .rs-tip, .rs:focus-visible + .rs-tip, .rs[data-open] + .rs-tip { visibility: visible; }
+.stars { letter-spacing: 1px; }
 .kpi.is-none strong { font: 400 13px var(--font-family-sans); color: var(--color-text-secondary); }
 </style></head><body>
 <!-- KOPIA img/ikony/sprite.svg -->
@@ -447,17 +452,17 @@ tr.co td:first-child { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--tier) 
 
 
 <h1 class="frame-title">1. Znacznik oceny w wierszu listy spółek</h1>
-<p class="frame-sub">Mały znacznik przy nazwie, tylko dla oceny publicznej (A i wyżej). Oceny poniżej A są ukryte jak dziś, więc spółki z nimi nie mają znacznika. Kolor według oceny: A i A+ niebieski, AA morski, AAA fioletowy (bez zieleni i czerwieni kursu, bez bursztynu). Przy kilku audytorach znacznik pokazuje ocenę główną (środkową) i liczbę ocen; pełna lista w karcie spółki.</p>
+<p class="frame-sub">Mały znacznik przy nazwie, tylko dla oceny publicznej (A i wyżej). Oceny poniżej A są ukryte jak dziś, więc spółki z nimi nie mają znacznika. Kolor według oceny: A i A+ niebieski, AA morski, AAA fioletowy (bez zieleni i czerwieni kursu, bez bursztynu). Przy kilku audytorach znacznik pokazuje ocenę główną (środkową) i „+2”, czyli ile jest innych ocen; pełna lista w karcie spółki.</p>
 <div class="wrap"><table><caption class="sr">Spółki na giełdach Rubinowej, Platynowej i Złotej</caption>
   <thead><tr><th>Ticker</th><th>Spółka</th><th class="r">Kurs</th><th class="r">Zmiana</th><th class="r hide-sm">Masz</th></tr></thead>
   <tbody id="rows"></tbody></table></div>
 
-<h1 class="frame-title">2. Kafelek „Ocena” w karcie spółki obcej</h1>
-<p class="frame-sub">Kafelek „Oceny”: ocena główna dużą czcionką i lista audytorów z ich oceną i ważnością. Audytor może mieć własną skalę (np. punkty 0–100). Bez oceny publicznej: krótkie zdanie.</p>
+<h1 class="frame-title">2. Oceny w karcie spółki obcej</h1>
+<p class="frame-sub">Ocena główna w kafelku i pod spodem tabela ocen: audytor, ocena w jego skali (litery, punkty, gwiazdki, klasy), odpowiednik na skali wspólnej, data wystawienia i ważność. Najedź, przejdź Tabem albo dotknij oceny, żeby zobaczyć przeliczenie skali. Skale są tylko wyglądem: gra liczy na jednej skali.</p>
 <div class="wrap" style="display:grid;gap:16px">
   <section class="card" aria-labelledby="c1"><header><h3 id="c1">Nordhamn Steel</h3><span class="tk">NRDS</span><span class="flag">Szwecja, Giełda Platynowa (Sztokholm)</span></header>
-    <div class="kpis"><div class="kpi is-rating"><span>Oceny</span><strong aria-describedby="r1"><span class="rt g-AA" style="font-size:16px;height:26px;padding:0 8px">AA</span></strong><small id="r1">ocena główna z 3 audytorów</small>
-      <ul class="rl" aria-label="Oceny audytorów"><li><span>Nordic Rating</span><span class="rt g-AAA">AAA</span><small>ważna do R6 kw.2</small></li><li><span>Baltic Credit</span><span class="rt g-AA">AA</span><small>ważna do R6 kw.1</small></li><li><span>Scoreline</span><span class="rt g-AA" title="Skala punktowa 0–100; 90 odpowiada AA">90/100</span><small>skala punktowa, ważna do R5 kw.4</small></li></ul></div><div class="kpi"><span>Kapitalizacja</span><strong class="n">41,2 mld SEK</strong><small>≈ 15,3 mld PLN</small></div><div class="kpi"><span>Kurs</span><strong class="n">218,40 SEK</strong><small class="up">▲ +1,4%</small></div></div></section>
+    <div class="kpis"><div class="kpi"><span>Ocena główna</span><strong><span class="rt g-AA" style="font-size:16px;height:26px;padding:0 8px">AA</span></strong><small>środkowa z 4 ocen</small></div><div class="kpi"><span>Kapitalizacja</span><strong class="n">41,2 mld SEK</strong><small>≈ 15,3 mld PLN</small></div><div class="kpi"><span>Kurs</span><strong class="n">218,40 SEK</strong><small class="up">▲ +1,4%</small></div></div>
+    <table class="rl"><caption>Oceny audytorów</caption><thead><tr><th scope="col">Audytor</th><th scope="col">Ocena</th><th scope="col">Skala wspólna</th><th scope="col" class="hide-sm">Wystawiona</th><th scope="col">Ważna do</th></tr></thead><tbody id="rl"></tbody></table></section>
   <section class="card" aria-labelledby="c2"><header><h3 id="c2">Brno Chemie</h3><span class="tk">BRCH</span><span class="flag">Czechy, Giełda Srebrna (Praga)</span></header>
     <div class="kpis"><div class="kpi is-none"><span>Ocena</span><strong>Brak oceny publicznej</strong></div><div class="kpi"><span>Kapitalizacja</span><strong class="n">2,8 mld CZK</strong><small>≈ 0,5 mld PLN</small></div><div class="kpi"><span>Kurs</span><strong class="n">412,00 CZK</strong><small class="down">▼ −0,8%</small></div></div></section>
 </div>
@@ -468,6 +473,13 @@ const R = [
   ['platinum', 'Giełda Platynowa', [['HKT', 'Huta Katowice', 'Przemysł', ['A', 2], '412,30', 1.2, 3], ['PEN', 'Polska Energia', 'Energia', null, '388,10', -0.2, 0]]],
   ['gold', 'Giełda Złota', [['BDMX', 'Budimix', 'Budownictwo', null, '451,00', 0.3, 0], ['NRL', 'NeuroLab', 'Technologia', ['A', 1], '205,40', 2.8, 12]]],
 ];
-document.getElementById('rows').innerHTML = R.map(([t, name, list]) => `<tr class="ex t-${t}"><th colspan="5" scope="colgroup">${name}</th></tr>` + list.map(([tk, nm, sec, rt, px, ch, mine]) => `<tr class="co t-${t}"><td class="tk">${tk}</td><td><span class="nm"><b>${nm}</b>${rt ? `<span class="rt g-${rt[0].replace('+', 'p')}" title="Ocena główna ${rt[0]}${rt[1] > 1 ? ` z ${rt[1]} audytorów` : ''}">${rt[0]}${rt[1] > 1 ? `<span class="cnt" aria-hidden="true">×${rt[1]}</span>` : ''}<span class="sr">: ocena audytora${rt[1] > 1 ? `, główna z ${rt[1]}` : ''}</span></span>` : ''}<span class="tag hide-sm">${sec}</span></span></td><td class="r n">${px}</td><td class="r n ${ch > 0 ? 'up' : 'down'}">${ch > 0 ? '▲ +' : '▼ −'}${Math.abs(ch).toFixed(1).replace('.', ',')}%</td><td class="r n hide-sm">${mine || '—'}</td></tr>`).join('')).join('');
+document.getElementById('rows').innerHTML = R.map(([t, name, list]) => `<tr class="ex t-${t}"><th colspan="5" scope="colgroup">${name}</th></tr>` + list.map(([tk, nm, sec, rt, px, ch, mine]) => `<tr class="co t-${t}"><td class="tk">${tk}</td><td><span class="nm"><b>${nm}</b>${rt ? `<span class="rt g-${rt[0].replace('+', 'p')}" title="Ocena główna ${rt[0]}${rt[1] > 1 ? ` z ${rt[1]} audytorów` : ''}">${rt[0]}${rt[1] > 1 ? `<span class="cnt" aria-hidden="true">+${rt[1] - 1}</span>` : ''}<span class="sr">: ocena główna${rt[1] > 1 ? `, oraz ${rt[1] - 1} inne oceny` : ''}</span></span>` : ''}<span class="tag hide-sm">${sec}</span></span></td><td class="r n">${px}</td><td class="r n ${ch > 0 ? 'up' : 'down'}">${ch > 0 ? '▲ +' : '▼ −'}${Math.abs(ch).toFixed(1).replace('.', ',')}%</td><td class="r n hide-sm">${mine || '—'}</td></tr>`).join('')).join('');
+
+/* oceny audytorów: [audytor, ocena w jego skali, skala wspólna, wystawiona, ważna do, [nazwa skali, przeliczenie]] */
+const SCALES = { lit: ['Skala literowa', 'AAA, AA, A, BBB… Litery jak na skali wspólnej.'], pkt: ['Skala punktowa 0–100', '95–100 = AAA, 88–94 = AA, 80–87 = A, poniżej 80 niepubliczna.'], gw: ['Gwiazdki 1–5', '5 gwiazdek = AAA, 4 = AA, 3 = A, mniej niepubliczna.'], kl: ['Klasy I–V', 'Klasa I = AAA, II = AA, III = A, IV i V niepubliczne.'] };
+const RL = [['Nordic Rating', 'AAA', 'lit', 'AAA', 'R5 kw.2', 'R6 kw.2'], ['Scoreline', '95/100', 'pkt', 'AAA', 'R5 kw.1', 'R6 kw.1'], ['Astra Ratings', '<span class="stars" aria-label="4 z 5 gwiazdek">★★★★<span aria-hidden="true" style="opacity:.25">★</span></span>', 'gw', 'AA', 'R4 kw.4', 'R5 kw.4'], ['Euro Audit', 'klasa II', 'kl', 'AA', 'R5 kw.3', 'R6 kw.3']];
+document.getElementById('rl').innerHTML = RL.map(([a, v, sc, c, from, to], i) => `<tr><td>${a}</td><td><span class="rs-wrap"><button type="button" class="rs" aria-describedby="rs-${i}">${v}</button><span class="rs-tip" role="tooltip" id="rs-${i}"><b>${SCALES[sc][0]}</b>${SCALES[sc][1]}</span></span></td><td><span class="rt g-${c}">${c}</span></td><td class="hide-sm n">${from}</td><td class="n">${to}</td></tr>`).join('');
+document.addEventListener('click', e => { const b = e.target.closest('.rs'); document.querySelectorAll('.rs[data-open]').forEach(x => x !== b && x.removeAttribute('data-open')); if (b) b.toggleAttribute('data-open'); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') document.querySelectorAll('.rs[data-open]').forEach(x => x.removeAttribute('data-open')); });
 </script>
 </body></html>
