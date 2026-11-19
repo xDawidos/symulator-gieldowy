@@ -668,6 +668,7 @@ function applySaveSnapshot(snapshot) {
         startNewCareer(snapshot.playerProfile || {});
     } else {
         playerProfile = snapshot.playerProfile;
+        if (typeof trimPlayerCv === 'function') trimPlayerCv(playerProfile); // 0.18.8 D1: stary zapis z długim CV
         playerFund = snapshot.playerFund;
         playerWallet = { ...createPlayerWallet(0), ...(snapshot.playerWallet || {}) };
         if (!isFiniteNumber(playerWallet.cash)) playerWallet.cash = 0;
@@ -1530,6 +1531,7 @@ function runQuarterlyTick() {
         advanceEconomyCycle(); // nowa faza koniunktury przed raportami
         advanceMacroQuarter(); // inflacja, bezrobocie, cykle sektorów, wybory (macro.js)
         if (typeof noteDecadeQuarter === 'function') runQuarterStep('noteDecadeQuarter', noteDecadeQuarter); // 0.18.8 D6: raport dekady
+        if (typeof trimPlayerCv === 'function') trimPlayerCv(); // 0.18.8 D1: CV 40 wpisów + liczniki
         processCityQuarterly(); // festyn raz w roku (city.js)
         applyCrowdingPressureToWeak(); // D2: nasycony rynek — słabe spółki tanieją szybciej
         if (typeof processIndexLaunchQuarterly === 'function') processIndexLaunchQuarterly(); // 0.16.1: Bank Centralny uruchamia SIG40 i BSIG80

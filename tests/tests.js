@@ -17785,6 +17785,14 @@ group('0.18.6 Porządki', () => {
 });
 
 group('0.18.8 Długa gra', () => {
+    test('D1: CV — 40 ostatnich wpisów, starsze jako liczniki; stary zapis z długim CV wczytuje się przycięty', () => {
+        resetWorld([makeCompany('CV1')]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+        playerProfile.cv = Array.from({ length: 130 }, (_, i) => ({ type: i % 2 ? 'training' : 'promotion', text: `wpis ${i}` }));
+        assertEq(trimPlayerCv(), 90, 'przycięte 90'); assertEq(playerProfile.cv.length, 40, '40 wpisów'); assertEq(playerProfile.cv[39].text, 'wpis 129', 'najnowsze zostają');
+        assertEq(playerProfile.cvCounts.training + playerProfile.cvCounts.promotion, 90, 'liczniki według typu');
+        const long = { cv: Array.from({ length: 70 }, (_, i) => ({ type: 'milestone', text: `m${i}` })) }; trimPlayerCv(long); assert(long.cv.length === 40 && long.cvCounts.milestone === 30, 'przycinanie profilu ze starego zapisu');
+        playerProfile.cv = Array.from({ length: 60 }, (_, i) => ({ type: 'training', text: `s${i}` })); delete playerProfile.cvCounts; const snap = JSON.parse(JSON.stringify(buildSaveSnapshot())); applySaveSnapshot(snap); assert(playerProfile.cv.length === 40 && playerProfile.cvCounts.training === 20, 'wczytanie zapisu przycina CV');
+    });
     test('D5: czarny łabędź poza budżetem linii — wymuszony uruchamia linię, stopy, zaufanie i szoki sektorów, potem wraca do normy; harmonogram: 0 w 6,5 roku, 1–3 w 50 latach', () => {
         resetWorld([makeCompany('SW1')]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' }); resetCrises(); macro.quarter = 50; mailbox = createMailbox();
         const used0 = [...crisisState.used], last0 = crisisState.lastEventQ, trust0 = playerFund.trust;

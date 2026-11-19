@@ -3722,6 +3722,15 @@ const LEGACY_CLIENT_TYPES = { retiree: 'careful', saver: 'miser', speculator: 's
 
 const JU_MARKET_MAX_PREMIUM = 0.10;
 const JU_SELL_ORDER_PATIENCE = 2;          // tygodni bez kupca → umorzenie
+/** 0.18.8 D1: CV — szczegół 40 ostatnich wpisów, starsze jako liczniki według typu (`cvCounts`); podsumowania dekad są w history.js. */
+const CV_RULES = { keep: 40 };
+function trimPlayerCv(profile = playerProfile) {
+    if (!profile || !Array.isArray(profile.cv) || profile.cv.length <= CV_RULES.keep) return 0;
+    const old = profile.cv.splice(0, profile.cv.length - CV_RULES.keep);
+    profile.cvCounts = profile.cvCounts || {};
+    for (const e of old) profile.cvCounts[e.type || 'inne'] = (profile.cvCounts[e.type || 'inne'] || 0) + 1;
+    return old.length;
+}
 const JU_TAPE_LIMIT = 40;
 const JU_HISTORY_WEEKS = 8;
 const CLIENT_HISTORY_LIMIT = 10;

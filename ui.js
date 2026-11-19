@@ -7341,8 +7341,11 @@ function renderCvPanel() {
         return `<span class="cv-medal cv-medal-${medal.id}" title="${escapeHtml(stripEmoji(skills[id].name))} — poziom ${getSkillLevel(id)}">${uiIcon('medal', 14)}<span class="sr-only">${medal.label}: </span>${escapeHtml(stripEmoji(skills[id].name))}</span>`;
     }).join('') || '<span class="fund-muted">Brak ukończonych szkoleń.</span>';
 
+    const CV_TYPE_LABELS = { promotion: 'awanse', demotion: 'degradacje', training: 'szkolenia', milestone: 'kamienie milowe', compliance: 'kontrole' };
+    const older = Object.entries(playerProfile?.cvCounts || {}).filter(([, n]) => n > 0); // 0.18.8 D1: starsze wpisy CV jako liczniki
     const history = (playerProfile?.cv || []).slice(-8).reverse()
-        .map(entry => `<li class="cv-entry-${entry.type}">${escapeHtml(entry.text)}</li>`).join('');
+        .map(entry => `<li class="cv-entry-${entry.type}">${escapeHtml(entry.text)}</li>`).join('')
+        + (older.length ? `<li class="fund-muted">Starsze wpisy: ${older.map(([t, n]) => `${CV_TYPE_LABELS[t] || t} ${n}`).join(', ')}. Podsumowania dekad: Ranking → Historia.</li>` : '');
 
     const cards = trainings.map(id => {
         const skill = skills[id];
