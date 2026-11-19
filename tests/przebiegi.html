@@ -386,6 +386,7 @@ PRESETS['ceo'] = PRESETS['gracz-aktywny'] + 'playerProfile.positionId = "ceo";';
 // =================================================================================
 // 0.17.1 T0: presety wielkich testów. Każdy zapisuje wynik w window.__t171 (pole s017.t171).
 // =================================================================================
+PRESETS['automaty'] = PRESETS['gracz-aktywny'] + `(function () { if (!playerProfile) return; playerProfile.mentor = { ...(playerProfile.mentor || {}), certificates: { ...(playerProfile.mentor?.certificates || {}), risk: 0, analyst: 0 } }; const a = getAutomation(); a.deposits.on = a.tbills.on = a.sector.on = true; playerHasTBillAccess = true; })();`; // 0.18.8 D4: wszystkie automaty włączone
 PRESETS['bierny'] = ''; // gracz nic nie robi: baza GIG, liczby spółek i limitów
 PRESETS['wejscia'] = ''; // to samo co bierny; miary debiutów, limitu spółek i koncentracji są w sondzie P0156
 // Dźwignia: forex 1:10 do limitu 3 × aktywa i zastaw wszystkich akcji w lombardzie. Mierzy margin call, zamknięcia automatyczne,
@@ -1529,6 +1530,25 @@ async function loadFrame() {
     return w;
 }
 
+// 0.18.8 D0: PROBE_LONG — co 5 lat (20 kw.): bajty zapisu według sekcji, pola spółek w pamięci, sterta JS; fundusz wobec rynku (aktywa / kapitalizacja, największy udział w free floacie, czynnik pojemności). Wynik: pole plong.
+const PROBE_LONG = `(function () {
+    const s = window.__sim, L = s.plong = { samples: [] }; let lastQ = null;
+    const len = v => { try { return JSON.stringify(v ?? null).length; } catch (e) { return -1; } };
+    const take = () => {
+        const q = macro.quarter; if (lastQ !== null && q - lastQ < 20) return; lastQ = q;
+        const snap = typeof buildSaveSnapshot === 'function' ? buildSaveSnapshot({ compact: 0 }) : {};
+        const sec = {}; for (const k of Object.keys(snap)) sec[k] = len(snap[k]);
+        const mem = {}; for (const x of stocks) for (const k of Object.keys(x)) { const v = x[k]; if (v && typeof v === 'object') mem[k] = (mem[k] || 0) + len(v); }
+        const caps = stocks.filter(x => !x.assetType && !x.isBankrupt).reduce((a, x) => a + x.price * (x.totalShares || 0), 0);
+        let maxFf = 0, maxFfSym = null; for (const [sym, p] of Object.entries(typeof playerPortfolio === 'object' ? playerPortfolio : {})) { const st = stocks.find(x => x.symbol === sym); if (!st || !(p?.shares > 0)) continue; const ff = Math.max(1, typeof getFreeFloatShares === 'function' ? getFreeFloatShares(st) : st.totalShares); if (p.shares / ff > maxFf) { maxFf = p.shares / ff; maxFfSym = sym; } }
+        const assets = typeof getFundAssets === 'function' ? getFundAssets() : 0;
+        L.samples.push({ q, save: len(snap), sec, mem: Object.entries(mem).sort((a, b) => b[1] - a[1]).slice(0, 15), heap: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e6) : null, stocks: stocks.length,
+            fund: { assets: Math.round(assets), caps: Math.round(caps), share: caps > 0 ? +(assets / caps).toFixed(5) : null, maxFf: +maxFf.toFixed(4), maxFfSym, capacity: typeof getFundCapacityFactor === 'function' ? +getFundCapacityFactor(assets).toFixed(3) : null, positions: Object.keys(typeof playerPortfolio === 'object' ? playerPortfolio : {}).length } });
+    };
+    const origSample = s.sample; s.sample = function () { const r = origSample.apply(this, arguments); try { take(); } catch (e) { L.err = String(e).slice(0, 200); } return r; };
+    const origFinish = s.finish; s.finish = function () { lastQ = null; try { take(); } catch (e) {} const r = origFinish.apply(this, arguments); r.plong = L; return r; };
+})();`;
+
 async function oneRun(index) {
     localStorage.setItem('gra_inwestycyjna_debug_mode', '1');
     localStorage.setItem('gra_inwestycyjna_skip_intro', '1');
@@ -1541,6 +1561,7 @@ async function oneRun(index) {
     w.eval(PROBE_0156);
     w.eval(PROBE_017);
     w.eval(PROBE_018);
+    w.eval(PROBE_LONG);
     const quarterMs = 300000 / SPEED;
     const startQ = w.eval('macro.quarter');
     w.eval('__sim.sample()');

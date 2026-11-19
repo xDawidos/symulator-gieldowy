@@ -1439,6 +1439,7 @@ function runWeeklyTick() {
         processFundWeekly();
         processFundPawnLoansWeekly(); // zastawy funduszy w lombardzie (finance.js)
         processFundDepositsWeekly(); // lokaty terminowe funduszu (finance.js)
+        if (typeof checkSectorConcentration === 'function') checkSectorConcentration(); // 0.18.8 D4: alert koncentracji sektora
         maintainStartupCount(); // inkubator: nowe startupy w czasie gry (startups.js)
         processPppWeekly(); // projekty miejskie PPP (city.js)
         processBridgeLoansWeekly(); // finansowanie pomostowe budów (finance.js)

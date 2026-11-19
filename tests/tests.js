@@ -1531,6 +1531,27 @@ group('Banki, lombard, obligacje, giełdy elitarne (etap E2)', () => {
         assert(!isEliteExchange(child.exchange), 'IPO na niższej giełdzie');
     });
 
+    test('0.18.8 D4: automaty — zapadła lokata wraca do najlepszego banku, oferta na bony nie przekracza limitu gotówki, alert sektora raz i ponownie po zejściu poniżej; zablokowane bez certyfikatu', () => {
+        const { a } = worldE2();
+        const bank = makeBank(a), bank2 = { ...bank, id: 'bankT2', name: 'Bank Lepszy', baseInterestRateMargin: bank.baseInterestRateMargin + 0.02, loanPortfolio: {} }; commercialBanks.push(bank2);
+        const auto = getAutomation(); auto.deposits.on = true; auto.tbills.on = true; auto.sector.on = true;
+        assert(!isAutomationOn('deposits'), 'bez certyfikatu zablokowany');
+        playerProfile.mentor = { ...(playerProfile.mentor || {}), certificates: { risk: 1, analyst: 1 } };
+        assert(isAutomationOn('deposits') && isAutomationOn('tbills') && isAutomationOn('sector'), 'po certyfikatach działają');
+        openFundDeposit(bank.id, 2000, 4);
+        for (let i = 0; i < 4; i++) processFundDepositsWeekly();
+        assert(playerFund.deposits.length === 1 && playerFund.deposits[0].bankId === bank2.id && playerFund.deposits[0].termWeeks === 4, 'odnowiona w banku z najwyższą stopą');
+        auto.deposits.minRate = 0.99; for (let i = 0; i < 4; i++) processFundDepositsWeekly(); assertEq(playerFund.deposits.length, 0, 'poniżej progu: bez odnowienia');
+        playerHasTBillAccess = true; currentTBillAuction = { quantityAvailable: 1e6, endTime: Infinity, bids: [] }; const cash = playerCash;
+        const bid = autoBidTBills(); assert(bid && bid.quantity * bid.price <= cash * auto.tbills.cashPct + 1e-6, 'oferta ≤ limit gotówki');
+        assertEq(autoBidTBills(), null, 'jedna oferta na aukcję'); currentTBillAuction = null;
+        playerPortfolio = { AAA: { shares: 100, avgPrice: 1 } }; mailbox = createMailbox();
+        assertEq(checkSectorConcentration().length, 1, 'alert przy przekroczeniu'); assertEq(checkSectorConcentration().length, 0, 'nie co tydzień');
+        playerPortfolio = {}; checkSectorConcentration(); playerPortfolio = { AAA: { shares: 100, avgPrice: 1 } };
+        assertEq(checkSectorConcentration().length, 1, 'ponownie po zejściu poniżej');
+        assert(auto.log.length <= 20 && auto.log.length >= 3, 'dziennik akcji');
+        playerPortfolio = {}; commercialBanks.length = 0;
+    });
     test('lokata funduszu: NAV bez zmian przy założeniu, odsetki co tydzień, wypłata w terminie, kara za zerwanie', () => {
         const { a } = worldE2();
         const bank = makeBank(a);

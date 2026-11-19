@@ -1243,6 +1243,7 @@ function triggerTBillAuctionEvent() {
         bids: []
     };
     logEvent(`🔔 Bank Centralny ogłasza aukcję ${quantity} bonów skarbowych! Aukcja trwa ${auctionDurationMinutes} min.`, 'market');
+    if (typeof autoBidTBills === 'function') autoBidTBills(); // 0.18.8 D4
     showToast(`🔔 Ogłoszono aukcję bonów skarbowych! Sprawdź Bank Centralny.`, 'default', 10000);
     
     // setTimeout(resolveTBillAuction, delay); // Usunięte - rozstrzygnięcie w pętli main.js

@@ -366,6 +366,7 @@ function processFundDepositsWeekly() {
         if (deposit.weeksLeft <= 0) {
             const payout = settleFundDeposit(deposit);
             logEvent(`🏦 Lokata w ${deposit.bankName} zapada: fundusz otrzymuje ${formatZl(payout, 2)} (odsetki ${formatZl(deposit.accrued, 2)}).`, 'review');
+            if (typeof autoRollDeposit === 'function') autoRollDeposit(deposit, payout); // 0.18.8 D4
         }
     }
 }

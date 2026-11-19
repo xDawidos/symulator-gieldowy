@@ -7289,7 +7289,23 @@ function renderSkillsPanel() {
     renderCvPanel();
 }
 
-let cvTab = 'cv'; // N1: 'cv' | 'academy'
+let cvTab = 'cv'; // N1: 'cv' | 'academy' | 'mentor' | 'automation' (0.18.8 D4)
+/** 0.18.8 D4: Akademia → Automaty (bez nowego okna; ekran 4 listy designu czeka na makietę): stan, parametry, warunek odblokowania, ostatnie 20 akcji. */
+function renderAutomationPanel() {
+    const a = getAutomation(); if (!a) return renderEmptyState({ icon: 'zegar', title: 'Brak profilu', text: 'Automaty działają po rozpoczęciu kariery.' });
+    const pct = v => formatNumberPl(v * 100, 1);
+    const field = (kind, key, label, value, step, max) => `<label class="fund-field">${label} <input type="number" inputmode="decimal" min="0" max="${max}" step="${step}" value="${pct(value).replace(',', '.')}" onchange="setAutomation('${kind}', { ${key}: Math.max(0, Math.min(${max}, Number(this.value) || 0)) / 100 }); renderCvPanel()"> %</label>`;
+    const card = (kind, desc, fields) => {
+        const unlocked = isAutomationUnlocked(kind), cert = MENTOR_TRACKS[AUTOMATION_UNLOCK[kind]]?.label || '';
+        return `<article class="bank-card mt-3"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon(unlocked ? 'zegar' : 'blokada', 20)}</span><div><h4>${AUTOMATION_LABELS[kind]}</h4><span class="bank-card-type">${unlocked ? (a[kind].on ? 'włączony' : 'wyłączony') : `po zdobyciu: ${escapeHtml(cert)}`}</span></div></header>
+            <p class="text-sm text-muted">${desc}</p>
+            ${unlocked ? `<label class="fund-field"><input type="checkbox" ${a[kind].on ? 'checked' : ''} onchange="setAutomation('${kind}', { on: this.checked }); renderCvPanel()"> Włączony</label>${fields}` : renderEmptyState({ icon: 'blokada', title: 'Zablokowany', text: `Zdobądź ${cert} u mentora.`, variant: 'locked' })}</article>`;
+    };
+    return card('deposits', 'Zapadła lokata wraca na ten sam okres do banku z najwyższą stopą. Te same zasady co przy ręcznej lokacie.', field('deposits', 'minRate', 'Minimalna stopa', a.deposits.minRate, 0.1, 20))
+        + card('tbills', 'Przy każdej aukcji bonów fundusz składa ofertę do limitu gotówki. Cena wynika z minimalnej rentowności.', field('tbills', 'cashPct', 'Limit gotówki', a.tbills.cashPct, 1, 100) + field('tbills', 'minYield', 'Minimalna rentowność', a.tbills.minYield, 0.1, 20))
+        + card('sector', 'Wiadomość, gdy jeden sektor przekroczy limit akcji funduszu. Bez automatycznej sprzedaży.', field('sector', 'limit', 'Limit sektora', a.sector.limit, 1, 100))
+        + `<h4 class="mt-3">Ostatnie akcje automatów</h4>${a.log.length ? `<ul class="text-sm">${a.log.map(e => `<li>${escapeHtml(formatQuarterDate(e.q))} · ${escapeHtml(AUTOMATION_LABELS[e.kind] || e.kind)}: ${escapeHtml(e.text)}</li>`).join('')}</ul>` : '<p class="text-sm text-muted">Na razie bez akcji.</p>'}`;
+}
 
 function setCvTab(tab) {
     cvTab = tab;
@@ -7301,9 +7317,13 @@ function renderCvPanel() {
     const money = document.getElementById('skills-modal-xp');
     if (!list) return;
     if (money) money.textContent = formatNumberPl(playerWallet.cash, 2);
-    const tabs = `<div class="bank-tabs" role="tablist"><button role="tab" aria-selected="${cvTab === 'cv'}" class="bank-tab-btn ${cvTab === 'cv' ? 'active' : ''}" onclick="setCvTab('cv')">CV i szkolenia</button><button role="tab" aria-selected="${cvTab === 'academy'}" class="bank-tab-btn ${cvTab === 'academy' ? 'active' : ''}" onclick="setCvTab('academy')">Akademia</button><button role="tab" aria-selected="${cvTab === 'mentor'}" class="bank-tab-btn ${cvTab === 'mentor' ? 'active' : ''}" onclick="setCvTab('mentor')">Mentor</button></div>`;
+    const tabs = `<div class="bank-tabs" role="tablist"><button role="tab" aria-selected="${cvTab === 'cv'}" class="bank-tab-btn ${cvTab === 'cv' ? 'active' : ''}" onclick="setCvTab('cv')">CV i szkolenia</button><button role="tab" aria-selected="${cvTab === 'academy'}" class="bank-tab-btn ${cvTab === 'academy' ? 'active' : ''}" onclick="setCvTab('academy')">Akademia</button><button role="tab" aria-selected="${cvTab === 'mentor'}" class="bank-tab-btn ${cvTab === 'mentor' ? 'active' : ''}" onclick="setCvTab('mentor')">Mentor</button><button role="tab" aria-selected="${cvTab === 'automation'}" class="bank-tab-btn ${cvTab === 'automation' ? 'active' : ''}" onclick="setCvTab('automation')">Automaty</button></div>`; // 0.18.8 D4
     if (cvTab === 'academy' && typeof renderAcademyPanel === 'function') {
         list.innerHTML = tabs + renderAcademyPanel();
+        return;
+    }
+    if (cvTab === 'automation' && typeof getAutomation === 'function') {
+        list.innerHTML = tabs + renderAutomationPanel();
         return;
     }
     if (cvTab === 'mentor' && typeof renderMentorPanel === 'function') {
