@@ -52,7 +52,7 @@ const POCZTA_SENDERS = ['KNF', 'NBP', 'Dział obsługi klienta'];
 /** Kanał wiadomości: Poczta (newsy, ciekawostki, reklamy), TeamedUP! (szefostwo i współpracownicy), Tied (inwestorzy i spółki). Nic nie ginie — kanał liczy się przy wyświetlaniu. */
 function getMailChannel(message) {
     const s = String(message.sender);
-    if (s === CORPORATION_SENDER) return 'teamedup';
+    if (s === CORPORATION_SENDER || (typeof DECADE_SENDER === 'string' && s === DECADE_SENDER)) return 'teamedup'; // 0.18.8 D6: Kronika Rynku w TeamedUP!
     if (POCZTA_SENDERS.includes(s)) return 'poczta'; // urzędy i obsługa klienta: Poczta ma znaczek w menu, Tied nie
     if (message.action) return 'poczta'; // przyciski wiadomości (pakiet, VIP) pokazuje tylko podgląd Poczty i TeamedUP!
     if (MAGAZINES[s] || message.isSpam) return 'poczta'; // reklamy zostają w Poczcie (Spam), Tied jest bez reklam

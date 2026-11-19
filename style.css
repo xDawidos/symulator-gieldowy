@@ -6285,3 +6285,23 @@ fieldset.sector-chips { border: 0; margin: 0; padding: 0; min-inline-size: 0; }
 .rs:hover + .rs-tip, .rs:focus-visible + .rs-tip, .rs[data-open] + .rs-tip { visibility: visible; }
 .stars { letter-spacing: 1px; }
 @media (max-width: 640px) { .rl .hide-sm { display: none; } }
+
+/* 0.18.8 D6 (makieta 23 §3): podsumowanie dekady — TeamedUP! i Ranking → Historia */
+.dk { border: 1px solid var(--ink-700); border-radius: 4px 12px 12px 12px; background: var(--color-bg-raised); padding: 16px; min-width: 0; }
+.dk header { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; }
+.dk h3 { margin: 0; font-family: 'IBM Plex Sans Condensed', var(--font-family-sans); font-size: 19px; font-weight: 600; }
+.dk header small { display: block; color: var(--color-text-muted); }
+.dk .tu-av { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: #2e2348; color: #ddb7ff; font-weight: 700; flex: none; }
+.dk > p { margin: 0 0 14px; color: var(--color-text-secondary); max-width: 66ch; }
+.dk-hero { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 18px; padding: 12px 14px; margin-bottom: 14px; border-radius: 6px; background: var(--color-bg-sunken); }
+.dk-hero b { font: 600 26px var(--font-family-mono); color: var(--amber-400); }
+.dk-hero span { color: var(--color-text-secondary); }
+.dk .up { color: var(--color-text-up); } .dk .down { color: var(--color-text-down); }
+.dk-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: 10px; margin-bottom: 14px; }
+.dk-cell { padding: 10px 12px; border: 1px solid var(--ink-700); border-radius: 6px; }
+.dk-cell h4 { margin: 0 0 4px; font-size: 12px; font-weight: 400; color: var(--color-text-muted); }
+.dk-cell b { font-weight: 600; }
+.dk-cell .v { display: block; font-size: 15px; }
+.dk .tu-tag { display: inline-block; padding: 0 6px; border: 1px solid var(--ink-600); border-radius: 4px; font-size: 11px; color: var(--color-text-secondary); }
+.dk-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.dk-list { display: grid; gap: 12px; }

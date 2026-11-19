@@ -17763,6 +17763,27 @@ group('0.18.6 Porządki', () => {
     });
 });
 
+group('0.18.8 Długa gra', () => {
+    test('D6: raport dekady co 10 lat z kompletem pól, 3 raporty po 30 latach, ≤ 2 KB na dekadę; wiadomość Kroniki Rynku w TeamedUP!, Historia w Rankingu', () => {
+        const list = Array.from({ length: 6 }, (_, i) => { const c = makeCompany(`H${i}`); c.price = 100; c.totalShares = 1e5; return c; });
+        resetWorld(list); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' }); mailbox = createMailbox(); macro.quarter = 0; decadeState = createDecadeState();
+        noteDecadeQuarter(); // start
+        for (let q = 1; q <= 120; q++) { macro.quarter = q; list[0].price *= 1.01; if (q === 60) list[5].isBankrupt = true; noteDecadeQuarter(); }
+        assertEq(decadeState.reports.length, 3, '3 raporty po 30 latach');
+        const r = decadeState.reports[0];
+        for (const k of ['n', 'q0', 'q1', 'nav0', 'nav1', 'fund', 'gig', 'infl', 'best', 'worst', 'bestSector', 'worstSector', 'crises', 'swans', 'parties', 'career']) assert(k in r, `pole ${k}`);
+        assertEq(r.best.symbol, 'H0', 'najlepsza spółka dekady');
+        const sizes = decadeState.reports.map(x => JSON.stringify(x).length); assert(Math.max(...sizes) <= 2048, `≤ 2 KB na dekadę: ${sizes}`);
+        const msg = mailbox.messages.find(m => m.sender === DECADE_SENDER);
+        assert(msg && getMailChannel(msg) === 'teamedup' && /Dekada 1 \(rok 1–10\)/.test(decadeState.reports.length && mailbox.messages[mailbox.messages.length - 1].subject), 'wiadomość TeamedUP! z tematem dekady');
+        const html = renderMailPreview(mailbox.messages[mailbox.messages.length - 1]);
+        assert(html.includes('class="dk"') && html.includes('Ranking → Historia') && !/\p{Extended_Pictographic}/u.test(html), 'artykuł dekady bez emoji');
+        const host = document.createElement('div'); host.id = 'leaderboard-list'; document.body.appendChild(host);
+        try { setLeaderboardTab('history'); assertEq(host.querySelectorAll('.dk').length, 3, 'Historia: 3 dekady'); } finally { host.remove(); leaderboardTab = 'funds'; }
+        const snap = JSON.parse(JSON.stringify(getDecadeSnapshot())); decadeState = createDecadeState(); applyDecadeSnapshot(snap); assertEq(decadeState.reports.length, 3, 'zapis i odczyt');
+    });
+});
+
 group('0.18.7 Progresja i onboarding', () => {
     test('E0d: KNF zapowiada zmianę zasad kwartał wcześniej, spółki notowane mają rok przejściowy, najwyżej jedna zmiana na 2 lata', () => {
         const old = makeCompany('OLD'); old.marketSinceQ = 2; resetWorld([old]); macro.quarter = 20; knfRules = createKnfRules(); mailbox = createMailbox();

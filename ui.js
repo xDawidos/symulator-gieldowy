@@ -2912,8 +2912,14 @@ function displayLeaderboard() {
     const container = document.getElementById('leaderboard-list');
     if (!container) return;
     if (!playerFund) { container.innerHTML = '<p class="fund-muted">Brak funduszu.</p>'; return; }
+    const tabs = `<div class="wn-tabs" role="tablist" aria-label="Ranking">${[['funds', 'Fundusze'], ['history', 'Historia']].map(([id, label]) => `<button class="wn-tab bank-tab-btn${leaderboardTab === id ? ' active' : ''}" role="tab" aria-selected="${leaderboardTab === id}" onclick="setLeaderboardTab('${id}')">${label}</button>`).join('')}</div>`; // 0.18.8 D6
+    if (leaderboardTab === 'history') {
+        const reps = typeof decadeState === 'object' ? [...decadeState.reports].reverse() : [];
+        container.innerHTML = tabs + (reps.length ? `<div class="dk-list">${reps.map(r => renderDecadeArticle(r, true)).join('')}</div>` : renderEmptyState({ icon: 'zegar', title: 'Historia jeszcze pusta', text: 'Pierwsze podsumowanie dekady przyjdzie po 10 latach gry od Kroniki Rynku.', variant: 'wait' }));
+        return;
+    }
 
-    container.innerHTML = `
+    container.innerHTML = tabs + `
         <p class="fund-muted">Zwrot skumulowany z ${FUND_PERIODS_SHOWN} ostatnich okresów. Liczy się wynik, nie wielkość funduszu.</p>
         <table class="asset-mini-table leaderboard-table">
             <thead><tr><th>#</th><th>Fundusz</th><th>Zwrot</th><th>Zmienność</th><th>Zaufanie</th><th>Aktywa</th></tr></thead>
@@ -2929,7 +2935,35 @@ function displayLeaderboard() {
         </table>`;
 }
 
-function openLeaderboardModal() {
+/** 0.18.8 D6 (makieta 23 §3): wiadomość „Kronika Rynku” — wynik funduszu (bursztyn: Twój), komórki dekady, przejście do Historii. */
+function renderDecadeArticle(rep, full = false) {
+    const [y0, y1] = decadeYears(rep), pct = v => v === null || v === undefined ? '—' : formatPct(v, 0), cls = v => v > 0 ? 'up' : v < 0 ? 'down' : '';
+    const diff = rep.fund !== null && rep.gig !== null ? Math.round((rep.fund - rep.gig) * 100) : null;
+    const cell = (title, html) => `<div class="dk-cell"><h4>${title}</h4>${html}</div>`;
+    const names = list => list.map(x => `${escapeHtml(x.name)} (rok ${Math.floor(x.q / 4) + 1})`).join(', ');
+    const cells = [
+        rep.best ? cell('Najlepsza spółka dekady', `<b>${escapeHtml(rep.best.name)}</b> <span class="tu-tag">${escapeHtml(rep.best.symbol)}</span><span class="n v ${cls(rep.best.ch)}">${pct(rep.best.ch)} wartości</span>`) : '',
+        rep.bestPos ? cell('Twoja najlepsza pozycja', `<b>${escapeHtml(rep.bestPos.name)}</b> <span class="tu-tag">${escapeHtml(rep.bestPos.symbol)}</span><span class="n v ${cls(rep.bestPos.ch)}">${pct(rep.bestPos.ch)} od zakupu</span>`) : '',
+        cell('Rynek', `GIG <span class="n ${cls(rep.gig)}">${pct(rep.gig)}</span>, inflacja średnio <span class="n">${formatNumberPl(rep.infl * 100, 1)}%</span> rocznie`),
+        cell('Kryzysy', rep.crises.length + rep.swans.length ? `${rep.crises.length + rep.swans.length}: ${names([...rep.swans.map(s => ({ ...s, name: `czarny łabędź: ${s.name}` })), ...rep.crises])}` : 'bez kryzysów'),
+        cell('Twoja kariera', `${escapeHtml(rep.career.position || 'zarządca')}, ${rep.career.certs} ${rep.career.certs === 1 ? 'certyfikat' : rep.career.certs % 10 >= 2 && rep.career.certs % 10 <= 4 && (rep.career.certs % 100 < 12 || rep.career.certs % 100 > 14) ? 'certyfikaty' : 'certyfikatów'}, ${rep.career.clients} klientów`),
+        full && rep.bestSector ? cell('Sektory', `najlepszy: ${escapeHtml(rep.bestSector.sector)} <span class="n ${cls(rep.bestSector.ch)}">${pct(rep.bestSector.ch)}</span>; najsłabszy: ${escapeHtml(rep.worstSector.sector)} <span class="n ${cls(rep.worstSector.ch)}">${pct(rep.worstSector.ch)}</span>`) : '',
+        full && rep.worst ? cell('Najsłabsza spółka', `<b>${escapeHtml(rep.worst.name)}</b> <span class="tu-tag">${escapeHtml(rep.worst.symbol)}</span><span class="n v ${cls(rep.worst.ch)}">${rep.worst.ch <= -1 ? 'upadłość' : pct(rep.worst.ch)}</span>`) : '',
+        full ? cell('Rządy', rep.parties.length ? rep.parties.map(escapeHtml).join(' → ') : '—') : ''
+        // 0.19.2: komórka „Wkład w Miasto”
+    ].join('');
+    return `<article class="dk" aria-labelledby="dk-t-${rep.n}${full ? 'f' : ''}">
+        <header><span class="tu-av" aria-hidden="true">KR</span><div><h3 id="dk-t-${rep.n}${full ? 'f' : ''}">Dekada ${rep.n}: rok ${y0}–${y1}</h3><small>${DECADE_SENDER}, firma informacyjna · koniec roku ${y1}</small></div></header>
+        ${full ? '' : '<p>Dziesięć lat Twojego funduszu w liczbach. Pełny raport z sektorami i rządami jest w Rankingu, w zakładce Historia.</p>'}
+        <div class="dk-hero" aria-label="Wynik funduszu"><span>NAV / udział</span><b class="n">${formatNav(rep.nav0)} → ${formatNav(rep.nav1)}</b><span>fundusz <span class="n ${cls(rep.fund)}">${pct(rep.fund)}</span>, GIG <span class="n">${pct(rep.gig)}</span>${diff !== null ? `, czyli <span class="n ${cls(diff)}">${diff > 0 ? '+' : ''}${diff} pkt</span> ${diff >= 0 ? 'lepiej' : 'gorzej'}` : ''}</span></div>
+        <div class="dk-grid">${cells}</div>
+        ${full ? '' : '<div class="dk-acts"><button class="btn" onclick="openLeaderboardModal(\'history\')">Pełny raport: Ranking → Historia</button></div>'}
+    </article>`;
+}
+let leaderboardTab = 'funds';
+function setLeaderboardTab(tab) { leaderboardTab = tab; displayLeaderboard(); }
+function openLeaderboardModal(tab = null) {
+    if (tab) leaderboardTab = tab;
     const modal = document.getElementById('leaderboard-modal');
     if (modal) {
         displayLeaderboard();
@@ -7772,7 +7806,7 @@ function renderTeamedUp() {
             return `<div class="te-contact ${m.read ? '' : 'unread'} ${m.id === teamedView.selectedId ? 'selected' : ''}" role="button" tabindex="0" ${m.id === teamedView.selectedId ? 'aria-current="true"' : ''} onclick="selectTeamedMail(${m.id})" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectTeamedMail(${m.id}); }">
             <span class="net-avatar" aria-hidden="true">${escapeHtml(initials(name.replace(/^\P{L}+/u, '')))}</span>
             <span class="te-contact-main"><span class="te-contact-top"><strong>${escapeHtml(name)}</strong><span class="te-time">${formatMailTime(m.at)}</span></span>
-            <span class="te-role">${coworker ? 'Współpracownik' : 'Zarząd'}</span>
+            <span class="te-role">${coworker ? 'Współpracownik' : m.action?.type === 'decade' ? 'Firma informacyjna' : 'Zarząd'}</span>
             <span class="te-snippet">${escapeHtml(m.subject)} — ${escapeHtml(m.body.slice(0, 70))}</span></span>${m.read ? '' : '<span class="te-dot" role="img" aria-label="Nieprzeczytana"></span>'}</div>`; }).join('') : '<p class="fund-muted mail-empty">Brak wiadomości od szefostwa i współpracowników.</p>'}</div>
         ${selected ? `<div class="te-chat">${renderMailPreview(selected)}</div>` : '<div class="te-chat te-chat-empty"><p class="fund-muted">Wybierz rozmowę z listy.</p></div>'}`;
 }
@@ -7975,6 +8009,7 @@ function renderMailPreview(message) {
                </div>`
             : '<p class="fund-muted">Zapisy na tę ofertę są zamknięte.</p>';
     }
+    if (message.action?.type === 'decade' && typeof getDecadeReport === 'function' && getDecadeReport(message.action.n)) return renderDecadeArticle(getDecadeReport(message.action.n)); // 0.18.8 D6 (makieta 23 §3)
     return `
         <article class="mail-message">
             <h3>${escapeHtml(message.subject)}</h3>

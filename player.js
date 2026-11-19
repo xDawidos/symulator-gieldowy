@@ -1804,6 +1804,7 @@ function startNewCareer(profile = {}) {
     if (typeof resetChainState === 'function') resetChainState();
     if (typeof resetRatings === 'function') resetRatings(); // 0.18.4
     if (typeof createKnfRules === 'function') knfRules = createKnfRules(); // 0.18.7 E0d
+    if (typeof createDecadeState === 'function') decadeState = createDecadeState(); // 0.18.8 D6
     if (typeof listingHistory === 'object') { listingHistory = []; ipoStats = { ipos: 0, withdrawn: 0, fees: 0 }; } // 0.18.1 P2: bilans łańcuchów od nowa (kalibruje pierwszy kwartał)
     if (typeof resetForeignBots === 'function') resetForeignBots(); // 0.16.2 G8: nowa gra bez botów zagranicznych
     for (const symbol of Object.keys(playerPortfolio)) delete playerPortfolio[symbol];

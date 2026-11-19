@@ -234,7 +234,7 @@ function buildSaveSnapshot({ compact = 0 } = {}) {
         currencies: typeof getCurrencySnapshot === 'function' ? getCurrencySnapshot() : undefined, // 0.16.1 G2: kursy, gotówka w walutach (v16)
         forex: typeof getForexSnapshot === 'function' ? getForexSnapshot() : undefined, // 0.16.4 G21: pozycje z depozytem (pole opcjonalne v16)
         commodities: typeof getCommoditiesSnapshot === 'function' ? getCommoditiesSnapshot() : undefined, // 0.17 S1: ceny surowców (pole opcjonalne)
-        ratings: typeof getRatingSnapshot === 'function' ? getRatingSnapshot() : undefined, knfRules: typeof getKnfRulesSnapshot === 'function' ? getKnfRulesSnapshot() : undefined, listingHistory: typeof listingHistory === 'object' ? listingHistory : undefined, ipoStats: typeof ipoStats === 'object' ? ipoStats : undefined, // 0.18.4 A2–A4 (pola opcjonalne)
+        ratings: typeof getRatingSnapshot === 'function' ? getRatingSnapshot() : undefined, knfRules: typeof getKnfRulesSnapshot === 'function' ? getKnfRulesSnapshot() : undefined, decades: typeof getDecadeSnapshot === 'function' ? getDecadeSnapshot() : undefined, listingHistory: typeof listingHistory === 'object' ? listingHistory : undefined, ipoStats: typeof ipoStats === 'object' ? ipoStats : undefined, // 0.18.4 A2–A4 (pola opcjonalne)
         chains: typeof getChainsSnapshot === 'function' ? getChainsSnapshot() : undefined, // 0.18.1 P2: bilans łańcuchów (pole opcjonalne; stary zapis: stan buduje pierwszy kwartał)
         antitrustOffice, antitrustLog, // 0.15.6 E5: poziom urzędu antymonopolowego i interwencje (pola opcjonalne)
         subcontractLog, subcontractorDeals, subcontractorAcquisitionCount, // 0.15.5 B2–B3: okno zleceń podwykonawców, przejęcia pionowe (pola opcjonalne)
@@ -645,6 +645,7 @@ function applySaveSnapshot(snapshot) {
     if (typeof applyChainsSnapshot === 'function') applyChainsSnapshot(snapshot.chains); // 0.18.1 P2
     if (typeof applyRatingSnapshot === 'function') applyRatingSnapshot(snapshot.ratings); // 0.18.4
     if (typeof applyKnfRulesSnapshot === 'function') applyKnfRulesSnapshot(snapshot.knfRules); // 0.18.7 E0d
+    if (typeof applyDecadeSnapshot === 'function') applyDecadeSnapshot(snapshot.decades); // 0.18.8 D6
     if (typeof listingHistory === 'object') listingHistory = Array.isArray(snapshot.listingHistory) ? snapshot.listingHistory.slice(-120) : [];
     if (typeof ipoStats === 'object') ipoStats = { ipos: 0, withdrawn: 0, fees: 0, ...(snapshot.ipoStats || {}) };
     if (typeof commodityMetalsMigration === 'object' && commodityMetalsMigration && typeof splitMetalsContracts === 'function') { // 0.18.1 P1: pozycje gracza na MET-* → IRON + COP po połowie
@@ -1526,6 +1527,7 @@ function runQuarterlyTick() {
         if (typeof checkMarketCrashQuarterly === 'function') checkMarketCrashQuarterly(); // 0.15 H4: sprawdzanie warunków krachu rynkowego
         advanceEconomyCycle(); // nowa faza koniunktury przed raportami
         advanceMacroQuarter(); // inflacja, bezrobocie, cykle sektorów, wybory (macro.js)
+        if (typeof noteDecadeQuarter === 'function') runQuarterStep('noteDecadeQuarter', noteDecadeQuarter); // 0.18.8 D6: raport dekady
         processCityQuarterly(); // festyn raz w roku (city.js)
         applyCrowdingPressureToWeak(); // D2: nasycony rynek — słabe spółki tanieją szybciej
         if (typeof processIndexLaunchQuarterly === 'function') processIndexLaunchQuarterly(); // 0.16.1: Bank Centralny uruchamia SIG40 i BSIG80
