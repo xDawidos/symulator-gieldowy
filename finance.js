@@ -984,7 +984,7 @@ function eliteQualifies(stock, tier) {
 }
 function getDiamondScore(stock, pool) {
     const maxCap = Math.max(1, ...pool.map(getMarketCap)), maxNi = Math.max(1, ...pool.map(s => Math.max(0, getNetIncome4q(s) || 0)));
-    const ri = stock.rating ? ratingIndex(stock.rating.grade) / (RATING_GRADES.length - 1) : 0;
+    const vr = getValidRating(stock), ri = vr ? ratingIndex(vr.grade) / (RATING_GRADES.length - 1) : 0; // 0.18.7 E5: ocena wiążąca
     return 0.5 * getMarketCap(stock) / maxCap + 0.25 * Math.max(0, getNetIncome4q(stock) || 0) / maxNi + 0.25 * ri;
 }
 /** Przydział do elitarnych. `immediate` (start gry, wczytanie): bez okresu potwierdzenia; na starcie pula dostaje audyt. */
@@ -993,7 +993,7 @@ function assignEliteExchanges(immediate = false) {
         .filter(s => !s.assetType && !s.isBankStock && !s.isBankrupt && !s.isSubsidiaryOf &&
             (s.exchange === 'PLATINUM' || isEliteExchange(s.exchange)))
         .sort((a, b) => getMarketCap(b) - getMarketCap(a));
-    if (immediate && typeof auditStock === 'function') for (const s of pool) if (!getValidRating(s)) auditStock(s);
+    if (immediate && typeof auditStock === 'function') for (const s of pool) if (!getValidRating(s)) auditStock(s, true);
 
     const target = {};
     if (getGameClockMs() >= ELITE_EXCHANGES.DIAMOND.minGameMs) {

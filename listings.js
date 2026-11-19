@@ -579,9 +579,31 @@ function processListingsQuarterly() {
 const RATING_GRADES = ['D', 'C', 'CCC', 'B', 'BB', 'BBB', 'A', 'A+', 'AA', 'AAA']; // 0.18.7 E0b: A+ (próg Rubinowej)
 const RATING_RULES = { validQ: 4, randomPerQ: 2, publicFrom: 'A', bribeChance: 0.03, bribeBoost: 2, revealChance: 0.25, revealDrop: -0.15, fineShare: 0.02, licenseLossQ: 8 };
 const AUDITORS = [
-    { id: 'aud1', name: 'Biegły & Wspólnicy', big: true, noise: 0.10 }, { id: 'aud2', name: 'Bilans Global', big: true, noise: 0.10 }, { id: 'aud3', name: 'Audyt Centralny', big: true, noise: 0.12 },
-    { id: 'aud4', name: 'Saldo Plus', big: false, noise: 0.30 }, { id: 'aud5', name: 'Rachunek s.c.', big: false, noise: 0.35 }, { id: 'aud6', name: 'Księgi Rzetelne', big: false, noise: 0.30 }
+    { id: 'aud1', name: 'Biegły & Wspólnicy', big: true, noise: 0.10, scale: 'letters' }, { id: 'aud2', name: 'Bilans Global', big: true, noise: 0.10, scale: 'points' }, { id: 'aud3', name: 'Audyt Centralny', big: true, noise: 0.12, scale: 'stars' },
+    { id: 'aud4', name: 'Saldo Plus', big: false, noise: 0.30, scale: 'letters' }, { id: 'aud5', name: 'Rachunek s.c.', big: false, noise: 0.35, scale: 'classes' }, { id: 'aud6', name: 'Księgi Rzetelne', big: false, noise: 0.30, scale: 'points' }
 ];
+// 0.18.7 E5: skale audytorów — tylko zapis przy wyświetlaniu; gra liczy na RATING_GRADES (indeks 0 = D … 9 = AAA).
+const RATING_SCALES = {
+    letters: { name: 'litery AAA–D', marks: RATING_GRADES },
+    points: { name: 'punkty 0–100', marks: ['10', '25', '35', '45', '55', '65', '75', '84', '92', '98'], floors: [0, 20, 30, 40, 50, 60, 70, 80, 88, 96], suffix: '/100' }, // odczyt: przedział od `floors`
+    stars: { name: 'gwiazdki 1–5', marks: ['½', '1', '1½', '2', '2½', '3', '3½', '4', '4½', '5'], suffix: '★' },
+    classes: { name: 'klasy I–V', marks: ['V b', 'V a', 'IV b', 'IV a', 'III b', 'III a', 'II b', 'II a', 'I b', 'I a'], prefix: 'klasa ' }
+};
+const getAuditor = id => AUDITORS.find(a => a.id === id) || null;
+/** Ocena w zapisie audytora (np. „90/100”, „4½★”, „klasa I b”). */
+function formatAuditorGrade(grade, auditorId) {
+    const sc = RATING_SCALES[getAuditor(auditorId)?.scale] || RATING_SCALES.letters, i = ratingIndex(grade);
+    return i < 0 ? String(grade) : `${sc.prefix || ''}${sc.marks[i]}${sc.suffix || ''}`;
+}
+/** Odwrotnie: zapis audytora → ocena na skali wspólnej (punkty: przedział). */
+function parseAuditorGrade(text, auditorId) {
+    const sc = RATING_SCALES[getAuditor(auditorId)?.scale] || RATING_SCALES.letters;
+    const raw = String(text).replace(sc.prefix || '', '').replace(sc.suffix || '', '').trim();
+    if (sc.floors) { const v = Number(raw); if (!Number.isFinite(v)) return null; let i = 0; sc.floors.forEach((f, k) => { if (v >= f) i = k; }); return RATING_GRADES[i]; }
+    const i = sc.marks.indexOf(raw); return i < 0 ? null : RATING_GRADES[i];
+}
+/** Podpowiedź porównawcza: „90/100 u Bilans Global ≈ AA”. */
+function ratingCompareText(r) { const a = getAuditor(r.auditor); return a?.scale && a.scale !== 'letters' ? `${formatAuditorGrade(r.grade, r.auditor)} u ${a.name} ≈ ${r.grade}` : `${r.grade} u ${a?.name || 'audytora'}`; }
 const GATE_BY_TIER = { PLATINUM: 'A' }; // 0.18.7 E0a: ocena tylko od Platynowej (wcześniej Złota ≥ BBB)
 let ratingState = { banned: {}, log: [], stats: { audits: 0, bribes: 0, reveals: 0 } };
 function resetRatings() { ratingState = { banned: {}, log: [], stats: { audits: 0, bribes: 0, reveals: 0 } }; }
@@ -594,29 +616,41 @@ function getTrueRatingIndex(stock) {
     const score = 4 + health * 0.6 + (margin - 0.15) * 12 - (debt - 0.35) * 5;
     return Math.max(0, Math.min(RATING_GRADES.length - 1, Math.round(score)));
 }
-function pickAuditor(stock) {
+function pickAuditor(stock, renew = false) {
     const q = typeof macro === 'object' ? macro.quarter : 0, list = AUDITORS.filter(a => !(ratingState.banned[a.id] > q));
+    if (renew) { const own = list.find(a => getRatings(stock).some(r => r.auditor === a.id)); if (own) return own; } // 0.18.7 E5: audyt zlecony odnawia ocenę u dotychczasowego audytora
     const big = list.filter(a => a.big), wantBig = (stock.price * stock.totalShares) > 2_000_000 || Math.random() < 0.4;
     const pool = wantBig && big.length ? big : list;
     return pool[Math.floor(Math.random() * pool.length)] || AUDITORS[0];
 }
 /** Audyt spółki: nowa ocena na 4 kw. Zwraca ocenę. */
-function auditStock(stock) {
+function auditStock(stock, renew = false) {
     if (!stock || stock.assetType === 'REIT') return null;
-    const q = typeof macro === 'object' ? macro.quarter : 0, auditor = pickAuditor(stock);
+    const q = typeof macro === 'object' ? macro.quarter : 0, auditor = pickAuditor(stock, renew);
     let idx = getTrueRatingIndex(stock);
     if (Math.random() < auditor.noise) idx += Math.random() < 0.5 ? -1 : 1;
     const corruption = typeof oversight === 'object' ? Number(oversight?.corruption) || 0 : 0;
     const bribed = !auditor.big && Math.random() < RATING_RULES.bribeChance * (1 + corruption / 50); // w kraju z dużą korupcją przekupstwo częstsze
     if (bribed) { idx += RATING_RULES.bribeBoost; ratingState.stats.bribes++; }
     idx = Math.max(0, Math.min(RATING_GRADES.length - 1, idx));
-    stock.rating = { grade: RATING_GRADES[idx], q, until: q + RATING_RULES.validQ, auditor: auditor.id, bribed: bribed || undefined };
+    const rating = { grade: RATING_GRADES[idx], q, until: q + RATING_RULES.validQ, auditor: auditor.id, bribed: bribed || undefined };
+    stock.ratings = [rating, ...getRatings(stock).filter(r => r.auditor !== auditor.id && r.until > q)]; // 0.18.7 E5: nowa ocena zastępuje tylko ocenę tego audytora; wygasłe znikają
     ratingState.stats.audits++;
-    return stock.rating.grade;
+    return rating.grade;
 }
-function getValidRating(stock, q = (typeof macro === 'object' ? macro.quarter : 0)) { return stock?.rating && stock.rating.until > q ? stock.rating : null; }
-/** Ocena widoczna dla gracza: tylko ≥ A (spółki nie chwalą się słabszymi), inaczej null („brak oceny”). */
-function getPublicRating(stock) { const r = getValidRating(stock); return r && ratingIndex(r.grade) >= ratingIndex(RATING_RULES.publicFrom) ? r : null; }
+/** 0.18.7 E5: lista ocen spółki (stary zapis: `stock.rating` staje się pierwszym elementem). */
+function getRatings(stock) {
+    if (!stock) return [];
+    if (stock.rating) { stock.ratings = [stock.rating, ...(stock.ratings || []).filter(r => r.auditor !== stock.rating.auditor)]; delete stock.rating; }
+    return stock.ratings || (stock.ratings = []);
+}
+function getValidRatings(stock, q = (typeof macro === 'object' ? macro.quarter : 0)) { return getRatings(stock).filter(r => r.until > q); }
+/** Ocena wiążąca (bramki poziomów, elitarne): najniższa ważna — konserwatywnie, jak u regulatorów (0.18.7 E5). */
+function getValidRating(stock, q = (typeof macro === 'object' ? macro.quarter : 0)) { return getValidRatings(stock, q).reduce((lo, r) => (!lo || ratingIndex(r.grade) < ratingIndex(lo.grade) ? r : lo), null); }
+/** Oceny publiczne: tylko ≥ A (spółki nie chwalą się słabszymi), od najlepszej. */
+function getPublicRatings(stock) { return getValidRatings(stock).filter(r => ratingIndex(r.grade) >= ratingIndex(RATING_RULES.publicFrom)).sort((a, b) => ratingIndex(b.grade) - ratingIndex(a.grade)); }
+/** Ocena w wierszu listy: najlepsza publiczna (spółka pokazuje najlepszą), inaczej null („brak oceny”). */
+function getPublicRating(stock) { return getPublicRatings(stock)[0] || null; }
 /** Bramka awansu: czy spółka może wejść na poziom `tier` (bez oceny albo za niska → zostaje). */
 function meetsRatingGate(stock, tier) {
     const need = GATE_BY_TIER[tier];
@@ -624,10 +658,11 @@ function meetsRatingGate(stock, tier) {
     const r = getValidRating(stock);
     return Boolean(r && ratingIndex(r.grade) >= ratingIndex(need));
 }
-/** Ujawnienie przekupstwa: spadek kursu, kara dla spółki, audytor traci licencję na 8 kw., wpis o śledztwie policji. */
-function revealBribedRating(stock) {
-    const q = typeof macro === 'object' ? macro.quarter : 0, aud = AUDITORS.find(a => a.id === stock.rating.auditor);
-    stock.rating.revealed = true; stock.rating.until = q; ratingState.banned[stock.rating.auditor] = q + RATING_RULES.licenseLossQ; ratingState.stats.reveals++;
+/** Ujawnienie przekupstwa: spadek kursu, kara dla spółki, audytor traci licencję na 8 kw., wpis o śledztwie policji. Unieważnia tylko tę ocenę (0.18.7 E5). */
+function revealBribedRating(stock, rating = getRatings(stock).find(r => r.bribed && !r.revealed)) {
+    if (!rating) return;
+    const q = typeof macro === 'object' ? macro.quarter : 0, aud = getAuditor(rating.auditor);
+    rating.revealed = true; rating.until = q; ratingState.banned[rating.auditor] = q + RATING_RULES.licenseLossQ; ratingState.stats.reveals++;
     if (typeof applyPriceEffect === 'function') applyPriceEffect(stock.symbol, RATING_RULES.revealDrop, 'negative', 'company');
     const fine = Math.round(stock.price * stock.totalShares * RATING_RULES.fineShare);
     // 0.18.5: jak kara UEiE — najpierw kredyt (ensureCompanyCash), bez chwilowo ujemnej gotówki
@@ -636,14 +671,14 @@ function revealBribedRating(stock) {
     const text = `Afera audytowa: ${aud?.name || 'audytor'} zawyżył ocenę ${stock.name} po łapówce. Spółka płaci karę, audytor traci licencję, sprawą zajmuje się policja.`;
     if (typeof logEvent === 'function') logEvent(text, 'company');
     if (typeof pushNews === 'function') pushNews(text, stock.symbol);
-    ratingState.log.push({ q, symbol: stock.symbol, auditor: stock.rating.auditor }); if (ratingState.log.length > 20) ratingState.log.shift();
+    ratingState.log.push({ q, symbol: stock.symbol, auditor: rating.auditor }); if (ratingState.log.length > 20) ratingState.log.shift();
 }
 /** Co kwartał: 2 losowe audyty, audyt spółek czekających na awans, możliwe ujawnienie przekupstwa. */
 function processRatingsQuarterly() {
     const list = stocks.filter(s => !s.assetType && !s.isBankrupt);
-    for (const s of list.filter(s => s.awaitingAudit)) { auditStock(s); delete s.awaitingAudit; }
+    for (const s of list.filter(s => s.awaitingAudit)) { auditStock(s, true); delete s.awaitingAudit; }
     for (let i = 0; i < RATING_RULES.randomPerQ && list.length; i++) auditStock(list[Math.floor(Math.random() * list.length)]);
-    for (const s of list) if (s.rating?.bribed && !s.rating.revealed && getValidRating(s) && Math.random() < RATING_RULES.revealChance) revealBribedRating(s);
+    for (const s of list) for (const r of getValidRatings(s)) if (r.bribed && !r.revealed && Math.random() < RATING_RULES.revealChance) revealBribedRating(s, r);
 }
 function getRatingSnapshot() { return ratingState; }
 function applyRatingSnapshot(snap) { resetRatings(); if (snap && typeof snap === 'object') ratingState = { banned: snap.banned || {}, log: Array.isArray(snap.log) ? snap.log.slice(-20) : [], stats: { audits: 0, bribes: 0, reveals: 0, ...(snap.stats || {}) } }; }

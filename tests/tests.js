@@ -17479,17 +17479,17 @@ group('0.18.4 Audyt, oceny, IPO, sufity', () => {
     test('A2: ocena AAA–D ważna 4 kw., publiczna tylko od A; przekupstwo po ujawnieniu: spadek kursu, kara, audytor bez licencji; ocena jest bramką awansu na Złotą', () => {
         resetWorld([makeCompany('AAA'), makeCompany('BBB')]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' }); resetRatings();
         const s = stocks[0]; s.financialHealth = 5; macro.quarter = 10;
-        const g = auditStock(s); assert(RATING_GRADES.includes(g) && s.rating.until === 14, 'ocena na 4 kw.');
-        s.rating.grade = 'BB'; assertEq(getPublicRating(s), null, 'słaba ocena niewidoczna');
-        s.rating.grade = 'AA'; assert(getPublicRating(s), 'AA widoczna');
-        assert(meetsRatingGate(s, 'GOLD') && meetsRatingGate(s, 'PLATINUM'), 'bramka'); s.rating.grade = 'BB'; assert(meetsRatingGate(s, 'GOLD') && !meetsRatingGate(s, 'PLATINUM'), 'BB: Złota bez oceny, Platynowa od A (0.18.7 E0a)');
-        s.rating = { grade: 'A', q: 10, until: 14, auditor: 'aud5', bribed: true }; const p0 = s.price;
-        revealBribedRating(s); assert(s.rating.revealed && ratingState.banned.aud5 > 10, 'licencja'); assert(s.marketBehavior || s.price <= p0 || true, 'efekt kursu zlecony');
+        const g = auditStock(s); assert(RATING_GRADES.includes(g) && s.ratings[0].until === 14, 'ocena na 4 kw.');
+        s.ratings[0].grade = 'BB'; assertEq(getPublicRating(s), null, 'słaba ocena niewidoczna');
+        s.ratings[0].grade = 'AA'; assert(getPublicRating(s), 'AA widoczna');
+        assert(meetsRatingGate(s, 'GOLD') && meetsRatingGate(s, 'PLATINUM'), 'bramka'); s.ratings[0].grade = 'BB'; assert(meetsRatingGate(s, 'GOLD') && !meetsRatingGate(s, 'PLATINUM'), 'BB: Złota bez oceny, Platynowa od A (0.18.7 E0a)');
+        s.ratings = [{ grade: 'A', q: 10, until: 14, auditor: 'aud5', bribed: true }]; const p0 = s.price;
+        revealBribedRating(s); assert(s.ratings[0].revealed && ratingState.banned.aud5 > 10, 'licencja'); assert(s.marketBehavior || s.price <= p0 || true, 'efekt kursu zlecony');
         const poor = stocks[1]; poor.cash = 0; poor.rating = { grade: 'A', q: 10, until: 14, auditor: 'aud4', bribed: true }; const neg = [];
         const adj0 = adjustCompanyCash; adjustCompanyCash = (st, d, ...r) => { const out = adj0(st, d, ...r); if (st.cash < 0) neg.push(st.cash); return out; };
         try { revealBribedRating(poor); } finally { adjustCompanyCash = adj0; }
         assertEq(neg.length, 0, 'kara bez ujemnej gotówki (najpierw kredyt)');
-        const t = stocks[1]; t.price = 500; t.exchange = 'SILVER'; delete t.rating;
+        const t = stocks[1]; t.price = 500; t.exchange = 'SILVER'; delete t.ratings;
     });
     test('A3: IPO — dyskonto 5–15%, prowizja opiekuna dla banku inwestycyjnego, ocena przy debiucie', () => {
         resetWorld([makeCompany('AAA')]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' }); initializeCommercialBanks();
@@ -17777,6 +17777,22 @@ group('0.18.7 Progresja i onboarding', () => {
         try { macro.quarter = 27; assertEq(processKnfRulesQuarterly(), null, 'przed upływem 2 lat bez nowej zmiany'); } finally { Math.random = realRandom; }
         assert(mailbox.messages.some(m => m.sender === 'KNF'), 'mail KNF');
     });
+    test('E5: skale audytorów w obie strony, kilku audytorów z różną oceną (wiąże najniższa, w wierszu najlepsza z „+N”), przekupstwo unieważnia jedną ocenę, migracja starego zapisu', () => {
+        for (const a of AUDITORS) for (const g of RATING_GRADES) assertEq(parseAuditorGrade(formatAuditorGrade(g, a.id), a.id), g, `${a.id} ${g}`);
+        assertEq(formatAuditorGrade('AA', 'aud2'), '92/100', 'punkty'); assertEq(parseAuditorGrade('95/100', 'aud2'), 'AA', '95 ≈ AA (przedział 88–95)'); assertEq(parseAuditorGrade('96/100', 'aud2'), 'AAA', '96 ≈ AAA');
+        assertEq(formatAuditorGrade('AAA', 'aud3'), '5★', 'gwiazdki'); assert(ratingCompareText({ grade: 'AA', auditor: 'aud2' }).includes('≈ AA'), 'odpowiednik na skali wspólnej');
+        const s = makeCompany('MUL'); resetWorld([s]); macro.quarter = 10; resetRatings();
+        s.rating = { grade: 'AA', q: 9, until: 13, auditor: 'aud2' }; // stary zapis
+        assertEq(getRatings(s).length, 1, 'migracja: lista z jednej oceny'); assert(!('rating' in s) && s.ratings[0].grade === 'AA', 'stare pole usunięte');
+        s.ratings.push({ grade: 'A', q: 10, until: 14, auditor: 'aud1' }, { grade: 'AAA', q: 10, until: 14, auditor: 'aud4', bribed: true });
+        assertEq(getValidRating(s).grade, 'A', 'wiąże najniższa');
+        assertEq(getPublicRating(s).grade, 'AAA', 'w wierszu najlepsza publiczna');
+        assert(renderRatingChip(s, getPublicRating(s)).includes('+2'), '„+2” przy trzech ocenach');
+        assertEq((renderRatingList(getPublicRatings(s)).match(/<li>/g) || []).length, 3, 'lista ocen w karcie');
+        revealBribedRating(s); assertEq(getValidRatings(s).length, 2, 'ujawnienie unieważnia tylko przekupioną ocenę');
+        assertEq(getValidRatings(s).find(r => r.auditor === 'aud2').grade, 'AA', 'pozostałe bez zmian');
+        auditStock(s, true); assertEq(getRatings(s).filter(r => r.auditor === 'aud2' || r.auditor === 'aud1').length, 2, 'audyt zlecony odnawia ocenę dotychczasowego audytora (bez dubla)');
+    });
     test('E0c (makieta 27): jeden wpis Gazety Ekonomicznej na kwartał (≤ 6 opisanych), mail Domu Maklerskiego tylko przy akcjach gracza, KNF bez liczb przy poziomach', () => {
         const list = Array.from({ length: 8 }, (_, i) => makeCompany(`G${i}`)); resetWorld(list); mailbox = createMailbox();
         const savedPf = playerPortfolio; playerPortfolio = { G1: { shares: 10, avgPrice: 1 } };
@@ -17837,7 +17853,7 @@ group('0.18.7 Progresja i onboarding', () => {
         const big = list[0]; big.totalShares = 10000 * 150; big.exchange = 'GOLD'; // 150 × mediana (próg Platynowej 80×)
         resetWorld(list); macro.quarter = 10; tierMedianCache.q = null;
         big.fundamentals = { history: [1, 2, 3, 4].map(() => ({ netIncome: 1000 })) };
-        delete big.rating;
+        delete big.ratings;
         assertEq(getTierTargetKey(big), 'GOLD', 'bez oceny nie ma Platynowej');
         assert(decideTierChange(big) === null && big.awaitingAudit, 'kandydat zamawia audyt');
         big.rating = { grade: 'A', q: 10, until: 14, auditor: 'aud1' };
@@ -17847,7 +17863,7 @@ group('0.18.7 Progresja i onboarding', () => {
         big.exchange = 'PLATINUM';
         const p0 = getTierTargetKey(big); big.price /= 5; big.totalShares *= 5; tierMedianCache.q = null;
         assertEq(getTierTargetKey(big), p0, 'split nie zmienia poziomu');
-        big.rating.until = 9; // ocena wygasła
+        big.ratings[0].until = 9; // ocena wygasła
         assertEq(decideTierChange(big), 'GOLD', 'utrata oceny: spadek od razu');
     });
     test('E3: wskazówka o fazie bez nazwy fazy; po zmianie fazy najwyżej jedna na kanał; wiarygodność maila rośnie z prenumeratą', () => {

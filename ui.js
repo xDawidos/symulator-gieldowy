@@ -1820,6 +1820,16 @@ function getPriceFlashClass(stock) {
 }
 
 /** Makieta 18: reguła wejścia na giełdę w nagłówku listy („kurs 400–800 PLN, ocena BBB”). */
+/** 0.18.7 E5: znacznik oceny w wierszu — najlepsza publiczna w skali audytora, odpowiednik w podpowiedzi i dla czytnika, „+N” przy kilku ocenach. */
+function renderRatingChip(stock, r) {
+    const more = getPublicRatings(stock).length - 1, cmp = ratingCompareText(r);
+    return `<span class="rt${ratingIndex(r.grade) >= ratingIndex('AA') ? ' is-top' : ''}" title="${escapeHtml(`${cmp}. Ważna do: ${formatQuarterDate(r.until)}.${more > 0 ? ` Ocen: ${more + 1}.` : ''}`)}">${escapeHtml(formatAuditorGrade(r.grade, r.auditor))}<span class="sr-only">: ocena audytora, ${escapeHtml(cmp)}</span>${more > 0 ? `<span class="rt-more">+${more}</span>` : ''}</span> `;
+}
+/** 0.18.7 E5: lista ocen w karcie spółki — audytor, ocena w jego skali (≈ wspólna), data audytu, ważność. */
+function renderRatingList(list) {
+    if (list.length < 1) return '';
+    return `<ul class="rt-list">${list.map(r => `<li><span class="rt-aud">${escapeHtml(getAuditor(r.auditor)?.name || r.auditor)}</span> <b>${escapeHtml(formatAuditorGrade(r.grade, r.auditor))}</b>${formatAuditorGrade(r.grade, r.auditor) !== r.grade ? ` <span class="text-muted">≈ ${r.grade}</span>` : ''} <span class="text-muted">· ${formatQuarterDate(r.q)} · ważna do ${formatQuarterDate(r.until)}</span></li>`).join('')}</ul>`;
+}
 /** 0.18.7 E0a (makieta 25): podpowiedź poziomu — wymagana ocena (jeśli jest) + zdanie bez liczb. Ta sama na płytce i w karcie spółki. */
 const TIER_TIP_GRADES = { PLATINUM: 'A', RUBY: 'A+', EMERALD: 'AA' };
 function renderExchangeTip(key, idSuffix = '') {
@@ -1977,7 +1987,7 @@ function renderStockTableRow(stock, isSubsidiary, parentSymbol, stockTableBody, 
     metaLine.innerHTML = `${escapeHtml(primarySector)} · <span class="ms-tick">${escapeHtml(stock.symbol)}</span>${escapeHtml(metaRest)}`; // makieta 18 cz. 3: ticker w Condensed (bez osobnej kolumny — nazwa zostaje szeroka)
     metaLine.title = metaLine.textContent; // pełny opis, gdy wiersz jest ucięty
     const pubRating = typeof getPublicRating === 'function' ? getPublicRating(stock) : null; // 0.18.7 E0a: ocena publiczna (≥ A) w wierszu listy
-    if (pubRating) metaLine.insertAdjacentHTML('afterbegin', `<span class="rt${ratingIndex(pubRating.grade) >= ratingIndex('AA') ? ' is-top' : ''}" title="Ocena audytora, ważna do kw. ${pubRating.until}">${escapeHtml(pubRating.grade)}<span class="sr-only">: ocena audytora</span></span> `); // makieta 26
+    if (pubRating) metaLine.insertAdjacentHTML('afterbegin', renderRatingChip(stock, pubRating)); // makieta 26 + 0.18.7 E5 (skala audytora, „+N”)
     metaLine.prepend(infoButton); // 0.18.6 O6 (D50): karta i gwiazdka w linii opisu — nazwa ma całą szerokość kolumny
     infoButton.insertAdjacentHTML('afterend', favoriteButtonHtml(stock.symbol, stock.name));
 
@@ -4418,7 +4428,7 @@ function renderCompanyCard() {
         tile('Zadłużenie', debtRatio === null ? '—' : `${formatNumberPl(debtRatio * 100, 0)}%`, 'Zobowiązania / aktywa. Powyżej ~70% spółka jest mocno zadłużona.', debtRatio > 0.7 ? 'text-down' : '', vs(debtRatio, med?.debt, { format: pctFmt, labels: ['niższe', 'wyższe'] })),
         exchanges[stock.exchange] ? tile('Giełda', escapeHtml(stripEmoji(exchanges[stock.exchange].name)), `${TIER_TIP_GRADES[stock.exchange] ? `Wymagana ocena ${TIER_TIP_GRADES[stock.exchange]}. ` : ''}${getExchangeRuleText(stock.exchange)}`) : '', // 0.18.7 E0a (makieta 25)
         foreign ? tile('Ocena', 'Brak oceny publicznej', 'Ocena poniżej A albo brak audytu. Publiczne są oceny od A.') : '', // makieta 26: karta spółki obcej
-        typeof getPublicRating === 'function' && !foreign ? (r => tile('Ocena', r ? `${uiIcon('audyt', 14)} ${r.grade}` : 'brak oceny', r ? `Ocena kredytowa od audytora, ważna do kw. ${r.until}. Spółki ujawniają tylko oceny od A w górę.` : 'Spółka nie ujawnia oceny. Brak oceny często znaczy, że ocena jest niska (spółki pokazują tylko A i wyżej).', '', r?.revealed ? '<em class="text-down">przekupiony audyt</em>' : ''))(getPublicRating(stock)) : '', // 0.18.4 A2
+        typeof getPublicRatings === 'function' && !foreign ? (list => tile('Ocena', list.length ? `${uiIcon('audyt', 14)} ${escapeHtml(formatAuditorGrade(list[0].grade, list[0].auditor))}${list[0].grade !== formatAuditorGrade(list[0].grade, list[0].auditor) ? ` <small>≈ ${list[0].grade}</small>` : ''}` : 'brak oceny', list.length ? 'Oceny kredytowe od audytorów, każdy w swojej skali (≈ odpowiednik na skali AAA–D). Do poziomów giełdy liczy się najniższa ważna ocena. Spółki ujawniają tylko oceny od A w górę.' : 'Spółka nie ujawnia oceny. Brak oceny często znaczy, że ocena jest niska (spółki pokazują tylko A i wyżej).', '', renderRatingList(list)))(getPublicRatings(stock)) : '', // 0.18.4 A2, 0.18.7 E5: lista ocen
         tile('Kondycja', `${formatNumberPl(health, 1)} · ${healthLabel}`, 'Kondycja finansowa od −5 (bankructwo) do +5.', health >= 1 ? 'text-up' : health <= -2 ? 'text-down' : ''),
         sectorPremiumTile(),
         typeof isCrisisActive === 'function' && isCrisisActive() ? tile('Wystawienie na kryzys', (label => `${uiIcon({ wysoki: 'alert', 'średni': 'info', niski: 'ok' }[label], 14)} ${label}`)(getCrisisExposureLabel(stock)), `Udział segmentów spółki w sektorach tracących w linii „${CRISIS_LINES[crisisLine.id].name}”.`, getCrisisExposure(stock) >= 0.6 ? 'text-down' : '') : ''

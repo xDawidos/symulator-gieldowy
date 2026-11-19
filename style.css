@@ -6269,3 +6269,9 @@ fieldset.sector-chips { border: 0; margin: 0; padding: 0; min-inline-size: 0; }
 .ex-plate:hover .ex-tip, .ex-plate:focus-visible .ex-tip { visibility: visible; }
 .rt { display: inline-flex; align-items: center; height: 18px; padding: 0 5px; border: 1px solid var(--ink-500); border-radius: 3px; font: 600 11px var(--font-family-mono); color: var(--color-text-secondary); vertical-align: middle; }
 .rt.is-top { border-color: var(--color-text-secondary); color: var(--color-text-primary); }
+
+/* 0.18.7 E5: kilka ocen jednej spółki — „+N” w znaczniku, lista w karcie (czeka na zgodność z designem) */
+.rt-more { margin-left: 4px; padding-left: 4px; border-left: 1px solid var(--ink-500); color: var(--color-text-muted); }
+.rt-list { margin: 6px 0 0; padding: 0; list-style: none; display: grid; gap: 2px; font-size: 12px; font-weight: 400; }
+.rt-list .rt-aud { color: var(--color-text-secondary); }
+.cc-kpi:has(.rt-list) { grid-column: 1 / -1; }

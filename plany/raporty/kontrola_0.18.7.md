@@ -61,6 +61,24 @@ W 2 grach 20-letnich z kodem E0 (enf kw. 71, e0h kw. 63) licznik kwartałów prz
 
 e0y (25 × 20 lat z zabezpieczeniem): 0 zawieszeń, `qerr` pusty we wszystkich grach, GIG 20 lat 10,51% (SE 0,33). Łącznie po e0h: 0 zawieszeń na 50 gier; przyczyna pozostaje niewyjaśniona (rzadka, ok. 1 na 40 gier), zabezpieczenie i diagnostyka zostają.
 
+## E5: skale audytorów i wiele ocen (polecenie użytkownika 2026-11-19)
+
+Decyzje F13–F15. Każdy audytor ma własną skalę (litery, punkty, gwiazdki, klasy), tylko w wyświetlaniu; spółka może mieć oceny kilku firm; do bramek liczy się najniższa ważna, w wierszu najlepsza publiczna z „+N”, w karcie lista. **Lista ocen w karcie i „+N” w znaczniku zrobione bez nowej makiety — czekają na zgodność z designem (rozszerzenie makiety 26).** Testy: 1118/1118 (skale w obie strony dla 6 audytorów × 10 ocen, „95/100 ≈ AA”, trzech audytorów z różną oceną, ujawnienie unieważnia jedną, migracja `stock.rating` → `stock.ratings`).
+
+Seria e5a + e5b (25 gier × 6,5 roku, 25 × 20 lat) wobec e0h / e0hx:
+
+| Miara | Cel | Wynik | Ocena |
+|---|---|---|---|
+| Rozkład poziomów Śmieciowa / Brązowa / Srebrna / Złota / Platynowa | ±3 pp wobec E0 | 12,4 / 30,8 / 32,5 / 15,3 / 3,8% (E0: 12,9 / 30,0 / 32,9 / 15,1 / 3,8%) | OK (≤ 0,8 pp) |
+| Rubinowa / Szmaragdowa / Diamentowa od 3. roku | jak E0 | 89% / 64% / 100% (E0: 91 / 68 / 100%) | OK (szum) |
+| Diamentowa zmiany, KNF zmiany na 20 lat | 1–4 | 1,76 / 2,56 | OK |
+| GIG 6,5 roku | — | 10,50% → 11,30% | OK |
+| GIG 20 lat | cel 10–13% | 10,31% → 9,79% (SE 0,34; e5a 9,31% z 10 gier, e5b 10,11% z 15) | różnica 1,2 SE (szum), średnia tuż pod 10% → U12 |
+| Debiuty 20 lat | ±20% | 80,1 → 80,1 | OK |
+| Niezmienniki, błędy JS, zawieszenia | 0 | 0 na 60 gier | OK |
+
+Sprawdzone w podglądzie: znacznik „92/100 +2” z podpowiedzią „92/100 u Bilans Global ≈ AA”, lista w karcie (Bilans Global 92/100 ≈ AA, Biegły & Wspólnicy A, Audyt Centralny 3½★ ≈ A, z datą i ważnością) na całą szerokość siatki kafelków.
+
 ## Zrzuty i sprawdzenia w podglądzie
 
 Sprawdzone w grze (podgląd 1366 px): podpowiedź Platynowej po najechaniu (ikona, „Wymagana ocena A”, zdanie bez liczb) nad wierszami, nie przesuwa układu; znacznik „AA” w linii opisu spółki; płytka Diamentowej z „1 miejsce”; 15 znaczników oceny na liście w świeżej grze. Mail Gazety, Domu Maklerskiego i KNF sprawdzone testami (treść, brak emoji, brak liczb przy poziomach).
