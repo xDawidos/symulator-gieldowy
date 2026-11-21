@@ -18,3 +18,11 @@ Plan: `plany/plan_0.18.6_porzadki_dluga_gra.md` (sekcja 0.18.8). Praca autonomic
 | # | Sprawa | Opcje | Rekomendacja |
 |---|---|---|---|
 | U13 | Skala kapitału gracza (D2). Fundusz botów po 50 latach to 8 ppm rynku, ale wpływ zlecenia na kurs ma pułap 2%, więc gracz może tanio skupić dużą część małej spółki; pułap napływu liczony od stałych 60 000 PLN coraz mocniej hamuje fundusz w długiej grze (rynek ×16 w 50 lat) | a) bez zmian; b) poślizg rosnący z udziałem w free floacie (max np. 15%) + szacunek w formularzu (makieta ekranu 7); c) limit udziału w obrocie dnia; d) pułap napływu względem kapitalizacji rynku | b + d (szczegóły: `diagnoza_dluga_gra.md` §3) |
+
+## Decyzja użytkownika 2026-11-21
+
+**U13 → b + d z dopiskiem.**
+- b) poślizg rosnący z udziałem zlecenia w free floacie (zamiast pułapu 2%) i szacunek w formularzu zlecenia (ekran 7 listy designu);
+- d) pułap napływu klientów względem kapitalizacji rynku zamiast stałych 60 000 PLN;
+- dopisek użytkownika: gdy fundusz jest **większościowcem** i sprzedaje większy pakiet (od ok. 5–10% akcji spółki), kurs spada **przez jakiś czas** — powstaje niestabilność, mniejszościowi akcjonariusze panikują (efekt rozłożony na tygodnie, nie jednorazowy poślizg).
+Bramka: gra 6,5-letnia GIG i marże ±0,5 pp; test poślizgu według tabeli.

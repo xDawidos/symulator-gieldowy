@@ -28,3 +28,9 @@ Plan: `plany/plan_0.18.6_porzadki_dluga_gra.md` (sekcja 0.18.7). E1 przeniesione
 | U10 | Makiety 25–27 wdrożone przed akceptacją | a) akceptacja; b) poprawki w makietach i dopasowanie kodu | a) — kod trzyma się notek; odstępstwa w F10 |
 | U11 | Szmaragdowa obsadzona w 68% kwartałów od 3. roku (cel ≥ 90%), Platynowa sama 3,8% (cel 5–10%; z elitarnymi 9,1%). Liczby wystroiłem (F5, F7); dalej ogranicza warunek oceny AA + 4 kw. dywidendy | a) zostawić; b) Szmaragdowa od A+ zamiast AA (dywidenda zostaje); c) dywidenda 2 kw. zamiast 4; d) liczyć cel Platynowej razem z elitarnymi | d) + a) — elitarne to wierzch Platynowej, a pustka na Szmaragdowej w 1/3 czasu nie szkodzi grze |
 | U12 | GIG 20 lat 10,31% (baza 11,96%; cel użytkownika 10–13%). −0,6 pp to zniknięcie premii za awanse z kursu, −0,85 pp inny rozkład poziomów (dostęp botów, cele przejęć) | a) zostawić (w celu); b) dodać dryf wycen Złotej i wyżej; c) przywrócić dodatnią premię za awans bez symetrycznego spadku | a) — w celu, a b) i c) to zmiana balansu poza 0.18.7 |
+
+## Decyzje użytkownika 2026-11-21
+
+- **U10 → a)** makiety 25–30 zaakceptowane (commit 8c1153d).
+- **U11 → b)** Szmaragdowa od oceny **A+** zamiast AA (dywidenda 4 kw. i 3 × próg Platynowej zostają). Do wdrożenia z serią kontrolną (obsadzenie Szmaragdowej, rozkład poziomów ±3 pp).
+- **U12 → a)** zostawić GIG 20 lat ok. 10% (w celu 10–13%).

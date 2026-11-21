@@ -19,3 +19,7 @@ Plan: `plany/plan_0.18.6_porzadki_dluga_gra.md` (sekcja 0.18.6). Decyzje użytko
 | # | Sprawa | Opcje | Rekomendacja |
 |---|---|---|---|
 | U9 | Zanieczyszczenie po 20 latach 67,5 (cel 55–65), 35% gier ≥ 90 (cel ≤ 10%), Zieloni w 36% brudnych gier (cel ≥ 50%). Presja działa, ale brudne gry wynikają z miksu energetycznego (węgiel) | a) zostawić obecny stan; b) dźwignia w energetyce: przy presji ≥ 60 państwowy program OZE i wygaszanie węgla (zmiana balansu energii 0.17.2, osobna część z serią); c) przesunąć cel na 60–70 | b) w 0.18.8 albo osobnej części — tylko to sięga przyczyny |
+
+## Decyzja użytkownika 2026-11-21
+
+**U9 → zwiększyć presję i dodać negatywne wydarzenia ekologiczne** (nie a/b/c z tabeli). Słowa użytkownika: zwiększyć presję, stworzyć negatywne eventy ekologiczne; w karcie spółki, w zakładce Przegląd, oddzielna część „Wpływ na cenę i produkcję”, gdzie pojawiają się związki zawodowe, strajki aktywistów, kontrole, kary i oskarżenia o zanieczyszczanie. Jeśli to nie obniży zanieczyszczenia do celu 55–65, dopisać do Polityki 2 (0.19.1, `plan_0.19.md`) system handlu emisjami jako potencjalną ustawę do wdrożenia.
