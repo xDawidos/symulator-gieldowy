@@ -1,4 +1,4 @@
-# 29. Baner „Czarny łabędź” (0.18.8 D5, ekran 5) — DO AKCEPTACJI
+# 29. Baner „Czarny łabędź” (0.18.8 D5, ekran 5) — zaakceptowana 2026-11-21
 
 Makieta: [makiety/29_czarny_labedz.html](makiety/29_czarny_labedz.html) (samodzielna). Kod dziś: `showBlackSwanBanner()` (`ui.js` ok. 9647), wariant `.crisis-banner` z ikoną `alert`, 33f81ed bez makiety.
 

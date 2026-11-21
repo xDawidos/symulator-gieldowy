@@ -1,4 +1,4 @@
-# 30. Ranking → Historia (0.18.8 D6, ekran 6) — DO AKCEPTACJI
+# 30. Ranking → Historia (0.18.8 D6, ekran 6) — zaakceptowana 2026-11-21
 
 Makieta: [makiety/30_historia.html](makiety/30_historia.html) (samodzielna). Kod dziś: `displayLeaderboard()` z zakładką „history” i `renderDecadeArticle(rep, true)` (`ui.js` ok. 2910–2962), 5125efc bez makiety: wszystkie raporty jeden pod drugim. Wiadomość „Kronika Rynku” w TeamedUP! zostaje jak w makiecie 23 §3.
 

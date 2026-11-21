@@ -1,4 +1,4 @@
-# 27. Zmiany poziomów i zasady KNF (E0c, E0d; ekran 18) — DO AKCEPTACJI
+# 27. Zmiany poziomów i zasady KNF (E0c, E0d; ekran 18) — zaakceptowana 2026-11-21
 
 Makieta: [makiety/27_zmiany_poziomu_knf.html](makiety/27_zmiany_poziomu_knf.html) (samodzielna). Plan: 0.18.7 E0c i E0d. Bez nowych okien: wszystko w Poczcie, na Tied, w pasku wiadomości i w Państwo → Nadzór.
 

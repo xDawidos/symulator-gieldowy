@@ -1,4 +1,4 @@
-# 26. Ocena w wierszu spółki i w karcie spółki obcej (E0a, E5; ekran 17) — DO AKCEPTACJI
+# 26. Ocena w wierszu spółki i w karcie spółki obcej (E0a, E5; ekran 17) — zaakceptowana 2026-11-21
 
 Makieta: [makiety/26_ocena_w_wierszu.html](makiety/26_ocena_w_wierszu.html) (samodzielna). Plan: 0.18.7 E0a „Ocena widoczna dla gracza”.
 

@@ -1,4 +1,4 @@
-# 28. Automaty (CV i Akademia → Automaty; 0.18.8 D4, ekran 4) — DO AKCEPTACJI
+# 28. Automaty (CV i Akademia → Automaty; 0.18.8 D4, ekran 4) — zaakceptowana 2026-11-21
 
 Makieta: [makiety/28_automaty.html](makiety/28_automaty.html) (samodzielna). Kod dziś: `automation.js`, `renderAutomationPanel()` (`ui.js:7294`), wdrożone w 844824e bez makiety.
 

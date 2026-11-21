@@ -1,4 +1,4 @@
-# 25. Podpowiedź poziomu giełdy (E0a, E0b; ekran 16) — DO AKCEPTACJI
+# 25. Podpowiedź poziomu giełdy (E0a, E0b; ekran 16) — zaakceptowana 2026-11-21
 
 Makieta: [makiety/25_poziomy_gield.html](makiety/25_poziomy_gield.html) (samodzielna). Plan: `plany/plan_0.18.6_porzadki_dluga_gra.md`, 0.18.7 E0a i E0b. Rozwija poprawkę makiety 18 (płytka bez reguły wejścia, zaakceptowana 2026-11-14).
 
