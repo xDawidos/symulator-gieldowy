@@ -67,6 +67,7 @@ Słowa użytkownika: w zakładce Prawo i Kraj są dwa sposoby pokazywania ustaw,
   2. **przetargi** jak dziś (Budowlany, podwykonawcy z 0.18.2 G6) i **PPP** gracza (zmniejsza raty);
   3. **nepotyzm** poziom 3 (P4): wcześniejsza informacja o planie inwestycji.
 - **Skutki:** przepustowość szlaków (morskie, lotnicze, lądowe) → koszt importu w łańcuchach i stan szlaków w M5; przychody przewoźników (`getInfraCarrierFactor`); w 0.19.2 ministerstwo dzieli część budżetu na miasta (infrastruktura miasta 0–100). Brak finansowania obniża poziom życia (S3) przez zużycie.
+- **Łącza (sieć szerokopasmowa), decyzja planu:** w 0.19.1 nie dodajemy łączy jako czwartego trybu szlaków (szlaki dotyczą towarów: morze, powietrze, ląd). Łącza wchodzą w 0.19.2 jako typ infrastruktury miasta (`broadband` w `INFRA_TYPES`, zamawiany przez ministerstwo albo miasto) i podnoszą popyt na usługi cyfrowe oraz wskaźnik „informacja” poziomu życia.
 - **UI:** mini okienko w **Gospodarka → Przegląd**: poziom finansowania słowem, budżet kwartalny, plan inwestycji (3–4 pozycje z terminem), stan przepustowości trzech trybów (słowem i liczbą), minister i partia, przycisk „Lobbing” (od P3). Makietę robi równolegle czat designu.
 - **Pliki:** `infrastructure.js` (decyzja ministerstwa, plan inwestycji), `core.js` (ustawa → polityka ministerstwa, ruchy partii), `ui.js` (mini okienko), `main.js` (migracja poziomu).
 - **Test i bramka:** przy tych samych ruchach partii poziom finansowania w serii jak dziś (±0,3 poziomu średnio), GIG i marże ±0,3 pp; reakcja na przepustowość < 0,85 najwyżej raz na rok; plan inwestycji zgodny z ogłoszonymi projektami.
@@ -112,6 +113,37 @@ Dziś ustawy są pokazywane na dwa sposoby: w zakładce Prawo i w zakładce Kraj
 - **Zasada grafu bez zmian:** odchylenie o średniej zero, `b = 1` na starcie (kalibracja jak w 0.18.1 P2).
 - **Pliki:** `goods.js` (dwa dobra, odbiorcy), `chains.js` (usługi bez zapasu i frachtu), `reits.js` (hotele z popytu), dane miast.
 - **Bramka:** marże Turystyki, Mediów, Gamingu i Technologii ±1 pp od bazy, średnia odchyłek marż 0 ± 0,3 pp, w recesji spadek popytu na turystykę L ≥ 2 × spadku Z.
+
+### Projekty budowlane, megaprojekty i projekty czasowe (polecenie użytkownika 2026-11-22)
+
+Polecenie: „dopracowanie i aktualizacja projektów budowlanych, megaprojektów infrastruktury i projektów czasowych”.
+
+**Diagnoza (kod, 2026-11-22):**
+- **Projekty spółek:** `INVESTMENT_CATALOG` (`companies.js:2385`), 65 pozycji w 17 grupach (`general` + 16 sektorów). Brakuje sektorów: **Alkohole, Motoryzacja, Rybołówstwo, Nieruchomości, Obronność**, a podsektory z 0.18 (Hutnictwo, Maszyny, Stocznie, Chemia polimerowa, Papiernie itd.) korzystają tylko z katalogu sektora. Koszty są **absolutne** (np. „Nowa Fabryka” 800 000), a jedyna zniżka to −10% od poziomu rozwoju 3 (`getInvestmentCostForCompany`, `companies.js:7990`), więc w długiej grze, gdy spółki rosną, projekty robią się drobne.
+- **Jak wybierają boty:** `startRandomInvestment` (`companies.js:8156`) losuje **dowolną** pozycję spełniającą poziom rozwoju (`getRandomElement`), bez oceny zwrotu, gotówki ani potrzeb spółki. Katalog `general` jest dostępny zawsze, więc ogólne pozycje (biura, szkolenia) wypadają częściej niż sektorowe. Inne miejsca wyboru: przetargi budowlane (`core.js:5879`, tylko pozycje z budową), M&A (`ma.js:1710`) i miasta (`state.js:166`). Częstości w serii nie zmierzyłem: pierwszy krok PR0.
+- **Megaprojekty państwa:** `MEGA_PROJECTS` (`state.js:705`), 9 pozycji. Każda jest **jednorazowa na całą grę** (`state.js:742`: projekt już ukończony albo aktywny nie wraca), więc w długiej grze katalog się wyczerpuje. Bonusy (wzrost, wycena, kondycja) dla sektorów są stałe.
+- **Projekty czasowe:** `TIMED_PROJECT_TEMPLATES` (`state.js:717`), 6 pozycji, koszty 4–8 mln, też absolutne.
+- **Infrastruktura:** `INFRA_TYPES` (`infrastructure.js:10`): port, lotnisko, kolej, autostrada, z przetargami na odcinki i PPP.
+- **Emoji:** ikony projektów to emoji (136 pól `icon: '…'` w `companies.js`, 31 w `state.js`), wbrew zasadzie „ikony SVG”.
+- **Graf:** żaden projekt nie zużywa stali, tarcicy ani maszyn, a dobra K (maszyny, pojazdy) mają popyt tylko z amortyzacji (0.18).
+
+**Części (w 0.19.2, po modelu miast):**
+
+| Część | Zakres | Test / bramka |
+|---|---|---|
+| **PR0** | **Pomiar:** sonda wyborów projektów w serii 24 × 6,5 roku i 10 × 20 lat: które pozycje boty wybierają, jak często, zwrot (koszt / roczny przyrost zysku), udział `general`; megaprojekty i czasowe: liczba na grę i rok wyczerpania katalogu | raport `raporty/diagnoza_projekty_0.19.2.md` |
+| **PR1** | **Katalog spółek:** uzupełnienie o Alkohole, Motoryzację, Rybołówstwo, Nieruchomości, Obronność i podsektory z 0.18 (po 2–4 pozycje); przegląd nonsensów (pozycje bez związku z sektorem, dublujące się, z premią bez kosztu utrzymania) z listą usuniętych w raporcie; ikony SVG zamiast emoji (`uiIcon`) | każdy sektor i podsektor z grafu ma ≥ 2 pozycje; 0 emoji w katalogach |
+| **PR2** | **Wybór botów według zwrotu:** zamiast losowania ocena pozycji: oczekiwany zwrot (premia przychodu × przychód spółki − utrzymanie) / koszt, gotówka i kredyt, potrzeby (np. niska kondycja → szkolenia, pełna zdolność w grafie → fabryka); losowanie ważone tą oceną, `general` bez przewagi | rozkład wyborów z PR0 bez jednej pozycji > 20% wszystkich; GIG i marże ±0,3 pp |
+| **PR3** | **Skala w długiej grze:** koszt, wartość aktywa, utrzymanie i premie liczone względem wielkości spółki (np. koszt = udział rocznego przychodu, z widełkami) i inflacji, a koszty megaprojektów i czasowych względem PKB / wpływów państwa | w grze 20-letniej średni koszt projektu / przychód spółki w roku 15–20 = ± 20% roku 1–5 |
+| **PR4** | **Graf towarów:** projekty budowlane mają wsad (stal, tarcica, cement przez Budowlany, maszyny jako dobro K dla fabryk i zakładów) liczony w bilansie jako popyt inwestycyjny; niedobór stali opóźnia budowę albo podnosi koszt (zamiast cichego braku) | kalibracja `b = 1` na starcie; niedobór stali −20% wydłuża budowy o 10–30% |
+| **PR5** | **Kto zamawia:** spółka (katalog), **miasto** (projekty miasta z modelu 0.19.2: szpitale, uniwersytety, galerie, łącza, metro), **państwo przez Ministerstwo Infrastruktury** (0.19.1 P5a: porty, lotniska, kolej, autostrady, mosty) i rząd (megaprojekty narodowe). Wspólny opis zamawiającego w przetargu (kto płaci, kto dostaje premię) | każdy projekt ma zamawiającego; budżety państwa i miast bez ujemnych sald |
+| **PR6** | **Megaprojekty powtarzalne:** szablony zamiast jednorazowych pozycji (np. „Szpital kliniczny” w kolejnym mieście, „Elektrownia” kolejny blok), z odstępem między tymi samymi typami (np. 3 lata) i limitem liczby aktywnych (`MAX_ACTIVE_PROJECTS = 2` zostaje); nazwa z miastem lub numerem; projekty czasowe jako pula wydarzeń z kalendarza (co rok inne, wybór według miast i rządu) | w 20 latach 6–12 megaprojektów i ≥ 1 na każde 3 lata; katalog się nie wyczerpuje |
+| **PR7** | **Czytelne skutki dla gracza:** karta projektu pokazuje, kto zamawia, koszt, czas, wsad z grafu, komu daje premię i jak dużą (słowem i liczbą), co zmienia po ukończeniu (np. przepustowość, poziom życia miasta); wpis w Gazecie przy starcie i odbiorze | test DOM karty; brak emoji |
+| **PR8** | Kontrola części projektów w ramach kontroli 0.19.2 | GIG 20 lat 10–13%, marże 0 ± 0,3 pp, czas kroku ≤ 900 ms/kw. |
+
+**Pliki:** `companies.js` (`INVESTMENT_CATALOG`, `startRandomInvestment`, koszt), `state.js` (`MEGA_PROJECTS`, `TIMED_PROJECT_TEMPLATES`, harmonogram), `infrastructure.js` (ministerstwo jako zamawiający), `chains.js` (popyt inwestycyjny), `ui.js` (karta projektu), `img/` (ikony), `tests/przebiegi.html` (sonda).
+
+**Dlaczego w 0.19.2:** miasta są nowym zamawiającym większości projektów (szpitale, uniwersytety, galerie, łącza), a Ministerstwo Infrastruktury z 0.19.1 jest już wtedy gotowe. Robienie katalogów przed miastami oznaczałoby drugi przegląd tych samych pozycji.
 
 **Dlaczego tutaj (w 0.19.2), a Ministerstwo w 0.19.1:** Ministerstwo Infrastruktury to nowy urząd sterowany przez rząd i partie, więc pasuje do P5 (nowe urzędy) i P3 (lobbing) w 0.19.1, a Miasta 2 od razu dostają z niego budżet infrastruktury miast. Turystyka i usługi cyfrowe potrzebują popytu z klas po S1 (0.19.1) i z miast (atrakcyjność, zanieczyszczenie, informacja), więc wchodzą razem z Miastami; wcześniej popyt byłby tylko krajowy i trzeba by go przeliczać drugi raz.
 
