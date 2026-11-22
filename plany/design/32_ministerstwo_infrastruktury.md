@@ -12,11 +12,11 @@ Makieta: [makiety/32_ministerstwo_infrastruktury.html](makiety/32_ministerstwo_i
 ## Co pokazuje karta
 | Część | Treść | Dane | Markup / ARIA |
 |---|---|---|---|
-| Nagłówek | „Ministerstwo Infrastruktury” i zdanie: decyduje rząd, Ty możesz współfinansować (PPP) | — | `article.card.mi[aria-labelledby]` na całą szerokość siatki Przeglądu |
+| Nagłówek | „Ministerstwo Infrastruktury” i zdanie: finansowanie infrastruktury, decyduje rząd, Ty możesz współfinansować (PPP); bez odwołania do dawnej ustawy (poprawka 2026-11-22) | — | `article.card.mi[aria-labelledby]` na całą szerokość siatki Przeglądu |
 | Finansowanie | poziom słowem, „poziom 3 z 5”, skala; utrzymanie w kwartale (kwota i % wpływów), raty za budowy, zużycie na rok, szansa projektu | `society.laws.infrastructure`, `INFRA_LEVELS`, `inf.lastUpkeep`, `inf.lastInstallments` | `.mi-steps[role=img]`, `dl.mi-dl` |
 | Przepustowość | 3 paski (morska, lotnicza, lądowa) z kreską startu 1,00, liczba (poniżej 1,00 kolorem ostrzeżenia) i zdanie o szlakach z mapy 16 | `getInfraCapacity`, `getInfraCapUpper` | `ul.cap`, pasek `role=img` z pełnym opisem |
 | Priorytety | typy projektów w kolejności szansy (z wagi `pickInfraType`) i wolne miejsca (limit − obiekty); energia jako odnośnik do zakładki Energia | `INFRA_TYPES`, `countInfraObjects` | `ol.prio` |
-| Projekty w toku | nazwa (z odcinkami), wykonawca, termin, postęp, wpływ na przepustowość (`gain`), udział PPP gracza bursztynem | `society.infra.projects` | `ul.pj` |
+| Projekty w toku | nazwa (z odcinkami), wykonawca, termin, postęp, wpływ na przepustowość (`gain`), udział PPP gracza bursztynem | `society.infra.projects` | `ul.pj[tabindex=0][aria-label]` z przewijakiem (`max-height` ok. 3 projektów, `overflow-y: auto`, poprawka 2026-11-22) |
 | Akcje | „Mapa szlaków” (Łańcuchy → Szlaki), „Przetargi: Budownictwo” | — | `.mi-acts` |
 
 Telefon: jedna kolumna (`@media (max-width: 860px)`). Ikona magistrali pochodzi z `018_ikony.svg` (do przeniesienia do sprite'a gry, jak w notce 13).

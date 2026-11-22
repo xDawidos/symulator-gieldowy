@@ -288,7 +288,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .prio li.is-ext { color: var(--color-text-muted); }
 .prio li.is-ext a { color: var(--color-text-primary); font-size: 12px; }
 /* projekty w toku */
-.pj { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.pj { margin: 0; padding: 0 6px 0 0; list-style: none; display: grid; gap: 8px; max-height: 236px; overflow-y: auto; scrollbar-gutter: stable; overscroll-behavior: contain; } /* przewijak: lista rośnie z liczbą budów */
 .pj li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 3px 10px; padding: 8px 10px; border: 1px solid var(--ink-700); border-radius: 6px; background: var(--color-bg-surface); }
 .pj b { font-weight: 600; }
 .pj small { color: var(--color-text-muted); font-size: 12px; }
@@ -494,10 +494,10 @@ const NOW = 2;
 const CAP = [['Morska', 'transport-sea', 1.15, 1.45, 'szlaki morskie: fracht tańszy o ok. 4%'], ['Lotnicza', 'transport-air', 0.96, 1.30, 'poniżej startu: zużycie wyprzedza inwestycje'], ['Lądowa', 'transport-land', 1.08, 1.88, 'drogi i kolej: szlaki lądowe do Niemiec i Czech']];
 /* priorytet = waga państwa 1/przepustowość^4 (pickInfraType), wolne miejsca = limit − obiekty */
 const PRIO = [['Lotnisko', 'transport-air', 0.96, 1, 2], ['Magistrala kolejowa', 'magistrala', 1.08, 2, 4], ['Autostrada', 'transport-land', 1.08, 3, 6], ['Port morski', 'transport-sea', 1.15, 1, 3]];
-const PJ = [['Magistrala kolejowa', 'Infrastrukturex', 62, '+0,10 lądowej', 'odbiór za ok. 3 kw.', '25% PPP: Twój fundusz', '500 000 PLN'], ['Autostrada A2, odcinki 2–3 z 4', 'Bractwo Stali', 18, '+0,08 lądowej po całości', 'przetarg odcinka 4: tydz. 2', null, null], ['Port morski (terminal)', 'Budimix', 91, '+0,15 morskiej', 'odbiór w tym kwartale', null, null]];
+const PJ = [['Magistrala kolejowa', 'Infrastrukturex', 62, '+0,10 lądowej', 'odbiór za ok. 3 kw.', '25% PPP: Twój fundusz', '500 000 PLN'], ['Autostrada A2, odcinki 2–3 z 4', 'Bractwo Stali', 18, '+0,08 lądowej po całości', 'przetarg odcinka 4: tydz. 2', null, null], ['Port morski (terminal)', 'Budimix', 91, '+0,15 morskiej', 'odbiór w tym kwartale', null, null], ['Lotnisko regionalne', 'Giereklud', 8, '+0,15 lotniczej', 'budowa od tego kwartału', null, null], ['Magistrala kolejowa (południe)', 'przetarg', 0, '+0,10 lądowej', 'oferty do tydz. 3', '25% PPP: możesz współfinansować', '']];
 const w = PRIO.map(p => 1 / Math.pow(p[2], 4)), ws = w.reduce((a, b) => a + b, 0);
 const pct = (v, max) => `${Math.min(100, (v - 0.7) / (max - 0.7) * 100)}%`;
-document.getElementById('mi').innerHTML = `<header><span>${ic('budownictwo', 18)}</span><div><h3 id="mi-t">Ministerstwo Infrastruktury</h3><small>Finansowanie infrastruktury (dawniej ustawa w Prawo → Kraj). Decyduje rząd; Ty możesz współfinansować projekty (PPP).</small></div></header>
+document.getElementById('mi').innerHTML = `<header><span>${ic('budownictwo', 18)}</span><div><h3 id="mi-t">Ministerstwo Infrastruktury</h3><small>Finansowanie infrastruktury. Decyduje rząd; Ty możesz współfinansować projekty (PPP).</small></div></header>
   <div>
     <h4>Finansowanie</h4>
     <div class="mi-level"><b>${LV[NOW][0]}</b><span style="color:var(--color-text-muted)">poziom ${NOW + 1} z ${LV.length}</span></div>
@@ -516,7 +516,7 @@ document.getElementById('mi').innerHTML = `<header><span>${ic('budownictwo', 18)
     <ol class="prio">${PRIO.map(([n, i, c, done, lim], k) => `<li>${ic(i)}<span>${n}</span><span class="share">${Math.round(w[k] / ws * 100)}%</span><span class="slots">${lim - done} z ${lim} wolne</span></li>`).join('')}
       <li class="is-ext">${ic('prad')}<span>Energia: bloki i farmy</span><span></span><a href="#">Gospodarka → Energia</a></li></ol>
     <h4>Projekty w toku</h4>
-    <ul class="pj">${PJ.map(([n, who, v, gain, when, ppp, mine]) => `<li><b>${n}</b><span class="gain">${gain}</span><small>${who}, ${when}</small><span></span><span class="bar" role="img" aria-label="Postęp ${v}%" style="--v:${v}%"></span>${ppp ? `<span class="ppp">${ic('umowa', 14)}${ppp} <span class="mine">${mine}</span></span>` : ''}</li>`).join('')}</ul>
+    <ul class="pj" tabindex="0" aria-label="Projekty w toku, przewijana lista">${PJ.map(([n, who, v, gain, when, ppp, mine]) => `<li><b>${n}</b><span class="gain">${gain}</span><small>${who}, ${when}</small><span></span><span class="bar" role="img" aria-label="Postęp ${v}%" style="--v:${v}%"></span>${ppp ? `<span class="ppp">${ic('umowa', 14)}${ppp} <span class="mine">${mine}</span></span>` : ''}</li>`).join('')}</ul>
   </div>
   <div class="mi-acts"><span>Wpływ na szlaki widać na mapie: Łańcuchy → Szlaki.</span><span style="display:flex;gap:8px"><button class="btn">Mapa szlaków</button><button class="btn">Przetargi: Budownictwo</button></span></div>`;
 </script>
