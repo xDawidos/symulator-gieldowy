@@ -210,7 +210,7 @@ function getPowerResultAdj(stock) {
     if (stock.deposit && stock.deposit.untilQ > getEnergyQuarter()) revenueFactor *= stock.deposit.factor;
     const emission = getStockEmissionFactor(stock);
     if (emission > 0) { marginAdj -= getClimateFee() * emission; revenueFactor *= 1 - getPollutionProductionCut(e); }
-    revenueFactor *= getOpinionRevenueFactor(stock, e);
+    revenueFactor *= getOpinionRevenueFactor(stock, e) * getEcoIncidentRevenueFactor(stock); // 0.18.8 U9: skutki zdarzeń ekologicznych
     if (e.acidUntil >= getEnergyQuarter() && getStockSegments(stock).some(seg => seg.subsector === 'Rolnictwo')) revenueFactor -= ENERGY_EVENT_RULES.acidCut;
     return { revenueFactor, marginAdj };
 }
@@ -285,7 +285,7 @@ function processPowerBuilds(e) {
         const need = clampValue((ENERGY_RULES.targetReserve - reserve) / 0.05, 0, 1);
         const chance = ENERGY_RULES.buildChance * need * (1 + Math.max(0, deviation) * 2);
         const cashOk = (Number(stock.cash) || 0) >= getPowerBlockCost(stock, undefined, e) * ENERGY_RULES.minCashShare;
-        if (chance > 0 && cashOk && Math.random() < chance && startPowerBlock(stock)) building = null;
+        if (chance > 0 && cashOk && Math.random() < chance && startPowerBlock(stock, pickPowerBuildType(stock))) building = null; // 0.18.8 U9: pod presją OZE
     }
 }
 /** Budynek energetyczny z katalogu daje moc spółce (typ spółki, wiatr i słońce zawsze OZE). */
@@ -462,7 +462,7 @@ const ENERGY_EVENTS = {
 };
 // 0.18.6 O5 (U7): presja ekologiczna 0–100 — społeczna reakcja na zanieczyszczenie zamiast strojenia emisji.
 const ECO_PRESSURE_RULES = {
-    from: 45, scale: 2.5,             // cel presji = (zanieczyszczenie − 45) × 2,5 (zanieczyszczenie 85 → 100)
+    from: 45, scale: 3.0,             // cel presji = (zanieczyszczenie − 45) × 3 (zanieczyszczenie 78 → 100); 0.18.8 U9: 2,5 → 3 (decyzja użytkownika: więcej presji)
     up: 0.25, down: 0.10,             // dojście do celu na kwartał: szybko w górę, wolno w dół
     bumps: { smog: 5, protest: 4, acidRain: 3, ecoStrike: 2 },
     eventMult: 1,                     // szansa smogu i protestu × (1 + presja/100)
@@ -651,7 +651,7 @@ function processAiEsg(e) {
     for (const stock of stocks) {
         if (!canOrderEsg(stock) || getStockEmissionFactor(stock) <= getEmissionLimit(e)) continue;
         const p = getEcoPressure(e) / 100; // 0.18.6 O5: presja ekologiczna przyspiesza ESG u emitentów ponad limit (sprzężenie zwrotne: czyściej → mniejsza presja)
-        if (Math.random() < ENERGY_OFFICE_RULES.aiEsgChance * (1 + ECO_PRESSURE_RULES.esgBoost * p) && (Number(stock.cash) || 0) > getStockRevenue(stock) * (1 - ECO_PRESSURE_RULES.esgCashRelief * p) && !(typeof canFundControlAgm === 'function' && canFundControlAgm(stock))) orderEsg(stock);
+        if (Math.random() < ENERGY_OFFICE_RULES.aiEsgChance * (1 + ECO_PRESSURE_RULES.esgBoost * p) * (1 + ECO_INCIDENT_RULES.esgBoost * ecoHeat(stock)) && (Number(stock.cash) || 0) > getStockRevenue(stock) * (1 - ECO_PRESSURE_RULES.esgCashRelief * p) && !(typeof canFundControlAgm === 'function' && canFundControlAgm(stock))) orderEsg(stock);
     }
 }
 
@@ -848,6 +848,7 @@ function processEnergyQuarterly() {
     processAiEsg(e);
     processEnergyEvents(e);
     processEcoPressure(e); // 0.18.6 O5 (U7)
+    processEcoIncidents(e); // 0.18.8 U9: zdarzenia ekologiczne u emitentów
     payOzeSubsidies(e);
     maybeFoundStateAtom(e);
     processOpinion(e);
@@ -939,3 +940,58 @@ Object.assign(ACADEMY_ENTRIES, {
         ]
     }
 });
+
+// =================================================================================
+// 0.18.8 U9 (decyzja użytkownika 2026-11-21): NEGATYWNE WYDARZENIA EKOLOGICZNE u dużych emitentów — związki zawodowe, strajki aktywistów,
+// kontrole z karami, oskarżenia o zanieczyszczanie. Skutki: kurs, produkcja (przychód przez 1–2 kw.), kara; każde dokłada spółce
+// „presję” (ecoHeat, gaśnie 25%/kw.), która przyspiesza jej ESG i skłania energetykę węglową do budowy bloków OZE zamiast węglowych.
+// Lista zdarzeń spółki w karcie: Przegląd → „Wpływ na cenę i produkcję”. Gdy to nie wystarczy → handel emisjami w Polityce 2 (0.19.1).
+// =================================================================================
+const ECO_INCIDENT_RULES = { from: 25, maxPerQ: 3, chance: 0.45, decay: 0.75, esgBoost: 3, ozeMax: 0.8, logMax: 8, fineShare: 0.004 };
+const ECO_INCIDENTS = {
+    union: { name: 'Związki zawodowe', weight: 3, price: -0.01, prod: -0.03, q: 1, heat: 0.20, mood: 8, texts: ['Związkowcy w {name} żądają planu ograniczenia emisji i dodatku za pracę w złych warunkach.', 'Załoga {name} grozi strajkiem: chce filtrów na kominach i badań lekarskich.'] },
+    activists: { name: 'Strajk aktywistów', weight: 3, price: -0.02, prod: -0.05, q: 1, heat: 0.30, texts: ['Aktywiści blokują bramy {name}. Dostawy stoją, linia produkcyjna zwalnia.', 'Protestujący przykuli się do taśmociągu w {name}. Zakład przerywa pracę.'] },
+    inspection: { name: 'Kontrola i kara', weight: 2, price: -0.015, prod: -0.02, q: 1, heat: 0.30, fine: true, texts: ['Inspekcja ochrony środowiska w {name}: przekroczone normy emisji, kara.', 'Kontrola w {name} kończy się karą za brak pozwoleń na emisję.'] },
+    accusation: { name: 'Oskarżenie o zanieczyszczanie', weight: 2, price: -0.03, prod: 0, q: 0, heat: 0.40, texts: ['Mieszkańcy pozywają {name} za zatrucie rzeki. Sprawa trafia do mediów.', 'Raport lekarzy łączy wzrost zachorowań z emisjami {name}.'] }
+};
+const ecoHeat = stock => Number(stock?.ecoHeat) || 0;
+/** Mnożnik przychodu spółki z trwających skutków zdarzeń (getPowerResultAdj). */
+function getEcoIncidentRevenueFactor(stock) { const c = stock?.ecoProd; return c && c.until >= getEnergyQuarter() ? 1 + c.cut : 1; }
+function runEcoIncident(stock, kind) {
+    const def = ECO_INCIDENTS[kind], q = getEnergyQuarter(); if (!def || !stock) return null;
+    let fine = 0;
+    if (def.price && typeof applyPriceEffect === 'function') applyPriceEffect(stock.symbol, def.price, 'negative', 'company');
+    if (def.prod) stock.ecoProd = { cut: Math.max(-0.15, (stock.ecoProd?.until >= q ? stock.ecoProd.cut : 0) + def.prod), until: q + def.q };
+    if (def.mood && stock.workforce) stock.workforce.satisfaction = clampValue(stock.workforce.satisfaction - def.mood, 0, 100);
+    if (def.fine) {
+        fine = Math.round((Number(stock.price) || 0) * (Number(stock.totalShares) || 0) * ECO_INCIDENT_RULES.fineShare * Math.min(2, getStockEmissionFactor(stock)));
+        if (fine > 0 && typeof adjustCompanyCash === 'function') {
+            if (typeof ensureCompanyCash === 'function') ensureCompanyCash(stock, fine, 'Kredyt na karę za emisje');
+            adjustCompanyCash(stock, -fine); if (typeof adjustBalanceSheet === 'function') adjustBalanceSheet(stock, { assets: -fine, retainedEarnings: -fine });
+            if (typeof coverNegativeCash === 'function') coverNegativeCash(stock);
+            if (typeof recordPayment === 'function') recordPayment(stock, 'external:skarb-panstwa', fine, 'Kara za przekroczenie norm emisji');
+            if (typeof governmentTreasury === 'number') governmentTreasury += fine;
+        }
+    }
+    stock.ecoHeat = Math.min(3, ecoHeat(stock) + def.heat);
+    stock.ecoLog = [{ q, kind, price: def.price, prod: def.prod, fine }, ...(stock.ecoLog || [])].slice(0, ECO_INCIDENT_RULES.logMax);
+    const e = society.energy; e.stats.events = e.stats.events || {}; e.stats.events[`eco_${kind}`] = (e.stats.events[`eco_${kind}`] || 0) + 1;
+    publishEnergyNews(fillEnergyText(getRandomElement(def.texts), stock), `${def.name}: ${stock.name}`, 1);
+    return { kind, fine };
+}
+/** Co kwartał: presja spółek gaśnie; przy presji ≥ 25 duzi emitenci mają zdarzenia (najwyżej 3 na kwartał, szansa rośnie z presją). */
+function processEcoIncidents(e = society.energy) {
+    for (const s of stocks) if (s.ecoHeat) { s.ecoHeat = +(s.ecoHeat * ECO_INCIDENT_RULES.decay).toFixed(3); if (s.ecoHeat < 0.02) delete s.ecoHeat; }
+    const p = getEcoPressure(e); if (p < ECO_INCIDENT_RULES.from) return [];
+    const top = stocks.filter(s => !s.isBankrupt && !s.assetType && getStockEmissionFactor(s) > 0.3).map(s => [s, getStockEmissions(s)]).sort((a, b) => b[1] - a[1]).slice(0, 8).map(x => x[0]);
+    const out = [], kinds = Object.keys(ECO_INCIDENTS), total = kinds.reduce((a, k) => a + ECO_INCIDENTS[k].weight, 0);
+    for (const s of top) {
+        if (out.length >= ECO_INCIDENT_RULES.maxPerQ) break;
+        if (Math.random() >= ECO_INCIDENT_RULES.chance * p / 100) continue;
+        let r = Math.random() * total, kind = kinds[0]; for (const k of kinds) { r -= ECO_INCIDENTS[k].weight; if (r <= 0) { kind = k; break; } }
+        out.push(runEcoIncident(s, kind));
+    }
+    return out;
+}
+/** Typ nowego bloku: energetyka węglowa pod presją częściej buduje OZE (szansa = presja spółki, do 80%). */
+function pickPowerBuildType(stock) { return stock?.power?.type === 'coal' && Math.random() < Math.min(ECO_INCIDENT_RULES.ozeMax, ecoHeat(stock)) ? 'oze' : stock?.power?.type; }
