@@ -1,4 +1,4 @@
-# 31. Ustawy w zakładce Kraj: jeden układ (Państwo → Prawo → Kraj) — zaakceptowana 2026-11-22, zaktualizowana do planu 0.19.1 P5b (zmiany do akceptacji)
+# 31. Ustawy w zakładce Kraj: jeden układ (Państwo → Prawo → Kraj) — zaakceptowana 2026-11-22, zaktualizowana do planu 0.19.1 P5b (zmiany zaakceptowane 2026-11-22)
 
 Makieta: [makiety/31_ustawy.html](makiety/31_ustawy.html) (samodzielna). Uwaga użytkownika 2026-11-22: w zakładce Kraj są dwa sposoby pokazywania ustaw, a finansowanie infrastruktury jest poza tym.
 

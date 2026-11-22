@@ -1,4 +1,4 @@
-# 32. Ministerstwo Infrastruktury (Państwo → Gospodarka → Przegląd) — zaakceptowana 2026-11-22, zaktualizowana do planu 0.19.1 P5a (zmiany do akceptacji)
+# 32. Ministerstwo Infrastruktury (Państwo → Gospodarka → Przegląd) — zaakceptowana 2026-11-22, zaktualizowana do planu 0.19.1 P5a (zmiany zaakceptowane 2026-11-22)
 
 Makieta: [makiety/32_ministerstwo_infrastruktury.html](makiety/32_ministerstwo_infrastruktury.html) (samodzielna). Uwaga użytkownika 2026-11-22: ministerstwo decyduje o finansowaniu infrastruktury i ma mini okienko w Gospodarka → Przegląd. Mechanikę (kto decyduje, wpływ gracza, budżet) planuje czat planowania; makieta używa tylko danych, które już są w kodzie.
 
