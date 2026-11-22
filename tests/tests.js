@@ -1006,6 +1006,7 @@ group('Fundusz gracza (etap B)', () => {
     test('minimalny wpływ na cenę: 1% wolnego obrotu ≈ +0,5%', () => {
         const { a } = fundWorld();
         const price0 = a.price;
+        playerCash += 1000; // 0.18.8 U13: średnia cena z poślizgiem jest o 0,25% wyższa
         buyStock('AAA', 100); // 1% z 10 000 akcji
         assertNear(a.price / price0 - 1, 0.005, 'wpływ na cenę', 1e-6);
     });
@@ -4284,7 +4285,7 @@ group('Nauka N4/N5: Mentor, certyfikaty, wykres, wpływ zlecenia', () => {
     test('wpływ zlecenia: większe zlecenie = większy wpływ, limit 2%', () => {
         const [a] = world();
         const small = estimateOrderImpact(a, 1), big = estimateOrderImpact(a, 100000);
-        assert(small.impact < big.impact && big.impact <= 0.02, `wpływ ${small.impact} / ${big.impact}`);
+        assert(small.impact < big.impact && big.impact <= 0.15, `wpływ ${small.impact} / ${big.impact}`); // 0.18.8 U13: pułap 15% dla gracza
     });
 });
 
@@ -4770,7 +4771,8 @@ group('Poprawki 0.13.1 (B1–B13)', () => {
         const { a } = worldB();
         withCommission(0.01, () => {
             playerCash = 50_500; // 500 akcji po 100 zł + 1% prowizji = 50 500
-            assert(getMaxBuyQuantity(a, 'fund') === 500, `max ${getMaxBuyQuantity(a, 'fund')}`);
+            const m = getMaxBuyQuantity(a, 'fund'); // 0.18.8 U13: z poślizgiem mniej niż 500
+            assert(m <= 500 && getBuyQuote(a, m, 'fund').total <= playerCash && getBuyQuote(a, m + 1, 'fund').total > playerCash, `max ${m}`);
             buyStock('AAA', 501);
             assert(playerCash === 50_500 && !playerPortfolio.AAA, 'za drogo z prowizją — odmowa');
             buyStock('AAA', getMaxBuyQuantity(a, 'fund'));
@@ -17675,7 +17677,7 @@ group('0.18.6 Porządki', () => {
         const realRandom = Math.random;
         try {
             Math.random = () => 0.99; // bez strajku ekologicznego
-            assertEq(getEcoPressure(e), 62.5, 'stary zapis: presja z bieżącego zanieczyszczenia');
+            assertEq(getEcoPressure(e), (70 - ECO_PRESSURE_RULES.from) * ECO_PRESSURE_RULES.scale, 'stary zapis: presja z bieżącego zanieczyszczenia');
             e.pressure = 20; processEcoPressure(e); assert(e.pressure > 20, `rośnie przy 70: ${e.pressure}`);
             e.pollution = 40; const before = e.pressure; processEcoPressure(e); assert(e.pressure < before && e.pressure > before * 0.85, `spada wolno przy 40: ${before} → ${e.pressure}`);
         } finally { Math.random = realRandom; }
@@ -17785,6 +17787,44 @@ group('0.18.6 Porządki', () => {
 });
 
 group('0.18.8 Długa gra', () => {
+    test('U13: poślizg gracza według tabeli (bez pułapu 2%, do 15%), boty z pułapem 2%; pułap napływu rośnie z kapitalizacją rynku; sprzedaż pakietu większościowca obniża kurs przez kilka tygodni', () => {
+        const c = makeCompany('SLP'); c.price = 100; c.totalShares = 1e6; c.insiderShares = 0; c.sharesHeld = 0; resetWorld([c]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+        const ff = getTradeFreeFloat(c);
+        for (const [share, want] of [[0.001, 0.0005], [0.02, 0.01], [0.1, 0.05], [0.5, 0.15]]) assertNear(getTradeSlippage(c, ff * share), want, `udział ${share}`, 1e-9);
+        const q = getBuyQuote(c, ff * 0.1, 'fund'); assert(q.cost > c.price * ff * 0.1 * 1.02, 'średnia cena wykonania z poślizgiem (połowa ruchu)');
+        const p0 = c.price; applyTradeImpact(c, ff * 0.1, 1); assertNear(c.price, p0 * 1.02, 'bot: pułap 2%', 1e-9);
+        c.price = p0; applyTradeImpact(c, ff * 0.1, 1, true); assertNear(c.price, p0 * 1.05, 'gracz: 5% przy 10% obrotu', 1e-9);
+        c.price = 100; fundCapacityCapCache = { q: null, mult: 1 }; const r1 = getFundCapacityRef();
+        c.totalShares = 1e9; fundCapacityCapCache = { q: null, mult: 1 }; const r2 = getFundCapacityRef(); assert(r1 === FUND_CAPACITY_REF && r2 > r1 * 4, `pułap od rynku: ${r1} → ${r2}`);
+        c.totalShares = 1e6; fundCapacityCapCache = { q: null, mult: 1 };
+        const e = noteMajorityExit(c, 0.08 * c.totalShares, 0.6); assert(e && e.weeksLeft >= 4 && e.weeksLeft <= 6, 'wyjście większościowca');
+        assertEq(noteMajorityExit(c, 0.03 * c.totalShares, 0.6) ? 1 : 0, 0, 'mały pakiet: bez efektu'); assertEq(noteMajorityExit(c, 0.08 * c.totalShares, 0.3) ? 1 : 0, 0, 'mniejszościowiec: bez efektu');
+        const drops = []; const real = applyPriceEffect; applyPriceEffect = (sym, v) => drops.push(v);
+        try { for (let i = 0; i < 8; i++) processMajorityExitsWeekly(); } finally { applyPriceEffect = real; }
+        assert(drops.length >= 4 && drops.length <= 6 && Math.abs(drops.reduce((a, b) => a + b, 0) + 0.12) < 1e-9 && !c.majorityExit, `spadek rozłożony na tygodnie: ${drops}`);
+    });
+    test('U9: zdarzenia ekologiczne u emitentów — kurs, produkcja, kara, presja spółki (ESG, OZE zamiast węgla), lista w Przeglądzie; bez zdarzeń przy niskiej presji', () => {
+        const c = makeCompany('ECO'); c.segments = [{ sector: 'Energia', subsector: 'Energetyka węglowa', share: 1 }]; c.sector = getSectorsFromSegments(c.segments); c.price = 100; c.totalShares = 1e6; c.cash = 1e6;
+        resetWorld([c]); const e = ensureEnergy(); e.stats = e.stats || {};
+        const prices = [], real = applyPriceEffect; applyPriceEffect = (sym, v) => prices.push(v);
+        try {
+            const cash0 = c.cash; runEcoIncident(c, 'inspection'); runEcoIncident(c, 'activists');
+            assert(prices.length === 2 && prices.every(v => v < 0), 'kurs');
+            assert(getEcoIncidentRevenueFactor(c) < 1, 'produkcja obniżona');
+            assert(c.ecoLog.length === 2 && c.ecoHeat > 0.5, 'dziennik i presja spółki');
+            assert(c.ecoLog[1].fine >= 0 && c.cash <= cash0, 'kara');
+            for (let i = 0; i < 10; i++) runEcoIncident(c, 'union'); assertEq(c.ecoLog.length, 8, 'dziennik ≤ 8');
+            const html = renderEcoImpactSection(c); assert(html.includes('Wpływ na cenę i produkcję') && !/\p{Extended_Pictographic}/u.test(html), 'sekcja w Przeglądzie bez emoji');
+            c.power = { type: 'coal', capacity: 10 }; c.ecoHeat = 3; const realR = Math.random; Math.random = () => 0.5;
+            try { assertEq(pickPowerBuildType(c), 'oze', 'pod presją: blok OZE'); c.ecoHeat = 0.1; assertEq(pickPowerBuildType(c), 'coal', 'bez presji: węgiel'); } finally { Math.random = realR; }
+            e.pressure = 10; const n0 = c.ecoLog.length; assertEq(processEcoIncidents(e).length, 0, 'niska presja: bez zdarzeń');
+            c.ecoHeat = 1; processEcoIncidents(e); assertNear(c.ecoHeat, 0.75, 'presja spółki gaśnie', 1e-9);
+            assert(Object.values(ECO_INCIDENTS).every(d => d.texts.every(t => !/\p{Extended_Pictographic}/u.test(t))), 'teksty bez emoji');
+        } finally { applyPriceEffect = real; }
+    });
+    test('U11: Szmaragdowa od oceny A+ (dywidenda 4 kw. zostaje)', () => {
+        assertEq(ELITE_RULES.EMERALD.grade, 'A+', 'reguła'); assert(TIER_HINTS.EMERALD.includes('A+') && TIER_TIP_GRADES.EMERALD === 'A+', 'podpowiedź i wymagana ocena');
+    });
     test('D1: CV — 40 ostatnich wpisów, starsze jako liczniki; stary zapis z długim CV wczytuje się przycięty', () => {
         resetWorld([makeCompany('CV1')]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
         playerProfile.cv = Array.from({ length: 130 }, (_, i) => ({ type: i % 2 ? 'training' : 'promotion', text: `wpis ${i}` }));

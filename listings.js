@@ -824,7 +824,7 @@ const TIER_RULES = { BRONZE: 0.015, SILVER: 0.45, GOLD: 8, PLATINUM: 80, ffSilve
 const TIER_HINTS = {
     JUNK: 'Dostęp zależy od wielkości i zysków spółki.', BRONZE: 'Dostęp zależy od wielkości i zysków spółki.', SILVER: 'Dostęp zależy od wielkości i zysków spółki.', GOLD: 'Dostęp zależy od wielkości i zysków spółki.',
     PLATINUM: 'Dostęp od oceny A. Decydują też wielkość, płynność i zyski spółki.',
-    RUBY: 'Dostęp od oceny A+ i stałych zysków.', EMERALD: 'Dostęp od oceny AA i regularnej dywidendy.', DIAMOND: 'Tylko najlepsza spółka rynku.'
+    RUBY: 'Dostęp od oceny A+ i stałych zysków.', EMERALD: 'Dostęp od oceny A+ i regularnej dywidendy.', DIAMOND: 'Tylko najlepsza spółka rynku.'
 };
 let tierMedianCache = { q: null, home: 0, foreign: 0 };
 function medianOf(values) { const v = values.filter(x => x > 0).sort((a, b) => a - b); return v.length ? (v.length % 2 ? v[(v.length - 1) / 2] : (v[v.length / 2 - 1] + v[v.length / 2]) / 2) : 0; }

@@ -699,11 +699,11 @@ function renderStockDrawer(symbol) {
 /** N5: szacunek kosztu i wpływu zlecenia na kurs (płynność rynku). */
 function estimateOrderImpact(stock, quantity) {
     const freeFloat = Math.max(1, typeof getFreeFloatShares === 'function' ? getFreeFloatShares(stock) : stock.totalShares);
-    const impact = Math.min(0.02, 0.5 * Math.abs(quantity) / freeFloat);
+    const impact = typeof getTradeSlippage === 'function' ? getTradeSlippage(stock, quantity) : Math.min(0.02, 0.5 * Math.abs(quantity) / freeFloat); // 0.18.8 U13: poślizg gracza do 15%
     const marketId = typeof getStockMarket === 'function' ? getStockMarket(stock) : 'GPW';
     const commission = typeof getBuyCommissionRate === 'function' ? getBuyCommissionRate(stock) : (typeof getMarketDef === 'function' ? (getMarketDef(marketId)?.commission || 0) : 0);
     const value = quantity * stock.price;
-    return { value, impact, commission: value * commission, freeFloat, available: typeof getAvailableShares === 'function' ? getAvailableShares(stock) : null };
+    return { value, impact, slip: impact / 2, share: Math.abs(quantity) / freeFloat, commission: value * commission, freeFloat, available: typeof getAvailableShares === 'function' ? getAvailableShares(stock) : null };
 }
 
 function updateDrawerImpact(symbol) {
@@ -713,8 +713,8 @@ function updateDrawerImpact(symbol) {
     const quantity = Math.max(0, parseInt(document.getElementById('dqty-' + symbol)?.value, 10) || 0);
     if (!quantity) { box.textContent = ''; return; }
     const e = estimateOrderImpact(stock, quantity);
-    box.innerHTML = `Wartość ~${formatZl(e.value, 0)} · prowizja ~${formatZl(e.commission, 2)} · kurs po zleceniu ~${e.impact >= 0.0005 ? `${formatNumberPl(e.impact * 100)}%` : '0%'} w Twoją niekorzyść`
-        + `${e.impact >= 0.01 ? ' <span class="text-warn">— duże zlecenie przy małym obrocie (płynność!)</span>' : ''} · w obrocie ${formatInt(e.freeFloat)} akcji`;
+    box.innerHTML = `Wartość ~${formatZl(e.value, 0)} · prowizja ~${formatZl(e.commission, 2)} · poślizg ~${e.slip >= 0.0005 ? `${formatNumberPl(e.slip * 100)}%` : '0%'} (średnia cena), kurs po zleceniu ~${e.impact >= 0.0005 ? `${formatNumberPl(e.impact * 100)}%` : '0%'} w Twoją niekorzyść`
+        + `${e.impact >= 0.01 ? ' <span class="text-warn">— duże zlecenie przy małym obrocie (płynność!)</span>' : ''} · ${formatNumberPl(e.share * 100, 1)}% akcji w obrocie (${formatInt(e.freeFloat)})`;
     if (e.impact >= 0.01 && typeof unlockAcademyEntry === 'function') unlockAcademyEntry('wplyw');
 }
 
@@ -1846,7 +1846,7 @@ function renderRatingList(list) {
 document.addEventListener('click', e => { const b = e.target.closest?.('.rs'); document.querySelectorAll('.rs[data-open]').forEach(x => x !== b && x.removeAttribute('data-open')); if (b) b.toggleAttribute('data-open'); }); // dotyk: podpowiedź skali
 document.addEventListener('keydown', e => { if (e.key === 'Escape') document.querySelectorAll('.rs[data-open]').forEach(x => x.removeAttribute('data-open')); });
 /** 0.18.7 E0a (makieta 25): podpowiedź poziomu — wymagana ocena (jeśli jest) + zdanie bez liczb. Ta sama na płytce i w karcie spółki. */
-const TIER_TIP_GRADES = { PLATINUM: 'A', RUBY: 'A+', EMERALD: 'AA' };
+const TIER_TIP_GRADES = { PLATINUM: 'A', RUBY: 'A+', EMERALD: 'A+' };
 function renderExchangeTip(key, idSuffix = '') {
     const grade = TIER_TIP_GRADES[key];
     return `<span class="ex-tip" role="tooltip" id="ex-tip-${key}${idSuffix}">${grade ? `<span class="req">${uiIcon('zweryfikowany', 12)} Wymagana ocena ${grade}</span>` : ''}<span class="why">${escapeHtml(getExchangeRuleText(key))}</span></span>`;
@@ -4502,6 +4502,13 @@ function renderCompanyCard() {
     else body.innerHTML = renderCompanyCardOverview(stock) + (typeof renderStockChainTiles === 'function' ? renderStockChainTiles(stock) : ''); // 0.18.1 P5: wiersz łańcucha (tylko ogniwa)
 }
 
+/** 0.18.8 U9: Przegląd → „Wpływ na cenę i produkcję” — zdarzenia ekologiczne spółki (związki, aktywiści, kontrole, kary, oskarżenia). */
+function renderEcoImpactSection(stock) {
+    const log = stock.ecoLog || []; if (!log.length) return '';
+    const prod = typeof getEcoIncidentRevenueFactor === 'function' ? getEcoIncidentRevenueFactor(stock) - 1 : 0, pct = v => formatPct(v, 1);
+    return `<h4>Wpływ na cenę i produkcję</h4>${prod < 0 ? `<p class="text-sm">${uiIcon('alert', 14)} Produkcja obniżona o ${formatNumberPl(-prod * 100, 0)}% w tym kwartale.</p>` : ''}
+        <ul class="eco-log text-sm">${log.map(x => `<li><b>${escapeHtml(ECO_INCIDENTS[x.kind]?.name || x.kind)}</b> <span class="text-muted">· ${formatQuarterDate(x.q)}</span> — kurs ${pct(x.price)}${x.prod ? `, produkcja ${pct(x.prod)}` : ''}${x.fine ? `, kara ${formatZl(x.fine, 0)}` : ''}</li>`).join('')}</ul>`;
+}
 function renderCompanyCardOverview(stock) {
     const traits = (stock.ceo?.traits || []).map(trait => {
         const data = ceoTraits[trait.id];
@@ -4521,6 +4528,7 @@ function renderCompanyCardOverview(stock) {
                     <div class="ceo-traits-container">${traits}</div>` : ''}
                 ${stock.deputies?.length ? `<h4>Wiceprezesi</h4><ul class="ceo-deputies">${stock.deputies.map(deputy => `<li>${escapeHtml(deputy.name)} <button class="ceo-link" onclick="openTiedProfile('${escapeHtml(getCeoRelationKey(deputy.id))}')">${uiIcon('grupa', 12)} Profil w Tied</button></li>`).join('')}</ul>` : ''}
                 ${typeof renderCompanyEnergyKpi === 'function' ? renderCompanyEnergyKpi(stock) : ''}
+                ${!foreign ? renderEcoImpactSection(stock) : ''}
                 ${insights.length ? `<h4>Analityk</h4>${insights.map(line => `<p class="text-sm">${uiIcon('szukaj', 14)} ${escapeHtml(line)}</p>`).join('')}` : ''}
             </section>
         </div>`;

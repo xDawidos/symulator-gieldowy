@@ -336,8 +336,8 @@ function buyStock(symbol, quantity) {
     playerCash -= totalCost;
     stockToBuy.sharesHeld += quantity;
 
-    // Minimalny wpływ na cenę (udział w wolnym obrocie) i log transakcji funduszu (compliance)
-    applyTradeImpact(stockToBuy, quantity, 1);
+    // Wpływ na cenę (poślizg gracza, 0.18.8 U13) i log transakcji funduszu (compliance)
+    applyTradeImpact(stockToBuy, quantity, 1, true);
     logFundTrade(symbol, 'buy');
 
     // Logika transakcji
@@ -408,7 +408,8 @@ function sellStock(symbol, quantity) {
         return;
     }
 
-    let totalGain = stockToSell.price * quantity;
+    const stakeBeforeSale = typeof getPlayerStakePct === 'function' ? getPlayerStakePct(stockToSell) : 0; // 0.18.8 U13: wyjście większościowca
+    let totalGain = stockToSell.price * quantity * (1 - getTradeSlippage(stockToSell, quantity) / 2); // 0.18.8 U13: średnia cena wykonania z poślizgiem
     const charismaLevel = getSkillLevel('sharkCharisma');
     if (charismaLevel > 0) {
         let charismaBonus = 0;
@@ -454,7 +455,8 @@ function sellStock(symbol, quantity) {
     playerCash += totalGainNet; // Gracz otrzymuje kwotę netto
     holding.shares -= quantity;
     stockToSell.sharesHeld -= quantity;
-    applyTradeImpact(stockToSell, quantity, -1);
+    applyTradeImpact(stockToSell, quantity, -1, true);
+    if (typeof noteMajorityExit === 'function') noteMajorityExit(stockToSell, quantity, stakeBeforeSale);
     logFundTrade(symbol, 'sell');
     if (typeof onFundTrade === 'function') onFundTrade(stockToSell, quantity, 'sell'); // relacje z botami (relations.js)
     if (typeof chargeMarketCommission === 'function') chargeMarketCommission(stockToSell, quantity * stockToSell.price, 'player'); // prowizja operatora rynku
@@ -2380,9 +2382,14 @@ function maybeTriggerForcedEmission() {
 // =================================================================================
 
 /** Minimalny wpływ transakcji na cenę: 0,5 × udział w wolnym obrocie, maks. 2%. */
-function applyTradeImpact(stock, quantity, direction) {
-    const freeFloat = Math.max(1, typeof getFreeFloatShares === 'function' ? getFreeFloatShares(stock) : stock.totalShares);
-    const pct = Math.min(0.02, 0.5 * Math.abs(quantity) / freeFloat);
+// 0.18.8 U13 b (2026-11-21): zlecenie gracza ma poślizg rosnący z udziałem w free floacie (0,5 × udział, do 15%), wliczony w cenę
+// wykonania (połowa ruchu kursu) i w ruch kursu po transakcji. Boty i spółki zostają przy pułapie 2%.
+const TRADE_SLIP_RULES = { k: 0.5, max: 0.15, otherCap: 0.02 };
+function getTradeFreeFloat(stock) { return Math.max(1, typeof getFreeFloatShares === 'function' ? getFreeFloatShares(stock) : stock.totalShares); }
+/** Ruch kursu po zleceniu gracza (ułamek ceny). */
+function getTradeSlippage(stock, quantity) { return stock ? Math.min(TRADE_SLIP_RULES.max, TRADE_SLIP_RULES.k * Math.abs(quantity) / getTradeFreeFloat(stock)) : 0; }
+function applyTradeImpact(stock, quantity, direction, player = false) {
+    const pct = player ? getTradeSlippage(stock, quantity) : Math.min(TRADE_SLIP_RULES.otherCap, TRADE_SLIP_RULES.k * Math.abs(quantity) / getTradeFreeFloat(stock));
     stock.price = Math.max(0.01, stock.price * (1 + Math.sign(direction) * pct));
 }
 
@@ -2450,7 +2457,7 @@ function getBuyCommissionRate(stock) {
 
 /** 0.13.1 (B1/B2): pełny koszt zakupu — cena (z rabatem), prowizja, razem. */
 function getBuyQuote(stock, quantity, account = activeTradingAccount) {
-    const value = (Number(stock?.price) || 0) * Math.max(0, quantity);
+    const value = (Number(stock?.price) || 0) * Math.max(0, quantity) * (1 + getTradeSlippage(stock, quantity) / 2); // 0.18.8 U13: średnia cena wykonania z poślizgiem
     if (account === 'private') return { cost: value, fee: 0, total: value };
     const cost = value * (1 - getCharismaDiscount());
     const fee = value * getBuyCommissionRate(stock);
@@ -2480,7 +2487,7 @@ function sellStockPrivate(symbol, quantity) {
     if (!stock || !holding || holding.shares < quantity) { alert('Nie masz tylu akcji na koncie prywatnym.'); return false; }
     if (stock.isTradeLocked) { alert('Handel tą akcją jest wstrzymany.'); return false; }
 
-    const proceeds = stock.price * quantity;
+    const proceeds = stock.price * quantity * (1 - getTradeSlippage(stock, quantity) / 2); // 0.18.8 U13: poślizg
     const profit = proceeds - holding.avgPrice * quantity;
     const tax = profit > 0 ? profit * PRIVATE_GAINS_TAX * getPrivateTaxModifier() : 0;
     governmentTreasury += tax;
@@ -2488,7 +2495,7 @@ function sellStockPrivate(symbol, quantity) {
     playerWallet.cash += proceeds - tax;
     holding.shares -= quantity;
     stock.sharesHeld -= quantity;
-    applyTradeImpact(stock, quantity, -1);
+    applyTradeImpact(stock, quantity, -1, true); // 0.18.8 U13
     if (holding.shares <= 0) delete playerWallet.portfolio[symbol];
 
     logEvent(`🧍 Prywatnie sprzedano ${quantity} szt. ${symbol}: ${formatZl(proceeds, 2)} (podatek ${formatZl(tax, 2)}).`, 'review');
@@ -3731,6 +3738,28 @@ function trimPlayerCv(profile = playerProfile) {
     for (const e of old) profile.cvCounts[e.type || 'inne'] = (profile.cvCounts[e.type || 'inne'] || 0) + 1;
     return old.length;
 }
+// 0.18.8 U13 (dopisek użytkownika): fundusz-większościowiec (> 50%) sprzedaje pakiet ≥ 5% akcji → kurs spada przez 4–6 tygodni
+// (1,5 × sprzedany udział łącznie, do 25%), mniejszościowi panikują. Kolejna sprzedaż w trakcie dokłada spadek.
+const MAJORITY_EXIT_RULES = { minStake: 0.5, minSold: 0.05, dropPerShare: 1.5, maxDrop: 0.25, weeks: [4, 6] };
+function noteMajorityExit(stock, quantity, stakeBefore) {
+    const sold = quantity / Math.max(1, stock.totalShares);
+    if (!(stakeBefore > MAJORITY_EXIT_RULES.minStake) || sold < MAJORITY_EXIT_RULES.minSold) return null;
+    const weeks = getRandomIntInRange(...MAJORITY_EXIT_RULES.weeks), prev = stock.majorityExit;
+    const total = Math.min(MAJORITY_EXIT_RULES.maxDrop, MAJORITY_EXIT_RULES.dropPerShare * sold + (prev ? prev.perWeek * prev.weeksLeft : 0));
+    stock.majorityExit = { weeksLeft: weeks, perWeek: total / weeks };
+    const text = `Większościowy akcjonariusz ${stock.name} sprzedaje ${formatNumberPl(sold * 100, 1)}% akcji. Mniejszościowi akcjonariusze panikują, kurs jest niestabilny.`;
+    if (typeof logEvent === 'function') logEvent(text, 'market');
+    if (typeof pushNews === 'function') pushNews(text, stock.symbol);
+    return stock.majorityExit;
+}
+/** Co tydzień: rozłożony spadek kursu po wyjściu większościowca. */
+function processMajorityExitsWeekly() {
+    for (const s of stocks) {
+        const e = s.majorityExit; if (!e) continue;
+        if (!s.isBankrupt && typeof applyPriceEffect === 'function') applyPriceEffect(s.symbol, -e.perWeek, 'negative', 'market');
+        if (--e.weeksLeft <= 0) delete s.majorityExit;
+    }
+}
 const JU_TAPE_LIMIT = 40;
 const JU_HISTORY_WEEKS = 8;
 const CLIENT_HISTORY_LIMIT = 10;
@@ -3980,11 +4009,23 @@ function getRecentExcessAnnual() {
  * Pomiar (g0_diag20, fundusz-gig, 20 lat): bez pułapu udziały rosły średnio +3%/rok, ale 6,2% i −2% w skrajnych grach.
  */
 const FUND_CAPACITY_REF = 60_000;
+// 0.18.8 U13 d: próg rośnie razem z kapitalizacją rynku krajowego (start ok. 20 mld PLN), więc w długiej grze nie hamuje coraz mocniej.
+const FUND_CAPACITY_CAP0 = 20e9;
+let fundCapacityCapCache = { q: null, mult: 1 };
+function getFundCapacityRef() {
+    const q = typeof macro === 'object' ? macro.quarter : 0;
+    if (fundCapacityCapCache.q !== q && typeof stocks === 'object') {
+        const cap = stocks.filter(s => !s.assetType && !s.isBankrupt).reduce((a, s) => a + (Number(s.price) || 0) * (Number(s.totalShares) || 0), 0);
+        fundCapacityCapCache = { q, mult: Math.max(1, cap / FUND_CAPACITY_CAP0) };
+    }
+    return FUND_CAPACITY_REF * fundCapacityCapCache.mult;
+}
 const FUND_CAPACITY_EXPONENT = 0.6;
 const FUND_CAPACITY_FLOOR = 0.2;
 function getFundCapacityFactor(assets = getFundAssets()) {
-    if (!(assets > FUND_CAPACITY_REF)) return 1;
-    return Math.max(FUND_CAPACITY_FLOOR, Math.pow(FUND_CAPACITY_REF / assets, FUND_CAPACITY_EXPONENT));
+    const ref = getFundCapacityRef();
+    if (!(assets > ref)) return 1;
+    return Math.max(FUND_CAPACITY_FLOOR, Math.pow(ref / assets, FUND_CAPACITY_EXPONENT));
 }
 
 /** Roczna stopa napływu nowych klientów (przy otwartej emisji): zaufanie, reputacja, wynik vs GIG. */
