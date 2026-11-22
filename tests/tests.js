@@ -17825,6 +17825,30 @@ group('0.18.8 Długa gra', () => {
     test('U11: Szmaragdowa od oceny A+ (dywidenda 4 kw. zostaje)', () => {
         assertEq(ELITE_RULES.EMERALD.grade, 'A+', 'reguła'); assert(TIER_HINTS.EMERALD.includes('A+') && TIER_TIP_GRADES.EMERALD === 'A+', 'podpowiedź i wymagana ocena');
     });
+    test('makieta 28: Automaty — przełącznik role=switch zmienia aria-checked i ustawienie, pola wyłączone przy wyłączonym automacie, dziennik ≤ 20 wierszy, zablokowany z certyfikatem i przyciskiem Mentora', () => {
+        resetWorld([makeCompany('AU1')]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+        const own = !document.getElementById('skills-list'), host = document.getElementById('skills-list') || document.createElement('div'); if (own) { host.id = 'skills-list'; document.body.appendChild(host); } const savedTab = cvTab;
+        try {
+            cvTab = 'automation'; renderCvPanel();
+            assert(host.querySelectorAll('.au.is-locked').length === 3 && host.querySelector('.au-lock button').textContent.includes('Otwórz Mentora'), 'zablokowane z przyciskiem');
+            getMentor().certificates = { risk: 0, analyst: 0 }; renderCvPanel();
+            const sw = () => host.querySelector('.sw[aria-labelledby="au-deposits"]');
+            assertEq(sw().getAttribute('aria-checked'), 'false', 'wyłączony'); assert(host.querySelector('#au-f-deposits-minRate').disabled, 'pole wyłączone');
+            toggleAutomationFromUi('deposits'); assertEq(sw().getAttribute('aria-checked'), 'true', 'przełącznik'); assert(getAutomation().deposits.on && !host.querySelector('#au-f-deposits-minRate').disabled, 'ustawienie i pole włączone');
+            for (let i = 0; i < 30; i++) logAutomation('deposits', `akcja ${i}`); renderCvPanel(); assertEq(host.querySelectorAll('.au-log tbody tr').length, 20, 'dziennik ≤ 20');
+        } finally { if (own) host.remove(); else host.innerHTML = ''; cvTab = savedTab; }
+    });
+    test('makieta 29: baner łabędzia — „pozytywny”, ikona typu (bez alert w nagłówku), plakietka do końca łabędzia', () => {
+        resetWorld([makeCompany('SWB')]); macro.quarter = 50; blackSwanState = createBlackSwanState();
+        const bar = document.getElementById('topbar') || (() => { const h = document.createElement('header'); h.id = 'topbar'; h.dataset.test = '1'; document.body.appendChild(h); return h; })();
+        try {
+            blackSwanState.active = { id: 'techRevolution', name: 'Rewolucja technologiczna', q: 50, untilQ: 54, line: null, countries: [], positive: true };
+            const html = renderSwanBanner(blackSwanState.active); assert(html.includes('pozytywny') && html.includes('role="alert"'), 'pozytywny, role=alert');
+            assert(!html.split('</h2>')[0].includes(UI_ICON_PATHS.alert), 'bez ikony alert w nagłówku');
+            showBlackSwanBanner(blackSwanState.active); closeSwanBanner(); const chip = document.getElementById('swan-chip'); assert(chip && !chip.hidden && chip.textContent.includes('1 z 4'), 'plakietka po zamknięciu');
+            macro.quarter = 54; processBlackSwansQuarterly(); assert(!document.getElementById('swan-chip'), 'plakietka znika po untilQ');
+        } finally { document.getElementById('swan-banner')?.remove(); document.getElementById('swan-chip')?.remove(); if (bar.dataset.test) bar.remove(); blackSwanState = createBlackSwanState(); }
+    });
     test('D1: CV — 40 ostatnich wpisów, starsze jako liczniki; stary zapis z długim CV wczytuje się przycięty', () => {
         resetWorld([makeCompany('CV1')]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
         playerProfile.cv = Array.from({ length: 130 }, (_, i) => ({ type: i % 2 ? 'training' : 'promotion', text: `wpis ${i}` }));
@@ -17867,7 +17891,13 @@ group('0.18.8 Długa gra', () => {
         const html = renderMailPreview(mailbox.messages[mailbox.messages.length - 1]);
         assert(html.includes('class="dk"') && html.includes('Ranking → Historia') && !/\p{Extended_Pictographic}/u.test(html), 'artykuł dekady bez emoji');
         const host = document.createElement('div'); host.id = 'leaderboard-list'; document.body.appendChild(host);
-        try { setLeaderboardTab('history'); assertEq(host.querySelectorAll('.dk').length, 3, 'Historia: 3 dekady'); } finally { host.remove(); leaderboardTab = 'funds'; }
+        try {
+            historyDecade = null; setLeaderboardTab('history');
+            assertEq(host.querySelectorAll('button.dec').length, 3, 'makieta 30: 3 przyciski dekad'); assert(host.querySelector('.dec.is-now'), 'dekada w toku');
+            assert(host.querySelector('.hi-main .dk h3').textContent.includes('Dekada 3'), 'domyślnie najnowsza'); assert(host.querySelector('.hi-chart svg[role=img]').getAttribute('aria-label').includes('Dekada 1'), 'wykres z opisem');
+            selectHistoryDecade(1); assert(host.querySelector('.hi-main .dk h3').textContent.includes('Dekada 1') && host.querySelector('.dec[data-n="1"]').getAttribute('aria-current') === 'true', 'klik zmienia raport');
+            const keep = decadeState.reports; decadeState.reports = []; displayLeaderboard(); assert(host.textContent.includes('Historia jeszcze pusta'), 'stan pusty'); decadeState.reports = keep;
+        } finally { host.remove(); leaderboardTab = 'funds'; historyDecade = null; }
         const snap = JSON.parse(JSON.stringify(getDecadeSnapshot())); decadeState = createDecadeState(); applyDecadeSnapshot(snap); assertEq(decadeState.reports.length, 3, 'zapis i odczyt');
     });
 });

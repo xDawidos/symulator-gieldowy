@@ -8,7 +8,7 @@
 // =================================================================================
 const AUTOMATION_RULES = { logMax: 20, defaults: { deposits: { on: false, minRate: 0.02 }, tbills: { on: false, cashPct: 0.10, minYield: 0.04 }, sector: { on: false, limit: 0.35 } } };
 const AUTOMATION_UNLOCK = { deposits: 'risk', tbills: 'analyst', sector: 'risk' }; // certyfikat Akademii (mentor), który odblokowuje automat
-const AUTOMATION_LABELS = { deposits: 'Auto-rolowanie lokat', tbills: 'Auto-udział w aukcjach bonów', sector: 'Alert koncentracji sektora' };
+const AUTOMATION_LABELS = { deposits: 'Auto-rolowanie lokat', tbills: 'Auto-oferty na aukcjach bonów', sector: 'Alert koncentracji sektora' };
 
 function getAutomation() {
     if (!playerProfile) return null;
@@ -31,7 +31,7 @@ function logAutomation(kind, text) {
 function autoRollDeposit(deposit, payout) {
     if (!isAutomationOn('deposits') || !(payout >= FUND_DEPOSIT_MIN) || payout > playerCash) return null;
     const best = commercialBanks.filter(canBankTakeFundDeposits).map(b => ({ b, rate: getFundDepositRate(b, deposit.termWeeks) })).sort((x, y) => y.rate - x.rate)[0];
-    if (!best || best.rate < getAutomation().deposits.minRate) { logAutomation('deposits', `Lokata ${formatZl(payout, 0)} nie odnowiona: najlepsza stopa poniżej progu.`); return null; }
+    if (!best || best.rate < getAutomation().deposits.minRate) { logAutomation('deposits', `Lokata ${formatZl(payout, 0)} nie odnowiona: najlepsza stopa ${best ? formatNumberPl(best.rate * 100, 2) + '%' : 'brak banku'} poniżej progu ${formatNumberPl(getAutomation().deposits.minRate * 100, 1)}%.`); return null; }
     const d = openFundDeposit(best.b.id, payout, deposit.termWeeks);
     if (d) logAutomation('deposits', `Lokata ${formatZl(payout, 0)} odnowiona w ${best.b.name} na ${deposit.termWeeks} tyg. (${formatNumberPl(best.rate * 100, 2)}%).`);
     return d;

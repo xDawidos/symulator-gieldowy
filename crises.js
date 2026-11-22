@@ -793,6 +793,7 @@ function processBlackSwansQuarterly() {
     const q = crisisQuarter();
     if (blackSwanState.nextQ === null) blackSwanState.nextQ = Math.max(BLACK_SWAN_RULES.firstQ, q + swanGap());
     if (blackSwanState.active && q >= blackSwanState.active.untilQ) blackSwanState.active = null;
+    if (typeof updateSwanChip === 'function') updateSwanChip(); // makieta 29: plakietka do końca łabędzia
     if (q < blackSwanState.nextQ) return null;
     blackSwanState.nextQ = q + swanGap();
     return startBlackSwan();

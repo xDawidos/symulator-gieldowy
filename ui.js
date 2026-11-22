@@ -2913,11 +2913,7 @@ function displayLeaderboard() {
     if (!container) return;
     if (!playerFund) { container.innerHTML = '<p class="fund-muted">Brak funduszu.</p>'; return; }
     const tabs = `<div class="wn-tabs" role="tablist" aria-label="Ranking">${[['funds', 'Fundusze'], ['history', 'Historia']].map(([id, label]) => `<button class="wn-tab bank-tab-btn${leaderboardTab === id ? ' active' : ''}" role="tab" aria-selected="${leaderboardTab === id}" onclick="setLeaderboardTab('${id}')">${label}</button>`).join('')}</div>`; // 0.18.8 D6
-    if (leaderboardTab === 'history') {
-        const reps = typeof decadeState === 'object' ? [...decadeState.reports].reverse() : [];
-        container.innerHTML = tabs + (reps.length ? `<div class="dk-list">${reps.map(r => renderDecadeArticle(r, true)).join('')}</div>` : renderEmptyState({ icon: 'zegar', title: 'Historia jeszcze pusta', text: 'Pierwsze podsumowanie dekady przyjdzie po 10 latach gry od Kroniki Rynku.', variant: 'wait' }));
-        return;
-    }
+    if (leaderboardTab === 'history') { container.innerHTML = tabs + renderHistoryTab(); return; } // 0.18.8 D6 (makieta 30)
 
     container.innerHTML = tabs + `
         <p class="fund-muted">Zwrot skumulowany z ${FUND_PERIODS_SHOWN} ostatnich okresów. Liczy się wynik, nie wielkość funduszu.</p>
@@ -2941,6 +2937,7 @@ function renderDecadeArticle(rep, full = false) {
     const diff = rep.fund !== null && rep.gig !== null ? Math.round((rep.fund - rep.gig) * 100) : null;
     const cell = (title, html) => `<div class="dk-cell"><h4>${title}</h4>${html}</div>`;
     const names = list => list.map(x => `${escapeHtml(x.name)} (rok ${Math.floor(x.q / 4) + 1})`).join(', ');
+    if (full) return renderDecadeArticleFull(rep); // 0.18.8 D6 (makieta 30)
     const cells = [
         rep.best ? cell('Najlepsza spółka dekady', `<b>${escapeHtml(rep.best.name)}</b> <span class="tu-tag">${escapeHtml(rep.best.symbol)}</span><span class="n v ${cls(rep.best.ch)}">${pct(rep.best.ch)} wartości</span>`) : '',
         rep.bestPos ? cell('Twoja najlepsza pozycja', `<b>${escapeHtml(rep.bestPos.name)}</b> <span class="tu-tag">${escapeHtml(rep.bestPos.symbol)}</span><span class="n v ${cls(rep.bestPos.ch)}">${pct(rep.bestPos.ch)} od zakupu</span>`) : '',
@@ -2959,6 +2956,52 @@ function renderDecadeArticle(rep, full = false) {
         <div class="dk-grid">${cells}</div>
         ${full ? '' : '<div class="dk-acts"><button class="btn" onclick="openLeaderboardModal(\'history\')">Pełny raport: Ranking → Historia</button></div>'}
     </article>`;
+}
+/** Makieta 30: pełny raport dekady w Ranking → Historia. */
+function renderDecadeArticleFull(rep) {
+    const [y0, y1] = decadeYears(rep), pct = v => v === null || v === undefined ? '—' : formatPct(v, 0), cls = v => v > 0 ? 'up' : v < 0 ? 'down' : '';
+    const diff = rep.fund !== null && rep.gig !== null ? Math.round((rep.fund - rep.gig) * 100) : null;
+    const cell = (title, html, wide = false) => `<div class="dk-cell${wide ? ' is-wide' : ''}"><h4>${title}</h4>${html}</div>`;
+    const co = x => `<b>${escapeHtml(x.name)}</b> <span class="tu-tag">${escapeHtml(x.symbol)}</span>`;
+    const ev = [...(rep.swans || []).map(x => ({ k: 'swan', t: `Czarny łabędź: ${x.name}`, q: x.q })), ...(rep.crises || []).map(x => ({ k: 'crisis', t: x.name, q: x.q }))].sort((a, b) => a.q - b.q);
+    return `<article class="dk" aria-labelledby="dk-t-${rep.n}f"><header><span class="tu-av" aria-hidden="true">KR</span><div><h3 id="dk-t-${rep.n}f">Dekada ${rep.n}: rok ${y0}–${y1}</h3><small>${DECADE_SENDER}, firma informacyjna · raport z końca roku ${y1}</small></div></header>
+        <div class="dk-hero" aria-label="Wynik funduszu"><span>NAV / udział</span><b class="n">${formatNav(rep.nav0)} → ${formatNav(rep.nav1)}</b><span>fundusz <span class="n ${cls(rep.fund)}">${pct(rep.fund)}</span>, GIG <span class="n">${pct(rep.gig)}</span>${diff !== null ? `, czyli <span class="n ${cls(diff)}">${diff > 0 ? '+' : diff < 0 ? '−' : ''}${Math.abs(diff)} pkt</span> ${diff >= 0 ? 'lepiej' : 'gorzej'}` : ''}</span></div>
+        <div class="dk-grid">
+            ${rep.best ? cell('Najlepsza spółka dekady', `${co(rep.best)}<span class="n v ${cls(rep.best.ch)}">${pct(rep.best.ch)} wartości</span>`) : ''}
+            ${rep.worst ? cell('Najsłabsza spółka', `${co(rep.worst)}<span class="n v ${cls(rep.worst.ch)}">${rep.worst.ch <= -1 ? 'upadłość' : pct(rep.worst.ch)}</span>`) : ''}
+            ${rep.bestPos ? cell('Twoja najlepsza pozycja', `${co(rep.bestPos)}<span class="n v ${cls(rep.bestPos.ch)}">${pct(rep.bestPos.ch)} od zakupu</span>`) : ''}
+            ${cell('Rynek', `GIG <span class="n ${cls(rep.gig)}">${pct(rep.gig)}</span>, inflacja średnio <span class="n">${formatNumberPl(rep.infl * 100, 1)}%</span> rocznie`)}
+            ${rep.bestSector ? cell('Sektory', `najlepszy: ${escapeHtml(rep.bestSector.sector)} <span class="n ${cls(rep.bestSector.ch)}">${pct(rep.bestSector.ch)}</span><br>najsłabszy: ${escapeHtml(rep.worstSector.sector)} <span class="n ${cls(rep.worstSector.ch)}">${pct(rep.worstSector.ch)}</span>`) : ''}
+            ${cell('Twoja kariera', `${escapeHtml(rep.career.position || 'zarządca')}, ${rep.career.certs} ${rep.career.certs === 1 ? 'certyfikat' : rep.career.certs % 10 >= 2 && rep.career.certs % 10 <= 4 && (rep.career.certs % 100 < 12 || rep.career.certs % 100 > 14) ? 'certyfikaty' : 'certyfikatów'}, ${rep.career.clients} klientów`)}
+            ${cell('Kryzysy i czarne łabędzie', ev.length ? `<ul class="ev">${ev.map(x => `<li class="${x.k}">${uiIcon(x.k === 'swan' ? 'alert' : 'kryzys-bank', 14)}<span>${escapeHtml(x.t)} <span class="n text-muted">rok ${Math.floor(x.q / 4) + 1}</span></span></li>`).join('')}</ul>` : 'bez kryzysów', true)}
+            ${cell('Rządy', rep.parties.length ? `<ol class="gov">${rep.parties.map(g => `<li>${escapeHtml(g)}</li>`).join('')}</ol>` : '—', true)}
+            <!-- 0.19.2: komórka „Wkład w Miasto” -->
+        </div></article>`;
+}
+/** Makieta 30: wykres słupków parami (fundusz bursztyn, GIG szary) i różnica w pkt nad parą. */
+function renderDecadeChart(reps) {
+    const w = 300, h = 150, b = 24, top = 18, bw = 22, gap = (w - 30) / Math.max(1, reps.length), val = v => Math.round((Number(v) || 0) * 100);
+    const max = Math.max(50, ...reps.flatMap(r => [val(r.fund), val(r.gig)])), y = v => h - b - Math.max(0, v) / max * (h - b - top);
+    return `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${escapeHtml(reps.map(r => `Dekada ${r.n}: fundusz ${formatPct(r.fund, 0)}, GIG ${formatPct(r.gig, 0)}`).join('; '))}"><line x1="20" x2="${w}" y1="${h - b}" y2="${h - b}"/>
+        ${reps.map((r, i) => { const x = 30 + i * gap, f = val(r.fund), g = val(r.gig), d = f - g, [y0, y1] = decadeYears(r);
+            return `<rect class="f" x="${x}" y="${y(f)}" width="${bw}" height="${h - b - y(f)}" rx="2"/><rect class="g" x="${x + bw + 4}" y="${y(g)}" width="${bw}" height="${h - b - y(g)}" rx="2"/>
+            <text class="d ${d >= 0 ? 'up' : 'down'}" x="${x + bw + 2}" y="${Math.min(y(f), y(g)) - 5}" text-anchor="middle">${d >= 0 ? '+' : '−'}${Math.abs(d)} pkt</text><text x="${x + bw + 2}" y="${h - 8}" text-anchor="middle">${y0}–${y1}</text>`; }).join('')}</svg>`;
+}
+let historyDecade = null;
+function selectHistoryDecade(n) { historyDecade = n; displayLeaderboard(); document.querySelector(`.dec[data-n="${n}"]`)?.focus(); }
+function renderHistoryTab() {
+    const reps = typeof decadeState === 'object' ? decadeState.reports : [];
+    if (!reps.length) return renderEmptyState({ icon: 'zegar', title: 'Historia jeszcze pusta', text: 'Pierwsze podsumowanie dekady przyjdzie po 10 latach gry od Kroniki Rynku.', variant: 'wait' });
+    const cur = reps.find(r => r.n === historyDecade) || reps[reps.length - 1], last = reps[reps.length - 1];
+    const ahead = reps.filter(r => r.fund !== null && r.gig !== null && r.fund > r.gig).length, years = Math.floor(((typeof macro === 'object' ? macro.quarter : last.q1) - reps[0].q0) / 4);
+    const diffOf = r => Math.round(((r.fund || 0) - (r.gig || 0)) * 100);
+    const items = [...reps].reverse().map(r => { const d = diffOf(r), [y0, y1] = decadeYears(r); return `<li><button type="button" class="dec" data-n="${r.n}" ${r === cur ? 'aria-current="true"' : ''} onclick="selectHistoryDecade(${r.n})"><b>Dekada ${r.n}</b><span class="diff ${d >= 0 ? 'up' : 'down'}">${d >= 0 ? '+' : '−'}${Math.abs(d)} pkt</span><small>rok ${y0}–${y1}, fundusz ${formatPct(r.fund, 0)}, GIG ${formatPct(r.gig, 0)}</small></button></li>`; }).join('');
+    const nextY0 = decadeYears(last)[1] + 1;
+    return `<p class="hi-state">${years} lat gry, ${reps.length} ${reps.length === 1 ? 'dekada' : reps.length < 5 ? 'dekady' : 'dekad'} w historii. Fundusz wyprzedza GIG w ${ahead} z ${reps.length}.</p>
+        <div class="hi" role="tabpanel"><div class="hi-side">
+            <section class="hi-chart" aria-labelledby="hi-c-t"><h3 id="hi-c-t">Fundusz wobec GIG, po dekadach</h3>${renderDecadeChart(reps)}<div class="leg"><span><i style="background:var(--amber-400)"></i>Twój fundusz</span><span><i style="background:var(--ink-400)"></i>GIG</span></div></section>
+            <nav class="hi-list" aria-labelledby="hi-l-t"><h3 id="hi-l-t">Dekady</h3><ol>${items}<li><div class="dec is-now"><b>Dekada ${last.n + 1}</b><span></span><small>w toku: rok ${nextY0}–${nextY0 + 9}, raport po roku ${nextY0 + 9}</small></div></li></ol></nav>
+        </div><div class="hi-main" aria-live="polite">${renderDecadeArticle(cur, true)}</div></div>`;
 }
 let leaderboardTab = 'funds';
 function setLeaderboardTab(tab) { leaderboardTab = tab; displayLeaderboard(); }
@@ -7299,20 +7342,40 @@ function renderSkillsPanel() {
 
 let cvTab = 'cv'; // N1: 'cv' | 'academy' | 'mentor' | 'automation' (0.18.8 D4)
 /** 0.18.8 D4: Akademia → Automaty (bez nowego okna; ekran 4 listy designu czeka na makietę): stan, parametry, warunek odblokowania, ostatnie 20 akcji. */
+const AUTOMATION_ICONS = { deposits: 'odswiez', tbills: 'moneta', sector: 'alert' };
+/** 0.18.8 D4 (makieta 28): Akademia → Automaty — podsumowanie, karty z przełącznikiem role=switch, pola z jednostką, ostatnia akcja, dziennik jako tabela. */
 function renderAutomationPanel() {
     const a = getAutomation(); if (!a) return renderEmptyState({ icon: 'zegar', title: 'Brak profilu', text: 'Automaty działają po rozpoczęciu kariery.' });
-    const pct = v => formatNumberPl(v * 100, 1);
-    const field = (kind, key, label, value, step, max) => `<label class="fund-field">${label} <input type="number" inputmode="decimal" min="0" max="${max}" step="${step}" value="${pct(value).replace(',', '.')}" onchange="setAutomation('${kind}', { ${key}: Math.max(0, Math.min(${max}, Number(this.value) || 0)) / 100 }); renderCvPanel()"> %</label>`;
-    const card = (kind, desc, fields) => {
-        const unlocked = isAutomationUnlocked(kind), cert = MENTOR_TRACKS[AUTOMATION_UNLOCK[kind]]?.label || '';
-        return `<article class="bank-card mt-3"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon(unlocked ? 'zegar' : 'blokada', 20)}</span><div><h4>${AUTOMATION_LABELS[kind]}</h4><span class="bank-card-type">${unlocked ? (a[kind].on ? 'włączony' : 'wyłączony') : `po zdobyciu: ${escapeHtml(cert)}`}</span></div></header>
-            <p class="text-sm text-muted">${desc}</p>
-            ${unlocked ? `<label class="fund-field"><input type="checkbox" ${a[kind].on ? 'checked' : ''} onchange="setAutomation('${kind}', { on: this.checked }); renderCvPanel()"> Włączony</label>${fields}` : renderEmptyState({ icon: 'blokada', title: 'Zablokowany', text: `Zdobądź ${cert} u mentora.`, variant: 'locked' })}</article>`;
+    const pct = v => formatNumberPl(v * 100, 1), kinds = ['deposits', 'tbills', 'sector'];
+    const FIELDS = {
+        deposits: [['minRate', 'Minimalna stopa', '% rocznie', 'Poniżej tej stopy lokata nie wraca, pieniądze zostają w gotówce.', 20]],
+        tbills: [['cashPct', 'Limit gotówki', '% gotówki', 'Na jedną aukcję.', 100], ['minYield', 'Minimalna rentowność', '% rocznie', 'Niższa rentowność = wyższa cena oferty.', 20]],
+        sector: [['limit', 'Limit sektora', '% akcji', '', 100]]
     };
-    return card('deposits', 'Zapadła lokata wraca na ten sam okres do banku z najwyższą stopą. Te same zasady co przy ręcznej lokacie.', field('deposits', 'minRate', 'Minimalna stopa', a.deposits.minRate, 0.1, 20))
-        + card('tbills', 'Przy każdej aukcji bonów fundusz składa ofertę do limitu gotówki. Cena wynika z minimalnej rentowności.', field('tbills', 'cashPct', 'Limit gotówki', a.tbills.cashPct, 1, 100) + field('tbills', 'minYield', 'Minimalna rentowność', a.tbills.minYield, 0.1, 20))
-        + card('sector', 'Wiadomość, gdy jeden sektor przekroczy limit akcji funduszu. Bez automatycznej sprzedaży.', field('sector', 'limit', 'Limit sektora', a.sector.limit, 1, 100))
-        + `<h4 class="mt-3">Ostatnie akcje automatów</h4>${a.log.length ? `<ul class="text-sm">${a.log.map(e => `<li>${escapeHtml(formatQuarterDate(e.q))} · ${escapeHtml(AUTOMATION_LABELS[e.kind] || e.kind)}: ${escapeHtml(e.text)}</li>`).join('')}</ul>` : '<p class="text-sm text-muted">Na razie bez akcji.</p>'}`;
+    const DESC = { deposits: 'Zapadła lokata wraca na ten sam okres do banku z najwyższą stopą.', tbills: 'Przy każdej aukcji fundusz składa ofertę. Cena wynika z minimalnej rentowności.', sector: 'Wiadomość, gdy jeden sektor przekroczy limit akcji funduszu. Nic nie sprzedaje.' };
+    const on = kinds.filter(isAutomationOn).length;
+    const card = kind => {
+        const unlocked = isAutomationUnlocked(kind), isOn = unlocked && a[kind].on, cert = MENTOR_TRACKS[AUTOMATION_UNLOCK[kind]]?.label || '';
+        const last = a.log.find(e => e.kind === kind);
+        const fields = FIELDS[kind].map(([key, label, unit, hint, max]) => `<div class="fld"><label for="au-f-${kind}-${key}">${label}</label><div class="in"><input id="au-f-${kind}-${key}" inputmode="decimal" value="${pct(a[kind][key])}"${hint ? ` aria-describedby="au-h-${kind}-${key}"` : ''}${isOn ? '' : ' disabled'} onchange="setAutomation('${kind}', { ${key}: Math.max(0, Math.min(${max}, Number(String(this.value).replace(',', '.')) || 0)) / 100 }); renderCvPanel()"><span class="unit" aria-hidden="true">${unit}</span></div>${hint ? `<small id="au-h-${kind}-${key}">${hint}</small>` : ''}</div>`).join('');
+        return `<article class="au${isOn ? ' is-on' : ''}${unlocked ? '' : ' is-locked'}" aria-labelledby="au-${kind}">
+            <div class="au-top"><span class="au-ic">${uiIcon(unlocked ? AUTOMATION_ICONS[kind] : 'klodka', 18)}</span><div><h3 id="au-${kind}">${AUTOMATION_LABELS[kind]}</h3><span class="au-state">${unlocked ? (isOn ? 'Włączony' : 'Wyłączony') : 'Zablokowany'}</span></div>
+            ${unlocked ? `<button type="button" class="sw" role="switch" aria-checked="${isOn}" aria-labelledby="au-${kind}" onclick="toggleAutomationFromUi('${kind}')"><i aria-hidden="true"></i>${isOn ? 'Wł.' : 'Wył.'}</button>` : ''}</div>
+            <p>${DESC[kind]}</p>
+            ${unlocked ? `<div class="au-fields">${fields}</div><div class="au-last">${uiIcon('zegar', 14)}<span>${last ? `${escapeHtml(formatQuarterDate(last.q))}: ${escapeHtml(last.text)}` : isOn ? 'Na razie bez akcji.' : 'Wyłączony.'}</span></div>`
+                : `<div class="au-lock"><span>Odblokujesz po zdobyciu: <b>${escapeHtml(cert)}</b>.</span><button type="button" onclick="setCvTab('mentor')">Otwórz Mentora</button></div>`}</article>`;
+    };
+    const log = a.log.slice(0, AUTOMATION_RULES.logMax).map(e => `<tr><td class="n">${escapeHtml(formatQuarterDate(e.q))}</td><td><span class="kind">${uiIcon(AUTOMATION_ICONS[e.kind] || 'zegar', 14)}<span class="hide-sm">${escapeHtml(AUTOMATION_LABELS[e.kind] || e.kind)}</span><span class="sr-only">${escapeHtml(AUTOMATION_LABELS[e.kind] || e.kind)}</span></span></td><td class="${/nie odnowiona/.test(e.text) ? 'is-skip' : ''}">${escapeHtml(e.text)}</td></tr>`).join('');
+    return `<div class="au-sum"><span><b class="n">${on} z 3</b> włączone</span><span>Automaty działają jak Twoje ręczne decyzje: te same zasady i opłaty. Wszystko trafia do dziennika poniżej.</span></div>
+        <div class="au-grid">${kinds.map(card).join('')}</div>
+        <section class="au-log"><h3>Dziennik automatów</h3>${log ? `<table><caption class="sr-only">20 ostatnich akcji, od najnowszej</caption><thead><tr><th scope="col">Kiedy</th><th scope="col">Automat</th><th scope="col">Co zrobił</th></tr></thead><tbody>${log}</tbody></table>` : '<p class="text-sm text-muted">Na razie bez akcji.</p>'}</section>
+        <div class="sr-only" role="status" aria-live="polite" id="au-live"></div>`;
+}
+function toggleAutomationFromUi(kind) {
+    const a = getAutomation(); if (!a || !isAutomationUnlocked(kind)) return;
+    setAutomation(kind, { on: !a[kind].on }); renderCvPanel();
+    document.querySelector(`.sw[aria-labelledby="au-${kind}"]`)?.focus();
+    const live = document.getElementById('au-live'); if (live) live.textContent = `${AUTOMATION_LABELS[kind]}: ${a[kind].on ? 'włączony' : 'wyłączony'}.`;
 }
 
 function setCvTab(tab) {
@@ -9651,21 +9714,53 @@ function showCrisisBanner(line, stage) {
     el.classList.remove('is-anim'); void el.offsetWidth; el.classList.add('is-anim'); // animacja od nowa przy każdym etapie
     return el;
 }
-/** 0.18.8 D5: wariant banera kryzysu „Czarny łabędź” — typ, kraje, linia, czas trwania (ekran 5 listy designu czeka na makietę). */
+/** 0.18.8 D5 (makieta 29): baner „Czarny łabędź” — osobny wariant `.swan` (role=alert raz), fakty, chipy sektorów, plakietka w pasku do końca łabędzia. */
+const SWAN_ICONS = { pandemic: 'kryzys-pandemia', war: 'kryzys-ropa', currency: 'moneta', techRevolution: 'rakieta', bankSystem: 'kryzys-bank' };
+function getSwanProgress(swan) { const q = typeof macro === 'object' ? macro.quarter : swan.q, of = Math.max(1, swan.untilQ - swan.q); return { of, now: Math.max(1, Math.min(of, q - swan.q + 1)) }; }
+function renderSwanBanner(swan) {
+    const def = BLACK_SWANS[swan.id] || {}, positive = Boolean(swan.positive), { of, now } = getSwanProgress(swan);
+    const countries = swan.countries.length ? ['Polska', ...swan.countries.map(c => COUNTRY_DEFS?.[c]?.name || c)].join(', ') : 'cały rynek';
+    const rate = def.rate ? `${def.rate.kind === 'cut' ? 'cięcie' : 'podwyżka'} o ${formatNumberPl(Math.abs(def.rate.total[0]) * 100, 1)}–${formatNumberPl(Math.abs(def.rate.total[1]) * 100, 1)} pkt w ${def.rate.quarters} kw.` : 'bez zmian';
+    const trust = def.trust || 0, regime = def.regime === 'euphoria' ? 'euforię' : 'kapitulację';
+    const line = swan.line ? `Uruchamia linię kryzysu „${escapeHtml(CRISIS_LINES[swan.line]?.name || swan.line)}”. Rynki krajów przechodzą w ${regime}.` : `Bez linii kryzysu. Rynki krajów przechodzą w ${regime}.`;
+    return `<section class="swan is-new${positive ? ' is-positive' : ''}" role="alert" aria-labelledby="swan-t" aria-describedby="swan-d">
+        <span class="swan-ic">${uiIcon(SWAN_ICONS[swan.id] || 'kryzys-bank', 22)}</span>
+        <span class="swan-kind"><b>Czarny łabędź${positive ? ', pozytywny' : ''}</b> · zdarza się raz na 15–25 lat</span>
+        <button type="button" class="swan-close" aria-label="Zamknij baner (Esc). Plakietka zostaje w pasku" onclick="closeSwanBanner()">${uiIcon('zamknij', 18)}</button>
+        <h2 id="swan-t">${escapeHtml(swan.name)}</h2>
+        <p class="swan-news" id="swan-d">${escapeHtml(def.news || '')}</p>
+        <dl class="swan-facts">
+            <div><dt>Kraje</dt><dd>${escapeHtml(countries)}</dd></div>
+            <div><dt>Stopy procentowe</dt><dd>${rate}</dd></div>
+            <div><dt>Zaufanie klientów</dt><dd class="n ${trust > 0 ? 'up' : 'down'}">${trust > 0 ? '+' : '−'}${Math.abs(trust)} pkt</dd></div>
+            <div class="swan-time"><dt>Potrwa</dt><dd>ok. <span class="n">${of}</span> kw., teraz <span class="n">${now}</span>.</dd><i role="img" aria-label="${now} z ${of} kwartałów" style="--v:${now / of * 100}%"></i></div>
+        </dl>
+        <ul class="secs" aria-label="Sektory">${(def.sectors || []).map(([sec, v]) => `<li class="${v > 0 ? 'up' : 'down'}">${v > 0 ? '▲' : '▼'} ${escapeHtml(sec)} <span class="n">${v > 0 ? '+' : '−'}${formatNumberPl(Math.abs(v) * 100, 0)}%</span></li>`).join('')}</ul>
+        <div class="swan-foot"><span>${line}</span><a href="#" onclick="event.preventDefault(); typeof openMailbox === 'function' && openMailbox()">Gazeta Ekonomiczna: pełny opis</a></div></section>`;
+}
 function showBlackSwanBanner(swan) {
     if (typeof document === 'undefined' || !swan) return null;
-    let el = document.getElementById('crisis-banner');
-    if (!el) { el = document.createElement('div'); el.id = 'crisis-banner'; el.className = 'crisis-banner'; el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite'); document.body.appendChild(el); }
-    el.dataset.line = 'swan'; el.dataset.stage = swan.positive ? 'positive' : 'swan'; el.hidden = false;
-    const countries = swan.countries.map(c => COUNTRY_DEFS?.[c]?.name || c);
-    el.innerHTML = `<svg class="crisis-banner-chart" viewBox="0 0 64 32" aria-hidden="true"><polyline points="${swan.positive ? '2,28 14,24 22,25 32,16 40,18 50,8 62,4' : '2,6 14,9 22,7 32,22 40,20 50,27 62,28'}"/></svg>
-        <div class="crisis-banner-text"><strong>${uiIcon('alert', 16)} Czarny łabędź: ${escapeHtml(swan.name)}</strong>
-        <span class="crisis-banner-stage">${countries.length ? `Kraje: Polska, ${escapeHtml(countries.join(', '))}` : 'Cały rynek'}${swan.line ? ` · linia: ${escapeHtml(CRISIS_LINES[swan.line]?.name || swan.line)}` : ''} · ok. ${swan.untilQ - swan.q} kw.</span>
-        <span class="crisis-banner-hint">Co to znaczy dla Ciebie: ${swan.positive ? 'wybrane sektory drożeją, klienci chętniej wpłacają.' : 'stopy procentowe i zaufanie klientów się zmieniają, część sektorów mocno traci.'}</span></div>
-        <button type="button" class="btn-ghost-icon crisis-banner-close" aria-label="Zamknij baner kryzysu" onclick="closeCrisisBanner()">${uiIcon('zamknij', 16)}</button>`;
-    el.classList.remove('is-anim'); void el.offsetWidth; el.classList.add('is-anim');
+    let el = document.getElementById('swan-banner');
+    if (!el) { el = document.createElement('div'); el.id = 'swan-banner'; el.className = 'swan-host'; document.body.appendChild(el); }
+    el.hidden = false; el.innerHTML = renderSwanBanner(swan);
+    updateSwanChip(false);
     return el;
 }
+function closeSwanBanner() { const el = document.getElementById('swan-banner'); if (el) el.hidden = true; updateSwanChip(true); }
+/** Plakietka w pasku: widoczna po zamknięciu banera, dopóki łabędź trwa (`blackSwanState.active`). */
+function updateSwanChip(show = !document.getElementById('swan-banner') || document.getElementById('swan-banner').hidden) {
+    if (typeof document === 'undefined') return;
+    const swan = typeof blackSwanState === 'object' ? blackSwanState.active : null, bar = document.getElementById('topbar');
+    let chip = document.getElementById('swan-chip');
+    if (!swan) { chip?.remove(); const el = document.getElementById('swan-banner'); if (el) el.hidden = true; return; }
+    if (!show || !bar) { if (chip) chip.hidden = true; return; }
+    if (!chip) { chip = document.createElement('button'); chip.type = 'button'; chip.id = 'swan-chip'; chip.className = 'swan-chip'; chip.onclick = () => showBlackSwanBanner(blackSwanState.active); bar.appendChild(chip); }
+    const { of, now } = getSwanProgress(swan);
+    chip.hidden = false; chip.classList.toggle('is-positive', Boolean(swan.positive));
+    chip.setAttribute('aria-label', `Czarny łabędź: ${swan.name}, pokaż szczegóły`);
+    chip.innerHTML = `${uiIcon(SWAN_ICONS[swan.id] || 'kryzys-bank', 14)}${escapeHtml(swan.name)} · ${now} z ${of} kw.`;
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.getElementById('swan-banner') && !document.getElementById('swan-banner').hidden) closeSwanBanner(); });
 function closeCrisisBanner() { const el = document.getElementById('crisis-banner'); if (el) el.hidden = true; }
 
 
