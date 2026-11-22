@@ -279,6 +279,10 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .lw-levels li[aria-current] { border-color: var(--color-text-secondary); background: var(--color-bg-raised); }
 .lw-levels li.is-next { border-style: dashed; border-color: var(--color-border-warn); }
 .lw-meta { margin: 8px 0 0; color: var(--color-text-muted); font-size: 12px; }
+.lw-who { margin: 10px 0 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 12px; }
+.lw-who dt { color: var(--color-text-muted); } .lw-who dd { margin: 0; color: var(--color-text-secondary); }
+.lw-who .up { color: var(--color-text-primary); }
+.lw-by { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; padding: 0 6px; border: 1px solid var(--ink-600); border-radius: 4px; font-size: 11px; font-weight: 400; color: var(--color-text-secondary); }
 .lw-moved { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px dashed var(--ink-600); border-radius: 6px; color: var(--color-text-secondary); }
 .lw-moved a { color: var(--color-text-primary); }
 @media (max-width: 640px) { .lw-row { grid-template-columns: 22px minmax(0, 1fr) auto; } .lw-row .lw-scale, .lw-row .lw-now { grid-column: 2 / -1; } .lw-detail { padding-left: 4px; } }
@@ -459,11 +463,13 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 
 
 <h1 class="frame-title">Państwo → Prawo → Kraj: ustawy w jednym układzie</h1>
-<p class="frame-sub">Dziś są dwa układy: tabela „Ustawy” z kropkami poziomów (z emoji) i osobne osie kroków dla Finansowania infrastruktury i Polityki klimatycznej. Tu: jedna lista w trzech grupach, w wierszu poziom słowem i skala, po rozwinięciu wszystkie poziomy ze skutkami (dawne osie). Finansowanie infrastruktury przechodzi do Ministerstwa Infrastruktury (makieta 32). Kliknij wiersz.</p>
+<p class="frame-sub">Dziś są dwa układy: tabela „Ustawy” z kropkami poziomów (z emoji) i osobne osie kroków dla Finansowania infrastruktury i Polityki klimatycznej. Tu: jedna lista w trzech grupach, w wierszu poziom słowem i skala, po rozwinięciu wszystkie poziomy ze skutkami (dawne osie). Finansowanie infrastruktury jest polityką Ministerstwa Infrastruktury (makieta 32): ta sama karta z dopiskiem „decyduje: Ministerstwo …”. Po rozwinięciu też: kto chce zmiany i ostatnia zmiana (P5b planu 0.19.1). Kliknij wiersz.</p>
 <div class="wrap"><section class="win" aria-labelledby="w-t"><h2 id="w-t">Ustawy</h2><p>Rząd zmienia najwyżej 1 ustawę na rok i zapowiada ją kwartał wcześniej. Rynek reaguje już na zapowiedź.</p>
   <div id="laws"></div>
-  <div class="lw-moved"><svg width="18" height="18" aria-hidden="true"><use href="#ic-budownictwo"/></svg><span>Finansowanie infrastruktury: teraz w <a href="#">Gospodarka → Przegląd → Ministerstwo Infrastruktury</a>.</span></div>
 </section></div>
+<h1 class="frame-title">Skrót: ta sama karta w zakładce Kraj</h1>
+<p class="frame-sub">P5b: jeden komponent karty ustawy w dwóch miejscach. Pełna lista (wyżej) i skrót: 4 najważniejsze ustawy i odnośnik do pełnej listy.</p>
+<div class="wrap"><section class="win" aria-labelledby="s-t"><h2 id="s-t">Ustawy</h2><p>4 z 11. Pełna lista: <a href="#" style="color:var(--color-text-primary)">Prawo → Ustawy</a>.</p><div id="short"></div></section></div>
 
 <script>
 const ic = (n, s = 16) => `<svg width="${s}" height="${s}" aria-hidden="true"><use href="#ic-${n}"/></svg>`;
@@ -484,19 +490,25 @@ const G = [
     ['climatePolicy', 'Polityka klimatyczna', 'emisje', ['Brak opłat', 'Niska', 'Średnia', 'Wysoka', 'Bardzo wysoka'], 1, null, false, ['bez opłat za emisje', 'niska opłata', 'średnia opłata, więcej OZE', 'wysoka opłata', 'bardzo wysoka, przemysł traci'], 1]]],
 ];
 let open = 'minWage';
+const WHO = { minWage: ['Socjaldemokraci, Ludowcy: wyżej', 'Koalicja Rynkowa: niżej', 'R5 kw.1: z „brak” na „niska”'], climatePolicy: ['Zieloni: wyżej', 'Blok Państwowy: niżej', 'R3 kw.2: z „Brak opłat” na „Niska”'], infrastructure: ['program Koalicji Rynkowej: Utrzymanie', 'reguła: przepustowość < 0,85 → +1 poziom, najwyżej raz na rok', 'R4 kw.3: z „Łatanie dziur” na „Utrzymanie”'] };
+const BY = { infrastructure: 'Ministerstwo Infrastruktury' };
 function row([id, name, icon, lv, now, next, nominal, eff, ch]) {
   const isOpen = id === open;
   const scale = lv.map((_, i) => `<i class="${i === now ? 'now' : !nominal && i < now ? 'on' : ''}${i === next ? ' next' : ''}"></i>`).join('');
   return `<li><button class="lw-row" aria-expanded="${isOpen}" aria-controls="d-${id}" data-id="${id}">${ic(icon, 18)}
-      <span class="lw-name"><b>${name}</b><small>${ch ? `zmiany: ${ch}` : 'bez zmian od startu'}</small></span>
+      <span class="lw-name"><b>${name}</b>${BY[id] ? `<span class="lw-by">${ic('budownictwo', 11)}decyduje: ${BY[id]}</span>` : ''}<small>${ch ? `zmiany: ${ch}` : 'bez zmian od startu'}</small></span>
       <span class="lw-now">${lv[now]}${next !== null ? `<br><span class="lw-pending">${ic('zegar', 11)}zapowiedź: ${lv[next]} od przyszłego kwartału</span>` : ''}</span>
       <span class="lw-scale" role="img" aria-label="${nominal ? `wariant ${now + 1} z ${lv.length}` : `poziom ${now + 1} z ${lv.length}`}">${scale}</span>
       <span class="lw-chev">${ic('chevron-down', 16)}</span></button>
     <div class="lw-detail" id="d-${id}"${isOpen ? '' : ' hidden'}><ol class="lw-levels" aria-label="${nominal ? 'Warianty' : 'Poziomy'} ustawy ${name}">${lv.map((l, i) => `<li${i === now ? ' aria-current="true"' : ''}${i === next ? ' class="is-next"' : ''}><b>${l}${i === now ? ' (teraz)' : i === next ? ' (zapowiedź)' : ''}</b>${eff[i]}</li>`).join('')}</ol>
+      ${WHO[id] ? `<dl class="lw-who"><dt>${BY[id] ? 'Program' : 'Chcą zmiany'}</dt><dd>${WHO[id][0]}</dd><dt>${BY[id] ? 'Reguła' : 'Przeciw'}</dt><dd>${WHO[id][1]}</dd><dt>Ostatnia zmiana</dt><dd>${WHO[id][2]}</dd>${BY[id] ? `<dt>Gdzie</dt><dd><a href="#" style="color:var(--color-text-primary)">Gospodarka → Przegląd → ${BY[id]}</a></dd>` : ''}</dl>` : ''}
       ${next !== null ? '<p class="lw-meta">Rynek już reaguje na zapowiedź: kurs zmienia się przy ogłoszeniu, nie w dniu wejścia ustawy w życie.</p>' : ''}</div></li>`;
 }
-function draw() { document.getElementById('laws').innerHTML = G.map(([g, list]) => `<section class="lw-grp" aria-label="${g}"><h3>${g}</h3><ul class="lw">${list.map(row).join('')}</ul></section>`).join(''); }
+G.push(['Polityki ministerstw', [['infrastructure', 'Finansowanie infrastruktury', 'budownictwo', ['Porzucenie', 'Łatanie dziur', 'Utrzymanie', 'Rozbudowa', 'Autostrady na wczoraj'], 2, null, false, ['brak wydatków, szybkie zużycie', '1% wpływów, zużycie 3,5% na rok', '2% wpływów, zużycie 2% na rok', '3% wpływów, zużycie 1% na rok', '4,5% wpływów, zużycie 0,5% na rok'], 1]]]);
+const SHORT = ['minWage', 'benefits', 'climatePolicy', 'infrastructure'];
+function draw() { document.getElementById('laws').innerHTML = G.map(([g, list]) => `<section class="lw-grp" aria-label="${g}"><h3>${g}</h3><ul class="lw">${list.map(row).join('')}</ul></section>`).join('');
+  document.getElementById('short').innerHTML = `<ul class="lw">${G.flatMap(g => g[1]).filter(l => SHORT.includes(l[0])).map(l => row(l).replace(new RegExp(`"d-${l[0]}"`, 'g'), `"ds-${l[0]}"`).replace(`data-id="${l[0]}"`, `data-id="${l[0]}" data-short="1"`)).join('')}</ul>`; }
 draw();
-document.getElementById('laws').addEventListener('click', e => { const b = e.target.closest('.lw-row'); if (!b) return; open = open === b.dataset.id ? null : b.dataset.id; draw(); document.querySelector(`.lw-row[data-id="${b.dataset.id}"]`).focus(); });
+document.body.addEventListener('click', e => { const b = e.target.closest('.lw-row'); if (!b) return; open = open === b.dataset.id ? null : b.dataset.id; draw(); document.querySelector(`.lw-row[data-id="${b.dataset.id}"]${b.dataset.short ? '[data-short]' : ':not([data-short])'}`).focus(); });
 </script>
 </body></html>
