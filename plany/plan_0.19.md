@@ -36,7 +36,8 @@ Cel: polityka dotyczy wszystkich otwartych krajów, partie się zmieniają, grac
 | **P2** | **Partie:** nowe i zmieniające się z czasem (populistyczna, liberalna, Zieloni, centrum, socjaldemokracja, libertariańska, anarchistyczna, komunistyczna, technokraci); 6 partii w kraju startowym, 4 w innych; **6 wydarzeń na typ partii**; program polityczny i ekonomiczny wpływa na ceny akcji, spółki państwowe, bank i handel |
 | **P3** | **Sponsoring** wyborów (+5% za każdy) i lobbing sektorowy (np. podatek cukrowy → Żywność); więcej polityk wzmacniających i osłabiających spółki państwa |
 | **P4** | **Nepotyzm, poziomy 2–4 (najpierw poziom 2):** zasugerowanie spółce państwowej sprzedaży akcji funduszowi gracza; poufne informacje o ruchach rządu (6. zmysł na spółkach państwowych nie działa); sugerowanie inwestycji |
-| **P5** | **Nowe urzędy** (programy socjalne są od 0.15.4 P7) |
+| **P5** | **Nowe urzędy** (programy socjalne są od 0.15.4 P7), w tym **Ministerstwo Infrastruktury** (P5a, opis niżej) |
+| **P5b** | **Ujednolicenie ustaw:** jeden widok ustaw w oknie Państwa (opis niżej) |
 | **S1** | **Ruch klas** (dopisek z 0.17.1): dziś udziały klas przez 8 lat zmieniają się najwyżej o 1–2 pp i raczej w dół (średnia 24 → 23%), nikt nie awansuje. Diagnoza razem z pytaniem, czemu realna gospodarka nie rośnie; po zmianie sprawdzić wybory (wagi `CLASS_VOTE` strojone na stałej strukturze) |
 | **S2** | **Zdrowie i nauka:** wskaźniki zdrowia i nauki, szpitale i uniwersytety jako odbiorcy (łańcuch Zdrowie z 0.18: farmacja, sprzęt medyczny → szpitale → zdrowie obywateli) |
 | **S3** | **Poziom życia** (z 0.17.2: konsumpcja i zadowolenie, zdrowie, bezpieczeństwo, edukacja i nauka, informacja) pogłębiony o S1–S2; w 0.19.2 przechodzi na miasta |
@@ -52,7 +53,29 @@ Cel: polityka dotyczy wszystkich otwartych krajów, partie się zmieniają, grac
 3. Nepotyzm: najpierw poziom 2; poziomy 3 i 4 w kolejnych krokach P4.
 4. Uproszczone symulacje państw (zgłoszenie 2026-10-28): inne państwa mają własne, uproszczone symulacje (gospodarka, budżet, partia rządząca, polityka zagraniczna) zamiast samego stałego profilu z decyzji 1; reagują na handel, kryzysy i działania gracza. Zakres i koszt czasu kroku do ustalenia w specyfikacji.
 
-**Zlecenie dla designu:** karta kraju z partią rządzącą i programem; panel sponsoringu i lobbingu; poziomy Nepotyzmu w drzewku umiejętności; wskaźniki klas, zdrowia i nauki w oknie Państwa.
+### P5a. Ministerstwo Infrastruktury (pomysł użytkownika 2026-11-22)
+
+Słowa użytkownika: w zakładce Prawo i Kraj są dwa sposoby pokazywania ustaw, a finansowanie infrastruktury jest poza nimi; ministerstwo infrastruktury ma o nim decydować i mieć mini okienko w Gospodarka → Przegląd.
+
+**Stan w kodzie (2026-11-22):** finansowanie infrastruktury to ustawa `society.laws.infrastructure` (`SOCIAL_LAWS.infrastructure`, `core.js:5333`; poziomy „Porzucenie” … „Autostrady na wczoraj”, start 2). Poziom (`INFRA_LEVELS`, `infrastructure.js:20`) wyznacza: udział wpływów państwa na utrzymanie (0–4,5%), tempo zużycia przepustowości i szansę ogłoszenia projektu na kwartał. `settleInfraBudget` (`infrastructure.js:352`) liczy utrzymanie i raty projektów, a wynik trafia do budżetu jako `budget.infrastructureSpending` (`core.js:5943`). Partie ruszają tę ustawę w swoich ruchach (`state` i `people` +1, `core.js:5381–5382`). Przetargi na odcinki i PPP gracza są w `infrastructure.js`, przepustowość szlaków (`society.infra.cap`) czyta mapa szlaków z 0.18.3 M5 i import w łańcuchach.
+
+**Decyzja planu: Ministerstwo przejmuje ustawę zamiast jej dublować.**
+- **Kto decyduje:** ministerstwo podlega rządowi. Co kwartał ustala poziom finansowania (te same 5 poziomów, więc balans z 0.17 zostaje) według programu partii rządzącej (dzisiejsze ruchy partii przechodzą na ministra) i stanu sieci. Gdy przepustowość któregoś trybu spadnie poniżej 0,85, minister podnosi poziom o 1, nawet wbrew programowi, ale najwyżej raz na rok. Ustawa `infrastructure` znika z listy ustaw i staje się „polityką ministerstwa”, a stary zapis przenosi jej poziom.
+- **Budżet:** stała część wpływów państwa według poziomu (jak dziś `INFRA_LEVELS.spend`) plus raty projektów. Nowość: **plan inwestycji na 4 kwartały** (lista projektów z `INFRA_TYPES` w kolejności), żeby gracz i spółki widzieli, co nadchodzi. Przy deficycie skarbu (budżet państwa na minusie 2 kw.) ministerstwo tnie plan o jeden projekt.
+- **Wpływ gracza:**
+  1. **lobbing** (0.19.1 P3) za podniesieniem poziomu albo za konkretnym projektem (np. port zamiast lotniska);
+  2. **przetargi** jak dziś (Budowlany, podwykonawcy z 0.18.2 G6) i **PPP** gracza (zmniejsza raty);
+  3. **nepotyzm** poziom 3 (P4): wcześniejsza informacja o planie inwestycji.
+- **Skutki:** przepustowość szlaków (morskie, lotnicze, lądowe) → koszt importu w łańcuchach i stan szlaków w M5; przychody przewoźników (`getInfraCarrierFactor`); w 0.19.2 ministerstwo dzieli część budżetu na miasta (infrastruktura miasta 0–100). Brak finansowania obniża poziom życia (S3) przez zużycie.
+- **UI:** mini okienko w **Gospodarka → Przegląd**: poziom finansowania słowem, budżet kwartalny, plan inwestycji (3–4 pozycje z terminem), stan przepustowości trzech trybów (słowem i liczbą), minister i partia, przycisk „Lobbing” (od P3). Makietę robi równolegle czat designu.
+- **Pliki:** `infrastructure.js` (decyzja ministerstwa, plan inwestycji), `core.js` (ustawa → polityka ministerstwa, ruchy partii), `ui.js` (mini okienko), `main.js` (migracja poziomu).
+- **Test i bramka:** przy tych samych ruchach partii poziom finansowania w serii jak dziś (±0,3 poziomu średnio), GIG i marże ±0,3 pp; reakcja na przepustowość < 0,85 najwyżej raz na rok; plan inwestycji zgodny z ogłoszonymi projektami.
+
+### P5b. Ujednolicenie ustaw
+
+Dziś ustawy są pokazywane na dwa sposoby: w zakładce Prawo i w zakładce Kraj okna Państwa, a infrastruktura jest poza nimi. Zostaje **jeden komponent karty ustawy** (nazwa, poziom słowem i paskiem 0–4, co daje, kto chce zmiany, ostatnia zmiana) używany w obu miejscach. Kraj pokazuje skrót (najważniejsze 4 ustawy i link), Prawo pełną listę. Polityki ministerstw (infrastruktura z P5a, później energia z UEiE) mają tę samą kartę z dopiskiem „decyduje: Ministerstwo …”. Makietę wspólnego widoku robi równolegle czat designu. **Pliki:** `ui.js` (zakładki `country` i Prawo), `state.js`, `style.css`. **Test:** jedna funkcja renderuje kartę ustawy w obu miejscach; liczba i poziomy ustaw identyczne w obu widokach.
+
+**Zlecenie dla designu:** wspólny widok ustaw (P5b) i mini okienko Ministerstwa Infrastruktury w Gospodarka → Przegląd (P5a); karta kraju z partią rządzącą i programem; panel sponsoringu i lobbingu; poziomy Nepotyzmu w drzewku umiejętności; wskaźniki klas, zdrowia i nauki w oknie Państwa.
 
 ---
 
@@ -79,6 +102,18 @@ Cel: polityka dotyczy wszystkich otwartych krajów, partie się zmieniają, grac
 - **Okno „Miasto”:** dziś okno inwestycji miejskich (`openCityInvestmentModal`). Rejestr odblokowań przeniesiony do 1.0 (`plan_1.0.md`); Miasta 2 są dostępne bez blokady, a 1.0 dopisze im regułę.
 - **Podsumowanie dekady** (0.18.8 D6, makieta 23): od 0.19.2 dochodzi komórka „Wkład w Miasto”.
 - **Mapa szlaków** (makieta 16): karta kraju dostaje listę miast (przed 0.19.2 „kraj bez miast”).
+
+### Usługi w grafie: Turystyka i usługi cyfrowe (2026-11-22)
+
+**Stan w kodzie:** Turystyka (3 spółki) nie ma roli w grafie (`goods.js`), działa tylko na profilu sektora i technologiach. Media, Gaming i Technologia/AI tylko kupują (papier, chipy: `goods.js:111–113`), a ich produkt nigdzie nie trafia. Bankowość, Finanse, Nieruchomości i Badania są poza grafem, ale mają własne mechaniki, więc zostają bez zmian.
+
+- **Turystyka** jako nowe dobro usługowe `tourism` (klasa **Z**, a dla wyjazdów zagranicznych i hoteli premium **L**, jak herbata „klasa wg kraju”): wsad paliwa (przez transport lotniczy i lądowy), żywność, prąd; popyt obywateli z klas (luksusowa część mocniej spada w recesji, jak dobra L z 0.18.3 M2) i z **miast** (atrakcyjność, zanieczyszczenie obniża popyt). REIT-y typu `hospitality` (hotele) dostają czynsz z tego popytu.
+- **Usługi cyfrowe** jako dobro `digital` (klasa **Z**, producenci: Media, Gaming, Technologia/Sztuczna inteligencja, Telekomunikacja): popyt obywateli (rozrywka, informacja; wskaźnik „informacja” poziomu życia z 0.17.2) i firm (część kosztów wszystkich sektorów usługowych i finansowych, np. 2–4%). Wsad: chipy, prąd, papier dla Mediów drukowanych. Usługa nie ma transportu ani zapasu, więc w bilansie ma zapas 0 i import tylko cyfrowy (bez frachtu, z cłem dopiero w 0.19.4).
+- **Zasada grafu bez zmian:** odchylenie o średniej zero, `b = 1` na starcie (kalibracja jak w 0.18.1 P2).
+- **Pliki:** `goods.js` (dwa dobra, odbiorcy), `chains.js` (usługi bez zapasu i frachtu), `reits.js` (hotele z popytu), dane miast.
+- **Bramka:** marże Turystyki, Mediów, Gamingu i Technologii ±1 pp od bazy, średnia odchyłek marż 0 ± 0,3 pp, w recesji spadek popytu na turystykę L ≥ 2 × spadku Z.
+
+**Dlaczego tutaj (w 0.19.2), a Ministerstwo w 0.19.1:** Ministerstwo Infrastruktury to nowy urząd sterowany przez rząd i partie, więc pasuje do P5 (nowe urzędy) i P3 (lobbing) w 0.19.1, a Miasta 2 od razu dostają z niego budżet infrastruktury miast. Turystyka i usługi cyfrowe potrzebują popytu z klas po S1 (0.19.1) i z miast (atrakcyjność, zanieczyszczenie, informacja), więc wchodzą razem z Miastami; wcześniej popyt byłby tylko krajowy i trzeba by go przeliczać drugi raz.
 
 ### Ryzyko
 
