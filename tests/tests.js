@@ -17675,6 +17675,28 @@ group('0.18.3 Mechaniki grafu', () => {
             green.exchange = 'PLATINUM'; assert(meetsEsgGate(green, 'PLATINUM'), 'okres przejściowy dla spółki już na poziomie');
         } finally { oversight.energy.level = lvl; macro.quarter = q0; society.energy.esgReg = null; }
     });
+    test('0.18.9 U14: mediana liter filarów (D ogranicza do B); duża spółka z Platynowej celuje w B; bank poza kryterium', () => {
+        const old = ESG_RULES.combine;
+        try {
+            ESG_RULES.combine = 'median';
+            assertEq(combineEsg(65, 64, 50).grade, 'B', 'B B C → B'); assertEq(combineEsg(80, 64, 50).grade, 'B', 'A B C → B');
+            assertEq(combineEsg(80, 80, 30).grade, 'B', 'A A D → B'); assertEq(combineEsg(30, 30, 64).grade, 'D', 'D D B → D');
+            ESG_RULES.combine = 'score'; assertEq(combineEsg(65, 64, 50).grade, 'C', 'wynik ważony 60,2 → C');
+        } finally { ESG_RULES.combine = old; }
+        const big = makeCompany('EP14', { sector: ['Technologia'] }), bank = makeCompany('EB14', { sector: ['Bankowość'] });
+        big.exchange = 'PLATINUM'; bank.isBankStock = true; resetWorld([big, bank]); clearEsgCache(); ensureEnergy();
+        const st = getEsgRegState(), prev = { ...st };
+        try {
+            st.criterion = true; st.effectiveQ = -99;
+            assert(meetsEsgGate(bank, 'RUBY'), 'bank bez oceny ESG przechodzi kryterium');
+            const plat = getMarketCap(big) / ELITE_RULES.EMERALD.capMult / 1.1, origPlat = window.getPlatinumCapThreshold;
+            window.getPlatinumCapThreshold = () => plat;
+            try {
+                assertEq(getEsgGateNeed(big), 'B', 'duża spółka z Platynowej celuje w próg Szmaragdowej');
+                window.getPlatinumCapThreshold = () => getMarketCap(big) * 2; assertEq(getEsgGateNeed(big), 'C', 'mała zostaje przy C');
+            } finally { window.getPlatinumCapThreshold = origPlat; }
+        } finally { Object.assign(st, prev); }
+    });
     test('0.18.9 G1: pokrycie: Platynowa zawsze dostaje ocenę, Brązowa bez deklaracji nie', () => {
         const p = makeCompany('ESP', { sector: ['Finanse'] }), z = makeCompany('ESZ', { sector: ['Finanse'] }); p.exchange = 'PLATINUM'; z.exchange = 'BRONZE';
         resetWorld([p, z]); clearEsgCache(); processEsgQuarterly();

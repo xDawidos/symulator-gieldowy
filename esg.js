@@ -5,7 +5,7 @@
 // =================================================================================
 const ESG_RULES = {
     grades: [['A', 70], ['B', 62], ['C', 42], ['D', -Infinity]], // G0 (diagnoza_esg_0.18.9.md): plan 75/55/35 dawał B 70%; progi z histogramów serii g0; A 68 → 70 po g4 (A publiczne 30%), B 58 → 60 po g5, → 62 po g9 (B publiczne 49%, C 19–27%; cel B 30–45, C 25–40)
-    weights: { e: 0.4, s: 0.3, g: 0.3 },
+    weights: { e: 0.4, s: 0.3, g: 0.3 }, combine: 'score',
     // E spółek bez emisji: baza według sektora (praca biurowa i laboratoria czystsze niż transport, turystyka i rolnictwo)
     cleanBySector: { 'Technologia': 72, 'Badania': 72, 'Medycyna': 68, 'Gaming': 70, 'Media': 68, 'Finanse': 64, 'Bankowość': 64, 'Pożyczki konsumenckie': 60, 'Usługi': 60, 'Nieruchomości': 58, 'Turystyka': 50, 'Transport i logistyka': 45, 'Żywność': 52, 'Dobra konsumpcyjne': 55, 'Obronność': 48 },
     e: { clean: 60, cleanCut: 30, base: 60, slope: 40, heat: 8, legacy: 15, minBase: 0.05 },
@@ -60,8 +60,15 @@ function getEsgGBase(stock) {
 }
 function combineEsg(e, s, g) {
     const w = ESG_RULES.weights, score = w.e * e + w.s * s + w.g * g;
-    let grade = esgGrade(score);
-    if ([e, s, g].some(v => esgGrade(v) === 'D') && grade !== 'D') grade = ESG_GRADE_ORDER[Math.min(3, ESG_GRADE_ORDER.indexOf(grade) + 1)];
+    const letters = [e, s, g].map(esgGrade);
+    let grade;
+    if (ESG_RULES.combine === 'median') { // U14: większość liter filarów (mediana); filar D ogranicza do B
+        const i = letters.map(x => ESG_GRADE_ORDER.indexOf(x)).sort((a, b) => a - b)[1];
+        grade = ESG_GRADE_ORDER[letters.includes('D') ? Math.max(1, i) : i];
+    } else {
+        grade = esgGrade(score);
+        if (letters.includes('D') && grade !== 'D') grade = ESG_GRADE_ORDER[Math.min(3, ESG_GRADE_ORDER.indexOf(grade) + 1)];
+    }
     return { score, grade };
 }
 
@@ -122,7 +129,7 @@ function getEsgRating(stock) {
 }
 const isEsgGreenwashing = stock => Boolean(stock?.ethicsClaim) && ['C', 'D'].includes(getEsgTrue(stock)?.grade);
 function needsEsgAudit(stock) {
-    if (getEsgRating(stock)) return isBelowEsgGate(stock) && esgQuarter() - (stock.esgRating?.q ?? 0) >= ESG_PROJECT_RULES.gateReauditQ && (stock.esgProjectsDone || 0) > (stock.esgRating?.projectsDone ?? 0); // G10: po projekcie pod kryterium nowy audyt
+    if (getEsgRating(stock)) return isBelowEsgGate(stock) && esgQuarter() - (stock.esgRating?.q ?? 0) >= ESG_PROJECT_RULES.gateReauditQ && ((stock.esgProjectsDone || 0) > (stock.esgRating?.projectsDone ?? 0) || ESG_GRADE_ORDER.indexOf(getEsgTrue(stock)?.grade) <= ESG_GRADE_ORDER.indexOf(getEsgGateNeed(stock))); // G10: po projekcie pod kryterium nowy audyt
     if (ESG_PUBLIC_RULES.topTiers.includes(stock.exchange) || stock.ethicsClaim) return true;
     const year = stock.exchange === 'GOLD' ? ESG_PUBLIC_RULES.goldYear : stock.exchange === 'SILVER' ? ESG_PUBLIC_RULES.silverYear : 0;
     return year > 0 && Math.random() < 1 - Math.pow(1 - year, 0.25);
@@ -542,10 +549,10 @@ const isRateUEcologyOpen = () => (typeof getEnergyOfficeLevel === 'function' ? g
 // G9: UEiE. Poziom 4: raz w roku rozporządzenie ESG (wpis w Gazecie): kontrola deklaracji u 3–6 spółek (losowanie ważone różnicą
 // deklaracja–rzeczywistość); greenwashing: kara 1–3% rocznego przychodu, G −20 na 8 kw., kurs −4–8%, ocena publiczna = rzeczywista
 // (ocena urzędu), deklaracja wycofana. Poziom 5: szansa 25% na rok, że ESG staje się kryterium awansu (ogłoszenie 1 kw. wcześniej,
-// 4 kw. przejściowe dla spółek, które już są na poziomie): Platynowa ≥ C, Rubinowa, Szmaragdowa i Diamentowa ≥ B. Znika, gdy UEiE
+// 4 kw. przejściowe dla spółek, które już są na poziomie): Platynowa i Rubinowa ≥ C (U14), Szmaragdowa i Diamentowa ≥ B. Znika, gdy UEiE
 // spadnie poniżej 5 (z ogłoszeniem). Stan: society.energy.esgReg = { criterion, pending, effectiveQ, log[] }.
 // ---------------------------------------------------------------------------------
-const ESG_REG_RULES = { level: 4, checks: [3, 6], fine: [0.01, 0.03], drop: [0.04, 0.08], gCut: 20, gCutQ: 8, criterionLevel: 5, criterionYear: 0.25, transitionQ: 4, logMax: 10, need: { PLATINUM: 'C', RUBY: 'B', EMERALD: 'B', DIAMOND: 'B' } };
+const ESG_REG_RULES = { level: 4, checks: [3, 6], fine: [0.01, 0.03], drop: [0.04, 0.08], gCut: 20, gCutQ: 8, criterionLevel: 5, criterionYear: 0.25, transitionQ: 4, logMax: 10, need: { PLATINUM: 'C', RUBY: 'C', EMERALD: 'B', DIAMOND: 'B' } }; // U14: Rubinowa ≥ C (przy B elitarne obsadzone w 44–70% kwartałów)
 function getEsgRegState() {
     const e = typeof society === 'object' && society?.energy ? society.energy : null; if (!e) return { criterion: false, pending: null, effectiveQ: -99, log: [] };
     return e.esgReg || (e.esgReg = { criterion: false, pending: null, effectiveQ: -99, log: [] });
@@ -594,7 +601,7 @@ const isEsgCriterionActive = () => Boolean(getEsgRegState().criterion);
 /** Czy spółka spełnia kryterium ESG poziomu (true, gdy kryterium nie obowiązuje albo trwa okres przejściowy dla spółki już na poziomie). */
 function meetsEsgGate(stock, tier) {
     const st = getEsgRegState(), need = ESG_REG_RULES.need[tier];
-    if (!st.criterion || !need) return true;
+    if (!st.criterion || !need || !getEsgTrue(stock)) return true; // U14: banki bez oceny ESG poza kryterium
     if (stock.exchange === tier && esgQuarter() < st.effectiveQ + ESG_REG_RULES.transitionQ) return true;
     const g = getEsgRating(stock);
     return Boolean(g) && ESG_GRADE_ORDER.indexOf(g) <= ESG_GRADE_ORDER.indexOf(need);
@@ -604,21 +611,28 @@ function processEsgRegulationQuarterly() {
     const q = esgQuarter(), st = getEsgRegState(), level = typeof getEnergyOfficeLevel === 'function' ? getEnergyOfficeLevel() : 0;
     if (st.pending && q >= st.pending.effectiveQ) {
         st.criterion = st.pending.on; st.effectiveQ = q; st.pending = null;
-        const text = st.criterion ? 'Od dziś ESG jest kryterium awansu: Platynowa wymaga oceny ESG co najmniej C, Rubinowa, Szmaragdowa i Diamentowa co najmniej B. Spółki, które już są na tych poziomach, mają 4 kwartały na dostosowanie.' : 'ESG przestaje być kryterium awansu na giełdach.';
+        const text = st.criterion ? 'Od dziś ESG jest kryterium awansu: Platynowa i Rubinowa wymagają oceny ESG co najmniej C, Szmaragdowa i Diamentowa co najmniej B. Spółki, które już są na tych poziomach, mają 4 kwartały na dostosowanie.' : 'ESG przestaje być kryterium awansu na giełdach.';
         if (typeof pushNews === 'function') pushNews(text); if (typeof logEvent === 'function') logEvent(text, 'company');
     }
     if (q % 4 !== 0 || q === 0) return;
     if (level >= ESG_REG_RULES.level) runEsgRegulation();
     if (!st.pending) {
-        const announce = on => { st.pending = { on, effectiveQ: q + 1 }; const text = on ? 'UEiE zapowiada: od następnego kwartału ESG będzie kryterium awansu (Platynowa ≥ C, elitarne ≥ B).' : 'UEiE traci uprawnienia: od następnego kwartału ESG przestaje być kryterium awansu.'; if (typeof pushNews === 'function') pushNews(text); if (typeof logEvent === 'function') logEvent(text, 'company'); };
+        const announce = on => { st.pending = { on, effectiveQ: q + 1 }; const text = on ? 'UEiE zapowiada: od następnego kwartału ESG będzie kryterium awansu (Platynowa i Rubinowa ≥ C, Szmaragdowa i Diamentowa ≥ B).' : 'UEiE traci uprawnienia: od następnego kwartału ESG przestaje być kryterium awansu.'; if (typeof pushNews === 'function') pushNews(text); if (typeof logEvent === 'function') logEvent(text, 'company'); };
         if (!st.criterion && level >= ESG_REG_RULES.criterionLevel && Math.random() < ESG_REG_RULES.criterionYear) announce(true);
         else if (st.criterion && level < ESG_REG_RULES.criterionLevel) announce(false);
     }
 }
 
 /** G10: spółka z Platynowej albo elitarnych poniżej litery wymaganej przez kryterium ESG (obowiązujące albo ogłoszone). */
+/** Próg ESG, do którego spółka dąży: poziomu, na którym jest, a duża spółka z Platynowej lub Rubinowej z kapitalizacją Szmaragdowej celuje w próg Szmaragdowej (U14). */
+function getEsgGateNeed(stock) {
+    const need = ESG_REG_RULES.need[stock?.exchange];
+    if (!['PLATINUM', 'RUBY'].includes(stock?.exchange) || typeof getPlatinumCapThreshold !== 'function' || typeof ELITE_RULES !== 'object') return need;
+    const plat = getPlatinumCapThreshold();
+    return plat > 0 && getMarketCap(stock) >= plat * ELITE_RULES.EMERALD.capMult ? ESG_REG_RULES.need.EMERALD : need;
+}
 function isBelowEsgGate(stock) {
-    const st = getEsgRegState(), need = ESG_REG_RULES.need[stock?.exchange];
+    const st = getEsgRegState(), need = getEsgGateNeed(stock);
     if (!need || !(st.criterion || st.pending?.on)) return false;
     const g = getEsgRating(stock) || getEsgTrue(stock)?.grade;
     return ESG_GRADE_ORDER.indexOf(g) > ESG_GRADE_ORDER.indexOf(need);

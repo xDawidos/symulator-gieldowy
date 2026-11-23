@@ -23,6 +23,7 @@ Plan: `plany/plan_0.18.9_esg.md`. Diagnoza: `raporty/diagnoza_esg_0.18.9.md`. Pr
 | H16 | G10 | Przydział: 1 Szmaragdowa, potem Rubinowa do limitu, potem reszta Szmaragdowej (dawniej Szmaragdowa do 3 jako pierwsza). Rubinowa 1,6 × progu Platynowej, Szmaragdowa 2,5 ×. Spółki z Platynowej i elitarnych poniżej kryterium ESG (obowiązującego albo ogłoszonego): projekt z szansą 60% na kw., nowy audyt 2 kw. po zakończonym projekcie | g9: Rubinowa 73%; k9: Szmaragdowa 83% |
 | H17 | G10/G11 | Strojenie po k9 i c9: próg B 62; popyt A +0,5 / C −0,5 / D −1% rocznie; ryzyko w ocenie kredytowej A +1, C −1 z 25%, D −1, D w G −2; wycofanie uczciwej deklaracji 60% na kw.; Srebrna oceniana z szansą 70% na rok; greenwashing 0,1% na kw. | Bramki G11 |
 | H18 | G11 | Baza porównań: g0 + fk łącznie (g0 sam wypadł wysoko). Ablacja (aba/abb/abc) pokazała, że spadek marży w g9 to szum, nie skutek ESG | Seria g9 dała marżę 20 lat −2,4 pp, k9 i c9 w szumie |
+| H19 | U14 | Decyzja użytkownika 2026-11-23 (szczegóły: `kontrola_0.18.9.md`, „U14”). Wzór oceny łącznej bez zmian (0,4 E + 0,3 S + 0,3 G); mediana liter filarów została jako przełącznik `ESG_RULES.combine` i presety `med` / `esg5m` w przebiegach. Motywacja: spółka z Platynowej lub Rubinowej z kapitalizacją Szmaragdowej celuje w próg Szmaragdowej (`getEsgGateNeed`); spółka poniżej kryterium, której rzeczywista ocena już je spełnia, zamawia nowy audyt po 2 kw. (szum audytu); banki (bez oceny ESG) poza kryterium. Kryterium: Rubinowa ≥ C, Szmaragdowa i Diamentowa ≥ B | Mediana usuwa klasę D (0,3–0,5%); motywacja sama dała Rubinową 70%, Szmaragdową 60% |
 
 ## Wyniki serii
 
@@ -43,6 +44,4 @@ Po g5 zmienione jeszcze: próg B 60 (za mało C wśród ocen publicznych) i popy
 
 ## Do decyzji użytkownika
 
-| # | Sprawa | Opcje | Rekomendacja |
-|---|---|---|---|
-| U14 | Kryterium ESG w elitarnych (G9): przy wymogu B elitarne obsadzone w 44–49% kwartałów (cel ≥ 85%), bo duże spółki to głównie emitenci z oceną C | a) zostawić; b) Rubinowa ≥ C, Szmaragdowa i Diamentowa ≥ B; c) wszystkie elitarne ≥ C, B tylko Diamentowa; d) dłuższy okres przejściowy (8 kw.) | b) (szczegóły: `kontrola_0.18.9.md`) |
+Brak otwartych. U14 rozstrzygnięte 2026-11-23 (H19).

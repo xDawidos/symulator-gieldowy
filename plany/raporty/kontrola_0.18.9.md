@@ -18,7 +18,8 @@ Seria kontrolna c9 (kod a7b185b): 24 gry × 6,5 roku i 20 × 20 lat bez presetu 
 | G8 | d4cae07 | makieta 34: znaczek ESG w wierszu listy, skrót w Przeglądzie, blok „Etyka i ESG” w Zarządzaniu |
 | G9 | 3491466 | rozporządzenia UEiE (poziom 4), kary za greenwashing, kryterium ESG awansu (poziom 5), preset `esg5` |
 | G10 | a7b185b | kolejność przydziału elitarnych, progi Rubinowej (1,6 ×) i Szmaragdowej (2,5 ×), reakcja spółek na kryterium ESG, strojenie po k9 |
-| G11 | ten commit | szansa greenwashingu 0,001 na kw.; raport |
+| G11 | f7b2bfb | szansa greenwashingu 0,001 na kw.; raport |
+| U14 | ten commit | Rubinowa ≥ C, cel Szmaragdowej dla dużych spółek, ponowny audyt przy spełnionej ocenie rzeczywistej, banki poza kryterium; mediana jako przełącznik |
 
 ## Bramki G11
 
@@ -39,7 +40,7 @@ Seria kontrolna c9 (kod a7b185b): 24 gry × 6,5 roku i 20 × 20 lat bez presetu 
 | Rubinowa 3–6 od 3. roku | ≥ 90% (cel 95%) | c9 88%, gw 89% (bez kryterium ESG, w 7 z 20 gier c9 kryterium weszło) | o 1–2 pp poniżej |
 | Szmaragdowa 1–3 | ≥ 90% (cel 95%) | c9 85%, gw 83% | poniżej |
 | Diamentowa 1 | ≥ 95% | 100% | OK |
-| Elitarne z kryterium ESG | ≥ 85% | `esg5`: Rubinowa 44%, Szmaragdowa 49%, Diamentowa 99% | **poza → U14** |
+| Elitarne z kryterium ESG | ≥ 85% (akceptowalne ≥ 75%) | c9 `esg5`: Rubinowa 44%, Szmaragdowa 49%; po U14 (p14): Rubinowa 78%, Szmaragdowa 65%, Diamentowa 100% | Rubinowa akceptowalna, Szmaragdowa poniżej (sekcja U14); projekty ESG 24–33% (cel 10–25%) |
 | Projekty ESG po 20 latach | 10–25% spółek | 26–29% | o 1–4 pp za dużo |
 | Zmiana oceny kredytowej (audytorzy z ESG) | 0 ± 0,2 stopnia | −0,08 (20 lat), −0,12 (6,5 roku) | OK |
 | Czas kroku | ≤ 900 ms/kw., wzrost ≤ 20 ms | 6,5 roku 788 ms (baza 802); 20 lat 1189 ms (baza 1110, +79 ms) | 20 lat: wzrost ponad próg; seria 20 lat ma ponad 900 ms także w bazie |
@@ -52,13 +53,32 @@ Sonda `T.tiers[].ru` i `em` (c9, bez kryterium): pula Platynowej i elitarnych 10
 
 Z kryterium ESG (`esg5`) pula spada do 8,1 (Platynowa wymaga ESG ≥ C), a wymóg B dla elitarnych odcina połowę kandydatów: duże spółki to w większości emitenci (energetyka, przemysł, chemia) z oceną C. Projekty pod kryterium (G10) nie nadrabiają tego w ciągu kilku lat, bo filar E zależy od emisji.
 
-## Do decyzji użytkownika
+## U14: kryterium ESG w elitarnych (decyzja 2026-11-23)
 
-- **U14 (kryterium ESG w elitarnych).** Przy kryterium z planu (Rubinowa, Szmaragdowa, Diamentowa ≥ B) elitarne są obsadzone w 44–49% kwartałów (cel ≥ 85%). Opcje: a) zostawić (kryterium robi to, co ma: elitarne pustoszeją, póki spółki się nie poprawią); b) Rubinowa ≥ C, Szmaragdowa i Diamentowa ≥ B; c) wszystkie elitarne ≥ C, B tylko dla Diamentowej; d) przy kryterium dłuższy okres przejściowy (8 kw.) i spółki pod kryterium dostają ocenę szybciej. Rekomendacja: **b)**, bo daje różnicę między poziomami i zostawia Rubinową dla dużych emitentów.
+Polecenie użytkownika: sprawdzić, dlaczego duzi emitenci mają głównie C i co skłoni spółki do ESG; jeśli nie zadziała, Rubinowa ≥ C. Dodatek: wariant oceny łącznej jako mediany liter filarów (filar D ogranicza do B).
+
+**Diagnoza** (serie d14 i n14 z sondą puli: spółki z Platynowej i elitarnych z kapitalizacją ≥ 1,6 × progu Platynowej; banki wyłączone od n14). Emitenci nie trzymają się w C z budowy: E porównuje emisyjność spółki ze średnią sektora (spółka na średniej ma E 60, filar C, ale wynik łączny 60–61 przy S i G ok. 61), a energetyka, chemia i przemysł w puli mają głównie B. W C siedzą Obronność (baza E 48), Budowlany, Usługi i część Nieruchomości. Bez kryterium rzeczywiste ≥ B ma 58% puli, z kryterium (esg5) 75%. Spółce w C do progu B brakuje średnio 4 pkt wyniku łącznego, czyli 1–2 projekty (koszt 0,5–3% rocznego przychodu, 2–4 kw.). Ścieżka ESG kosztuje roczny przychód i prawie nikt jej nie wybiera (1–4% puli). Dwie przyczyny w motywacji: (1) duża spółka z Platynowej mierzyła się z progiem Platynowej (C), więc nie reagowała na wymóg B elitarnych; (2) spółka z oceną publiczną zaniżoną przez szum (±1 litera z 20%) czekała 4 kw. na nowy audyt. Banki nie mają oceny ESG, więc na Platynowej nie przechodziły kryterium.
+
+**Warianty** (20 lat, 10 gier z `esg5`, 6 bez presetu, kwartały od 3. roku):
+
+| Wariant | Rubinowa z kryterium | Szmaragdowa z kryterium | Rubinowa / Szmaragdowa bez presetu | Oceny rzeczywiste A / B / C / D (20 lat, esg5) | Projekty ESG |
+|---|---|---|---|---|---|
+| c9 (przed U14, elitarne ≥ B) | 44% | 49% | 88 / 85% | — | 26–29% |
+| d14 (to samo, nowa sonda) | 60% | 58% | 83 / 74% | — | — |
+| n14 wynik ważony + motywacja | 70% | 60% | 79 / 84% | 21 / 37 / 30 / 12 | 28–31% |
+| n14 mediana + motywacja | 73% | 64% | 82 / 79% | 23 / 44 / 33 / 0,3 | 24–34% |
+| **p14: wynik ważony + motywacja + Rubinowa ≥ C** | **78%** | **65%** | **85 / 82%** | 24 / 36 / 25 / 15 | 24–33% |
+
+Mediana daje tylko +3–4 pp w elitarnych, a klasa D prawie znika (0,3–0,5% spółek, w 8 z 10 gier esg5 brak D), bo D wymaga dwóch filarów D. Bez limitu do B mediana zostawia D, ale wtedy filar D nie obniża oceny łącznej (A A D → A), czyli wraca problem, przed którym chronił limit. Wybór: wynik ważony.
+
+**Wynik p14** (34 gry: 24 × 6,5 roku bez presetu, 10 × 20 lat bez presetu, 8 × 20 lat esg5): Rubinowa z kryterium 78% (akceptowalne ≥ 75%), Szmaragdowa 65% (poniżej). Bez kryterium bez zmian w szumie wobec c9. Oceny publiczne po 20 latach bez presetu: A 20,5 / B 43,8 / C 22,7 / D 13,0%, pokrycie 55%. Zmiana oceny kredytowej −0,11 stopnia. Marże i GIG wobec bazy g0 + fk: 6,5 roku średnia odchyłek sektorów −0,04 pp (OK), GIG +0,59 pp (SE 1,03); 20 lat GIG −0,67 pp (SE 0,57), marża końcowa −1,17 pp (SE 1,10), wskaźnik zysków −1,14 pp (SE 0,44; łącznie z c9 i gw −0,12 pp, SE 0,37, więc szum serii). Zanieczyszczenie bez zmian (ta sama ścieżka, projekty w szumie). Czas kroku w p14 wyższy (971 / 1573 ms), bo seria szła 8 naraz obok testów; c9 bez zmian kodu w pętli.
+
+Szmaragdowa (65%) ograniczają przede wszystkim warunki spoza ESG: z 8,4 spółek w puli dywidendę przez 2 kw. i kapitalizację 2,5 × ma 3,4, a ESG ≥ B odcina z tego jeszcze ok. 20%. Dalsze obniżanie wymogu ESG dla Szmaragdowej poza decyzją użytkownika, więc zostaje B.
 
 ## Co nie zostało sprawdzone
 
-- Bramka elitarnych bez kryterium ≥ 90% nie przeszła (88–89% / 83–85%); bez U14 dalsze strojenie nie ma sensu, bo w części gier kryterium wchodzi samo (7 z 20 gier c9).
+- Bramka elitarnych bez kryterium ≥ 90% nie przeszła (c9 88–89% / 83–85%, p14 85 / 82%); w części gier kryterium wchodzi samo (7 z 20 c9, 3 z 10 p14).
+- Szmaragdowa z kryterium 65% (cel ≥ 85%, akceptowalne ≥ 75%).
 - Fundusz etyczny bota („strategia testowa bota” z planu) nie powstał: napływ +15% sprawdza test jednostkowy, nie seria.
 - Czas kroku w grze 20-letniej +79 ms wobec bazy łącznej (w seriach równoległych pomiar czasu jest głośny; seria 6,5 roku bez wzrostu).
 - Wiersz listy z oceną ESG i okna UI sprawdzone w podglądzie na jednej grze; zrzuty nie są zapisane.
