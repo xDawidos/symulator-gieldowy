@@ -21,7 +21,7 @@ Polecenie użytkownika z 2026-11-23: wersja 0.20 z analizą wydatków i mechanik
 | W4 | Konsolidacja grup kapitałowych | zgoda **z rozszerzeniem:** więcej typów grup, typy specjalistyczne, więcej mechanik łączących i dzielących | K16–K19 (wersja 0.20.3) |
 | W5 | Konkurencja lokalna | zgoda **z dopiskiem:** limit wynika z ograniczonej ludności miasta, podatków miejskich i czasem z geografii | K15 |
 | W6 | Restrukturyzacja przy spadku po drabinie | zgoda | K14 |
-| W7 | Dodatkowe pomysły planowania | użytkownik poprosił o propozycje; P1–P3 na końcu pliku czekają na akceptację | — |
+| W7 | Dodatkowe pomysły planowania (P1–P3) | **zgoda na wszystkie z poprawkami (2026-11-23):** P1 to nie jeden rywal, tylko relacje z wieloma firmami, a wojna cenowa może obejmować 3 i więcej okolicznych producentów; oprócz rywali są przyjaciele. P2: firmy rodzinne mają bonus stabilności i rzadziej naginają prawo, ale rodzina może stracić firmę (wydarzenie, jednorazowy spadek kursu, utrata bonusu). P3 bez zmian | K20, K21, K22 |
 
 ## Podział na podwersje (decyzja planowania 2026-11-23)
 
@@ -29,9 +29,9 @@ Po W1–W6 zakres przekracza 10 części, więc 0.20 dzielimy na trzy podwersje,
 
 | Wersja | Nazwa | Części |
 |---|---|---|
-| **0.20.1** | Drabina i ludzie | K0 (pomiar), K1 drabina, K2 obieg płac, K3 działy botów, K4 profile, K11 centrala, K12 WZA, K13 rozbicie marży, K14 restrukturyzacja, UI z K9 dla tych części, kontrola |
-| **0.20.2** | Rynek firm | K5 OTC, K6 IPO z deficytu, K7 import awaryjny, K8 kooperacje z grafu, K15 konkurencja lokalna, UI z K9 (mapa: siedziby i OTC), kontrola |
-| **0.20.3** | Grupy kapitałowe | K16 typy grup, K17 mechaniki łączące, K18 mechaniki dzielące, K19 życie grupy (konsolidacja, cash pooling, ceny transferowe, rating grupy), UI, kontrola |
+| **0.20.1** | Drabina i ludzie | K0 (pomiar), K1 drabina, K2 obieg płac, K3 działy botów, K4 profile, K11 centrala, K12 WZA, K13 rozbicie marży, K14 restrukturyzacja, K22 kronika, UI z K9 dla tych części, kontrola |
+| **0.20.2** | Rynek firm | K5 OTC, K6 IPO z deficytu, K7 import awaryjny, K8 kooperacje z grafu, K15 konkurencja lokalna, K20 rywale i przyjaciele, UI z K9 (mapa: siedziby i OTC), kontrola |
+| **0.20.3** | Grupy kapitałowe | K16 typy grup, K17 mechaniki łączące, K18 mechaniki dzielące, K19 życie grupy (konsolidacja, cash pooling, ceny transferowe, rating grupy), K21 firmy rodzinne, UI, kontrola |
 
 ## Nowa kolejność wersji (K1)
 
@@ -149,7 +149,8 @@ Po W1–W6 zakres przekracza 10 części, więc 0.20 dzielimy na trzy podwersje,
 |---|---|---|
 | Karta spółki: ścieżka rozwoju | K1, K4, K9 | szczebel, 4 filary (pasek i słowo), następny próg i odblokowania, profile, wybór profilu w spółce kontrolowanej |
 | Lista spółek: szczebel | K9 | znaczek szczebla w wierszu, filtr |
-| Karta spółki: rozbicie marży i kronika | K13, P3 | wykres kaskadowy marży, kronika (awanse, fuzje, rekordy) |
+| Karta spółki: rozbicie marży i kronika | K13, K22 |
+| Karta spółki: relacje i rodzina | K20, K21 | lista rywali i przyjaciół z siłą relacji, trwające wojny cenowe z uczestnikami, znaczek firmy rodzinnej i jej bonus | wykres kaskadowy marży, kronika (awanse, fuzje, rekordy) |
 | Walne: wybór kierunku i oferty miast | K11, K12 | uchwała o profilu z głosami, porównanie ofert miast przy przeprowadzce centrali |
 | Grupa kapitałowa | K16–K19 | widok grupy na karcie matki: typ i jego skutki, członkowie, konsolidacja, cash pooling, rating grupy, działania łączące i dzielące |
 | Mapa kraju: siedziby i OTC | K5, K9 | warstwa na mapie z 0.19.2: siedziby, oddziały, moc OTC per miasto (dobro i skala) |
@@ -162,9 +163,9 @@ Po W1–W6 zakres przekracza 10 części, więc 0.20 dzielimy na trzy podwersje,
 - **Zakres:** podział na 0.20.1, 0.20.2 i 0.20.3 (wyżej). Grupy kapitałowe (0.20.3) dotykają zapisu (struktura grup) i niezmiennika akcji w obrocie, więc idą ostatnie.
 - **Grupy a GIG:** konsolidacja nie może zmieniać indeksu (spółki notowane liczone raz).
 
-## Propozycje planowania (do potwierdzenia)
+## Propozycje planowania (przyjęte 2026-11-23)
 
 - **Przyjęte:** podział na podwersje; profile z K4 przechodzą na córki (córka dziedziczy jeden profil matki, K16).
-- **P1. Rywale:** każda spółka od szczebla Regionalnego ma jednego **rywala** (ten sam podsektor, podobny szczebel, najlepiej to samo miasto, czyli para z K15). Rywalizacja daje wydarzenia: kampania cenowa, podkupienie prezesa albo specjalistów, wyścig o przetarg, wrogie przejęcie. Po przejęciu, bankructwie albo zmianie szczebla rywal się zmienia. Tani element RPG (z istniejących mechanik), widoczny na karcie i w Gazecie. Wersja: 0.20.2.
-- **P2. Firmy rodzinne i sukcesja:** część spółek ma założyciela albo rodzinę z pakietem (np. 20–50%). Przy odejściu prezesa-założyciela następuje sukcesja: dziecko (losowe cechy z G3 0.18.9), zawodowy menedżer albo spór rodzinny (sprzedaż pakietu, okazja do przejęcia dla gracza). Daje historie i decyzje przy walnym. Wersja: 0.20.3 (z grupami, bo rodziny często mają holdingi).
-- **P3. Kronika spółki:** na karcie rok założenia, awanse i spadki po drabinie, fuzje, rekordy (największy zysk, najwyższa wycena), prezesi. Tylko zapis istniejących zdarzeń z limitem jak CV z 0.18.8 D1. Wersja: 0.20.1.
+- **P1 → K20. Relacje: rywale i przyjaciele (0.20.2):** spółka od szczebla Regionalnego ma **relacje z wieloma firmami**, a nie jednego rywala. **Rywalizacja** dotyczy tego samego podsektora i sąsiedztwa (to samo miasto albo województwo). **Wojna cenowa z K15 obejmuje wszystkich okolicznych producentów** ponad pojemność rynku, czyli 2, 3 lub więcej firm naraz; najmocniej tracą najmniejsi, a kończy się wyjściem, przeprowadzką, przejęciem albo porozumieniem (urząd antymonopolowy pilnuje, żeby porozumienie nie było kartelem). Wydarzenia rywalizacji: kampania cenowa, podkupienie prezesa albo specjalistów, wyścig o przetarg, wrogie przejęcie. **Przyjaciele** (relacja dodatnia) powstają ze wspólnych kooperacji (K8), aliansów i JV (K17), tego samego miasta bez konkurencji, prezesów z dobrymi relacjami (0.17.3): lepsze warunki kooperacji, wsparcie w obronie przed przejęciem (biały rycerz), wspólne oferty w przetargach. Relacja ma siłę od −100 do +100, zmienia się od wydarzeń i powoli wraca do zera. Widoczna na karcie (lista rywali i przyjaciół, słowem i znakiem, nie tylko kolorem) i w Gazecie. **Test:** wojny cenowe z 3+ uczestnikami w ≥ 30% wojen; średnia odchyłek marż 0 ± 0,3 pp; przyjaźń zmniejsza skuteczność wrogich przejęć.
+- **P2 → K21. Firmy rodzinne i sukcesja (0.20.3):** część spółek (np. 10–20%) ma rodzinę założyciela z pakietem 20–50%. **Bonus rodzinny:** wyższa stabilność (mniejsza zmienność kursu, rzadsze zmiany strategii, lojalność pracowników) i **rzadsze naginanie prawa** (niższa szansa szarej strefy, oszustw księgowych i greenwashingu z 0.18.9). Przy odejściu prezesa-założyciela sukcesja: dziecko (losowe cechy z 0.18.9 G3), zawodowy menedżer albo spór rodzinny. **Rodzina może stracić firmę:** spór, sprzedaż pakietu, rozwodnienie w emisji albo przejęcie. Wtedy wydarzenie w Gazecie i mail do akcjonariuszy, **jednorazowy spadek kursu** (np. 5–12%) i **utrata bonusu rodzinnego** na stałe. Dla gracza to okazja do odkupu pakietu. **Test:** w 20 latach 20–40% firm rodzinnych traci rodzinę; zmienność firm rodzinnych niższa o 10–20%; GIG ± 0,3 pp.
+- **P3 → K22. Kronika spółki (0.20.1, zgoda):** na karcie rok założenia, awanse i spadki po drabinie, fuzje, rekordy (największy zysk, najwyższa wycena), prezesi. Tylko zapis istniejących zdarzeń z limitem jak CV z 0.18.8 D1. Wersja: 0.20.1.
