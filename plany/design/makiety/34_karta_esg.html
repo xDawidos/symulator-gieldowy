@@ -325,6 +325,19 @@ table.ls { width: 100%; border-collapse: collapse; background: var(--color-bg-ba
 .none { font-size: 13px; color: var(--color-text-secondary); }
 .none p { margin: 4px 0 8px; font-size: 12px; color: var(--color-text-muted); }
 .link { display: inline-flex; align-items: center; gap: 4px; color: var(--color-text-primary); font-size: 12px; }
+/* ===== Blok do gry 3: skrót „Etyka i ESG” w zakładce Przegląd (renderCompanyCardOverview, prawa kolumna pod Prezesem) ===== */
+.cc { max-width: 860px; }
+.cc-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--ink-700); margin: 0 0 14px; }
+.cc-tabs span { padding: 8px 12px; font-size: 13px; color: var(--color-text-secondary); }
+.cc-tabs span[aria-selected="true"] { color: var(--color-text-primary); font-weight: 600; box-shadow: inset 0 -3px 0 var(--color-section-market); }
+.cc-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; }
+@media (max-width: 700px) { .cc-grid { grid-template-columns: 1fr; } }
+.cc-grid h4 { margin: 0 0 6px; font-size: 13px; }
+.cc-grid section > p { margin: 0 0 8px; font-size: 12px; color: var(--color-text-secondary); }
+.es { margin-top: 14px; }
+.es-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.es-row .word { color: var(--color-text-primary); font-size: 13px; }
+.es p { margin: 4px 0 0; font-size: 12px; color: var(--color-text-muted); }
 
 </style></head><body>
 <!-- KOPIA img/ikony/sprite.svg -->
@@ -492,9 +505,19 @@ table.ls { width: 100%; border-collapse: collapse; background: var(--color-bg-ba
   <thead><tr><th>Ticker</th><th>Spółka</th><th style="text-align:right">Kurs</th><th style="text-align:right">Zmiana</th></tr></thead>
   <tbody id="rows"></tbody></table></div>
 
-<h1 class="frame-title">2. Blok „Etyka i ESG” w karcie spółki krajowej</h1>
-<p class="frame-sub">Cztery stany. Litera zawsze ze słowem, filary z punktami i paskiem z kreskami progów liter (35, 55, 75). Spółki zagraniczne pokazują „brak oceny” z dopiskiem, że oceny ESG są na razie krajowe.</p>
+<h1 class="frame-title">2. Blok „Etyka i ESG” w karcie spółki krajowej (zakładka Zarządzanie)</h1>
+<p class="frame-sub">Pełny blok stoi w zakładce Zarządzanie (ład korporacyjny i etyka razem). Cztery stany. Litera zawsze ze słowem, filary z punktami i paskiem z kreskami progów liter (35, 55, 75). Spółki zagraniczne pokazują „brak oceny” z dopiskiem, że oceny ESG są na razie krajowe.</p>
 <div class="wrap cards" id="cards"></div>
+<h1 class="frame-title">3. Skrót oceny w zakładce Przegląd</h1>
+<p class="frame-sub">Gdy spółka ma ocenę publiczną albo Twoje badanie, Przegląd pokazuje krótko: znaczek ze słowem, deklarację, kto i do kiedy, jedno zdanie o filarach i odnośnik do pełnego bloku w zakładce Zarządzanie. Bez oceny tej części nie ma.</p>
+<div class="wrap"><article class="card cc" aria-label="Karta spółki Wawelski Bank, zakładka Przegląd">
+  <header><h3>Wawelski Bank</h3><span class="tk">WSB</span><span class="tk">Bankowość, Giełda Rubinowa</span></header>
+  <div class="cc-tabs" role="tablist" aria-label="Zakładki karty spółki"><span role="tab" aria-selected="true">Przegląd</span><span role="tab" aria-selected="false">Finanse</span><span role="tab" aria-selected="false">Zarządzanie</span><span role="tab" aria-selected="false">Zatrudnienie</span></div>
+  <div class="cc-grid">
+    <section><h4>O spółce</h4><p>Bank uniwersalny z siedzibą w Krakowie, obsługuje klientów detalicznych i firmy w całym kraju. Rozwija bankowość mobilną i kredyty dla małych firm.</p></section>
+    <section><h4>Prezes</h4><p><b>Marta Kowal</b> · wiek 52, staż 6 lat</p>
+      <div class="es" id="es"></div></section>
+  </div></article></div>
 
 <script>
 /* wspólne dla makiet 33–36 (do gry: funkcje w esg.js / ui.js) */
@@ -539,6 +562,9 @@ const C = [
     <div class="pen"><h5>${ic('alert', 14)}Kara za greenwashing, R6 kw.1</h5><ul><li>Spółka deklarowała etykę przy ocenie rzeczywistej D. Deklaracja wycofana.</li><li>Kara <span class="n">2 140 000 PLN</span> (2% rocznego przychodu), kurs −6% w dniu ogłoszenia.</li><li>Ład korporacyjny −20 pkt do R7 kw.4.</li></ul></div></section>`],
 ];
 document.getElementById('cards').innerHTML = C.map(([st, html], i) => `<div><p class="state">Stan ${i + 1}: ${st}</p><article class="card" aria-label="${st}">${html}</article></div>`).join('');
+
+document.getElementById('es').innerHTML = `<h4>${ic('lisc', 14)} Etyka i ESG</h4><div class="es-row">${esg('A')}<span class="word">etyczna</span><span class="claim" style="margin-left:0">${ic('lisc', 12)}deklaruje etykę</span></div>
+  <p>Bilans Global, ważna do R7 kw.1. Najsłabszy filar: Środowisko, 78 pkt. <a class="link" href="#">Szczegóły w zakładce Zarządzanie</a></p>`;
 
 </script>
 </body></html>

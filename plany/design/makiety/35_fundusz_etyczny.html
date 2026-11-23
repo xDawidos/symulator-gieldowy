@@ -1,4 +1,4 @@
-<!doctype html><html lang="pl"><head><meta charset="utf-8"><title>Makieta UI — Fundusz etyczny (0.18.9 G6)</title>
+<!doctype html><html lang="pl"><head><meta charset="utf-8"><title>Makieta UI — O funduszu i fundusz etyczny (0.18.9 G6)</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@500;600&display=swap" rel="stylesheet">
@@ -274,27 +274,57 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .pil > span i { font-style: normal; font-weight: 400; color: var(--color-text-muted); }
 .word { font-size: 12px; color: var(--color-text-secondary); }
 
-.cols { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: 24px; align-items: start; }
-@media (max-width: 860px) { .cols { grid-template-columns: 1fr; } }
-.cap { margin: 0 0 6px; font-size: 12px; color: var(--color-text-muted); }
-.panel { border: 1px solid var(--ink-700); border-radius: 6px; background: var(--color-bg-surface); padding: 14px; }
-.panel > h2 { margin: 0 0 10px; font-size: 15px; }
-.kv { display: flex; justify-content: space-between; font-size: 12px; color: var(--color-text-muted); margin: 2px 0; }
-.kv b { color: var(--color-text-primary); font-weight: 600; }
+/* ===== Wspólna rama okna (kopia z makiety 19, 19_okna.css; tu bez tła i pozycjonowania absolutnego) ===== */
+.wn { --wn-accent: var(--color-section-ju); display: grid; grid-template-rows: auto auto minmax(0, 1fr); height: 780px; max-width: 1120px; background: var(--color-bg-surface); border: 1px solid var(--ink-700); border-top: 3px solid var(--wn-accent); border-radius: 6px; box-shadow: 0 24px 64px rgba(0, 0, 0, .55); overflow: hidden; }
+.wn-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 14px 16px 12px 20px; }
+.wn-emblem { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 6px; background: var(--color-bg-raised); color: var(--wn-accent); }
+.wn-head h2 { margin: 0; font: 600 22px/1.15 'IBM Plex Sans Condensed', var(--font-family-sans); }
+.wn-head p { margin: 2px 0 0; color: var(--color-text-secondary); font-size: 13px; }
+.wn-close { width: 40px; height: 40px; display: grid; place-items: center; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--color-text-secondary); cursor: pointer; }
+.wn-strip { display: flex; gap: 28px; padding: 8px 20px 10px; border-bottom: 1px solid var(--ink-700); overflow-x: auto; scrollbar-width: none; }
+.wn-strip div { display: grid; gap: 1px; min-width: max-content; }
+.wn-strip span { font-size: 12px; color: var(--color-text-muted); }
+.wn-strip b { font: 600 15px var(--font-family-mono); font-variant-numeric: tabular-nums; }
+.wn-body { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; }
+.wn-tabs { display: flex; gap: 2px; padding: 0 16px; border-bottom: 1px solid var(--ink-700); overflow-x: auto; scrollbar-width: none; }
+.wn-tab { position: relative; display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 12px; border: 0; background: none; color: var(--color-text-secondary); font: 400 13px var(--font-family-sans); white-space: nowrap; cursor: pointer; }
+.wn-tab:hover { color: var(--color-text-primary); }
+.wn-tab[aria-selected="true"] { color: var(--color-text-primary); font-weight: 600; }
+.wn-tab[aria-selected="true"]::before { content: ""; position: absolute; left: 10px; right: 10px; bottom: -1px; height: 3px; border-radius: 2px; background: var(--wn-accent); }
+.wn-count { min-width: 20px; padding: 0 6px; border-radius: 999px; background: rgba(245,165,36,.14); color: var(--color-text-warn); font: 600 11px/18px var(--font-family-mono); text-align: center; }
+.wn-main { min-height: 0; overflow-y: auto; padding: 20px 24px 32px; scrollbar-gutter: stable; }
+@media (max-width: 640px) { .wn { height: 820px; border-radius: 0; } .wn-head { padding: 10px 8px 8px 12px; } .wn-head h2 { font-size: 19px; } .wn-main { padding: 16px 12px 24px; } .wn-tab { min-height: 44px; } }
 
-/* ===== Blok do gry 1: „Fundusz etyczny” w panelu Mój fundusz (pod fund-summary) ===== */
-.fe { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--ink-700); }
+/* ===== Blok do gry 1: okno „O funduszu” (dawniej „Klienci i udziały”, #clients-modal) ===== */
+.grid2 { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 860px) { .grid2 { grid-template-columns: 1fr; } }
+.cardx { padding: 14px 16px; border: 1px solid var(--ink-700); border-radius: 6px; background: var(--color-bg-raised); }
+.cardx > h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; font-size: 14px; }
+.cardx > p { margin: 0 0 10px; font-size: 12px; color: var(--color-text-muted); }
+.cardx + .cardx { margin-top: 16px; }
+.row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.field { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.field input { width: 90px; height: 30px; padding: 0 8px; border: 1px solid var(--ink-400); border-radius: 4px; background: var(--ink-900); color: var(--color-text-primary); font: 13px var(--font-family-mono); }
+.field small { font-size: 12px; color: var(--color-text-muted); }
+/* klienci w skrócie: typ, liczba, zadowolenie */
+.mix { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.mix li { display: grid; grid-template-columns: 18px minmax(0, 1fr) 36px 90px 34px; gap: 8px; align-items: center; font-size: 12px; color: var(--color-text-secondary); }
+.mix .n { text-align: right; }
+.sat { position: relative; height: 6px; border-radius: 3px; background: var(--ink-750); }
+.sat i { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--ink-300); }
+.sat.low i { background: var(--amber-300); }
+/* fundusz etyczny */
 .fe-sw { display: flex; align-items: center; gap: 10px; }
-.fe-sw h3 { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 13px; }
+.fe-sw h3 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px; }
 .sw { position: relative; width: 38px; height: 22px; margin-left: auto; padding: 0; border: 1px solid var(--ink-400); border-radius: 11px; background: var(--ink-750); cursor: pointer; flex: none; }
 .sw::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--ink-300); transition: left .15s; }
 .sw[aria-checked="true"] { border-color: var(--amber-400); background: color-mix(in srgb, var(--amber-400) 25%, var(--ink-800)); }
 .sw[aria-checked="true"]::after { left: 18px; background: var(--amber-300); }
 .sw-state { font-size: 12px; color: var(--color-text-secondary); }
-.fe p { margin: 6px 0 0; font-size: 12px; color: var(--color-text-muted); }
+.fe p { margin: 8px 0 0; font-size: 12px; color: var(--color-text-muted); }
 .fe p b { color: var(--color-text-secondary); font-weight: 600; }
-.lim { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
-.lim li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 3px 8px; font-size: 12px; }
+.lim { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 10px; }
+.lim li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 8px; font-size: 12px; }
 .lim .lb { display: flex; align-items: center; gap: 6px; color: var(--color-text-secondary); }
 .lim .v { text-align: right; }
 .lim .v.over { color: var(--color-text-warn); }
@@ -302,16 +332,56 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .meter i { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--ink-300); }
 .meter.over i { background: var(--amber-300); }
 .meter b { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--ink-100); }
-.alert { display: flex; gap: 8px; align-items: flex-start; margin-top: 10px; padding: 10px; border: 1px solid var(--color-border-warn); border-radius: 4px; background: color-mix(in srgb, var(--amber-400) 6%, transparent); font-size: 12px; color: var(--color-text-secondary); }
+.alert { display: flex; gap: 8px; align-items: flex-start; margin-top: 12px; padding: 10px; border: 1px solid var(--color-border-warn); border-radius: 4px; background: color-mix(in srgb, var(--amber-400) 6%, transparent); font-size: 12px; color: var(--color-text-secondary); }
 .alert > svg { color: var(--color-text-warn); margin-top: 1px; }
 .alert b { color: var(--color-text-warn); }
 .alert ul { margin: 4px 0 0; padding-left: 16px; }
-.confirm { margin-top: 10px; padding: 10px; border: 1px solid var(--ink-600); border-radius: 4px; background: var(--color-bg-sunken); font-size: 12px; }
+.confirm { margin-top: 12px; padding: 10px; border: 1px solid var(--ink-600); border-radius: 4px; background: var(--color-bg-sunken); font-size: 12px; }
 .confirm p { margin: 0 0 8px; color: var(--color-text-secondary); }
-.confirm .btns { display: flex; gap: 8px; }
-.reason { margin-top: 10px; padding: 8px 10px; border-radius: 4px; background: var(--color-bg-sunken); font-size: 12px; color: var(--color-text-secondary); }
+.btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.reason { display: flex; gap: 6px; margin-top: 10px; padding: 8px 10px; border-radius: 4px; background: var(--color-bg-sunken); font-size: 12px; color: var(--color-text-secondary); }
+/* klienci */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 1px solid var(--ink-600); border-radius: 999px; background: none; color: var(--color-text-secondary); font: 12px var(--font-family-sans); cursor: pointer; }
+.chip[aria-pressed="true"] { border-color: var(--color-border-accent); color: var(--color-text-primary); }
+.cl { list-style: none; margin: 0; padding: 0; border: 1px solid var(--ink-700); border-radius: 6px; }
+.cl > li { border-bottom: 1px solid var(--ink-750); } .cl > li:last-child { border-bottom: 0; }
+.cl-row { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto 110px 16px; gap: 10px; align-items: center; width: 100%; padding: 10px 12px; border: 0; background: none; color: var(--color-text-primary); font: 13px var(--font-family-sans); text-align: left; cursor: pointer; }
+.cl-row:hover { background: var(--color-bg-hover); }
+.cl-row small { color: var(--color-text-muted); font-size: 12px; }
+.cl-row .sat-w { display: grid; gap: 2px; font-size: 11px; color: var(--color-text-muted); text-align: right; }
+.cl-row > svg:last-child { color: var(--color-text-muted); transition: transform .15s; }
+.cl-row[aria-expanded="true"] > svg:last-child { transform: rotate(180deg); }
+.cl-card { padding: 0 12px 12px 44px; font-size: 12px; color: var(--color-text-secondary); }
+.cl-card q { display: block; margin-bottom: 6px; font-style: italic; }
+.cl-card ul { margin: 6px 0 0; padding: 0; list-style: none; color: var(--color-text-muted); }
+@media (max-width: 640px) { .cl-row { grid-template-columns: 22px minmax(0, 1fr) 16px; } .cl-row .val, .cl-row .sat-w { grid-column: 2; text-align: left; } }
+/* rynek udziałów */
+.mk { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 16px; align-items: start; }
+@media (max-width: 900px) { .mk { grid-template-columns: 1fr; } }
+table.ft { width: 100%; border-collapse: collapse; font-size: 12px; }
+.ft th { padding: 6px 8px; border-bottom: 1px solid var(--ink-600); color: var(--color-text-muted); font-weight: 400; text-align: left; }
+.ft td { padding: 7px 8px; border-bottom: 1px solid var(--ink-750); }
+.ft .r { text-align: right; }
+.ft tr.mine td:first-child { box-shadow: inset 3px 0 0 var(--amber-400); }
+@media (max-width: 640px) { .ft .hide-sm { display: none; } }
+.tape { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 12px; color: var(--color-text-secondary); }
+.tape li { padding-bottom: 6px; border-bottom: 1px solid var(--ink-750); }
+.tape small { color: var(--color-text-muted); margin-right: 4px; }
 
-/* ===== Blok do gry 2: ostrzeżenie w szufladzie zlecenia (stock-drawer-impact) ===== */
+/* ===== Blok do gry 2: panel „Mój fundusz” (pasek boczny): tylko stan i odnośnik ===== */
+.panel { max-width: 360px; border: 1px solid var(--ink-700); border-radius: 6px; background: var(--color-bg-surface); padding: 14px; }
+.panel > h2 { margin: 0 0 10px; font-size: 15px; }
+.kv { display: flex; justify-content: space-between; font-size: 12px; color: var(--color-text-muted); margin: 2px 0; }
+.kv b { color: var(--color-text-primary); font-weight: 600; }
+.fe-line { display: flex; align-items: center; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--ink-700); font-size: 12px; color: var(--color-text-secondary); }
+.fe-line a { margin-left: auto; color: var(--color-text-primary); }
+.fe-line.over { color: var(--color-text-warn); }
+
+/* ===== Blok do gry 3: ostrzeżenie w szufladzie zlecenia (stock-drawer-impact) ===== */
+.cols { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: 24px; align-items: start; }
+@media (max-width: 860px) { .cols { grid-template-columns: 1fr; } }
+.cap { margin: 0 0 6px; font-size: 12px; color: var(--color-text-muted); }
 table.ls { width: 100%; border-collapse: collapse; background: var(--color-bg-base); border: 1px solid var(--ink-700); }
 .ls td { padding: 8px 10px; border-bottom: 1px solid var(--ink-800); }
 .ls .r { text-align: right; }
@@ -487,15 +557,35 @@ table.ls { width: 100%; border-collapse: collapse; background: var(--color-bg-ba
   <symbol id="ic-sektor-uslugi" viewBox="0 0 24 24"><path d="M15 4a5 5 0 0 0-4.6 6.9L4 17.3V20h2.7l6.4-6.4A5 5 0 0 0 20 9l-3 3-3-1-1-3 3-3a5 5 0 0 0-1-1z"/></symbol>
 </svg>
 
-<h1 class="frame-title">1. Fundusz etyczny w panelu „Mój fundusz”</h1>
-<p class="frame-sub">Przełącznik pod podsumowaniem funduszu. Gdy jest włączony, pokazuje limity D, C i B z paskami wykorzystania (kreska = limit). Przełącz stan, żeby zobaczyć wyłączony fundusz, limity w normie i przekroczenie z terminem poprawy. Wyłączenie wymaga potwierdzenia w tym samym miejscu, bez nowego okna.</p>
-<div class="demo-ctl" role="group" aria-label="Makieta: stan funduszu">Stan: <button type="button" data-st="off" aria-pressed="false">wyłączony</button><button type="button" data-st="ok" aria-pressed="true">w limitach</button><button type="button" data-st="over" aria-pressed="false">przekroczenie</button></div>
+<h1 class="frame-title">1. Okno „O funduszu” (dawniej „Klienci i udziały”)</h1>
+<p class="frame-sub">Nowa wersja okna we wspólnej ramie (makieta 19): nagłówek ze stanem, pasek liczb i cztery zakładki. Przegląd: fundusz etyczny z przełącznikiem i limitami, opłata za zarządzanie, klienci w skrócie. Klienci: filtry i rozwijana lista. Rynek udziałów: tabela funduszy i taśma transakcji. Kampanie: marketing i emisja. Pozycja w menu bocznym też zmienia nazwę na „O funduszu”.</p>
+<div class="demo-ctl" role="group" aria-label="Makieta: stan funduszu etycznego">Fundusz etyczny: <button type="button" data-st="off" aria-pressed="false">wyłączony</button><button type="button" data-st="ok" aria-pressed="true">w limitach</button><button type="button" data-st="over" aria-pressed="false">przekroczenie</button></div>
+<div class="wrap"><section class="wn" aria-labelledby="wn-t">
+  <header class="wn-head"><span class="wn-emblem">IC:teczka:22</span><div><h2 id="wn-t">O funduszu</h2><p id="wn-sub"></p></div><button class="wn-close" type="button" aria-label="Zamknij (Esc)">IC:zamknij:20</button></header>
+  <div class="wn-strip"><div><span>NAV</span><b>42,0 mln PLN</b></div><div><span>Zaufanie</span><b>71</b></div><div><span>Klienci</span><b>38</b></div><div><span>Wpłaty nowych (tydz.)</span><b>412 000 PLN</b></div><div><span>Premia do NAV</span><b class="up">+1,2%</b></div><div><span>Obrót udziałami (tydz.)</span><b>1 840</b></div></div>
+  <div class="wn-body">
+    <nav class="wn-tabs" role="tablist" aria-label="Zakładki okna O funduszu">
+      <button class="wn-tab" role="tab" id="t-ov" aria-controls="p-ov" aria-selected="true">Przegląd</button>
+      <button class="wn-tab" role="tab" id="t-cl" aria-controls="p-cl" aria-selected="false" tabindex="-1">Klienci</button>
+      <button class="wn-tab" role="tab" id="t-mk" aria-controls="p-mk" aria-selected="false" tabindex="-1">Rynek udziałów</button>
+      <button class="wn-tab" role="tab" id="t-cp" aria-controls="p-cp" aria-selected="false" tabindex="-1">Kampanie</button>
+    </nav>
+    <div class="wn-main">
+      <div role="tabpanel" id="p-ov" aria-labelledby="t-ov" tabindex="0"></div>
+      <div role="tabpanel" id="p-cl" aria-labelledby="t-cl" tabindex="0" hidden></div>
+      <div role="tabpanel" id="p-mk" aria-labelledby="t-mk" tabindex="0" hidden></div>
+      <div role="tabpanel" id="p-cp" aria-labelledby="t-cp" tabindex="0" hidden></div>
+    </div>
+  </div>
+</section></div>
+
+<h1 class="frame-title">2. Panel „Mój fundusz” i szuflada zlecenia</h1>
+<p class="frame-sub">W panelu bocznym zostaje jedna linia stanu z odnośnikiem do okna. Ostrzeżenie o limicie w szufladzie zlecenia liczy się przy każdej zmianie liczby akcji i nie blokuje zakupu.</p>
 <div class="wrap cols">
-  <div><p class="cap">Panel boczny (szerokość jak w grze)</p>
+  <div><p class="cap">Panel boczny</p>
     <section class="panel" aria-labelledby="fp-t"><h2 id="fp-t">Mój fundusz</h2>
       <div class="kv"><span>NAV</span><b class="n">42 000 000 PLN</b></div><div class="kv"><span>Zaufanie</span><b class="n">71</b></div><div class="kv"><span>Klienci</span><b class="n">38, w tym 9 etycznych</b></div>
-      <section class="fe" id="fe" aria-labelledby="fe-t"></section>
-    </section></div>
+      <p class="fe-line" id="fe-line"></p></section></div>
   <div><p class="cap">Szuflada zlecenia w liście spółek (fundusz etyczny włączony)</p>
     <table class="ls"><caption class="sr">Spółka z otwartą szufladą zlecenia</caption><tbody>
       <tr><td class="tk">ODZ</td><td><span class="nm"><b>Odzież Ekspres</b><span id="odz-esg"></span></span></td><td class="r n">58,10</td></tr>
@@ -523,30 +613,71 @@ const pil = (e, s, g, pts) => `<span class="pil">${[['E', e], ['S', s], ['G', g]
 const pln = v => v.toLocaleString('pl-PL').replace(/ /g, ' ') + ' PLN';
 
 
+document.querySelectorAll('.wn-emblem, .wn-close').forEach(el => el.innerHTML = el.innerHTML.replace(/IC:([a-z-]+):(\d+)/g, (m, n, s) => ic(n, +s)));
 document.getElementById('odz-esg').innerHTML = esg('C');
-/* udziały NAV w spółkach według oceny (ocena publiczna albo Twoje badanie; bez oceny liczy się jak B) */
-const NAV = 42000000;
+const NAV = 42000000, fmt = v => v.toFixed(1).replace('.', ',');
+/* udziały NAV według oceny (publiczna albo Twoje badanie; bez oceny jak B) */
 const S = { off: { D: 2.1, C: 3.8, B: 31.2 }, ok: { D: 0, C: 3.8, B: 31.2 }, over: { D: 2.1, C: 3.8, B: 31.2 } };
 const LIM = [['D', 0, 'Spółki D'], ['C', 5, 'Spółki C'], ['B', 40, 'Spółki B i bez oceny']];
-let st = 'ok', confirm = false;
-const fmt = v => v.toFixed(1).replace('.', ',');
-function draw() {
+let st = 'ok', confirm = false, tab = 't-ov', open = null, filter = 'all';
+
+/* klienci: [id, imię, typ, ikona, udziały, wartość PLN, zadowolenie %, motyw, historia] */
+const TYPES = { sly: ['Spryciarz', 'lis'], careful: ['Ostrożny', 'klodka'], brave: ['Odważny', 'lew'], rich: ['Bogaty', 'diament'], miser: ['Sknera', 'moneta'], institution: ['Instytucja', 'kraj'], ethical: ['Etyczny', 'lisc'], senior: ['Emeryt', 'osoba'] };
+const CL = [[1, 'Fundacja Rozwoju', 'institution', 9200, 6440000, 74, 'Szuka stabilnego wzrostu na lata.', ['t.212 dokupiła 400 udziałów']], [2, 'Anna K.', 'ethical', 2100, 1470000, 81, 'Nie chce zarabiać na krzywdzie ludzi.', ['t.209 zadowolona: fundusz ogłosił się etycznym']], [3, 'Piotr N.', 'rich', 6400, 4480000, 66, 'Lubi duże pozycje w spółkach z Rubinowej.', []], [4, 'Maria W.', 'ethical', 1800, 1260000, 77, 'Sprawdza, jak spółki traktują pracowników.', []], [5, 'Tomasz Z.', 'sly', 1200, 840000, 52, 'Kupuje, gdy udział jest poniżej NAV.', ['t.214 wystawił 200 udziałów na rynku wtórnym']], [6, 'Ewa L.', 'senior', 900, 630000, 70, 'Odkłada na spokojną emeryturę.', []], [7, 'Jan M.', 'miser', 700, 490000, 41, 'Patrzy przede wszystkim na opłaty.', ['t.213 niezadowolony z opłaty 1,8%']], [8, 'Kasia S.', 'brave', 1500, 1050000, 63, 'Chce wyprzedzić rynek.', []]];
+/* liczby w grze: 38 klientów według typu [liczba, średnie zadowolenie] */
+const MIX = { sly: [5, 52], careful: [7, 68], brave: [4, 63], rich: [3, 66], miser: [5, 41], institution: [2, 74], ethical: [9, 79], senior: [3, 70] };
+const sat = (v, w = '') => `<span class="sat ${v < 50 ? 'low' : ''}" role="img" aria-label="Zadowolenie ${v} na 100"${w}><i style="width:${v}%"></i></span>`;
+
+function ethicsCard() {
   const on = st !== 'off', u = S[st];
-  const meters = LIM.map(([g, lim, name]) => { const v = u[g], over = v > lim; const scale = Math.max(lim * 1.5, 10, v * 1.1);
+  const meters = LIM.map(([g, lim, name]) => { const v = u[g], over = v > lim, scale = Math.max(lim * 1.5, 10, v * 1.1);
     return `<li><span class="lb">${esg(g)} ${name}</span><span class="v n ${over ? 'over' : ''}">${over ? ic('alert', 12) + ' ' : ''}${fmt(v)}% z ${lim}%${over ? '<span class="sr"> limit przekroczony</span>' : ''}</span><span class="meter ${over ? 'over' : ''}" role="img" aria-label="${name}: ${fmt(v)}% NAV przy limicie ${lim}%${over ? ', przekroczony' : ''}"><i style="width:${Math.min(100, v / scale * 100)}%"></i><b style="left:${lim / scale * 100}%"></b></span></li>`; }).join('');
-  document.getElementById('fe').innerHTML = `<div class="fe-sw"><h3 id="fe-t">${ic('lisc', 14)}Fundusz etyczny</h3><span class="sw-state" aria-hidden="true">${on ? 'włączony' : 'wyłączony'}</span><button class="sw" id="sw" role="switch" aria-checked="${on}" aria-labelledby="fe-t"></button></div>
-  ${on ? `<p>Od R5 kw.3. <b>Napływ nowych pieniędzy +15%</b>, klienci etyczni przychodzą 2 razy częściej i są bardziej zadowoleni.</p><ul class="lim">${meters}</ul>
+  return `<section class="cardx fe" aria-labelledby="fe-t"><div class="fe-sw"><h3 id="fe-t">${ic('lisc', 16)}Fundusz etyczny</h3><span class="sw-state" aria-hidden="true">${on ? 'włączony' : 'wyłączony'}</span><button class="sw" id="sw" role="switch" aria-checked="${on}" aria-labelledby="fe-t"></button></div>
+  ${on ? `<p>Od R5 kw.3. <b>Napływ nowych pieniędzy +15%</b>, klienci etyczni przychodzą 2 razy częściej i są bardziej zadowoleni. W zamian limity udziału w NAV:</p><ul class="lim">${meters}</ul>
     ${st === 'over' ? `<div class="alert" role="alert">${ic('alert', 16)}<div><b>Limit spółek D przekroczony: 2,1% NAV przy limicie 0%.</b> Popraw do końca R6 kw.3 (zostało 9 tygodni). Potem zaufanie −5 i odejścia klientów etycznych.<ul><li>Huta Katowice (HKT), ESG D: 2,1% NAV</li></ul></div></div>` : ''}
     ${confirm ? `<div class="confirm" role="group" aria-label="Potwierdź wyłączenie"><p>Wyłączenie deklaracji: zaufanie −3, a ponowne włączenie najwcześniej w R7 kw.2.</p><div class="btns"><button class="btn" id="c-yes" type="button">Wyłącz</button><button class="btn" id="c-no" type="button">Zostaw włączony</button></div></div>` : ''}`
   : `<p>Gdy ogłosisz fundusz etyczny: <b>napływ nowych pieniędzy +15%</b>, klienci etyczni przychodzą 2 razy częściej. W zamian limity: spółki D 0%, C do 5%, B i bez oceny do 40% NAV. Na dopasowanie portfela masz 1 kwartał.</p>
-    <div class="reason">${ic('klienci', 12)} Klienci etyczni patrzą na spółki C i D: dziś 8% NAV (D liczy się podwójnie). Niezadowolenie zaczyna się od 15%.</div>`}`;
+    <div class="reason">${ic('klienci', 14)}<span>Klienci etyczni patrzą na spółki C i D: dziś 8% NAV (D liczy się podwójnie). Niezadowolenie zaczyna się od 15%.</span></div>`}</section>`;
+}
+function panes() {
+  const types = Object.entries(TYPES).map(([k, [l, i]]) => { const [cnt, avg] = MIX[k];
+    return `<li>${ic(i, 14)}<span>${l}</span><span class="n">${cnt}</span>${sat(avg)}<span class="n">${avg}</span></li>`; }).join('');
+  document.getElementById('p-ov').innerHTML = `<div class="grid2"><div>${ethicsCard()}</div><div>
+    <section class="cardx" aria-labelledby="fee-t"><h3 id="fee-t">${ic('teczka', 16)}Opłata za zarządzanie</h3><p>Niższa opłata przyciąga klientów, zwłaszcza skner. Wyższa zasila budżet korporacji i Twój udział. Zmiana raz na kwartał.</p>
+      <div class="field"><input id="fee" type="text" inputmode="decimal" value="1,80" aria-label="Opłata w procentach rocznie" aria-describedby="fee-h"><button class="btn" type="button">Ustaw</button><small id="fee-h">% rocznie, od 0,5 do 3; standard 1,5</small></div></section>
+    <section class="cardx" aria-labelledby="mix-t"><h3 id="mix-t">${ic('klienci', 16)}Klienci w skrócie</h3><p>Liczba i średnie zadowolenie według typu.</p><ul class="mix">${types}</ul></section></div></div>`;
+  const keys = ['all', ...Object.keys(TYPES)];
+  const list = CL.filter(c => filter === 'all' || c[2] === filter);
+  document.getElementById('p-cl').innerHTML = `<div class="chips" role="group" aria-label="Filtr typu klienta">${keys.map(k => `<button class="chip" type="button" data-f="${k}" aria-pressed="${filter === k}">${k === 'all' ? 'Wszyscy' : ic(TYPES[k][1], 14) + TYPES[k][0]} (${k === 'all' ? 38 : MIX[k][0]})</button>`).join('')}</div><p class="muted" style="margin:0 0 8px;font-size:12px">Makieta pokazuje kilku przykładowych klientów; w grze lista ma wszystkich, od największego.</p>
+    <ul class="cl">${list.map(([id, nm, t, u, v, s, mot, hist]) => `<li><button class="cl-row" type="button" aria-expanded="${open === id}" aria-controls="cc-${id}" data-c="${id}">${ic(TYPES[t][1], 18)}<span>${nm}<br><small>${TYPES[t][0]}</small></span><span class="val n">${u.toLocaleString('pl-PL')} udz.<br><small>${pln(v)}</small></span><span class="sat-w">${sat(s)}zadowolenie ${s}</span>${ic('chevron-down', 16)}</button>${open === id ? `<div class="cl-card" id="cc-${id}"><q>${mot}</q>Średni koszt udziału 640,00 PLN, zysk na udziale +9,4%.<ul>${hist.map(h => `<li>${h}</li>`).join('') || '<li>Brak historii.</li>'}</ul></div>` : ''}</li>`).join('')}</ul>`;
+  const F = [['Twój fundusz', 702.4, 1.2, 0.8, 1840, 6, 38, 1], ['Kapitał Polski TFI', 1210.0, 0.4, 0.1, 3200, 4, 61, 0], ['Rubin Invest', 455.8, -0.6, -0.9, 940, 1, 22, 0], ['Fundusz Narodowy', 980.3, 0.0, 0.2, 2100, 2, 54, 0], ['Bałtyk Asset', 312.1, 2.1, 1.6, 1200, 5, 18, 0]];
+  const pm = v => `<span class="${v > 0.05 ? 'up' : v < -0.05 ? 'down' : 'muted'}">${v > 0 ? '+' : v < 0 ? '−' : ''}${fmt(Math.abs(v))}%</span>`;
+  document.getElementById('p-mk').innerHTML = `<div class="mk"><section aria-labelledby="ft-t"><h3 id="ft-t" style="margin:0 0 4px;font-size:14px">Fundusze na rynku wtórnym</h3><p class="muted" style="margin:0 0 10px;font-size:12px">Klienci odsprzedają sobie udziały po NAV z premią zależną od popytu. Ty tylko obserwujesz.</p>
+    <table class="ft"><thead><tr><th scope="col">Fundusz</th><th scope="col" class="r">NAV udziału</th><th scope="col" class="r">Premia</th><th scope="col" class="r hide-sm">Trend 4 tyg.</th><th scope="col" class="r hide-sm">Wolumen</th><th scope="col" class="r">Nowi</th><th scope="col" class="r">Klienci</th></tr></thead>
+    <tbody>${F.map(([n, nav, p, t, vol, nw, c, mine]) => `<tr class="${mine ? 'mine' : ''}"><td>${mine ? `<span class="mine-tag">${n}</span>` : n}</td><td class="r n">${nav.toFixed(2).replace('.', ',')}</td><td class="r n">${pm(p)}</td><td class="r n hide-sm">${pm(t)}</td><td class="r n hide-sm">${vol.toLocaleString('pl-PL')}</td><td class="r n">${nw}</td><td class="r n">${c}</td></tr>`).join('')}</tbody></table></section>
+    <aside aria-labelledby="tp-t"><h3 id="tp-t" style="margin:0 0 8px;font-size:14px">Taśma transakcji</h3><ul class="tape"><li><small class="n">t.214</small>Tomasz Z. wystawił 200 udziałów Twojego funduszu, premia +1,2%</li><li><small class="n">t.214</small>Fundacja Rozwoju kupiła 400 udziałów od Piotra N.</li><li><small class="n">t.213</small>Klient Rubin Invest umorzył 120 udziałów</li><li><small class="n">t.213</small>Anna K. dokupiła 150 udziałów</li></ul></aside></div>`;
+  document.getElementById('p-cp').innerHTML = `<div class="grid2"><section class="cardx" aria-labelledby="mc-t"><h3 id="mc-t">${ic('megafon', 16)}Kampania marketingowa</h3><p>Dodatkowi kupujący udziały z wybranej grupy klientów przez 8 tygodni. Koszt 420 000 PLN z budżetu korporacji. Nowe wpłaty nadal wymagają zaufania co najmniej 50.</p>
+      <div class="btns"><button class="btn" type="button">${ic('diament', 14)}Zamożni klienci</button><button class="btn" type="button">${ic('klodka', 14)}Ostrożni oszczędzający</button><button class="btn" type="button">${ic('lew', 14)}Dynamiczni inwestorzy</button></div></section>
+    <section class="cardx" aria-labelledby="em-t"><h3 id="em-t">${ic('rakieta', 16)}Kampania emisyjna</h3><p>Nowe udziały powstają tylko w kampanii emisyjnej. Duży klient składa ofertę, a Ty decydujesz, czy ją przyjąć.</p><button class="btn primary" type="button">Rozpocznij kampanię emisyjną</button></section></div>`;
+  document.getElementById('wn-sub').textContent = st === 'over' ? 'Fundusz etyczny: limit spółek D przekroczony, popraw do końca R6 kw.3.' : st === 'ok' ? 'Fundusz etyczny w limitach. 38 klientów, napływ rośnie trzeci tydzień.' : '38 klientów, napływ rośnie trzeci tydzień.';
+  document.getElementById('t-ov').innerHTML = `Przegląd${st === 'over' ? '<span class="wn-count" title="1 do sprawdzenia">1</span>' : ''}`;
+  const fl = document.getElementById('fe-line'); fl.className = `fe-line ${st === 'over' ? 'over' : ''}`;
+  fl.innerHTML = `${ic(st === 'over' ? 'alert' : 'lisc', 14)}<span>${st === 'off' ? 'Fundusz nie jest etyczny' : st === 'over' ? 'Fundusz etyczny: limit D przekroczony' : 'Fundusz etyczny: w limitach'}</span><a href="#">O funduszu</a>`;
+  bind();
+}
+function bind() {
   const sw = document.getElementById('sw');
-  sw.onclick = () => { if (st === 'off') { st = 'ok'; confirm = false; } else confirm = true; sync(); draw(); document.getElementById(confirm ? 'c-no' : 'sw').focus(); };
-  if (confirm) { document.getElementById('c-yes').onclick = () => { st = 'off'; confirm = false; sync(); draw(); document.getElementById('sw').focus(); }; document.getElementById('c-no').onclick = () => { confirm = false; draw(); document.getElementById('sw').focus(); }; }
+  sw.onclick = () => { if (st === 'off') { st = 'ok'; confirm = false; } else confirm = true; sync(); panes(); document.getElementById(confirm ? 'c-no' : 'sw').focus(); };
+  if (confirm) { document.getElementById('c-yes').onclick = () => { st = 'off'; confirm = false; sync(); panes(); document.getElementById('sw').focus(); }; document.getElementById('c-no').onclick = () => { confirm = false; panes(); document.getElementById('sw').focus(); }; }
+  document.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { filter = b.dataset.f; open = null; panes(); document.querySelector(`[data-f="${filter}"]`).focus(); });
+  document.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { const id = +b.dataset.c; open = open === id ? null : id; panes(); document.querySelector(`[data-c="${id}"]`).focus(); });
 }
 function sync() { document.querySelectorAll('[data-st]').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.st === st))); }
-document.querySelectorAll('[data-st]').forEach(b => b.onclick = () => { st = b.dataset.st; confirm = false; sync(); draw(); });
-draw();
+document.querySelectorAll('[data-st]').forEach(b => b.onclick = () => { st = b.dataset.st; confirm = false; sync(); panes(); });
+const tabs = [...document.querySelectorAll('.wn-tab')];
+function sel(t) { tabs.forEach(x => { const on = x === t; x.setAttribute('aria-selected', String(on)); x.tabIndex = on ? 0 : -1; document.getElementById(x.getAttribute('aria-controls')).hidden = !on; }); t.focus(); }
+tabs.forEach((t, i) => { t.onclick = () => sel(t); t.onkeydown = e => { const d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0; if (d) { e.preventDefault(); sel(tabs[(i + d + tabs.length) % tabs.length]); } }; });
+panes();
 
 /* ostrzeżenie w szufladzie: limit C 5% NAV; bez blokady */
 const PX = 58.10, HAVE_C = 0.038 * NAV;

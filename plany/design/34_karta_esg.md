@@ -1,6 +1,10 @@
-# 34. Karta spółki: Etyka i ESG (0.18.9 G8) — zaakceptowane 2026-11-23
+# 34. Karta spółki: Etyka i ESG (0.18.9 G8) — zaakceptowane 2026-11-23, poprawki użytkownika 2026-11-23 (do akceptacji)
 
 Makieta: [makiety/34_karta_esg.html](makiety/34_karta_esg.html) (samodzielna). Plan: `plany/plan_0.18.9_esg.md`, G8. Litery i barwy jak w notce 33.
+
+## Poprawka użytkownika (2026-11-23): skrót w zakładce Przegląd
+- Gdy spółka ma ocenę publiczną albo Twoje badanie, zakładka **Przegląd** (`renderCompanyCardOverview`, prawa kolumna pod Prezesem) pokazuje skrót „Etyka i ESG”: znaczek ze słowem, deklaracja, audytor i ważność, najsłabszy filar z punktami i odnośnik „Szczegóły w zakładce Zarządzanie”. Bez oceny skrótu nie ma.
+- Pełny blok „Etyka i ESG” (4 stany niżej) stoi w zakładce **Zarządzanie**.
 
 ## Znaczek w wierszu listy spółek
 - Po znaczku oceny kredytowej (makieta 26) stoi `ESG` z literą: ocena publiczna albo Twoje badanie. Twoje badanie ma przerywaną ramkę i słowo „Twoje” bursztynem w znaczku.
@@ -19,4 +23,4 @@ Makieta: [makiety/34_karta_esg.html](makiety/34_karta_esg.html) (samodzielna). P
 Spółki zagraniczne: blok w stanie 2 z dopiskiem „oceny ESG są na razie krajowe” i bez odnośnika do badania. Markup: `section.eb[aria-label="Etyka i ESG"]`, paski `role=img` z pełnym opisem, ostrzeżenia z ikoną i tekstem (nie tylko kolor).
 
 ## Prompt dla czatu kodu
-> Według `plany/design/34_karta_esg.md` i makiety `plany/design/makiety/34_karta_esg.html` (po wdrożeniu G1, G7 i G9 planu 0.18.9): w wierszu listy spółek dodaj znaczek ESG po znaczku oceny kredytowej (ocena publiczna albo Twoje badanie z przerywaną ramką i słowem „Twoje”, ikona alert przy karze za greenwashing w ostatnich 8 kw.; bez oceny brak znaczka). W `renderCompanyCard` dodaj blok „Etyka i ESG”: znaczek ze słowem, deklaracja, audytor i ważność, trzy filary z paskiem (kreski progów 35/55/75) i punktami; „brak oceny” z odnośnikiem do RateU; ramka „Twoje badanie” z różnicą względem deklaracji; ramka kary za greenwashing. Zagraniczne spółki: „brak oceny, oceny ESG są na razie krajowe”. Użyj wspólnych funkcji znaczków z notki 33. Testy DOM: blok w trzech stanach (ocena, brak oceny, badanie gracza) i stan kary; litera zawsze z tekstem; brak emoji.
+> Według `plany/design/34_karta_esg.md` i makiety `plany/design/makiety/34_karta_esg.html` (po wdrożeniu G1, G7 i G9 planu 0.18.9): w wierszu listy spółek dodaj znaczek ESG po znaczku oceny kredytowej (ocena publiczna albo Twoje badanie z przerywaną ramką i słowem „Twoje”, ikona alert przy karze za greenwashing w ostatnich 8 kw.; bez oceny brak znaczka). W Przeglądzie karty (prawa kolumna pod Prezesem) dodaj skrót „Etyka i ESG”, gdy jest ocena albo Twoje badanie (znaczek ze słowem, deklaracja, audytor i ważność, najsłabszy filar, odnośnik do Zarządzania). W zakładce Zarządzanie dodaj pełny blok „Etyka i ESG”: znaczek ze słowem, deklaracja, audytor i ważność, trzy filary z paskiem (kreski progów 35/55/75) i punktami; „brak oceny” z odnośnikiem do RateU; ramka „Twoje badanie” z różnicą względem deklaracji; ramka kary za greenwashing. Zagraniczne spółki: „brak oceny, oceny ESG są na razie krajowe”. Użyj wspólnych funkcji znaczków z notki 33. Testy DOM: skrót w Przeglądzie tylko przy ocenie lub badaniu; blok w trzech stanach (ocena, brak oceny, badanie gracza) i stan kary; litera zawsze z tekstem; brak emoji.

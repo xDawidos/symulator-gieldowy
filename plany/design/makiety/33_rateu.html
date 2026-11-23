@@ -283,10 +283,13 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .net-address-wrap { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 0 14px; height: 32px; border-radius: 999px; background: #0e0a16; border: 1px solid var(--net-line); color: var(--net-muted); font: 13px ui-monospace, Consolas, monospace; }
 .net-address-wrap span { color: var(--net-text); }
 .net-main { padding: 18px 22px; }
+/* ===== Skórka strony RateU: granat + koral (poprawka 2026-11-23); litery A–D bez zmian ===== */
+.ru-page { --net-card: #13254d; --net-line: #22396b; --net-text: #e6edf9; --net-muted: #93a6c9; --ru-sunk: #0a1529; --ru-acc: #ff7f6e; background: #0e1a33; color: var(--net-text); }
+.ru-page .btn.primary { border-color: var(--ru-acc); background: var(--ru-acc); color: #1a0b08; }
 @media (max-width: 640px) { .net-main { padding: 14px 12px; } }
 /* kafelek ulubionych (INTERNET_FAVORITES, jak .net-fav w grze) */
 .favs { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 16px; }
-.fav { --tone: #2dd4bf; display: flex; flex-direction: column; gap: 8px; min-height: 150px; padding: 18px; border: 1px solid var(--net-line); border-radius: 14px; background: var(--net-card); color: var(--net-text); text-align: left; font: inherit; }
+.fav { --tone: #ff7f6e; display: flex; flex-direction: column; gap: 8px; min-height: 150px; padding: 18px; border: 1px solid var(--net-line); border-radius: 14px; background: var(--net-card); color: var(--net-text); text-align: left; font: inherit; }
 .fav.blue { --tone: #38bdf8; }
 .fav-top { display: flex; justify-content: space-between; align-items: flex-start; }
 .fav-icon { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 12px; color: var(--tone); background: color-mix(in srgb, var(--tone) 14%, transparent); border: 1px solid color-mix(in srgb, var(--tone) 35%, transparent); }
@@ -296,14 +299,19 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 
 /* ===== Blok do gry: strona RateU (net-page-rateu) ===== */
 .ru-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
-.ru-logo { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; background: color-mix(in srgb, var(--teal-400) 14%, transparent); color: var(--teal-400); }
+.ru-logo { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; background: color-mix(in srgb, var(--ru-acc) 16%, transparent); color: var(--ru-acc); }
 .ru-head h2 { margin: 0; font: 600 22px 'IBM Plex Sans Condensed', var(--font-family-sans); }
 .ru-head p { margin: 0; color: var(--net-muted); font-size: 12px; }
-.ru-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--net-line); margin-bottom: 16px; overflow-x: auto; }
+.ru-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--net-line); margin-bottom: 16px; flex-wrap: wrap; }
 .ru-tab { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--net-muted); font: 600 13px var(--font-family-sans); cursor: pointer; white-space: nowrap; }
-.ru-tab[aria-selected="true"] { color: var(--net-text); border-bottom-color: var(--teal-400); }
-.ru-tab small { font-weight: 400; font-size: 11px; }
-.ru-note { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 14px; padding: 10px 12px; border: 1px solid var(--net-line); border-radius: 8px; background: #0e0a16; color: var(--net-muted); font-size: 12px; }
+.ru-tab[aria-selected="true"] { color: var(--net-text); border-bottom-color: var(--ru-acc); }
+/* kłódka przy zablokowanej zakładce: półprzezroczysta, podpowiedź po najechaniu lub fokusie */
+.ru-lockic { position: relative; display: inline-flex; }
+.ru-lockic > svg { opacity: .5; } .ru-lockic:hover > svg { opacity: .9; }
+.ru-tip { position: absolute; left: 50%; top: calc(100% + 8px); transform: translateX(-50%); z-index: 4; width: max-content; max-width: min(260px, calc(100vw - 48px)); padding: 8px 10px; border: 1px solid var(--net-line); border-radius: 6px; background: var(--ru-sunk); color: var(--net-text); font: 400 12px/1.4 var(--font-family-sans); white-space: normal; text-align: left; box-shadow: 0 8px 20px rgba(0,0,0,.5); visibility: hidden; }
+.ru-lockic:hover .ru-tip, .ru-tab:focus-visible .ru-tip { visibility: visible; }
+.ru-tab[aria-selected="true"] .ru-tip { visibility: hidden; }
+.ru-note { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 14px; padding: 10px 12px; border: 1px solid var(--net-line); border-radius: 8px; background: var(--ru-sunk); color: var(--net-muted); font-size: 12px; }
 .ru-note b { color: var(--net-text); font-weight: 600; }
 .ru-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 @media (max-width: 900px) { .ru-cols { grid-template-columns: 1fr; } }
@@ -323,7 +331,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .ru-card h3 { margin: 0 0 4px; font-size: 15px; }
 .ru-card > p { margin: 0 0 12px; color: var(--net-muted); font-size: 12px; }
 .ru-card label { display: block; margin-bottom: 4px; font-size: 12px; color: var(--net-muted); }
-.ru-card select { width: 100%; height: 34px; padding: 0 8px; border: 1px solid var(--ink-400); border-radius: 4px; background: #0e0a16; color: var(--net-text); font: 13px var(--font-family-sans); }
+.ru-card select { width: 100%; height: 34px; padding: 0 8px; border: 1px solid var(--ink-400); border-radius: 4px; background: var(--ru-sunk); color: var(--net-text); font: 13px var(--font-family-sans); }
 .ru-dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 12px 0; font-size: 13px; }
 .ru-dl dt { color: var(--net-muted); } .ru-dl dd { margin: 0; }
 .ru-dl dd small { display: block; color: var(--net-muted); font-size: 11px; }
@@ -332,7 +340,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .gw { display: inline-flex; align-items: center; gap: 4px; color: var(--color-text-warn); font-size: 12px; }
 .ok { display: inline-flex; align-items: center; gap: 4px; color: var(--net-text); font-size: 12px; }
 /* ekologia zablokowana */
-.ru-lock { display: flex; gap: 14px; align-items: flex-start; padding: 18px; border: 1px dashed var(--ink-500); border-radius: 10px; background: #0e0a16; }
+.ru-lock { display: flex; gap: 14px; align-items: flex-start; padding: 18px; border: 1px dashed var(--ink-500); border-radius: 10px; background: var(--ru-sunk); }
 .ru-lock h3 { margin: 0 0 4px; font-size: 15px; }
 .ru-lock p { margin: 0 0 8px; color: var(--net-muted); font-size: 13px; max-width: 62ch; }
 .lv { display: inline-flex; gap: 3px; } .lv i { width: 22px; height: 6px; border-radius: 2px; background: var(--ink-700); } .lv i.on { background: var(--ink-300); } .lv i.need { outline: 1px dashed var(--teal-400); outline-offset: 1px; }
@@ -499,25 +507,25 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 </svg>
 
 <h1 class="frame-title">1. RateU w ulubionych</h1>
-<p class="frame-sub">Siódma strona w Internecie (`INTERNET_FAVORITES`). Ikona „ranking”, odcień morski. Obok dla porównania istniejący kafelek Tied.</p>
+<p class="frame-sub">Siódma strona w Internecie (`INTERNET_FAVORITES`). Ikona „ranking”, odcień koralowy jak strona. Obok dla porównania istniejący kafelek Tied.</p>
 <div class="wrap"><div class="favs" style="max-width:500px">
   <button class="fav" type="button"><span class="fav-top"><span class="fav-icon">ICON:ranking:22</span><span class="chip">Etyka spółek</span></span><strong>RateU</strong><small>Ranking ESG, badania spółek, ekologia.</small></button>
   <button class="fav blue" type="button"><span class="fav-top"><span class="fav-icon">ICON:grupa:22</span><span class="chip">Sieć zawodowa</span></span><strong>Tied</strong><small>Posty prezesów i wiadomości od inwestorów.</small></button>
 </div></div>
 
 <h1 class="frame-title">2. Strona rateu.pl</h1>
-<p class="frame-sub">Trzy zakładki. Strzałki w lewo i w prawo przełączają zakładki. Badanie można zamówić naprawdę (w makiecie): opłata, limit 4 na kwartał, wpis na liście. Przełącz poziom UEiE, żeby zobaczyć zakładkę Ekologia zablokowaną i otwartą.</p>
+<p class="frame-sub">Trzy zakładki. Strzałki w lewo i w prawo przełączają zakładki. Badanie można zamówić naprawdę (w makiecie): opłata, limit 4 na kwartał, wpis na liście. Strona w barwach RateU: granat i koral. Przy zablokowanej Ekologii stoi półprzezroczysta kłódka; najedź na nią (albo przejdź Tabem), żeby zobaczyć powód. Przełącz poziom UEiE, żeby zobaczyć zakładkę otwartą.</p>
 <div class="demo-ctl" role="group" aria-label="Makieta: poziom Urzędu Energii i Emisji">Poziom UEiE: <button type="button" data-lv="3" aria-pressed="true">3</button><button type="button" data-lv="4" aria-pressed="false">4</button></div>
 <div class="wrap"><div class="net">
   <div class="net-tabs"><span class="net-tab"><span class="net-tab-dot" aria-hidden="true"></span>RateU</span></div>
   <div class="net-bar"><div class="net-address-wrap">ICON:klodka:14<span>rateu.pl</span></div></div>
-  <main class="net-main">
+  <main class="net-main ru-page">
     <section aria-labelledby="ru-t">
       <header class="ru-head"><span class="ru-logo">ICON:ranking:22</span><div><h2 id="ru-t">RateU</h2><p>Oceny etyki krajowych spółek w skali A–D: E środowisko, S społeczeństwo, G ład korporacyjny.</p></div></header>
       <div class="ru-tabs" role="tablist" aria-label="Działy RateU">
         <button class="ru-tab" role="tab" id="tb-rank" aria-controls="pn-rank" aria-selected="true">ICON:ranking:14Ranking</button>
         <button class="ru-tab" role="tab" id="tb-ord" aria-controls="pn-ord" aria-selected="false" tabindex="-1">ICON:badania:14Zamów badanie</button>
-        <button class="ru-tab" role="tab" id="tb-eco" aria-controls="pn-eco" aria-selected="false" tabindex="-1">ICON:lisc:14Ekologia<small id="eco-lock"> (od poziomu 4)</small></button>
+        <button class="ru-tab" role="tab" id="tb-eco" aria-controls="pn-eco" aria-selected="false" tabindex="-1">ICON:lisc:14Ekologia<span class="ru-lockic" id="eco-lock">ICON:klodka:13<span class="ru-tip" role="tooltip" id="eco-tip">Niedostępne: Ekologia otwiera się przy poziomie 4 Urzędu Energii i Emisji. Dziś poziom 3.</span></span></button>
       </div>
       <div role="tabpanel" id="pn-rank" aria-labelledby="tb-rank" tabindex="0"></div>
       <div role="tabpanel" id="pn-ord" aria-labelledby="tb-ord" tabindex="0" hidden></div>
@@ -586,7 +594,7 @@ const ecoT = (id, L) => `<table class="ru-t" aria-labelledby="${id}"><thead><tr>
 let LV = 3;
 function drawEco() {
   document.getElementById('eco-lock').hidden = LV >= 4;
-  document.getElementById('tb-eco').setAttribute('aria-label', LV >= 4 ? 'Ekologia' : 'Ekologia, zablokowana do poziomu 4 Urzędu Energii i Emisji');
+  const te = document.getElementById('tb-eco'); if (LV >= 4) te.removeAttribute('aria-describedby'); else te.setAttribute('aria-describedby', 'eco-tip');
   document.getElementById('pn-eco').innerHTML = LV < 4
     ? `<div class="ru-lock">${ic('klodka', 22)}<div><h3>Ekologia otworzy się przy poziomie 4 Urzędu Energii i Emisji</h3><p>Ranking spółek najbardziej proekologicznych i antyekologicznych według filaru E i emisji. RateU dostaje dane o emisjach dopiero wtedy, gdy urząd je zbiera.</p><span class="lv" role="img" aria-label="Urząd Energii i Emisji: poziom 3 z 5, potrzebny poziom 4">${[1, 2, 3, 4, 5].map(i => `<i class="${i <= LV ? 'on' : ''} ${i === 4 ? 'need' : ''}"></i>`).join('')}</span> <span class="muted" style="font-size:12px">poziom ${LV} z 5, potrzebny 4</span></div></div>`
     : `<p class="ru-note">${ic('info', 14)}<span>Filar E i emisje spółki wobec średniej jej sektora, dane Urzędu Energii i Emisji za R6 kw.1.</span></p><div class="ru-cols"><section class="ru-list"><h3 id="h-pro">${ic('lisc', 16)}Najbardziej proekologiczne</h3>${ecoT('h-pro', PRO)}</section><section class="ru-list"><h3 id="h-anti">${ic('emisje', 16)}Najbardziej antyekologiczne</h3>${ecoT('h-anti', ANTI)}</section></div>`;
