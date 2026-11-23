@@ -14740,8 +14740,6 @@ group('0.16.9 Lombard w Internecie, rynek połączony na giełdzie', () => {
             startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
             const before = getListedCompanyCount(), news = [], saved = pushNews; pushNews = t => news.push(t);
             let result; try { result = processGiantEventQuarterly('takeover'); assert(result && result.kind === 'takeover', 'przejęcie'); assertEq(getListedCompanyCount(), before - 1, 'spółka zdjęta'); assertEq(giantEventState.replacements.length, 1, 'zastępstwo zakolejkowane');
-                const html = (() => { const b = document.createElement('div'); b.id = 'giant-event-body'; const m = document.createElement('div'); m.id = 'giant-event-modal'; m.appendChild(b); document.body.appendChild(m); const p = isGamePaused; try { showGiantEventWindow(result); return b.innerHTML; } finally { m.remove(); if (isGamePaused !== p) togglePauseGame(); } })();
-                assert(/zadebiutuje nowa spółka krajowa/.test(html), 'okno mówi, co pojawi się w zamian');
                 for (let k = 0; k < 4; k++) { macro.quarter++; processGiantEventQuarterly(); }
                 assertEq(getListedCompanyCount(), before, 'liczba krajowych spółek wróciła w 4 kwartały'); assertEq(giantEventState.replacements.length, 0, 'kolejka pusta');
                 assert(news.some(t => /W miejsce .+ wchodzi na giełdę .+ \(.+\), sektor: /.test(t)), 'news o debiucie');

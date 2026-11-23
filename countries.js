@@ -26,9 +26,8 @@ const GIANT_EVENT_RULES = {
 let foreignIssuers = {};      // id → emitent zagraniczny (countries.js)
 let giantEventState = { lastQ: -99, count: 0, takeover: 0, replacements: [] };
 let giantEventLog = [];       // { q, kind, giant, symbol } — ostatnie zdarzenia
-let pendingGiantEvent = null; // wynik do pokazania w oknie (UI w currency_ui.js; bez UI zostaje w dzienniku)
 
-function resetForeignIssuers() { foreignIssuers = {}; giantEventState = { lastQ: -99, count: 0, takeover: 0, replacements: [] }; giantEventLog = []; pendingGiantEvent = null; if (typeof resetCountriesState === 'function') resetCountriesState(); }
+function resetForeignIssuers() { foreignIssuers = {}; giantEventState = { lastQ: -99, count: 0, takeover: 0, replacements: [] }; giantEventLog = []; if (typeof resetCountriesState === 'function') resetCountriesState(); }
 
 function getForeignIssuerList() { return Object.values(foreignIssuers); }
 function getIssuerHeld(issuer, holder = 'player') { return Number(issuer.holders?.[holder]) || 0; }
@@ -145,8 +144,7 @@ function processGiantEventQuarterly(force = null) {
     giantEventState.lastQ = q; giantEventState.count++; giantEventState.takeover++;
     giantEventLog.push({ q, kind: result.kind, giant: result.giant, symbol: result.symbol || null });
     if (giantEventLog.length > 20) giantEventLog.shift();
-    pendingGiantEvent = result;
-    if (typeof showGiantEventWindow === 'function') showGiantEventWindow(result); // okno z pauzą (currency_ui.js); bez interfejsu zostaje dziennik
+    if (result.heldByPlayer && typeof showToast === 'function') showToast(`${result.giantName} przejmuje ${result.name}: Twoje akcje rozliczone po ${formatZl(result.offer, 2)}.`, 'info', 6000); // 0.18: bez okna i pauzy (kwity usunięte w 0.18.0)
     return result;
 }
 

@@ -179,30 +179,6 @@ function kantorUiSell() {
 
 // --- Zakładka „Obce”: kwity depozytowe ---
 
-// --- Okno wydarzenia „Gigant wkracza na scenę” (pauza gry; w przebiegach pauza jest blokowana przez narzędzia) ---
-
-function showGiantEventWindow(result) {
-    const modal = document.getElementById('giant-event-modal');
-    if (!modal || !result) return;
-    if (!isGamePaused && typeof togglePauseGame === 'function') togglePauseGame();
-    const body = document.getElementById('giant-event-body');
-    {
-        body.innerHTML = `<p><strong>${escapeHtml(result.giantName)}</strong> przejmuje <strong>${escapeHtml(result.name)}</strong> (${escapeHtml(result.symbol)}).</p>
-            <dl class="bank-card-rates"><div><dt>Cena wykupu</dt><dd>${formatZl(result.offer, 2)}</dd></div><div><dt>Premia do kursu</dt><dd>${formatNumberPl(result.premium * 100, 0)}%</dd></div><div><dt>Wypłacono akcjonariuszom</dt><dd>${formatZl(result.paid, 0)}</dd></div></dl>
-            <p class="text-sm">${result.heldByPlayer ? 'Twoje akcje rozliczono gotówką po cenie wykupu.' : 'Nie miałeś akcji tej spółki.'} Spółka znika z giełdy.${result.listedSymbol ? ` ${escapeHtml(result.giantName)} wchodzi na naszą listę jako zwykłe akcje <strong>${escapeHtml(result.listedSymbol)}</strong>.` : ''}</p>
-            <p class="text-sm">W jej miejsce w ciągu 1–4 kwartałów zadebiutuje nowa spółka krajowa${result.replacementSector ? ` z sektora ${escapeHtml(result.replacementSector)}` : ''} (informacja w wiadomościach).</p>`;
-    }
-    modal.hidden = false;
-    modal.style.display = 'block';
-}
-
-function closeGiantEventWindow() {
-    const modal = document.getElementById('giant-event-modal');
-    if (modal) modal.style.display = 'none';
-    pendingGiantEvent = null;
-    if (isGamePaused && typeof togglePauseGame === 'function') togglePauseGame();
-}
-
 // =================================================================================
 // 0.16.9 W1: okno „Gotówka funduszu” — salda walutowe i zmiana waluty (klik w gotówkę na pasku, Enter/Spacja z klawiatury)
 // =================================================================================
