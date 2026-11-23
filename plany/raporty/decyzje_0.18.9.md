@@ -16,6 +16,14 @@ Plan: `plany/plan_0.18.9_esg.md`. Diagnoza: `raporty/diagnoza_esg_0.18.9.md`. Pr
 | H10 | G4 | Projekty ESG: 9 pozycji, przyrost filaru do 20 pkt na filar (`stock.esgBonus`). Bot: szansa 2,5% na rok × (1 + presja) × 1,5 przy deklaracji, wybór najwyższego „przyrost × waga filaru × cechy / koszt” (najsłabszy filar ×2), potem cechy prezesa (ekolog i etyk zawsze, zwykły co drugi raz, ignorant rzadko), gotówka ≥ 2 × koszt. g4 na 6% na rok: 45% spółek z projektem po 20 latach; g5: 25% | Cel 10–25% |
 | H11 | G5 | Popyt ESG: A +1%, B 0, C −1%, D −2% rocznie, co kwartał 1/4, bezpośrednio w kursie (jak wpływ zlecenia botów), średnia ważona kapitalizacją ocenionych = 0. Plan (+1,5 / −1,5 / −3) dawał różnicę zwrotu A–D ok. 7 pp rocznie (z efektem selekcji). Bez skalowania przez `getInstitutionEffectiveness` | Cel 2–5 pp; mniej kodu |
 
+| H12 | G4 UI | Liczby projektów z makiety 36 (koszt 0,5–3% przychodu, przyrost 4–10 pkt). Panele: zamiast „energia o 4% tańsza” emisje −3 pp (gra nie liczy kosztu energii spółek). Wersja eko płatna przy zakończeniu inwestycji (`stock.ecoOrders`). Wniosek bez większości: uchwała `esgProject` na najbliższym walnym, przechodzi większością oddanych głosów (jak inne wnioski) | Makieta 36, decyzja koordynatora (3) |
+| H13 | G6 | Okno „O funduszu” w ramie `.wn`; przełącznik funduszu etycznego używa `.sw` z Automatów (zielony), nie bursztynu z makiety. Kara za limit co kwartał, dopóki trwa przekroczenie | Jeden wzór przełącznika w grze |
+| H14 | G7 | Impuls publikacji RateU liczony w składniku G5 (średnia zero). Wynik badania u audytora bez ESG: prywatna ocena kredytowa w skali audytora. Ocena urzędu ma audytora „UEiE” | Plan G7, zmiana użytkownika (6 audytorów) |
+| H15 | G9 | Losowanie kontroli: waga 1 + 3 × (litera rzeczywista − B), więc C waży 4, D 7. Stan w `society.energy.esgReg` (zapisuje się z energią) | Bez nowego pola zapisu |
+| H16 | G10 | Przydział: 1 Szmaragdowa, potem Rubinowa do limitu, potem reszta Szmaragdowej (dawniej Szmaragdowa do 3 jako pierwsza). Rubinowa 1,6 × progu Platynowej, Szmaragdowa 2,5 ×. Spółki z Platynowej i elitarnych poniżej kryterium ESG (obowiązującego albo ogłoszonego): projekt z szansą 60% na kw., nowy audyt 2 kw. po zakończonym projekcie | g9: Rubinowa 73%; k9: Szmaragdowa 83% |
+| H17 | G10/G11 | Strojenie po k9 i c9: próg B 62; popyt A +0,5 / C −0,5 / D −1% rocznie; ryzyko w ocenie kredytowej A +1, C −1 z 25%, D −1, D w G −2; wycofanie uczciwej deklaracji 60% na kw.; Srebrna oceniana z szansą 70% na rok; greenwashing 0,1% na kw. | Bramki G11 |
+| H18 | G11 | Baza porównań: g0 + fk łącznie (g0 sam wypadł wysoko). Ablacja (aba/abb/abc) pokazała, że spadek marży w g9 to szum, nie skutek ESG | Seria g9 dała marżę 20 lat −2,4 pp, k9 i c9 w szumie |
+
 ## Wyniki serii
 
 | Miara | Cel (G11) | g4 (G1–G4) | g5 (G1–G5) |
@@ -35,4 +43,6 @@ Po g5 zmienione jeszcze: próg B 60 (za mało C wśród ocen publicznych) i popy
 
 ## Do decyzji użytkownika
 
-Brak.
+| # | Sprawa | Opcje | Rekomendacja |
+|---|---|---|---|
+| U14 | Kryterium ESG w elitarnych (G9): przy wymogu B elitarne obsadzone w 44–49% kwartałów (cel ≥ 85%), bo duże spółki to głównie emitenci z oceną C | a) zostawić; b) Rubinowa ≥ C, Szmaragdowa i Diamentowa ≥ B; c) wszystkie elitarne ≥ C, B tylko Diamentowa; d) dłuższy okres przejściowy (8 kw.) | b) (szczegóły: `kontrola_0.18.9.md`) |

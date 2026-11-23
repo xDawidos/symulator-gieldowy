@@ -97,7 +97,8 @@ function getEsgTrue(stock) {
 const ESG_PUBLIC_RULES = {
     validQ: 4, noise: 0.2, fooled: 0.15, pillarNoise: 5,
     goldYear: 1, silverYear: 0.7, topTiers: ['PLATINUM', 'RUBY', 'EMERALD', 'DIAMOND'],
-    claim: { A: 0.12, B: 0.06 }, green: 0.0015, greenPressure: 1, greenDrop: 2, dropFrom: -0.2, withdraw: 0.6
+    claim: { A: 0.12, B: 0.06 }, green: 0.001, // c9: 0,0015 dawało greenwashing 10–13% deklaracji
+    greenPressure: 1, greenDrop: 2, dropFrom: -0.2, withdraw: 0.6
 };
 const ESG_TIERS = ['JUNK', 'BRONZE', 'SILVER', 'GOLD', 'PLATINUM', 'RUBY', 'EMERALD', 'DIAMOND']; // krajowe poziomy (ESG krajowe w 0.18.9)
 const esgShift = (grade, d) => ESG_GRADE_ORDER[Math.max(0, Math.min(3, ESG_GRADE_ORDER.indexOf(grade) + d))];
