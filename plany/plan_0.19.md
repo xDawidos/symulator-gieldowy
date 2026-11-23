@@ -7,13 +7,16 @@ Polecenie użytkownika z 2026-11-14: „zrób wspólny plik 0.19 ze wszystkim; m
 | Wersja | Nazwa | Wcześniej | Zakres w skrócie |
 |---|---|---|---|
 | **0.19.1** | Polityka i Społeczeństwo 2 | 0.19.1 „Polityka 2” (mapa) i 0.19.1 „Społeczeństwo 2” (plan serii) — ten sam numer, połączone | partie i wydarzenia polityczne, sponsoring i lobbing, nepotyzm, urzędy; ruch klas, zdrowie i nauka, poziom życia |
-| **0.19.2** | Miasta 2 | 0.19.2 (sekcja 7 planu serii) | miasta w kraju, oddziały spółek, projekty miejskie, galerie, szpitale i uniwersytety, REIT zdrowie przez najem |
-| **0.19.3** | Multikulturalizm (wspólny silnik „flavour”) | 0.19.2 „Multikulturalizm” | konfiguracja kraju: administracja, motyw, zasady, instytucje, poziomy obecności, przychylność per kraj |
+| **0.19.2** | Mapa kraju (dawniej Miasta 2) | 0.19.2 (sekcja 7 planu serii), rozszerzone 2026-11-23 | miasta na 3 szczeblach (1 + 6 + 12, część otwiera się z czasem), specjalizacje, polityki miejskie, migracje, zdarzenia lokalne, kategorie dóbr 0–4 na mapie, oddziały, galerie, szpitale i uniwersytety, REIT zdrowie przez najem |
+| **0.19.3** | Usługi i projekty (nowy zakres od 2026-11-23) | wydzielone z 0.19.2 | Turystyka i usługi cyfrowe w grafie, projekty budowlane, megaprojekty i projekty czasowe (PR0–PR8) |
 | **0.19.4** | Handel światowy | „0.19 Handel światowy” (mapa), w planie serii cła jako „0.20” | cła na krawędziach grafu, służba celna, doktryny handlowe, umowy, embarga, unie celne, WTO, handel energią |
 | **0.19.5** | Bramka testowa serii 0.19 | 0.19.3 „bramka testowa” | serie i gra ręczna po całej serii, strojenia |
-| **0.19.6+** | Wersje krajów | 0.19.3 Niemcy, 0.19.4 USA, 0.19.5 Czechy | 0.19.6 Niemcy (wzór), 0.19.7 USA, 0.19.8 Czechy, dalej pozostałe kraje |
+| ~~0.19.6+~~ → **0.24+** | Wersje krajów | przeniesione 2026-11-23 za Korporacje 2 | Niemcy (wzór), USA, Czechy, dalej pozostałe kraje |
+| ~~0.19.3~~ → **0.22** | Multikulturalizm (wspólny silnik „flavour”) | przeniesione 2026-11-23 za Korporacje 2 | konfiguracja kraju: administracja, motyw, zasady, instytucje, poziomy obecności, przychylność per kraj |
 
-Przed 0.19.1 idą jeszcze: 0.18.6 Porządki, 0.18.7 Progresja i onboarding, 0.18.8 Długa gra (`plan_0.18.6_porzadki_dluga_gra.md`) i wersja „Cel gry” (`plan_cel_gry.md`). Dalsze wersje (Globalne korporacje, Rynek pracy 2) są w mapie (`plan_0.13-0.16_mapa.md`, „Po 0.16”).
+**Decyzja użytkownika 2026-11-23 (`plan_0.20_korporacje_2.md`, K1):** państwa trzecie na później, w zamian mapa kraju startowego. Po 0.19.5 idą: 0.20 Korporacje 2, 0.21 Rynek pracy 2, 0.22 Multikulturalizm (silnik), 0.23 Globalne korporacje (dawne 0.20), 0.24+ wersje krajów.
+
+Przed 0.19.1 idą jeszcze: 0.18.6 Porządki, 0.18.7 Progresja i onboarding, 0.18.8 Długa gra (`plan_0.18.6_porzadki_dluga_gra.md`) i wersja „Cel gry” (`plan_cel_gry.md`). Dalsze wersje (Korporacje 2, Rynek pracy 2, Multikulturalizm, Globalne korporacje, wersje krajów) są w `plan_0.20_korporacje_2.md` i w mapie (`plan_0.13-0.16_mapa.md`, „Po 0.16”).
 
 **Wspólne zasady serii:**
 - Budżet czasu kroku: **900 ms/kw.** z UI (kontrola końcowa 0.18, `raporty/kontrola_0.18.md`). Każda wersja mierzy bazę i nową wersję po kolei, w tych samych warunkach.
@@ -80,13 +83,24 @@ Dziś ustawy są pokazywane na dwa sposoby: w zakładce Prawo i w zakładce Kraj
 
 ---
 
-## 0.19.2 Miasta 2
+## 0.19.2 Mapa kraju (dawniej Miasta 2)
 
 Źródło: rozmowa z użytkownikiem 2026-11-03 (dawna sekcja 7 planu serii) i dopiski z 0.17.2, 0.18 i decyzji U8.
 
+### Mapa kraju na 3 szczeblach (decyzje użytkownika 2026-11-23)
+
+- **Szczeble:** **Stolica** (1: centrum spółek zagranicznych i głównych siedzib krajowych, popyt na kat. 4), **miasta wojewódzkie** (6: siedziby córek i oddziałów, galerie dla kat. 3), **miasta powiatowe** (12, po 2 na województwo: baza przemysłowa kat. 1–2 albo brak większych firm).
+- **Nie wszystko na start:** na początku gry istnieje Stolica, część miast wojewódzkich i powiatowych oraz część połączeń między nimi. Kolejne miasta i połączenia otwierają się z czasem: przez plan inwestycji Ministerstwa Infrastruktury (0.19.1 P5a: droga albo kolej otwiera połączenie), wzrost ludności i migracje, odkrycie złoża (zdarzenie lokalne). Liczby startowe do specyfikacji (propozycja: Stolica + 4 wojewódzkie + 6 powiatowych, reszta w ciągu 10–15 lat).
+- **Specjalizacje (tagi):** 6–8 tagów, miasto ma 1–2: np. Zagłębie surowcowe (tańsze wydobycie, wyższe zanieczyszczenie), Węzeł kolejowy (tańszy fracht lądowy), Miasto akademickie (Nauka, specjaliści), Kurort (Turystyka, **zakaz brudnego przemysłu**), Port (fracht morski), Centrum finansowe (tylko Stolica). Tag zmienia koszty, limity i przyciąga podsektory, z zasadą średniej zero dla marż. Tag może się zmienić (np. odkrycie złoża).
+- **Polityki miejskie i okręgowe:** burmistrz (jak dziś `city.mayor`) i rada wybierają 1–2 polityki z listy (np. ulgi dla przemysłu, strefa czystego powietrza, budownictwo mieszkaniowe, przyciąganie inwestorów).
+- **Migracja wewnętrzna:** raz na kwartał, ≤ 1% ludności miasta, według atrakcyjności (zanieczyszczenie, płace, poziom życia S3, mieszkania). Przykład: wyjazd z zanieczyszczonych powiatów do wojewódzkich podnosi tam popyt na mieszkania i galerie REIT. Rozszerza migrację kraju (`core.js:5270`).
+- **Zdarzenia lokalne:** 6–10 typów (awaria sieci przesyłowej, odkrycie złoża, targi, powódź, nowa inwestycja zagraniczna), ≤ 1 na miasto na rok, z istniejącego silnika zdarzeń z celem „miasto”.
+- **Kategorie dóbr 0–4 (widok na klasy z 0.18, bez zmiany grafu):** 0 = **usługi lokalne** (bezpieczeństwo, komunalne, opieka: wskaźnik pokrycia potrzeb miasta 0–100%, bez magazynu), 1 = M (surowce), 2 = P (półprodukty), 3 = Z i K (końcowe i inwestycyjne), 4 = L (premium). Na mapie: kat. 1–2 w powiatach, kat. 3 sprzedaje się przez powierzchnię handlową (galerie) w wojewódzkich, popyt na kat. 4 skupia się w Stolicy, a produkcja zaawansowanej kat. 4 (technologia, farmacja) wymaga wskaźnika Nauki miasta.
+- Kraje obce: bez mapy do czasu silnika 0.22 i wersji krajów 0.24+ (decyzja K1).
+
 ### Model
 
-- Każdy kraj dzieli się na kilka **miast** (PL: 6, kraje obce: 3–4; liczba dla krajów obcych otwarta). Miasto: ludność i struktura klas (0.13), **infrastruktura** (drogi, kolej, energia, łącza; 0–100), zanieczyszczenie, zadowolenie, podatek lokalny, budżet, lista projektów i spółek z siedzibą.
+- Kraj startowy dzieli się na **miasta** na 3 szczeblach (wyżej). Kraje obce zostają bez miast (K1). Miasto: ludność i struktura klas (0.13), **infrastruktura** (drogi, kolej, energia, łącza; 0–100), zanieczyszczenie, zadowolenie, podatek lokalny, budżet, lista projektów i spółek z siedzibą.
 - **Graf towarów zostaje na poziomie podsektor × kraj** (nie × miasto). Miasto modyfikuje: koszt i dostępność pracy, limit rozwoju, zanieczyszczenie i zadowolenie. Dzięki temu miasta nie mnożą macierzy.
 - **Oddziały spółek:** spółka może otworzyć oddział w mieście (zatrudnia tam). Oddział zwiększa aktywność podsektora, ale zużywa pojemność miasta.
 - **Pojemność miasta** = f(infrastruktura, ludność, wykształcenie). Przekroczenie → rosną koszty pracy i podatki, rośnie zanieczyszczenie, spada zadowolenie.
@@ -103,6 +117,12 @@ Dziś ustawy są pokazywane na dwa sposoby: w zakładce Prawo i w zakładce Kraj
 - **Okno „Miasto”:** dziś okno inwestycji miejskich (`openCityInvestmentModal`). Rejestr odblokowań przeniesiony do 1.0 (`plan_1.0.md`); Miasta 2 są dostępne bez blokady, a 1.0 dopisze im regułę.
 - **Podsumowanie dekady** (0.18.8 D6, makieta 23): od 0.19.2 dochodzi komórka „Wkład w Miasto”.
 - **Mapa szlaków** (makieta 16): karta kraju dostaje listę miast (przed 0.19.2 „kraj bez miast”).
+
+---
+
+## 0.19.3 Usługi i projekty (nowy zakres od 2026-11-23)
+
+Wydzielone z 0.19.2, żeby Mapa kraju nie była za duża (decyzja planowania 2026-11-23, numer zwolniony przez przeniesienie Multikulturalizmu do 0.22). Obie części korzystają z miast z 0.19.2, więc idą zaraz po niej.
 
 ### Usługi w grafie: Turystyka i usługi cyfrowe (2026-11-22)
 
@@ -143,17 +163,17 @@ Polecenie: „dopracowanie i aktualizacja projektów budowlanych, megaprojektów
 
 **Pliki:** `companies.js` (`INVESTMENT_CATALOG`, `startRandomInvestment`, koszt), `state.js` (`MEGA_PROJECTS`, `TIMED_PROJECT_TEMPLATES`, harmonogram), `infrastructure.js` (ministerstwo jako zamawiający), `chains.js` (popyt inwestycyjny), `ui.js` (karta projektu), `img/` (ikony), `tests/przebiegi.html` (sonda).
 
-**Dlaczego w 0.19.2:** miasta są nowym zamawiającym większości projektów (szpitale, uniwersytety, galerie, łącza), a Ministerstwo Infrastruktury z 0.19.1 jest już wtedy gotowe. Robienie katalogów przed miastami oznaczałoby drugi przegląd tych samych pozycji.
+**Dlaczego w 0.19.3 (po Mapie kraju):** miasta są nowym zamawiającym większości projektów (szpitale, uniwersytety, galerie, łącza), a Ministerstwo Infrastruktury z 0.19.1 jest już wtedy gotowe. Robienie katalogów przed miastami oznaczałoby drugi przegląd tych samych pozycji.
 
-**Dlaczego tutaj (w 0.19.2), a Ministerstwo w 0.19.1:** Ministerstwo Infrastruktury to nowy urząd sterowany przez rząd i partie, więc pasuje do P5 (nowe urzędy) i P3 (lobbing) w 0.19.1, a Miasta 2 od razu dostają z niego budżet infrastruktury miast. Turystyka i usługi cyfrowe potrzebują popytu z klas po S1 (0.19.1) i z miast (atrakcyjność, zanieczyszczenie, informacja), więc wchodzą razem z Miastami; wcześniej popyt byłby tylko krajowy i trzeba by go przeliczać drugi raz.
+**Dlaczego tutaj (w 0.19.3, po miastach z 0.19.2), a Ministerstwo w 0.19.1:** Ministerstwo Infrastruktury to nowy urząd sterowany przez rząd i partie, więc pasuje do P5 (nowe urzędy) i P3 (lobbing) w 0.19.1, a Miasta 2 od razu dostają z niego budżet infrastruktury miast. Turystyka i usługi cyfrowe potrzebują popytu z klas po S1 (0.19.1) i z miast (atrakcyjność, zanieczyszczenie, informacja), więc wchodzą razem z Miastami; wcześniej popyt byłby tylko krajowy i trzeba by go przeliczać drugi raz.
 
-### Ryzyko
+### Ryzyko (0.19.2 i 0.19.3)
 
 Miasta dotykają zapisu (kilkadziesiąt obiektów), czasu kroku (oddziały) i UI (mapa). Pomiar względem budżetu 900 ms/kw.
 
 ---
 
-## 0.19.3 Multikulturalizm (wspólny silnik „flavour”)
+## 0.22 Multikulturalizm: wspólny silnik „flavour” (dawne 0.19.3, przeniesione 2026-11-23)
 
 Źródło: zgłoszenie użytkownika z 2026-10-29 (dawny `plan_0.19.2_multikulturalizm.md`). „Flavour” = **własny charakter każdego państwa**: nie tylko inne firmy i waluta, ale własne mechaniki, instytucje, społeczeństwo, wygląd i zasady rozgrywki. Polska przestaje być jedynym krajem z pełnym „smakiem”, a Niemcy (potem USA, Czechy, kolejne) dostają własną wersję gry.
 
@@ -173,7 +193,7 @@ Miasta dotykają zapisu (kilkadziesiąt obiektów), czasu kroku (oddziały) i UI
 ### Podział na wersje (decyzja użytkownika 2026-10-29, numery od 2026-11-14)
 
 - **0.19.3 = wspólny silnik „flavour”:** `COUNTRY_DEFS` rozszerzony o administrację, motyw, zasady kraju, instytucje, poziomy obecności (pkt 8) i przychylność per kraj (pkt 6), z Polską jako pierwszą implementacją. Bez pełnej treści innych krajów.
-- **Każdy kraj ma własną wersję po bramce 0.19.5:** 0.19.6 Niemcy (wzór), 0.19.7 USA, 0.19.8 Czechy, dalej Szwecja, Szwajcaria, Francja, Japonia, Chiny, Indie, Tajwan (kolejność do ustalenia). Każda z pomiarem GIG ±1 pp i czasu kroku.
+- **Każdy kraj ma własną wersję po silniku 0.22 i Globalnych korporacjach 0.23 (numery od 2026-11-23):** 0.24 Niemcy (wzór), potem USA, Czechy, dalej Szwecja, Szwajcaria, Francja, Japonia, Chiny, Indie, Tajwan (kolejność do ustalenia). Każda z pomiarem GIG ±1 pp i czasu kroku.
 - **Do czasu tych wersji** gra zostaje przy uproszczonej mechanice krajów (kraj startowy z 0.16.6/0.16.11, połączone giełdy i bilety z 0.16.2–0.16.3, stały profil społeczeństwa z 0.19.1).
 
 **Zależności:** 0.16.11 (zestawy firm i waluta), 0.19.1 (Polityka i Społeczeństwo 2, symulacje państw), 0.19.2 (miasta jako wzór administracji). Pkt 8 dotyka 0.16.3, biletów z 0.16.2 i `foreign_companies.js` (po wspólnym modelu spółek z 0.18.0 R1).
@@ -204,6 +224,6 @@ Miasta dotykają zapisu (kilkadziesiąt obiektów), czasu kroku (oddziały) i UI
 
 Jak 0.17.1: duża seria, presety graczy, gra ręczna, lista strojeń do decyzji użytkownika. Cele: GIG 20 lat 10–13%, marże 0 ± 0,3 pp, czas kroku ≤ 900 ms/kw., zapis bez dużego wzrostu, wybory i ruch klas po S1, miasta i handel w pomiarze.
 
-## 0.19.6+ Wersje krajów
+## 0.24+ Wersje krajów (dawne 0.19.6+, przeniesione 2026-11-23)
 
-0.19.6 Niemcy (Landy, ład korporacyjny, firmy, badania, partie, wydarzenia, nazwy, boty, motyw), 0.19.7 USA, 0.19.8 Czechy, dalej pozostałe kraje. Zakres według 0.19.3.
+0.24 Niemcy (Landy, ład korporacyjny, firmy, badania, partie, wydarzenia, nazwy, boty, motyw), 0.19.7 USA, 0.19.8 Czechy, dalej pozostałe kraje. Zakres według 0.19.3.
