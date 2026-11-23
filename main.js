@@ -1491,6 +1491,7 @@ function runQuarterlyTick() {
         noteQuarterForSpeedStats();
         runQuarterStep('reviewCompanyPlacements', reviewCompanyPlacements);
         ensureAllStockSegments(); // 0.14 T1a: nowe i zmienione spółki — sektory z rejestru, segmenty
+        if (typeof processEsgQuarterly === 'function') runQuarterStep('processEsgQuarterly', processEsgQuarterly); // 0.18.9 G1: deklaracje i audyty ESG (esg.js)
         runQuarterStep('processEliteExchangesQuarterly', processEliteExchangesQuarterly); // Rubin / Szmaragd / Diament, spółki zależne (finance.js)
         payBondCoupons(); // kupony kwartalne (finance.js)
         processPublicInvestmentFunding(); // BC → spółki państwowe, miasto → spółki miejskie (investments.js)

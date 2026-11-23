@@ -12685,7 +12685,7 @@ group('0.16.1', () => {
             assertNear(playerCash - cash0, expected, 'gracz dostał gotówkę po cenie z premią', 1e-3);
             assert(result.premium >= 0.25 && result.premium <= 0.45, 'premia 25–45%');
         }
-        assert(paymentJournal.slice(journal0).some(e => e.purpose.startsWith('Przejęcie przez zagranicznego')), 'wpływ z zewnątrz w księdze płatności');
+        if (result.symbol === sym) assert(paymentJournal.slice(journal0).some(e => e.purpose.startsWith('Przejęcie przez zagranicznego')), 'wpływ z zewnątrz w księdze płatności'); // 0.18.9: inny cel może nie mieć akcjonariuszy (wtedy bez wpłaty)
         assert(playerCash >= 0 && aiCompetitors.every(ai => ai.cash >= 0), 'brak ujemnej gotówki');
         assertEq(checkWorldInvariants().length, 0, 'niezmienniki po przejęciu');
         resetForeignIssuers(); resetForeignBots();
@@ -17475,9 +17475,86 @@ group('0.18.3 Mechaniki grafu', () => {
         assert(maxStep <= 0.0125 + 1e-6 && prev <= CHAIN_SUBSTITUTION.Motoryzacja.steel.max + 1e-9 && prev > 0.2, `udział zastąpiony ${prev}`);
         resetChainState();
     });
-    test('M4: emisyjność podsektora z receptury (huta ciężej niż sektor), ocena ESG A dla spółki na ścieżce ESG', () => {
+    test('M4: emisyjność podsektora z receptury (huta ciężej niż sektor); 0.18.9 G1: ścieżka ESG podnosi E rzeczywiste, bez audytu brak oceny publicznej', () => {
         assert(getRecipeEmissionFactor('Przemysł', 'Hutnictwo') > 1 && getRecipeEmissionFactor('Przemysł', null) === 1, 'huta cięższa');
-        const s = makeCompany('ESX', { sector: ['Przemysł'] }); assert(['B', 'C'].includes(getEsgRating(s)), 'bez ESG'); s.esg = true; assertEq(getEsgRating(s), 'A');
+        const s = makeCompany('ESX', { sector: ['Przemysł'] }); resetWorld([s]); clearEsgCache(); const e0 = getEsgTrue(s).e;
+        assertEq(getEsgRating(s), null, 'bez audytu: brak oceny'); s.esg = true; clearEsgCache(); assert(Math.abs(getEsgTrue(s).e - Math.min(100, e0 + ESG_RULES.e.legacy)) < 1e-9, `migracja esg = true: E +15 (${e0} → ${getEsgTrue(s).e})`);
+    });
+    test('0.18.9 G1: litery na progach, filar D obniża wynik łączny, audyt daje ocenę ważną 4 kw., deklaracja przy C to greenwashing', () => {
+        const [a, b, c] = ESG_RULES.grades.map(x => x[1]);
+        assertEq([esgGrade(a), esgGrade(a - 0.01), esgGrade(b), esgGrade(b - 0.01), esgGrade(c), esgGrade(c - 0.01)].join(''), 'ABBCCD', 'progi');
+        assertEq(combineEsg(90, 90, 90).grade, 'A'); assertEq(combineEsg(90, 90, c - 1).grade, 'B', 'D w filarze: A → B');
+        assertEq(combineEsg(c - 5, c - 5, c - 5).grade, 'D', 'D zostaje D');
+        const s = makeCompany('ESY', { sector: ['Technologia'] }); resetWorld([s]); clearEsgCache();
+        const rnd = Math.random; Math.random = () => 0.99;
+        try {
+            const r = auditEsg(s); assertEq(r.grade, getEsgTrue(s).grade, 'bez szumu: ocena = rzeczywista'); assertEq(getEsgRating(s), r.grade);
+            macro.quarter += ESG_PUBLIC_RULES.validQ; clearEsgCache(); assertEq(getEsgRating(s), null, 'po 4 kw. wygasa');
+            macro.quarter -= ESG_PUBLIC_RULES.validQ;
+            s.ceo = { ...(s.ceo || {}), traits: [{ id: 'chciwy' }, { id: 'skompromitowany' }] }; s.ethicsClaim = { q: 0, green: true }; clearEsgCache();
+            assert(['C', 'D'].includes(getEsgTrue(s).grade) === isEsgGreenwashing(s), 'greenwashing = deklaracja przy C/D');
+            delete s.ethicsClaim; assert(!isEsgGreenwashing(s), 'bez deklaracji nie ma greenwashingu');
+        } finally { Math.random = rnd; }
+    });
+    test('0.18.9 G2: audytor z ESG przy audycie wystawia ocenę ESG; D w filarze G obniża ocenę kredytową o 2 stopnie', () => {
+        const s = makeCompany('ESG2', { sector: ['Technologia'] }); resetWorld([s]); clearEsgCache();
+        s.ceo = { ...(s.ceo || {}), traits: [{ id: 'chciwy' }, { id: 'skompromitowany' }, { id: 'sklonny_do_korupcji' }] }; s.knfBanUntil = macro.quarter + 4; clearEsgCache();
+        assertEq(getEsgTrue(s).gg, 'D', `G = ${getEsgTrue(s).g}`);
+        const rnd = Math.random, banned = { ...ratingState.banned }, esgId = getEsgAuditorIds()[0]; Math.random = () => 0.99;
+        try {
+            for (const a of AUDITORS) if (a.id !== esgId) ratingState.banned[a.id] = macro.quarter + 10;
+            const grade = auditStock(s); assertEq(ratingIndex(grade), Math.max(0, getTrueRatingIndex(s) - 2), 'ocena −2'); assert(getEsgRating(s), 'ocena ESG'); assertEq(s.esgRating.auditor, esgId);
+            assertEq(getEsgCreditAdj({ grade: 'D', g: 60 }), -2); assertEq(getEsgCreditAdj({ grade: 'A', g: 80 }), 1); assertEq(getEsgCreditAdj({ grade: 'B', g: 60 }), 0); assertEq(getEsgCreditAdj(null), 0);
+            delete s.esgRating; ratingState.banned = { ...banned }; ratingState.banned[esgId] = macro.quarter + 10;
+            for (const a of AUDITORS) if (a.id !== ratingState.noEsg) ratingState.banned[a.id] = macro.quarter + 10;
+            const g2 = auditStock(s); assertEq(ratingIndex(g2), getTrueRatingIndex(s), 'audytor bez ESG: bez ryzyka ESG'); assertEq(getEsgRating(s), null, 'i bez oceny ESG');
+        } finally { Math.random = rnd; ratingState.banned = banned; }
+    });
+    test('0.18.9 G2: dokładnie jeden noEsg, na starcie 2 z ESG, dołączanie do 5 bez noEsg; migracja: aud2 z ESG', () => {
+        for (let i = 0; i < 20; i++) {
+            const st = initEsgAuditors({});
+            assert(AUDITORS.some(a => a.id === st.noEsg) && !st.esgAuditors.includes(st.noEsg), 'noEsg poza listą'); assertEq(st.esgAuditors.length, 2, 'start 2');
+            const m = initEsgAuditors({}, true); assert(m.esgAuditors.includes('aud2') && m.esgAuditors.length === 2 && m.noEsg !== 'aud2' && !m.esgAuditors.includes(m.noEsg), 'migracja');
+        }
+        const saved = ratingState; ratingState = initEsgAuditors({ banned: {}, log: [], stats: {} }); const rnd = Math.random; Math.random = () => 0.01;
+        try { for (let y = 0; y < 10; y++) processEsgAuditorsYearly(); assertEq(ratingState.esgAuditors.length, 5, 'najwyżej 5'); assert(!ratingState.esgAuditors.includes(ratingState.noEsg), 'noEsg nigdy'); }
+        finally { Math.random = rnd; ratingState = saved; }
+        const snap = JSON.parse(JSON.stringify(getRatingSnapshot())); delete snap.esgAuditors; delete snap.noEsg; applyRatingSnapshot(snap);
+        assert(ratingState.esgAuditors.includes('aud2') && ratingState.noEsg && ratingState.noEsg !== 'aud2', 'stary zapis: aud2 z ESG');
+    });
+    test('0.18.9 G3: cechy etyk, ignorant, ekolog, konserwatysta: każda u 4–8% nowych prezesów, pary się wykluczają; etyk bez wyzysku, ekolog buduje OZE', () => {
+        const n = 6000, cnt = { etyk: 0, ignorant: 0, ekolog: 0, konserwatysta: 0 }; let clash = 0;
+        for (let i = 0; i < n; i++) { const c = { age: 40 + (i % 21), traits: [] }; assignCeoTraits(c); const ids = c.traits.map(t => t.id); for (const k in cnt) if (ids.includes(k)) cnt[k]++; if (CEO_TRAIT_CONFLICTS.some(([a, b]) => ids.includes(a) && ids.includes(b))) clash++; }
+        for (const [k, v] of Object.entries(cnt)) assert(v / n >= 0.04 && v / n <= 0.08, `${k}: ${(100 * v / n).toFixed(1)}%`);
+        assertEq(clash, 0, 'pary wykluczające');
+        const s = makeCompany('ETK', { sector: ['Budowlany'] }); s.ceo = { traits: [{ id: 'chciwy' }, { id: 'etyk' }] }; assert(getCeoLaborPolicy(s) !== 'exploit', 'etyk bez wyzysku');
+        s.ceo.traits = [{ id: 'chciwy' }]; assertEq(getCeoLaborPolicy(s), 'exploit');
+        s.power = { type: 'coal' }; s.ceo.traits = [{ id: 'ekolog' }]; assertEq(pickPowerBuildType(s), 'oze'); s.ceo.traits = [{ id: 'konserwatysta' }]; assertEq(pickPowerBuildType(s), 'coal');
+        assertEq(getCeoEsgFactor(s), 0.3); s.ceo.traits = [{ id: 'ekolog' }]; assertEq(getCeoEsgFactor(s), 3);
+    });
+    test('0.18.9 G4: projekt ESG po zakończeniu podnosi swój filar o zapisany przyrost; ulepszenie eko obniża emisje i kosztuje 20% pozycji', () => {
+        const s = makeCompany('EPR', { sector: ['Przemysł'] }); s.cash = 1e9; s.fundamentals = { ...(s.fundamentals || {}), revenue: 1e8 }; resetWorld([s]); clearEsgCache();
+        const s0 = getEsgTrue(s).s, cash0 = s.cash, entry = startEsgProject(s, 'foundation');
+        assert(entry && entry.pillar === 's' && entry.gain >= 5 && entry.gain <= 8, 'wpis projektu'); assert(s.cash < cash0, 'koszt zapłacony');
+        assertEq(startEsgProject(s, 'foundation'), null, 'ten sam projekt nie dwa razy naraz');
+        macro.quarter += 4; processEsgProjects(s); clearEsgCache(); macro.quarter -= 4;
+        assert(entry.done && Math.abs(getEsgTrue(s).s - Math.min(100, s0 + entry.gain)) < 1e-6, `S ${s0} → ${getEsgTrue(s).s} (+${entry.gain})`);
+        const f0 = getStockEmissionFactor(s), proj = { id: 'new_factory', name: 'Nowa Fabryka', cost: 800000 }, c1 = s.cash;
+        assert(ecoUpgradeInvestment(s, proj), 'ulepszenie'); clearEmissionCache(); assert(getStockEmissionFactor(s) < f0, 'niższe emisje'); assert(Math.abs(c1 - s.cash - 160000) < 1, 'koszt 20%');
+        assert(!ecoUpgradeInvestment(s, proj), 'raz na inwestycję'); assert(!canEcoUpgrade(s, { id: 'marketing_campaign' }), 'tylko produkcja');
+    });
+    test('0.18.9 G5: popyt ESG: A rośnie, D spada, suma zmian kapitalizacji ocenionych spółek 0; bez oceny bez zmian', () => {
+        const list = ['A', 'B', 'D', null].map((g, i) => { const c = makeCompany(`ED${i}`, { sector: ['Finanse'] }); c.exchange = 'GOLD'; c.price = 100 + 50 * i; c.totalShares = 1e6 * (i + 1); if (g) c.esgRating = { grade: g, q: macro.quarter, until: macro.quarter + 4 }; return c; });
+        resetWorld(list); const cap0 = list.map(c => c.price * c.totalShares);
+        applyEsgDemandQuarterly(); const dc = list.map((c, i) => c.price * c.totalShares - cap0[i]);
+        assert(dc[0] > 0 && dc[2] < 0, 'A w górę, D w dół'); assertEq(dc[3], 0, 'bez oceny bez zmian');
+        assert(Math.abs(dc[0] + dc[1] + dc[2]) < 1e-6 * cap0.reduce((a, b) => a + b, 0), `suma ${dc[0] + dc[1] + dc[2]}`);
+    });
+    test('0.18.9 G1: pokrycie: Platynowa zawsze dostaje ocenę, Brązowa bez deklaracji nie', () => {
+        const p = makeCompany('ESP', { sector: ['Finanse'] }), z = makeCompany('ESZ', { sector: ['Finanse'] }); p.exchange = 'PLATINUM'; z.exchange = 'BRONZE';
+        resetWorld([p, z]); clearEsgCache(); processEsgQuarterly();
+        assert(getEsgRating(p), 'Platynowa oceniona'); assertEq(getEsgRating(z), null, 'Brązowa bez oceny');
+        z.ethicsClaim = { q: 0 }; processEsgQuarterly(); assert(getEsgRating(z), 'Brązowa z deklaracją zamawia ocenę');
     });
     test('M5: szlaki mają stan słowem; w strajku portowym szlaki morskie kraju startowego są utrudnione albo wstrzymane', () => {
         resetWorld([makeCompany('AAA')]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' }); resetCrises(); resetChainState();

@@ -3832,6 +3832,7 @@ function getStockTickModifiers(stock, regime, now) {
                 case 'nieudacznik': priceGrowthModifier -= 0.05; volatilityModifier += 0.05; break;
                 case 'biurowy_dron': priceGrowthModifier -= 0.01; break;
                 case 'hobbista': volatilityModifier += 0.02; break;
+                case 'konserwatysta': volatilityModifier *= 0.97; break; // 0.18.9 G3
                 case 'wizjoner': volatilityModifier += 0.05; break;
                 case 'stoik': volatilityModifier *= 0.60; break;
                 case 'pewniak': isVolatilityCapped = true; break;

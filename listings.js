@@ -608,7 +608,7 @@ function parseAuditorGrade(text, auditorId) {
 function ratingCompareText(r) { const a = getAuditor(r.auditor); return a?.scale && a.scale !== 'letters' ? `${formatAuditorGrade(r.grade, r.auditor)} u ${a.name} ≈ ${r.grade}` : `${r.grade} u ${a?.name || 'audytora'}`; }
 const GATE_BY_TIER = { PLATINUM: 'A' }; // 0.18.7 E0a: ocena tylko od Platynowej (wcześniej Złota ≥ BBB)
 let ratingState = { banned: {}, log: [], stats: { audits: 0, bribes: 0, reveals: 0 } };
-function resetRatings() { ratingState = { banned: {}, log: [], stats: { audits: 0, bribes: 0, reveals: 0 } }; }
+function resetRatings() { ratingState = { banned: {}, log: [], stats: { audits: 0, bribes: 0, reveals: 0 } }; if (typeof initEsgAuditors === 'function') initEsgAuditors(ratingState); } // 0.18.9 G2: audytorzy z ESG losowani na starcie
 function ratingIndex(grade) { return RATING_GRADES.indexOf(grade); }
 /** Ocena „prawdziwa” z fundamentów: kondycja, marża, zadłużenie (spółka bez historii: z kondycji). */
 function getTrueRatingIndex(stock) {
@@ -634,6 +634,7 @@ function auditStock(stock, renew = false) {
     const corruption = typeof oversight === 'object' ? Number(oversight?.corruption) || 0 : 0;
     const bribed = !auditor.big && Math.random() < RATING_RULES.bribeChance * (1 + corruption / 50); // w kraju z dużą korupcją przekupstwo częstsze
     if (bribed) { idx += RATING_RULES.bribeBoost; ratingState.stats.bribes++; }
+    if (typeof isEsgAuditor === 'function' && isEsgAuditor(auditor.id)) idx += getEsgCreditAdj(auditEsg(stock, auditor.id)); // 0.18.9 G2: audytor z ESG dolicza ryzyko ESG
     idx = Math.max(0, Math.min(RATING_GRADES.length - 1, idx));
     const rating = { grade: RATING_GRADES[idx], q, until: q + RATING_RULES.validQ, auditor: auditor.id, bribed: bribed || undefined };
     stock.ratings = [rating, ...getRatings(stock).filter(r => r.auditor !== auditor.id && r.until > q)]; // 0.18.7 E5: nowa ocena zastępuje tylko ocenę tego audytora; wygasłe znikają
@@ -683,7 +684,7 @@ function processRatingsQuarterly() {
     for (const s of list) for (const r of getValidRatings(s)) if (r.bribed && !r.revealed && Math.random() < RATING_RULES.revealChance) revealBribedRating(s, r);
 }
 function getRatingSnapshot() { return ratingState; }
-function applyRatingSnapshot(snap) { resetRatings(); if (snap && typeof snap === 'object') ratingState = { banned: snap.banned || {}, log: Array.isArray(snap.log) ? snap.log.slice(-20) : [], stats: { audits: 0, bribes: 0, reveals: 0, ...(snap.stats || {}) } }; }
+function applyRatingSnapshot(snap) { resetRatings(); if (snap && typeof snap === 'object') { ratingState = { banned: snap.banned || {}, log: Array.isArray(snap.log) ? snap.log.slice(-20) : [], stats: { audits: 0, bribes: 0, reveals: 0, ...(snap.stats || {}) }, esgAuditors: snap.esgAuditors, noEsg: snap.noEsg, esgJoin: snap.esgJoin || {} }; if (typeof initEsgAuditors === 'function') initEsgAuditors(ratingState, true); } }
 
 // =================================================================================
 // 0.18.4 A3: NOWE IPO — audyt → opiekun emisji (bank inwestycyjny, prowizja 3–7%) → cena emisyjna z dyskontem 5–15% → „pop” w hossie;

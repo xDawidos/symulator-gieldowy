@@ -434,14 +434,7 @@ function getRecipeEmissionFactor(sector, subsector) {
     const own = CHAIN_RECIPES[`${sector}/${subsector}`];
     return own ? Math.min(1.3, Math.max(0.7, heavy(`${sector}/${subsector}`) / heavy(sector))) : 1;
 }
-/** 0.18.3 M4: ocena ESG spółki (A: ścieżka ESG, B: emisje nie wyższe niż średnia sektora, C: wyższe) — do karty i ocen (0.18.4). */
-function getEsgRating(stock) {
-    if (!stock || stock.assetType) return null;
-    if (stock.esg) return 'A';
-    const segs = typeof getStockSegments === 'function' ? getStockSegments(stock) : [];
-    const own = segs.reduce((t, seg) => t + seg.share * getSegmentEmission(stock, seg), 0), base = segs.reduce((t, seg) => t + seg.share * (SECTOR_EMISSIONS[seg.sector] || 0), 0);
-    return own <= base * 1.0001 ? 'B' : 'C';
-}
+// 0.18.9 G1: getEsgRating (ocena publiczna) jest w esg.js
 const POLLUTION_RULES = {
     start: 40, keep: 0.9, elasticity: 3.3, elasticityLate: 2.2, fadeFrom: 26, fadeTo: 80, normGrowth: 0.015, powerShare: 0.4, healthyLevel: 40, populationLoss: 0.0002, productionFrom: 80, productionCut: 0.02
 };
@@ -651,7 +644,7 @@ function processAiEsg(e) {
     for (const stock of stocks) {
         if (!canOrderEsg(stock) || getStockEmissionFactor(stock) <= getEmissionLimit(e)) continue;
         const p = getEcoPressure(e) / 100; // 0.18.6 O5: presja ekologiczna przyspiesza ESG u emitentów ponad limit (sprzężenie zwrotne: czyściej → mniejsza presja)
-        if (Math.random() < ENERGY_OFFICE_RULES.aiEsgChance * (1 + ECO_PRESSURE_RULES.esgBoost * p) * (1 + ECO_INCIDENT_RULES.esgBoost * ecoHeat(stock)) && (Number(stock.cash) || 0) > getStockRevenue(stock) * (1 - ECO_PRESSURE_RULES.esgCashRelief * p) && !(typeof canFundControlAgm === 'function' && canFundControlAgm(stock))) orderEsg(stock);
+        if (Math.random() < ENERGY_OFFICE_RULES.aiEsgChance * getCeoEsgFactor(stock) * (1 + ECO_PRESSURE_RULES.esgBoost * p) * (1 + ECO_INCIDENT_RULES.esgBoost * ecoHeat(stock)) && (Number(stock.cash) || 0) > getStockRevenue(stock) * (1 - ECO_PRESSURE_RULES.esgCashRelief * p) && !(typeof canFundControlAgm === 'function' && canFundControlAgm(stock))) orderEsg(stock);
     }
 }
 
@@ -994,4 +987,9 @@ function processEcoIncidents(e = society.energy) {
     return out;
 }
 /** Typ nowego bloku: energetyka węglowa pod presją częściej buduje OZE (szansa = presja spółki, do 80%). */
-function pickPowerBuildType(stock) { return stock?.power?.type === 'coal' && Math.random() < Math.min(ECO_INCIDENT_RULES.ozeMax, ecoHeat(stock)) ? 'oze' : stock?.power?.type; }
+function pickPowerBuildType(stock) {
+    const traits = stock?.ceo?.traits || [];
+    if (traits.some(t => t.id === 'ekolog')) return 'oze'; // 0.18.9 G3: ekolog buduje OZE
+    if (traits.some(t => t.id === 'konserwatysta')) return stock?.power?.type; // konserwatysta zostaje przy swoim źródle
+    return stock?.power?.type === 'coal' && Math.random() < Math.min(ECO_INCIDENT_RULES.ozeMax, ecoHeat(stock)) ? 'oze' : stock?.power?.type;
+}

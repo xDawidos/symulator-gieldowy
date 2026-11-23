@@ -315,6 +315,8 @@ const researchInstituteDescriptions = ["Jesteśmy inkubatorem innowacji. Nie pro
 // --- 2. LOGIKA GENERATORÓW ---
 
 /** country: kraj spółki zagranicznej (pula ogólna bez cech narodowych; cechę narodową dokłada newForeignCeo). Bez kraju: pula ogólna + cechy polskie. */
+const CEO_TRAIT_CONFLICTS = [['etyk', 'ignorant'], ['ekolog', 'konserwatysta']];
+const ceoTraitConflicts = (id, assigned) => CEO_TRAIT_CONFLICTS.some(pair => pair.includes(id) && assigned.some(t => t.id !== id && pair.includes(t.id)));
 function assignCeoTraits(ceo, country = null) {
     // Sprawdzenie, czy baza danych cech jest dostępna
     if (typeof ceoTraits === 'undefined' || Object.keys(ceoTraits).length === 0) {
@@ -350,7 +352,7 @@ function assignCeoTraits(ceo, country = null) {
         // Znajdź wszystkie dostępne cechy danej rzadkości, których CEO jeszcze nie ma
         const availableTraits = traitsPool.filter(trait =>
             trait.rarity === rarityToGet &&
-            !assignedTraits.some(assigned => assigned.id === trait.id)
+            !assignedTraits.some(assigned => assigned.id === trait.id) && !ceoTraitConflicts(trait.id, assignedTraits)
         );
 
         // Jeśli są dostępne cechy, wylosuj jedną i dodaj
@@ -363,7 +365,7 @@ function assignCeoTraits(ceo, country = null) {
             });
         } else {
             // Jeśli w danej rzadkości nie ma już nic do wylosowania, spróbuj wylosować cokolwiek innego
-            const fallbackTraits = traitsPool.filter(trait => trait.rarity !== 'hidden' && !assignedTraits.some(assigned => assigned.id === trait.id));
+            const fallbackTraits = traitsPool.filter(trait => trait.rarity !== 'hidden' && !assignedTraits.some(assigned => assigned.id === trait.id) && !ceoTraitConflicts(trait.id, assignedTraits));
             if (fallbackTraits.length > 0) {
                 const chosenTrait = getRandomElement(fallbackTraits);
                 assignedTraits.push({
@@ -1104,6 +1106,11 @@ const ceoTraits = {
         description: "Jego władza jest absolutna. Spółka, której przewodzi, nie może zostać wrogo przejęta przez innego gracza lub AI."
     },
     // === 0.11 CIEMNA STREFA ===
+    // 0.18.9 G3: cechy etyczne (pary wykluczające się: etyk–ignorant, ekolog–konserwatysta, CEO_TRAIT_CONFLICTS)
+    etyk: { name: "Etyk", rarity: "common", color: "#a0a0a0", description: "Bez wyzysku i greenwashingu. Częściej zleca projekty społeczne i ładu korporacyjnego. Płace o 1% wyższe." },
+    ignorant: { name: "Ignorant", rarity: "common", color: "#a0a0a0", description: "ESG go nie obchodzi: rzadko zleca ścieżkę ESG i projekty, pod presją chętniej udaje etykę." },
+    ekolog: { name: "Ekolog", rarity: "common", color: "#a0a0a0", description: "Trzy razy częściej zleca ścieżkę ESG i projekty środowiskowe. Elektrownie buduje jako OZE." },
+    konserwatysta: { name: "Konserwatysta", rarity: "common", color: "#a0a0a0", description: "Trzyma się węgla i gazu, rzadko zleca ścieżkę ESG. Kurs o 3% spokojniejszy." },
     sklonny_do_korupcji: {
         name: "Skłonny do korupcji",
         rarity: "common",
@@ -8207,6 +8214,7 @@ function processActiveInvestments(stock) {
 }
 
 function finishInvestment(stock, project) {
+    if (typeof onInvestmentFinishedEsg === 'function') onInvestmentFinishedEsg(stock, project); // 0.18.9 G4: ulepszenie eko
     const data = project.data || {};
     const cost = Math.max(0, Number(project.cost) || 0);
 
@@ -10515,7 +10523,7 @@ function hasWorkforce(stock) {
 function getCeoLaborPolicy(stock) {
     const traits = (stock.ceo?.traits || []).map(t => t.id);
     if (traits.some(id => SOCIAL_CEO_TRAITS.includes(id))) return 'social';
-    if (traits.some(id => EXPLOIT_CEO_TRAITS.includes(id))) return 'exploit';
+    if (traits.some(id => EXPLOIT_CEO_TRAITS.includes(id)) && !traits.includes('etyk')) return 'exploit'; // 0.18.9 G3: etyk bez wyzysku
     if (traits.some(id => SAVING_CEO_TRAITS.includes(id)) || (Number(stock.financialHealth) || 0) < -1.5) return 'saving';
     return 'standard';
 }
@@ -10610,6 +10618,7 @@ function getLaborCostIndex(stock) {
     if (!wf) return 1;
     const productivity = Math.max(0.5, (Number(wf.productivity) || 1) + (Number(wf.productivityBonus) || 0));
     let index = getWorkforceCostRatio(stock) * (Number(wf.payMult) || 1) / productivity;
+    if (stock.ceo?.traits?.some(t => t.id === 'etyk')) index *= 1.01; // 0.18.9 G3: etyk płaci o 1% więcej
     if (wf.union || getSectorUnion(stock)) index += UNION_COST;
     index += (Number(wf.rotation) || 0) * 0.3;
     return clampValue(index, 0.5, 2);
