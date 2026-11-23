@@ -1,4 +1,4 @@
-# 35. O funduszu (dawniej „Klienci i udziały”) i fundusz etyczny (0.18.9 G6) — zaakceptowane 2026-11-23, poprawki użytkownika 2026-11-23 (do akceptacji)
+# 35. O funduszu (dawniej „Klienci i udziały”) i fundusz etyczny (0.18.9 G6) — zaakceptowane 2026-11-23 (z poprawkami użytkownika)
 
 Makieta: [makiety/35_fundusz_etyczny.html](makiety/35_fundusz_etyczny.html) (samodzielna). Plan: `plany/plan_0.18.9_esg.md`, G6. Poprawka użytkownika 2026-11-23: przełącznik funduszu etycznego ma być w oknie „Klienci i udziały”, które zmienia nazwę na **„O funduszu”** i dostaje nową wersję we wspólnej ramie okien (makieta 19). Decyzja użytkownika: 4 zakładki.
 

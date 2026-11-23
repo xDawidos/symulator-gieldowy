@@ -326,7 +326,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 @media (max-width: 640px) { .ru-t .hide-sm { display: none; } }
 /* zamów badanie */
 .ru-order { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
-@media (max-width: 760px) { .ru-order { grid-template-columns: 1fr; } }
+@media (max-width: 980px) { .ru-order { grid-template-columns: 1fr; } }
 .ru-card { padding: 14px 16px; border: 1px solid var(--net-line); border-radius: 10px; background: var(--net-card); }
 .ru-card h3 { margin: 0 0 4px; font-size: 15px; }
 .ru-card > p { margin: 0 0 12px; color: var(--net-muted); font-size: 12px; }
@@ -339,6 +339,20 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .ru-limit.warn { color: var(--color-text-warn); }
 .gw { display: inline-flex; align-items: center; gap: 4px; color: var(--color-text-warn); font-size: 12px; }
 .ok { display: inline-flex; align-items: center; gap: 4px; color: var(--net-text); font-size: 12px; }
+/* oferty audytorów (radio) */
+.offers { margin: 12px 0 0; padding: 0; border: 0; display: grid; gap: 6px; }
+.offers legend { margin-bottom: 4px; padding: 0; font-size: 12px; color: var(--net-muted); }
+.ru-card .offer { display: grid; margin: 0; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 8px 10px; border: 1px solid var(--net-line); border-radius: 6px; background: var(--ru-sunk); cursor: pointer; }
+.offer:has(input:checked) { border-color: var(--ru-acc); }
+.offer input { margin: 3px 0 0; accent-color: var(--ru-acc); }
+.of-main { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; font-size: 13px; }
+.of-main b { font-weight: 600; }
+.of-main small { flex-basis: 100%; color: var(--net-muted); font-size: 12px; }
+.of-main .tag { padding: 0 6px; border: 1px solid var(--net-line); border-radius: 4px; font-size: 11px; color: var(--net-muted); }
+.of-price { font-size: 13px; white-space: nowrap; }
+.of-main .meta { font-size: 12px; color: var(--net-muted); }
+.res { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; } .res b { font-weight: 600; }
+.res-p { display: block; margin-top: 2px; font-size: 12px; color: var(--net-muted); }
 /* ekologia zablokowana */
 .ru-lock { display: flex; gap: 14px; align-items: flex-start; padding: 18px; border: 1px dashed var(--ink-500); border-radius: 10px; background: var(--ru-sunk); }
 .ru-lock h3 { margin: 0 0 4px; font-size: 15px; }
@@ -514,7 +528,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 </div></div>
 
 <h1 class="frame-title">2. Strona rateu.pl</h1>
-<p class="frame-sub">Trzy zakładki. Strzałki w lewo i w prawo przełączają zakładki. Badanie można zamówić naprawdę (w makiecie): opłata, limit 4 na kwartał, wpis na liście. Strona w barwach RateU: granat i koral. Przy zablokowanej Ekologii stoi półprzezroczysta kłódka; najedź na nią (albo przejdź Tabem), żeby zobaczyć powód. Przełącz poziom UEiE, żeby zobaczyć zakładkę otwartą.</p>
+<p class="frame-sub">Trzy zakładki. Strzałki w lewo i w prawo przełączają zakładki. Badanie można zamówić naprawdę (w makiecie): wybór spółki i jednego z 6 audytorów, limit 4 na kwartał łącznie, wpis na liście. Strona w barwach RateU: granat i koral. Przy zablokowanej Ekologii stoi półprzezroczysta kłódka; najedź na nią (albo przejdź Tabem), żeby zobaczyć powód. Przełącz poziom UEiE, żeby zobaczyć zakładkę otwartą.</p>
 <div class="demo-ctl" role="group" aria-label="Makieta: poziom Urzędu Energii i Emisji">Poziom UEiE: <button type="button" data-lv="3" aria-pressed="true">3</button><button type="button" data-lv="4" aria-pressed="false">4</button></div>
 <div class="wrap"><div class="net">
   <div class="net-tabs"><span class="net-tab"><span class="net-tab-dot" aria-hidden="true"></span>RateU</span></div>
@@ -560,30 +574,43 @@ const table = (id, cap, L) => `<table class="ru-t" aria-labelledby="${id}"><thea
 document.getElementById('pn-rank').innerHTML = `<p class="ru-note">${ic('info', 14)}<span><b>Publikacja R6 kw.2.</b> Ranking obejmuje tylko spółki z oceną publiczną (42 z 71). Przy publikacji kursy pierwszej dziesiątki zwykle rosną około 1%, a ostatniej spadają około 1,5%.</span></p>
 <div class="ru-cols"><section class="ru-list"><h3 id="h-top">${ic('szczyt', 16)}Najwyżej ocenione</h3>${table('h-top', '', TOP)}</section><section class="ru-list"><h3 id="h-low">${ic('dolek', 16)}Najniżej ocenione</h3>${table('h-low', '', LOW)}</section></div>`;
 
-/* Zamów badanie: koszt 0,02% kapitalizacji w widełkach 15 000–300 000 PLN; [ticker, nazwa, kapitalizacja mln PLN, ocena publiczna] */
+/* Zamów badanie (plan G7 po zmianie a5a2b36): oferty 6 audytorów z AUDITORS. Koszt bazowy 0,02% kapitalizacji w widełkach 15 000–300 000 PLN,
+   Wielka Trójka ×1,5 i ±3 pkt, mali ×0,7 i ±8 pkt. [ticker, nazwa, kapitalizacja mln PLN, ocena publiczna] */
 const CO = [['ODZ', 'Odzież Ekspres', 610, 'C'], ['BDMX', 'Budimix', 1240, 'C'], ['KRS', 'Kras Meble', 38, null], ['FOT', 'Fotonika', 420, null], ['WSB', 'Wawelski Bank', 18400, 'A'], ['PEN', 'Polska Energia', 2100000, 'C']];
-const cost = cap => Math.min(300000, Math.max(15000, Math.round(cap * 1e6 * 0.0002 / 1000) * 1000));
-const ST = [['HKT', 'Huta Katowice', 'R6 kw.1', 'R6 kw.2', ['C', 42, 38, 33, 55], 'deklaruje etykę', true, 'R7 kw.2'], ['NRL', 'NeuroLab', 'R5 kw.4', 'R6 kw.1', ['A', 86, 80, 91, 88], 'deklaruje etykę', false, 'R7 kw.1']];
-let used = 1;
+const base = cap => Math.min(300000, Math.max(15000, Math.round(cap * 1e6 * 0.0002 / 1000) * 1000));
+/* [id, nazwa, Wielka Trójka, skala, esg: 'yes' | 'new' | 'no'] — stan przykładowej gry: 2 audytorów z ESG od startu, 1 dołączył, reszta bez (w tym jeden noEsg, niewidoczny dla gracza) */
+const AUD = [['aud1', 'Biegły & Wspólnicy', true, 'letters', 'new'], ['aud2', 'Bilans Global', true, 'points', 'yes'], ['aud3', 'Audyt Centralny', true, 'stars', 'no'], ['aud4', 'Saldo Plus', false, 'letters', 'yes'], ['aud5', 'Rachunek s.c.', false, 'classes', 'no'], ['aud6', 'Księgi Rzetelne', false, 'points', 'no']];
+const SCN = { letters: 'skala literowa', points: 'skala punktowa 0–100', stars: 'gwiazdki 1–5', classes: 'klasy I–V' };
+const price = (cap, big) => Math.round(base(cap) * (big ? 1.5 : 0.7) / 100) * 100;
+/* wynik ESG w skali audytora: punkty jak są, litery A–D, gwiazdki 4–1, klasy I–IV (propozycja zapisu) */
+const esgIn = (sc, pts) => { const g = letter(pts); return sc === 'points' ? `${pts}/100` : sc === 'stars' ? `${{ A: 4, B: 3, C: 2, D: 1 }[g]}★` : sc === 'classes' ? `klasa ${{ A: 'I', B: 'II', C: 'III', D: 'IV' }[g]}` : g; };
+/* Twoje badania: [ticker, nazwa, audytor, zlecone, wynik kwartał, rodzaj, dane, deklaracja, greenwashing, ważne do]
+   rodzaj 'esg': dane = [łącznie, E, S, G]; 'credit': dane = [zapis audytora, skala wspólna] */
+const ST = [['HKT', 'Huta Katowice', 'aud2', 'R6 kw.1', 'R6 kw.2', 'esg', [42, 38, 33, 55], 'deklaruje etykę', true, 'R7 kw.2'], ['NRL', 'NeuroLab', 'aud4', 'R5 kw.4', 'R6 kw.1', 'esg', [86, 80, 91, 88], 'deklaruje etykę', false, 'R7 kw.1'], ['LOG', 'Logistyka 24', 'aud5', 'R5 kw.4', 'R6 kw.1', 'credit', ['klasa IV', 'BB'], '', false, 'R7 kw.1']];
+let used = 1, pick = 'aud2';
+const aud = id => AUD.find(a => a[0] === id);
 function drawOrder() {
   const busy = tk => ST.some(x => x[0] === tk);
   const sel = document.getElementById('ru-co'); let k = sel ? sel.selectedIndex : 0;
   if (busy(CO[k][0])) k = CO.findIndex(x => !busy(x[0]));
-  const c = CO[k];
-  const full = used >= 4;
+  const c = CO[k], a = aud(pick), full = used >= 4, pr = price(c[2], a[2]);
+  const status = e => e === 'yes' ? `<span class="ok">${ic('lisc', 12)}bada ESG</span>` : e === 'new' ? `<span class="ok">${ic('lisc', 12)}od teraz bada ESG</span>` : `<span class="meta">nie bada ESG: tylko ocena kredytowa</span>`;
   document.getElementById('pn-ord').innerHTML = `<div class="ru-order">
-  <section class="ru-card" aria-labelledby="o-t"><h3 id="o-t">Badanie Etos Consulting</h3><p>Firma konsultingowa sprawdza spółkę dla Twojego funduszu. Wynik zobaczysz tylko Ty, także gdy spółka nie ma oceny publicznej.</p>
+  <section class="ru-card" aria-labelledby="o-t"><h3 id="o-t">Zamów badanie u audytora</h3><p>Wynik zobaczysz tylko Ty, także gdy spółka nie ma oceny publicznej. Audytor z ESG sprawdza E, S, G i deklarację spółki; audytor bez ESG wystawia tylko prywatną ocenę kredytową.</p>
     <label for="ru-co">Spółka</label><select id="ru-co">${CO.map(([tk, nm, cap, g], i) => `<option ${i === k ? 'selected' : ''} ${busy(tk) ? 'disabled' : ''}>${nm} (${tk}), ${busy(tk) ? 'masz już badanie' : g ? `ocena publiczna ${g}` : 'brak oceny'}</option>`).join('')}</select>
-    <dl class="ru-dl"><dt>Koszt</dt><dd><span class="n">${pln(cost(c[2]))}</span><small>0,02% kapitalizacji, od 15 000 do 300 000 PLN; płaci fundusz</small></dd>
-      <dt>Wynik</dt><dd>R6 kw.3<small>po 1 kwartale: E, S, G, wynik łączny i zgodność z deklaracją spółki</small></dd>
-      <dt>Ważny</dt><dd>4 kwartały, do R7 kw.3</dd></dl>
-    <button class="btn primary" id="ru-buy" type="button" ${full ? 'disabled aria-describedby="ru-lim"' : ''}>${ic('badania', 14)}Zamów badanie za ${pln(cost(c[2]))}</button>
-    <p class="ru-limit ${full ? 'warn' : ''}" id="ru-lim" aria-live="polite">${full ? `${ic('alert', 12)} Limit 4 badań w tym kwartale wykorzystany. Kolejne od R6 kw.3.` : `W tym kwartale: ${used} z 4 badań.`}</p></section>
-  <section class="ru-card" aria-labelledby="l-t"><h3 id="l-t">Twoje badania</h3><p>Wynik z oceny rzeczywistej, z dokładnością około 5 punktów.</p>
-    <table class="ru-t"><thead><tr><th scope="col">Spółka</th><th scope="col">Wynik</th><th scope="col">Deklaracja</th></tr></thead><tbody>${ST.map(([tk, nm, from, done, r, cl, gw, to]) => `<tr><td class="co"><b>${nm}</b><small>${tk}, zlecone ${from}${r ? `, ważne do ${to}` : ''}</small></td><td>${r ? `${esg(r[0], { mine: true })} ${pil(r[2], r[3], r[4])}` : `<span class="meta">${ic('zegar', 12)} wynik ${done}</span>`}</td><td>${!r ? '<span class="meta">—</span>' : gw ? `<span class="gw">${ic('alert', 12)}${cl}, a wynik ${r[0]}: greenwashing</span>` : `<span class="ok">${ic('ok', 12)}${cl}, zgodna</span>`}</td></tr>`).join('')}</tbody></table></section></div>`;
+    <fieldset class="offers"><legend>Oferty audytorów</legend>${AUD.map(([id, nm, big, sc, e]) => `<label class="offer"><input type="radio" name="aud" value="${id}" ${id === pick ? 'checked' : ''}><span class="of-main"><b>${nm}</b><span class="tag">${big ? 'Wielka Trójka' : 'mała firma'}</span><small>${SCN[sc]}, dokładność ±${big ? 3 : 8} pkt</small>${status(e)}</span><span class="of-price n">${pln(price(c[2], big))}</span></label>`).join('')}</fieldset>
+    <dl class="ru-dl"><dt>Wynik</dt><dd>R6 kw.3<small>po 1 kwartale, w skali audytora; ${a[4] === 'no' ? 'tylko ocena kredytowa' : 'E, S, G, wynik łączny i zgodność z deklaracją'}</small></dd><dt>Ważny</dt><dd>4 kwartały, do R7 kw.3</dd><dt>Płaci</dt><dd>fundusz<small>cena bazowa 0,02% kapitalizacji (15 000–300 000 PLN), Wielka Trójka ×1,5, mali ×0,7</small></dd></dl>
+    <button class="btn primary" id="ru-buy" type="button" ${full ? 'disabled aria-describedby="ru-lim"' : ''}>${ic('badania', 14)}Zamów u ${a[1]} za ${pln(pr)}</button>
+    <p class="ru-limit ${full ? 'warn' : ''}" id="ru-lim" aria-live="polite">${full ? `${ic('alert', 12)} Limit 4 badań w tym kwartale wykorzystany (łącznie u wszystkich audytorów). Kolejne od R6 kw.3.` : `W tym kwartale: ${used} z 4 badań, łącznie u wszystkich audytorów.`}</p></section>
+  <section class="ru-card" aria-labelledby="l-t"><h3 id="l-t">Twoje badania</h3><p>Wynik w skali audytora; obok litera na skali wspólnej.</p>
+    <table class="ru-t"><thead><tr><th scope="col">Spółka</th><th scope="col">Wynik</th><th scope="col">Deklaracja</th></tr></thead><tbody>${ST.map(([tk, nm, ad, from, done, kind, d, cl, gw, to]) => { const A = aud(ad);
+      const res = !d ? `<span class="meta">${ic('zegar', 12)} wynik ${done}</span>`
+        : kind === 'esg' ? `<span class="res"><b class="n">ESG ${esgIn(A[3], d[0])}</b>${A[3] === 'letters' ? '' : esg(letter(d[0]), { mine: true })}</span><span class="res-p">E ${esgIn(A[3], d[1])}, S ${esgIn(A[3], d[2])}, G ${esgIn(A[3], d[3])}</span>`
+        : `<span class="res"><b class="n">${d[0]}</b><span class="meta">ocena kredytowa, odpowiada ${d[1]}</span></span><span class="res-p">nie bada ESG</span>`;
+      return `<tr><td class="co"><b>${nm}</b><small>${tk}, ${A[1]}, zlecone ${from}${d ? `, ważne do ${to}` : ''}</small></td><td>${res}</td><td>${!d || kind !== 'esg' ? '<span class="meta">—</span>' : gw ? `<span class="gw">${ic('alert', 12)}${cl}, a wynik ${letter(d[0])}: greenwashing</span>` : `<span class="ok">${ic('ok', 12)}${cl}, zgodna</span>`}</td></tr>`; }).join('')}</tbody></table></section></div>`;
   document.getElementById('ru-co').onchange = drawOrder;
-  const b = document.getElementById('ru-buy');
-  b.onclick = () => { if (used >= 4) return; used++; ST.unshift([c[0], c[1], 'R6 kw.2', 'R6 kw.3', null, '', false, '']); drawOrder(); document.getElementById(used >= 4 ? 'ru-lim' : 'ru-buy').focus?.(); };
+  document.querySelectorAll('input[name=aud]').forEach(r => r.onchange = () => { pick = r.value; drawOrder(); document.querySelector(`input[name=aud][value="${pick}"]`).focus(); });
+  document.getElementById('ru-buy').onclick = () => { if (used >= 4) return; used++; ST.unshift([c[0], c[1], pick, 'R6 kw.2', 'R6 kw.3', aud(pick)[4] === 'no' ? 'credit' : 'esg', null, '', false, '']); drawOrder(); document.getElementById(used >= 4 ? 'ru-lim' : 'ru-buy').focus?.(); };
 }
 drawOrder();
 

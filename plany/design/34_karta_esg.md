@@ -1,4 +1,4 @@
-# 34. Karta spółki: Etyka i ESG (0.18.9 G8) — zaakceptowane 2026-11-23, poprawki użytkownika 2026-11-23 (do akceptacji)
+# 34. Karta spółki: Etyka i ESG (0.18.9 G8) — zaakceptowane 2026-11-23 (z poprawkami użytkownika)
 
 Makieta: [makiety/34_karta_esg.html](makiety/34_karta_esg.html) (samodzielna). Plan: `plany/plan_0.18.9_esg.md`, G8. Litery i barwy jak w notce 33.
 

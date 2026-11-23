@@ -1,4 +1,4 @@
-# 36. Projekty ESG (okno Inwestycje spółki; 0.18.9 G4) — zaakceptowane 2026-11-23, poprawki użytkownika 2026-11-23 (do akceptacji)
+# 36. Projekty ESG (okno Inwestycje spółki; 0.18.9 G4) — zaakceptowane 2026-11-23 (z poprawkami użytkownika)
 
 Makieta: [makiety/36_projekty_esg.html](makiety/36_projekty_esg.html) (samodzielna). Plan: `plany/plan_0.18.9_esg.md`, G4. Bez nowego okna: istniejące okno `openCompanyInvestments` dostaje dwie sekcje, a karty z katalogu opcję „wersja eko”.
 
