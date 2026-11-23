@@ -17605,6 +17605,38 @@ group('0.18.3 Mechaniki grafu', () => {
             assert(!/[\u{1F300}-\u{1FAFF}]/u.test(modal.querySelector('#ju-ethical').innerHTML), 'bez emoji');
         } finally { modal.style.display = 'none'; juTab = 'overview'; delete playerPortfolio[c.symbol]; if (!had) modal.remove(); }
     });
+    test('0.18.9 G7 RateU (makieta 33): ranking 10 + 10, 6 ofert (Wielka Trójka ×1,5, mali ×0,7), badanie: opłata i wynik po 1 kw. w skali audytora, bez ESG tylko ocena kredytowa, limit 4, Ekologia zablokowana bez listy', () => {
+        const list = Array.from({ length: 24 }, (_, i) => { const c = makeCompany(`RU${i}`, { sector: ['Finanse'] }); c.exchange = 'GOLD'; c.price = 100; c.totalShares = 1e7; const v = 30 + i * 2.5; c.esgRating = { grade: esgGrade(v), e: v, s: v, g: v, q: macro.quarter, until: macro.quarter + 4, auditor: 'aud1' }; return c; });
+        resetWorld(list); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' }); clearEsgCache(); playerCash = 5e6;
+        const root = document.createElement('div'); root.id = 'net-rateu-body'; document.body.appendChild(root);
+        const saved = JSON.parse(JSON.stringify(ratingState)), lvl = oversight.energy.level;
+        try {
+            const rk = getRateURanking(); assertEq(rk.top.length, 10); assertEq(rk.bottom.length, 10); assertEq(rk.top[0].symbol, 'RU23'); assertEq(rk.bottom[0].symbol, 'RU0');
+            rateuView = { tab: 'ranking', symbol: null, auditor: null }; renderRateUPage(); assertEq(root.querySelectorAll('.ru-t tbody tr').length, 20, 'ranking 10 + 10');
+            const st = list[5], offers = getRateUOffers(st); assertEq(offers.length, 6, '6 ofert');
+            const base = Math.min(300000, Math.max(15000, 0.0002 * st.price * st.totalShares));
+            assert(offers.every(o => o.price === Math.round(base * (o.auditor.big ? 1.5 : 0.7))), 'ceny');
+            rateuView.tab = 'order'; rateuView.symbol = st.symbol; renderRateUPage(); assertEq(root.querySelectorAll('.offer').length, 6, 'oferty w DOM');
+            ratingState.esgAuditors = ['aud1', 'aud3']; ratingState.noEsg = 'aud5';
+            const cash0 = playerCash, r1 = orderRateUStudy(st.symbol, 'aud2'); assert(r1.ok && playerCash === cash0 - getRateUOfferPrice(st, AUDITORS.find(x => x.id === 'aud2')), 'opłata');
+            assert(!orderRateUStudy(st.symbol, 'aud1').ok, 'drugie badanie tej samej spółki niemożliwe');
+            rateuView.symbol = null; renderRateUPage(); assert(root.querySelector(`#ru-stock option[value="${st.symbol}"]`).disabled, 'spółka z badaniem wyłączona');
+            assert(orderRateUStudy(list[6].symbol, 'aud1').ok && orderRateUStudy(list[7].symbol, 'aud4').ok && orderRateUStudy(list[8].symbol, 'aud6').ok, 'do 4');
+            const r5 = orderRateUStudy(list[9].symbol, 'aud3'); assert(!r5.ok && /Limit/.test(r5.reason), 'piąte niemożliwe');
+            assertEq(getPlayerEsgStudy(list[6]), null, 'wynik dopiero po kwartale');
+            macro.quarter += 1; processRateUStudies();
+            const sEsg = getPlayerEsgStudy(list[6]), sCredit = getPlayerEsgStudy(st);
+            assert(sEsg?.esg && 'ABCD'.includes(sEsg.esg.grade), 'audytor z ESG: wynik ESG'); assert(sCredit?.credit && !sCredit.esg, 'bez ESG: tylko ocena kredytowa');
+            rateuView.tab = 'order'; renderRateUPage(); assert(/nie bada ESG/.test(root.textContent), 'dopisek nie bada ESG');
+            assertEq(formatEsgInScale('aud2', 'C', 42), '42/100'); assertEq(formatEsgInScale('aud3', 'A', 80), '4★'); assertEq(formatEsgInScale('aud5', 'D', 10), 'klasa IV');
+            macro.quarter -= 1;
+            oversight.energy.level = 3; rateuView.tab = 'eco'; renderRateUPage();
+            assert(root.querySelector('.ru-lock') && !root.querySelector('.ru-t'), 'Ekologia zablokowana, bez listy'); assert(root.querySelector('#ru-tab-eco .ru-lockic [role=tooltip]'), 'kłódka z podpowiedzią');
+            oversight.energy.level = 4; renderRateUPage(); assertEq(root.querySelectorAll('.ru-t tbody tr').length, 20, 'Ekologia 10 + 10');
+            assert(!/[\u{1F300}-\u{1FAFF}]/u.test(root.innerHTML), 'bez emoji');
+            assert(INTERNET_FAVORITES.some(f => f.id === 'rateu' && f.host === 'rateu.pl'), 'w ulubionych');
+        } finally { root.remove(); ratingState = saved; oversight.energy.level = lvl; rateuView = { tab: 'ranking', symbol: null, auditor: null }; }
+    });
     test('0.18.9 G1: pokrycie: Platynowa zawsze dostaje ocenę, Brązowa bez deklaracji nie', () => {
         const p = makeCompany('ESP', { sector: ['Finanse'] }), z = makeCompany('ESZ', { sector: ['Finanse'] }); p.exchange = 'PLATINUM'; z.exchange = 'BRONZE';
         resetWorld([p, z]); clearEsgCache(); processEsgQuarterly();

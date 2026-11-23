@@ -152,6 +152,7 @@ function processEsgQuarterly() {
     }
     applyEsgDemandQuarterly(); // G5
     if (typeof playerFund === 'object' && playerFund) processEthicalFundQuarterly(); // G6
+    processRateUStudies(); // G7
 }
 
 // ---------------------------------------------------------------------------------
@@ -323,11 +324,12 @@ function onInvestmentFinishedEsg(stock, project) {
 const ESG_DEMAND_RULES = { A: 0.01, B: 0, C: -0.01, D: -0.02 }; // g5: plan (+1,5 / −1,5 / −3%) dawał różnicę zwrotu A–D ok. 7 pp rocznie (cel 2–5)
 /** Kwartalne zmiany kursu z popytu ESG: [{ stock, d }]; suma d × kapitalizacja = 0. */
 function getEsgDemandShifts() {
+    const { top, bottom } = getRateURanking(), impulse = s => top.includes(s) ? ESG_RATEU_RULES.topImpulse : bottom.includes(s) ? ESG_RATEU_RULES.bottomImpulse : 0; // G7: publikacja RateU (część składnika G5, nie dodatek)
     const rated = stocks.filter(s => ESG_TIERS.includes(s.exchange) && !s.isBankrupt && !s.assetType && getEsgRating(s))
-        .map(s => ({ stock: s, cap: Math.max(0, s.price * s.totalShares), c: ESG_DEMAND_RULES[getEsgRating(s)] || 0 }));
+        .map(s => ({ stock: s, cap: Math.max(0, s.price * s.totalShares), c: (ESG_DEMAND_RULES[getEsgRating(s)] || 0) / 4 + impulse(s) }));
     const w = rated.reduce((t, x) => t + x.cap, 0); if (!(w > 0)) return [];
     const mean = rated.reduce((t, x) => t + x.cap * x.c, 0) / w;
-    return rated.map(x => ({ stock: x.stock, d: (x.c - mean) / 4 }));
+    return rated.map(x => ({ stock: x.stock, d: x.c - mean }));
 }
 function applyEsgDemandQuarterly() {
     const shifts = getEsgDemandShifts();
@@ -443,3 +445,92 @@ function getEthicalOrderWarning(stock, qty) {
     const room = Math.max(0, Math.floor((limit - nowShare) * nav / Math.max(0.01, stock.price)));
     return { cls, share, limit, over: share > limit + 1e-9, room, graded: g !== 'none' };
 }
+
+// ---------------------------------------------------------------------------------
+// G7: RateU (rateu.pl). Ranking 10 + 10 według oceny publicznej (co kwartał impuls w składniku G5: +1% / −1,5%),
+// badania na zlecenie funduszu u 6 audytorów (zmiana użytkownika 2026-11-23): Wielka Trójka ±3 pkt i cena ×1,5,
+// mali ±8 pkt i ×0,7; cena bazowa 0,02% kapitalizacji w widełkach 15 000–300 000 PLN. Audytor z ESG: E, S, G, wynik łączny
+// i zgodność deklaracji; bez ESG: prywatna ocena kredytowa. Wynik po 1 kw., ważny 4 kw., limit 4 na kwartał łącznie.
+// Ekologia od poziomu UEiE 4: 10 pro- i 10 antyekologicznych według filaru E.
+// ---------------------------------------------------------------------------------
+const ESG_RATEU_RULES = { n: 10, topImpulse: 0.01, bottomImpulse: -0.015, priceShare: 0.0002, priceMin: 15000, priceMax: 300000, bigMult: 1.5, smallMult: 0.7, bigNoise: 3, smallNoise: 8, perQ: 4, readyQ: 1, validQ: 4, ecoLevel: 4 };
+const getEsgScoreOf = r => Number.isFinite(r?.e) ? ESG_RULES.weights.e * r.e + ESG_RULES.weights.s * r.s + ESG_RULES.weights.g * r.g : ({ A: 80, B: 65, C: 50, D: 30 }[r?.grade] ?? 0);
+/** Ranking RateU: spółki z ważną oceną publiczną, od najlepszej. */
+function getRateURanking() {
+    const list = stocks.filter(s => ESG_TIERS.includes(s.exchange) && !s.isBankrupt && !s.assetType && getEsgRating(s))
+        .sort((a, b) => getEsgScoreOf(b.esgRating) - getEsgScoreOf(a.esgRating));
+    const n = Math.min(ESG_RATEU_RULES.n, Math.floor(list.length / 2));
+    return { all: list, top: list.slice(0, n), bottom: list.slice(-n).reverse() };
+}
+const getEsgStudies = () => (typeof playerProfile === 'object' && playerProfile ? (playerProfile.esgStudies = playerProfile.esgStudies || []) : []);
+/** Twoje badanie spółki: gotowe i ważne (null, gdy brak). `any` = także zlecone, jeszcze bez wyniku. */
+function getPlayerEsgStudy(stock, any = false) {
+    const q = esgQuarter();
+    return getEsgStudies().filter(x => x.symbol === stock?.symbol && q < x.until && (any || q >= x.ready)).sort((a, b) => b.q - a.q)[0] || null;
+}
+function getRateUOfferPrice(stock, auditor) {
+    const r = ESG_RATEU_RULES, base = Math.min(r.priceMax, Math.max(r.priceMin, r.priceShare * Math.max(0, stock.price * stock.totalShares)));
+    return Math.round(base * (auditor.big ? r.bigMult : r.smallMult));
+}
+/** Oferty 6 audytorów dla spółki. `esg`: 'esg' | 'new' (dołączył w ostatnim roku) | 'none'. */
+function getRateUOffers(stock) {
+    const q = esgQuarter(), join = ratingState?.esgJoin || {};
+    return AUDITORS.filter(a => !(ratingState?.banned?.[a.id] > q)).map(a => ({ auditor: a, price: getRateUOfferPrice(stock, a), noise: a.big ? ESG_RATEU_RULES.bigNoise : ESG_RATEU_RULES.smallNoise, esg: !isEsgAuditor(a.id) ? 'none' : (join[a.id] != null && q - join[a.id] < 4 ? 'new' : 'esg') }));
+}
+const getRateUStudiesThisQuarter = () => getEsgStudies().filter(x => x.q === esgQuarter()).length;
+function canOrderRateUStudy(stock, auditorId) {
+    const a = AUDITORS.find(x => x.id === auditorId);
+    if (!stock || stock.assetType || !ESG_TIERS.includes(stock.exchange)) return { ok: false, reason: 'Badamy tylko spółki krajowe.' };
+    if (!a || ratingState?.banned?.[a.id] > esgQuarter()) return { ok: false, reason: 'Ten audytor nie przyjmuje zleceń.' };
+    if (getPlayerEsgStudy(stock, true)) return { ok: false, reason: 'Masz już badanie tej spółki.' };
+    if (getRateUStudiesThisQuarter() >= ESG_RATEU_RULES.perQ) return { ok: false, reason: `Limit ${ESG_RATEU_RULES.perQ} badań na kwartał wykorzystany.` };
+    const price = getRateUOfferPrice(stock, a);
+    if (price > playerCash + 1e-9) return { ok: false, reason: `Za mało gotówki funduszu (${formatZl(price, 0)}).` };
+    return { ok: true, price, auditor: a };
+}
+function orderRateUStudy(symbol, auditorId) {
+    const stock = stocks.find(x => x.symbol === symbol), c = canOrderRateUStudy(stock, auditorId);
+    if (!c.ok) return c;
+    playerCash -= c.price;
+    if (typeof recordPayment === 'function') recordPayment('player-fund', `external:${c.auditor.id}`, c.price, `Badanie spółki ${stock.symbol} (RateU, ${c.auditor.name})`);
+    const q = esgQuarter(), study = { symbol, auditor: c.auditor.id, esgAudit: isEsgAuditor(c.auditor.id), q, ready: q + ESG_RATEU_RULES.readyQ, until: q + ESG_RATEU_RULES.readyQ + ESG_RATEU_RULES.validQ, cost: c.price };
+    getEsgStudies().push(study);
+    if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('esg', stock.name);
+    return { ok: true, study, message: `Zlecono badanie ${stock.name} u ${c.auditor.name}: wynik w ${formatQuarterDate(study.ready)}.` };
+}
+/** Wynik badania (liczony, gdy minie kwartał). */
+function resolveRateUStudy(study) {
+    const stock = stocks.find(x => x.symbol === study.symbol), a = AUDITORS.find(x => x.id === study.auditor);
+    if (!stock || !a) { study.until = esgQuarter(); return; }
+    if (study.esgAudit) {
+        const t = getEsgTrue(stock), n = a.big ? ESG_RATEU_RULES.bigNoise : ESG_RATEU_RULES.smallNoise, r = () => (Math.random() * 2 - 1) * n;
+        const e = esgRound(t.e + r()), sv = esgRound(t.s + r()), g = esgRound(t.g + r());
+        study.esg = { e, s: sv, g, ...combineEsg(e, sv, g) }; study.esg.score = Math.round(study.esg.score);
+        if (stock.ethicsClaim) study.claim = ['A', 'B'].includes(t.grade) ? 'ok' : 'green';
+    } else {
+        let idx = getTrueRatingIndex(stock); if (Math.random() < a.noise) idx += Math.random() < 0.5 ? -1 : 1;
+        study.credit = RATING_GRADES[Math.max(0, Math.min(RATING_GRADES.length - 1, idx))];
+    }
+    study.done = true;
+}
+function processRateUStudies() {
+    const q = esgQuarter(), list = getEsgStudies();
+    for (const x of list) if (!x.done && q >= x.ready) resolveRateUStudy(x);
+    if (typeof playerProfile === 'object' && playerProfile) playerProfile.esgStudies = list.filter(x => q < x.until + 4).slice(-24); // wygasłe znikają po roku
+}
+/** Zapis wyniku ESG w skali audytora: punkty 0–100, litery A–D, gwiazdki 4★ = A … 1★ = D, klasy I = A … IV = D (makieta 33). */
+function formatEsgInScale(auditorId, grade, points) {
+    const scale = AUDITORS.find(a => a.id === auditorId)?.scale || 'letters', i = ESG_GRADE_ORDER.indexOf(grade);
+    if (scale === 'points') return `${Math.round(points)}/100`;
+    if (scale === 'stars') return `${4 - i}★`;
+    if (scale === 'classes') return `klasa ${['I', 'II', 'III', 'IV'][i]}`;
+    return grade;
+}
+/** Ekologia: 10 pro- i 10 antyekologicznych według filaru E (rzeczywistego), z emisjami wobec średniej sektora. */
+function getRateUEcology() {
+    const list = stocks.filter(s => ESG_TIERS.includes(s.exchange) && !s.isBankrupt && !s.assetType && !s.isBankStock).map(s => ({ stock: s, e: getEsgTrue(s)?.e ?? 0 })).sort((a, b) => b.e - a.e);
+    const n = Math.min(ESG_RATEU_RULES.n, Math.floor(list.length / 2));
+    const rel = s => { const segs = getStockSegments(s), base = segs.reduce((t, seg) => t + seg.share * (SECTOR_EMISSIONS[seg.sector] || 0), 0); return base > 0.05 ? getStockEmissionFactor(s) / base : null; };
+    return { pro: list.slice(0, n).map(x => ({ ...x, rel: rel(x.stock) })), anti: list.slice(-n).reverse().map(x => ({ ...x, rel: rel(x.stock) })) };
+}
+const isRateUEcologyOpen = () => (typeof getEnergyOfficeLevel === 'function' ? getEnergyOfficeLevel() : 0) >= ESG_RATEU_RULES.ecoLevel;

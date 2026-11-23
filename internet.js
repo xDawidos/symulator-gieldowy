@@ -13,7 +13,8 @@ const INTERNET_FAVORITES = [
     { id: 'startupy', tag: 'Venture capital', tone: 'violet', title: 'Startupy', host: 'startupy.gielda.pl', icon: 'rakieta', desc: 'Inkubator, pula start-upów i rundy finansowania.' },
     { id: 'ferie', tag: 'Mobilność', tone: 'teal', title: 'Ferie i wakacje', host: 'ferie-i-wakacje.pl', icon: 'samolot', desc: 'Bilety do rynków zagranicznych, lotnisko miasta.' },
     { id: 'lombard', tag: 'Płynność', tone: 'orange', title: 'Lombard', host: 'lombardex.pl', icon: 'lombard', desc: 'Pożyczki pod zastaw akcji.' },
-    { id: 'windykacja', tag: 'Długi', tone: 'amber', title: 'Windykacja', host: 'wrona-windykacja.pl', icon: 'umowa', desc: 'Zaległe długi, zajęte akcje i pożyczki konsumenckie Wrony.' }
+    { id: 'windykacja', tag: 'Długi', tone: 'amber', title: 'Windykacja', host: 'wrona-windykacja.pl', icon: 'umowa', desc: 'Zaległe długi, zajęte akcje i pożyczki konsumenckie Wrony.' },
+    { id: 'rateu', tag: 'Etyka spółek', tone: 'coral', title: 'RateU', host: 'rateu.pl', icon: 'ranking', desc: 'Ranking ESG, badania spółek na zlecenie i ekologia.' } // 0.18.9 G7 (makieta 33)
 ];
 
 /** Barwy kraju (ciemne tło okna i akcent) — kolor nigdy jedynym nośnikiem: nazwa stoi w pasku okna. */
@@ -134,6 +135,7 @@ function renderInternet() {
     else if (fav.id === 'tied') renderTiedPage();
     else if (fav.id === 'lombard') renderLombardPage();
     else if (fav.id === 'windykacja') renderDebtCollectorPage();
+    else if (fav.id === 'rateu') renderRateUPage();
     applyInternetTheme();
 }
 
@@ -216,3 +218,71 @@ function renderLombardPage() {
 // --- Dojście z dawnych wejść ---
 /** Zgodność: dawne wywołania okna Kantor. */
 function openKantorModal() { return openInternetPage('kantory24'); }
+
+// --- RateU (0.18.9 G7, makieta 33): granat i koral, zakładki Ranking, Zamów badanie, Ekologia ---
+let rateuView = { tab: 'ranking', symbol: null, auditor: null };
+const RATEU_TABS = [['ranking', 'Ranking'], ['order', 'Zamów badanie'], ['eco', 'Ekologia']];
+function setRateUTab(tab, focus = false) { rateuView.tab = tab; renderRateUPage(); if (focus) document.getElementById(`ru-tab-${tab}`)?.focus(); }
+function rateuTabsKey(e) { const i = RATEU_TABS.findIndex(t => t[0] === rateuView.tab), d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0; if (d) { e.preventDefault(); setRateUTab(RATEU_TABS[(i + d + RATEU_TABS.length) % RATEU_TABS.length][0], true); } }
+function renderRateUPage() {
+    const root = document.getElementById('net-rateu-body'); if (!root) return;
+    const level = typeof getEnergyOfficeLevel === 'function' ? getEnergyOfficeLevel() : 0, ecoOpen = isRateUEcologyOpen();
+    const tabs = RATEU_TABS.map(([id, label]) => {
+        const locked = id === 'eco' && !ecoOpen, on = rateuView.tab === id;
+        return `<button type="button" class="ru-tab" role="tab" id="ru-tab-${id}" aria-selected="${on}" aria-controls="ru-pane" tabindex="${on ? 0 : -1}"${locked ? ' aria-describedby="ru-tip-eco"' : ''} onclick="setRateUTab('${id}')">${label}${locked ? `<span class="ru-lockic">${uiIcon('klodka', 14)}<span class="ru-tip" role="tooltip" id="ru-tip-eco">Niedostępne: Ekologia otwiera się przy poziomie ${ESG_RATEU_RULES.ecoLevel} Urzędu Energii i Emisji. Dziś poziom ${level}.</span></span>` : ''}</button>`;
+    }).join('');
+    const pane = rateuView.tab === 'order' ? renderRateUOrder() : rateuView.tab === 'eco' ? renderRateUEco(ecoOpen, level) : renderRateURanking();
+    root.innerHTML = `<section aria-labelledby="ru-title"><div class="ru-head"><span class="ru-logo">${uiIcon('ranking', 22)}</span><div><h2 id="ru-title">RateU</h2><p>Oceny ESG spółek: A etyczna, B pojedyncze zarzuty, C nieetyczna, D duże zarzuty. Filary: środowisko, społeczeństwo, ład korporacyjny.</p></div></div>
+        <div class="ru-tabs" role="tablist" aria-label="Zakładki RateU" onkeydown="rateuTabsKey(event)">${tabs}</div><div id="ru-pane" role="tabpanel" aria-labelledby="ru-tab-${rateuView.tab}">${pane}</div></section>`;
+}
+function rateuNavShare(stock) {
+    const pos = playerPortfolio?.[stock.symbol], nav = getFundAssets();
+    return pos?.shares > 0 && nav > 0 ? ` <span class="mine-tag">masz ${formatNumberPl(pos.shares * stock.price / nav * 100, 1)}% NAV</span>` : '';
+}
+function renderRateURanking() {
+    const { all, top, bottom } = getRateURanking(), aud = id => escapeHtml(AUDITORS.find(a => a.id === id)?.name || id);
+    const table = (list, id, title, icon) => `<div class="ru-list"><h3 id="${id}">${uiIcon(icon, 16)}${title}</h3><table class="ru-t" aria-labelledby="${id}"><thead><tr><th scope="col">#</th><th scope="col">Spółka</th><th scope="col">Łącznie</th><th scope="col">E S G</th><th scope="col" class="hide-sm">Audytor, data</th></tr></thead><tbody>${list.map((st, i) => { const r = st.esgRating; return `<tr><td class="pos n">${i + 1}</td><td class="co"><b>${escapeHtml(st.name)}</b><small>${escapeHtml(st.symbol)}${rateuNavShare(st)}</small></td><td>${esgBadge(r.grade)}</td><td>${Number.isFinite(r.e) ? esgPillars(r) : ''}</td><td class="meta hide-sm">${aud(r.auditor)}, ${escapeHtml(formatQuarterDate(r.q))}</td></tr>`; }).join('') || '<tr><td colspan="5" class="meta">Za mało ocenionych spółek.</td></tr>'}</tbody></table></div>`;
+    return `<p class="ru-note">${uiIcon('info', 16)}<span>Publikacja ${escapeHtml(formatQuarterDate(macro.quarter))}: <b>${all.length}</b> spółek z ważną oceną. Publikacja co kwartał porusza kursy: pierwsza dziesiątka około +1%, ostatnia około −1,5%.</span></p>
+        <div class="ru-cols">${table(top, 'ru-top', 'Najwyżej oceniane', 'ranking')}${table(bottom, 'ru-bottom', 'Najniżej oceniane', 'dolek')}</div>`;
+}
+function rateuPickStock(sym) { rateuView.symbol = sym; renderRateUPage(); }
+function rateuPickAuditor(id) { rateuView.auditor = id; renderRateUPage(); }
+function rateuOrder() {
+    const r = orderRateUStudy(rateuView.symbol, rateuView.auditor);
+    showToast(r.ok ? r.message : r.reason, r.ok ? 'success' : 'warning');
+    if (r.ok) { rateuView.symbol = null; if (typeof displayFundPanel === 'function') displayFundPanel(); }
+    renderRateUPage();
+}
+function renderRateUOrder() {
+    const list = stocks.filter(s => ESG_TIERS.includes(s.exchange) && !s.isBankrupt && !s.assetType && !s.isBankStock).sort((a, b) => a.name.localeCompare(b.name, 'pl'));
+    if (!rateuView.symbol || !list.some(s => s.symbol === rateuView.symbol && !getPlayerEsgStudy(s, true))) rateuView.symbol = list.find(s => !getPlayerEsgStudy(s, true))?.symbol || null;
+    const stock = stocks.find(s => s.symbol === rateuView.symbol), offers = stock ? getRateUOffers(stock) : [];
+    if (!offers.some(o => o.auditor.id === rateuView.auditor)) rateuView.auditor = (offers.find(o => o.esg !== 'none') || offers[0])?.auditor.id || null;
+    const used = getRateUStudiesThisQuarter(), max = ESG_RATEU_RULES.perQ;
+    const opts = list.map(s => { const has = getPlayerEsgStudy(s, true); return `<option value="${s.symbol}"${s.symbol === rateuView.symbol ? ' selected' : ''}${has ? ' disabled' : ''}>${escapeHtml(s.name)} (${escapeHtml(s.symbol)})${has ? ', masz już badanie' : ''}</option>`; }).join('');
+    const esgText = o => o.esg === 'none' ? 'nie bada ESG: tylko ocena kredytowa' : o.esg === 'new' ? 'od teraz bada ESG' : 'bada ESG';
+    const offerRows = offers.map(o => `<label class="offer"><input type="radio" name="ru-aud" value="${o.auditor.id}"${o.auditor.id === rateuView.auditor ? ' checked' : ''} onchange="rateuPickAuditor('${o.auditor.id}')"><span class="ru-of-main"><b>${escapeHtml(o.auditor.name)}</b><span class="tag">${o.auditor.big ? 'Wielka Trójka' : 'mała firma'}</span><span class="meta">${escapeHtml(RATING_SCALES[o.auditor.scale]?.name || o.auditor.scale)}, ±${o.noise} pkt</span><small>${esgText(o)}</small></span><span class="ru-of-price n">${formatZl(o.price, 0)}</span></label>`).join('');
+    const pick = offers.find(o => o.auditor.id === rateuView.auditor), can = stock && pick ? canOrderRateUStudy(stock, pick.auditor.id) : { ok: false, reason: 'Wybierz spółkę i audytora.' };
+    const studies = getEsgStudies().slice().sort((a, b) => b.q - a.q).map(x => {
+        const st = stocks.find(s => s.symbol === x.symbol), a = AUDITORS.find(y => y.id === x.auditor), q = macro.quarter;
+        let res = '<span class="meta">wynik w ' + escapeHtml(formatQuarterDate(x.ready)) + '</span>';
+        if (x.done && x.esg) res = `<span class="res"><b>ESG ${escapeHtml(formatEsgInScale(x.auditor, x.esg.grade, x.esg.score))}</b>${a?.scale !== 'letters' ? esgBadge(x.esg.grade, { mine: true }) : ''}${esgPillars(x.esg, a?.scale === 'points')}</span>${x.claim === 'green' ? `<span class="gw">${uiIcon('alert', 12)} deklaracja niezgodna: greenwashing</span>` : x.claim === 'ok' ? `<span class="ok">${uiIcon('ok', 12)} deklaracja zgodna</span>` : ''}`;
+        else if (x.done && x.credit) res = `<span class="res"><b>${escapeHtml(formatAuditorGrade(x.credit, x.auditor))}</b><span class="res-p">${escapeHtml(ratingCompareText({ grade: x.credit, auditor: x.auditor }))} · nie bada ESG</span></span>`;
+        return `<tr><td class="co"><b>${escapeHtml(st?.name || x.symbol)}</b><small>${escapeHtml(x.symbol)}</small></td><td class="meta">${escapeHtml(a?.name || x.auditor)}</td><td class="meta">${escapeHtml(formatQuarterDate(x.q))}</td><td class="meta">${q < x.until ? escapeHtml(formatQuarterDate(x.until)) : 'wygasło'}</td><td>${res}</td></tr>`;
+    }).join('');
+    return `<div class="ru-order"><section class="ru-card" aria-labelledby="ru-o-t"><h3 id="ru-o-t">Zamów badanie</h3><p>Audytor bada wskazaną spółkę dla funduszu. Wynik po kwartale, ważny ${ESG_RATEU_RULES.validQ} kwartały, widzisz go tylko Ty.</p>
+        <label for="ru-stock">Spółka</label><select id="ru-stock" onchange="rateuPickStock(this.value)">${opts}</select>
+        <fieldset class="offers"><legend>Oferty audytorów</legend>${offerRows}</fieldset>
+        <p class="ru-limit${used >= max ? ' warn' : ''}" id="ru-lim" aria-live="polite">${used} z ${max} badań w tym kwartale, łącznie u wszystkich audytorów.</p>
+        <button type="button" class="btn-primary ru-go" ${can.ok ? '' : 'disabled aria-describedby="ru-why"'} onclick="rateuOrder()">${pick ? `Zamów u ${escapeHtml(pick.auditor.name)} za ${formatZl(pick.price, 0)}` : 'Zamów'}</button>${can.ok ? '' : `<p class="ru-limit" id="ru-why">${escapeHtml(can.reason)}</p>`}</section>
+        <section class="ru-card" aria-labelledby="ru-s-t"><h3 id="ru-s-t">Twoje badania</h3><p>Wynik w skali audytora. Zgodność z deklaracją etyki sprawdza tylko audytor, który bada ESG.</p>
+        ${studies ? `<table class="ru-t"><thead><tr><th scope="col">Spółka</th><th scope="col">Audytor</th><th scope="col">Zlecone</th><th scope="col">Ważne do</th><th scope="col">Wynik</th></tr></thead><tbody>${studies}</tbody></table>` : '<p class="meta">Brak badań.</p>'}</section></div>`;
+}
+function renderRateUEco(open, level) {
+    if (!open) return `<div class="ru-lock">${uiIcon('klodka', 22)}<div><h3>Ekologia: zablokowana</h3><p>Zestawienie najbardziej pro- i antyekologicznych spółek publikujemy, gdy Urząd Energii i Emisji mierzy emisje dokładnie, czyli od poziomu ${ESG_RATEU_RULES.ecoLevel}.</p>
+        <span class="ru-lv" role="img" aria-label="Poziom urzędu ${level} z 5, potrzebny ${ESG_RATEU_RULES.ecoLevel}">${[1, 2, 3, 4, 5].map(i => `<i class="${i <= level ? 'on' : ''}${i === ESG_RATEU_RULES.ecoLevel ? ' need' : ''}"></i>`).join('')}</span> <span class="meta">poziom ${level} z 5</span></div></div>`;
+    const { pro, anti } = getRateUEcology();
+    const rel = x => x.rel == null ? 'bez emisji' : `emisje ${x.rel <= 1 ? '−' : '+'}${formatNumberPl(Math.abs(x.rel - 1) * 100, 0)}% wobec sektora`;
+    const table = (list, id, title, icon) => `<div class="ru-list"><h3 id="${id}">${uiIcon(icon, 16)}${title}</h3><table class="ru-t" aria-labelledby="${id}"><thead><tr><th scope="col">#</th><th scope="col">Spółka</th><th scope="col">Filar E</th><th scope="col">Emisje</th></tr></thead><tbody>${list.map((x, i) => `<tr><td class="pos n">${i + 1}</td><td class="co"><b>${escapeHtml(x.stock.name)}</b><small>${escapeHtml(x.stock.symbol)}${rateuNavShare(x.stock)}</small></td><td><span class="esg-pil"><span class="g-${esgGrade(x.e)}"><i aria-hidden="true">E</i>${esgGrade(x.e)}<i aria-hidden="true">${Math.round(x.e)}</i><span class="sr-only"> Środowisko ${Math.round(x.e)} pkt</span></span></span></td><td class="ru-emis">${rel(x)}</td></tr>`).join('')}</tbody></table></div>`;
+    return `<div class="ru-cols">${table(pro, 'ru-pro', 'Proekologiczne', 'lisc')}${table(anti, 'ru-anti', 'Antyekologiczne', 'emisje')}</div>`;
+}
