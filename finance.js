@@ -973,7 +973,8 @@ function getGameClockMs() {
 // Rubinowa (≤ 6): ocena ≥ A+, zysk 8 kw. z rzędu, kapitalizacja ≥ 2 × próg Platynowej; Szmaragdowa (≤ 3): ocena ≥ AA, dywidenda
 // ≥ 4 kw. z rzędu (dividendStreak), ≥ 4 × próg; Diamentowa (1): najlepszy wynik (kapitalizacja 50%, zysk 4 kw. 25%, ocena 25%)
 // spośród spełniających Szmaragdową (gdy brak — Rubinową). Zmiana poziomu po 2 kw.; Diamentowa zmienia się po 2 kw. przewagi innej spółki.
-const ELITE_RULES = { RUBY: { capMult: 2, grade: 'A+', profitQ: 8 }, EMERALD: { capMult: 3, grade: 'A+', divQ: 2 }, confirmQ: 2, diamondLeadQ: 4, diamondMargin: 0.15 }; // U11 (2026-11-21): Szmaragdowa od A+, seria em: dywidenda wąskim gardłem → 2 kw.; kalibracja e0f → e0g: Szmaragdowa 4 → 3 × próg, Diamentowa 4 kw. przewagi o ≥ 15%
+const ELITE_RULES = { RUBY: { capMult: 1.6, grade: 'A+', profitQ: 8 }, // 0.18.9 G10: Rubinowa 2 → 1,6 × progu Platynowej (seria g9: Rubinowa 73%)
+    EMERALD: { capMult: 2.5, grade: 'A+', divQ: 2 }, /* 0.18.9 G10: 3 → 2,5 × progu (k9: Szmaragdowa 83%) */ confirmQ: 2, diamondLeadQ: 4, diamondMargin: 0.15 }; // U11 (2026-11-21): Szmaragdowa od A+, seria em: dywidenda wąskim gardłem → 2 kw.; kalibracja e0f → e0g: Szmaragdowa 4 → 3 × próg, Diamentowa 4 kw. przewagi o ≥ 15%
 let eliteState = { challenger: null, n: 0 };
 function getPlatinumCapThreshold() { return (typeof getTierMedianCap === 'function' ? getTierMedianCap('home') : 0) * (typeof TIER_RULES === 'object' ? TIER_RULES.PLATINUM : 5); }
 function eliteQualifies(stock, tier) {
@@ -1011,9 +1012,10 @@ function assignEliteExchanges(immediate = false) {
         } else eliteState = { challenger: null, n: 0 };
         if (diamond) target[diamond.symbol] = 'DIAMOND';
     }
-    for (const tier of ['EMERALD', 'RUBY']) {
-        let n = 0;
-        for (const s of pool) if (!target[s.symbol] && n < ELITE_EXCHANGES[tier].limit && eliteQualifies(s, tier)) { target[s.symbol] = tier; n++; }
+    // 0.18.9 G10: najpierw 1 Szmaragdowa, potem Rubinowa do limitu, potem reszta Szmaragdowej (wcześniej Szmaragdowa brała do 3 i Rubinowej brakowało spółek)
+    const used = { EMERALD: 0, RUBY: 0 };
+    for (const [tier, cap] of [['EMERALD', 1], ['RUBY', ELITE_EXCHANGES.RUBY.limit], ['EMERALD', ELITE_EXCHANGES.EMERALD.limit]]) {
+        for (const s of pool) if (!target[s.symbol] && used[tier] < cap && eliteQualifies(s, tier)) { target[s.symbol] = tier; used[tier]++; }
     }
 
     const changes = [];

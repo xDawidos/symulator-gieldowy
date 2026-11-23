@@ -388,6 +388,9 @@ PRESETS['ceo'] = PRESETS['gracz-aktywny'] + 'playerProfile.positionId = "ceo";';
 // =================================================================================
 PRESETS['automaty'] = PRESETS['gracz-aktywny'] + `(function () { if (!playerProfile) return; const m = getMentor(); m.certificates = { ...m.certificates, risk: 0, analyst: 0 }; const a = getAutomation(); a.deposits.on = a.tbills.on = a.sector.on = true; playerHasTBillAccess = true; })();`; // 0.18.8 D4: wszystkie automaty włączone
 PRESETS['esg5'] = `(function () { const orig = processEsgRegulationQuarterly; window.processEsgRegulationQuarterly = function () { oversight.energy.level = Math.max(5, Number(oversight.energy.level) || 0); return orig.apply(this, arguments); }; })();`; // 0.18.9 G9/G10: UEiE na poziomie 5 przez całą grę (kryterium ESG w elitarnych)
+const STRIP_ESG_TRAITS = `(function () { for (const id of ['etyk', 'ignorant', 'ekolog', 'konserwatysta']) if (ceoTraits[id]) ceoTraits[id].rarity = 'hidden'; for (const s of stocks) if (s.ceo?.traits) s.ceo.traits = s.ceo.traits.filter(t => !['etyk', 'ignorant', 'ekolog', 'konserwatysta'].includes(t.id)); })();`;
+const NO_ESG_QUARTER = `(function () { window.processEsgQuarterly = function () {}; })();`;
+PRESETS['abl-a'] = STRIP_ESG_TRAITS + NO_ESG_QUARTER; PRESETS['abl-b'] = STRIP_ESG_TRAITS; PRESETS['abl-c'] = NO_ESG_QUARTER; // 0.18.9 G11: ablacja marży
 PRESETS['bierny'] = ''; // gracz nic nie robi: baza GIG, liczby spółek i limitów
 PRESETS['wejscia'] = ''; // to samo co bierny; miary debiutów, limitu spółek i koncentracji są w sondzie P0156
 // Dźwignia: forex 1:10 do limitu 3 × aktywa i zastaw wszystkich akcji w lombardzie. Mierzy margin call, zamknięcia automatyczne,

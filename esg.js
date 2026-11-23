@@ -4,7 +4,7 @@
 // Filar z D obniża wynik łączny o co najmniej jedną literę (duży zarzut nie znika w średniej).
 // =================================================================================
 const ESG_RULES = {
-    grades: [['A', 70], ['B', 60], ['C', 42], ['D', -Infinity]], // G0 (diagnoza_esg_0.18.9.md): plan 75/55/35 dawał B 70%; progi z histogramów serii g0; A 68 → 70 po g4 (A publiczne 30%), B 58 → 60 po g5 (C publiczne 16–24%, cel 25–40%)
+    grades: [['A', 70], ['B', 62], ['C', 42], ['D', -Infinity]], // G0 (diagnoza_esg_0.18.9.md): plan 75/55/35 dawał B 70%; progi z histogramów serii g0; A 68 → 70 po g4 (A publiczne 30%), B 58 → 60 po g5, → 62 po g9 (B publiczne 49%, C 19–27%; cel B 30–45, C 25–40)
     weights: { e: 0.4, s: 0.3, g: 0.3 },
     // E spółek bez emisji: baza według sektora (praca biurowa i laboratoria czystsze niż transport, turystyka i rolnictwo)
     cleanBySector: { 'Technologia': 72, 'Badania': 72, 'Medycyna': 68, 'Gaming': 70, 'Media': 68, 'Finanse': 64, 'Bankowość': 64, 'Pożyczki konsumenckie': 60, 'Usługi': 60, 'Nieruchomości': 58, 'Turystyka': 50, 'Transport i logistyka': 45, 'Żywność': 52, 'Dobra konsumpcyjne': 55, 'Obronność': 48 },
@@ -96,8 +96,8 @@ function getEsgTrue(stock) {
 // ---------------------------------------------------------------------------------
 const ESG_PUBLIC_RULES = {
     validQ: 4, noise: 0.2, fooled: 0.15, pillarNoise: 5,
-    goldYear: 1, silverYear: 0.5, topTiers: ['PLATINUM', 'RUBY', 'EMERALD', 'DIAMOND'],
-    claim: { A: 0.12, B: 0.06 }, green: 0.0015, greenPressure: 1, greenDrop: 2, dropFrom: -0.2, withdraw: 0.4
+    goldYear: 1, silverYear: 0.7, topTiers: ['PLATINUM', 'RUBY', 'EMERALD', 'DIAMOND'],
+    claim: { A: 0.12, B: 0.06 }, green: 0.0015, greenPressure: 1, greenDrop: 2, dropFrom: -0.2, withdraw: 0.6
 };
 const ESG_TIERS = ['JUNK', 'BRONZE', 'SILVER', 'GOLD', 'PLATINUM', 'RUBY', 'EMERALD', 'DIAMOND']; // krajowe poziomy (ESG krajowe w 0.18.9)
 const esgShift = (grade, d) => ESG_GRADE_ORDER[Math.max(0, Math.min(3, ESG_GRADE_ORDER.indexOf(grade) + d))];
@@ -110,7 +110,7 @@ function auditEsg(stock, auditor = pickEsgAuditor()) {
     if (Math.random() < r.noise) grade = esgShift(grade, Math.random() < 0.5 ? -1 : 1);
     const fooled = Boolean(stock.ethicsClaim) && ['C', 'D'].includes(t.grade) && Math.random() < r.fooled;
     if (fooled) grade = esgShift(grade, -1);
-    stock.esgRating = { grade, e: esgRound(t.e + n()), s: esgRound(t.s + n()), g: esgRound(t.g + n()), q, until: q + r.validQ, auditor, ...(fooled ? { fooled: true } : {}) };
+    stock.esgRating = { grade, e: esgRound(t.e + n()), s: esgRound(t.s + n()), g: esgRound(t.g + n()), q, until: q + r.validQ, auditor, ...(fooled ? { fooled: true } : {}), ...(stock.esgProjectsDone ? { projectsDone: stock.esgProjectsDone } : {}) };
     return stock.esgRating;
 }
 /** Ocena publiczna (litera) albo null. */
@@ -121,7 +121,7 @@ function getEsgRating(stock) {
 }
 const isEsgGreenwashing = stock => Boolean(stock?.ethicsClaim) && ['C', 'D'].includes(getEsgTrue(stock)?.grade);
 function needsEsgAudit(stock) {
-    if (getEsgRating(stock)) return false;
+    if (getEsgRating(stock)) return isBelowEsgGate(stock) && esgQuarter() - (stock.esgRating?.q ?? 0) >= ESG_PROJECT_RULES.gateReauditQ && (stock.esgProjectsDone || 0) > (stock.esgRating?.projectsDone ?? 0); // G10: po projekcie pod kryterium nowy audyt
     if (ESG_PUBLIC_RULES.topTiers.includes(stock.exchange) || stock.ethicsClaim) return true;
     const year = stock.exchange === 'GOLD' ? ESG_PUBLIC_RULES.goldYear : stock.exchange === 'SILVER' ? ESG_PUBLIC_RULES.silverYear : 0;
     return year > 0 && Math.random() < 1 - Math.pow(1 - year, 0.25);
@@ -198,7 +198,7 @@ function pickEsgAuditor() {
     return ids.length ? ids[Math.floor(Math.random() * ids.length)] : null;
 }
 // ---------------------------------------------------------------------------------
-const ESG_CREDIT_RULES = { A: [1, 1], B: [0, 0], C: [-1, 0.5], D: [-2, 1], gD: -2 }; // g4: plan (A +1 z 50%, C −1) dawał średnio −0,28 stopnia → A zawsze +1, C −1 z 50%
+const ESG_CREDIT_RULES = { A: [1, 1], B: [0, 0], C: [-1, 0.25], D: [-1, 1], gD: -2 }; // k9: D −2 → −1 (średnio −0,26 stopnia po 6,5 roku); D w filarze G zostaje −2 // g9: C −1 z 50% → −0,19..−0,26 stopnia; → 25% // g4: plan (A +1 z 50%, C −1) dawał średnio −0,28 stopnia → A zawsze +1, C −1 z 50%
 /** Zmiana oceny kredytowej (stopnie) z oceny ESG audytora; D w filarze G zawsze −2. */
 function getEsgCreditAdj(esg) {
     if (!esg) return 0;
@@ -225,7 +225,7 @@ const ESG_PROJECTS = [
     { id: 'supply_audit', name: 'Audyt łańcucha dostaw', pillar: 'g', cost: 0.008, q: 2, gain: [6, 6], icon: 'lancuch', text: 'Sprawdzenie dostawców i partnerów.', extra: 'ujawnia powiązania ze spółkami D' },
     { id: 'anticorruption', name: 'Program antykorupcyjny', pillar: 'g', cost: 0.01, q: 3, gain: [10, 10], icon: 'waga', text: 'Procedury, szkolenia, sygnaliści.' }
 ];
-const ESG_PROJECT_RULES = { maxBonus: 20, yearChance: 0.025, pressure: 1, claimBoost: 1.5, cashFloor: 2, keepDone: 3, ecoUpgradeShare: 0.2, ecoUpgradeCut: 0.05, ecoUpgradeChance: 0.4 }; // g4: 6%/rok dawało 45% spółek z projektem po 20 latach (cel 10–25%)
+const ESG_PROJECT_RULES = { gateChance: 0.6, gateReauditQ: 2, maxBonus: 20, yearChance: 0.025, pressure: 1, claimBoost: 1.5, cashFloor: 2, keepDone: 3, ecoUpgradeShare: 0.2, ecoUpgradeCut: 0.05, ecoUpgradeChance: 0.4 }; // g4: 6%/rok dawało 45% spółek z projektem po 20 latach (cel 10–25%)
 const ECO_UPGRADE_IDS = ['new_factory', 'new_mine', 'chip_factory', 'pharma_factory', 'energy_plant', 'food_processing_plant', 'production_facility', 'textile_factory', 'electronics_assembly', 'brewery', 'industrial_park'];
 const getEsgProject = id => ESG_PROJECTS.find(p => p.id === id) || null;
 const getEsgProjectCost = (stock, p) => Math.max(10000, Math.round(getStockRevenue(stock) * p.cost));
@@ -288,11 +288,11 @@ function processEsgProjects(stock) {
     }
     if (typeof canFundControlAgm === 'function' && canFundControlAgm(stock)) return; // spółką gracza steruje gracz
     if ((stock.esgProjects || []).some(x => !x.done)) return;
-    const r = ESG_PROJECT_RULES, p = typeof getEcoPressure === 'function' ? getEcoPressure() / 100 : 0;
-    const chance = (1 - Math.pow(1 - r.yearChance, 0.25)) * (1 + r.pressure * p) * (stock.ethicsClaim ? r.claimBoost : 1);
+    const r = ESG_PROJECT_RULES, p = typeof getEcoPressure === 'function' ? getEcoPressure() / 100 : 0, gate = isBelowEsgGate(stock);
+    const chance = gate ? r.gateChance : (1 - Math.pow(1 - r.yearChance, 0.25)) * (1 + r.pressure * p) * (stock.ethicsClaim ? r.claimBoost : 1);
     if (Math.random() >= chance) return;
     const pick = pickEsgProject(stock); if (!pick) return;
-    if (Math.random() >= Math.min(1, getCeoProjectFactor(stock, pick.pillar) / 2)) return; // cechy prezesa: ekolog i etyk zawsze, zwykły co drugi raz, ignorant rzadko
+    if (!gate && Math.random() >= Math.min(1, getCeoProjectFactor(stock, pick.pillar) / 2)) return; // cechy prezesa: ekolog i etyk zawsze, zwykły co drugi raz, ignorant rzadko
     if ((Number(stock.cash) || 0) < getEsgProjectCost(stock, pick) * r.cashFloor) return;
     startEsgProject(stock, pick.id);
 }
@@ -323,7 +323,7 @@ function onInvestmentFinishedEsg(stock, project) {
 // Średnia zero: składnik liczony względem średniej ważonej kapitalizacją ocenionych spółek, więc nie przesuwa GIG.
 // Spółki bez oceny: 0. Kurs zmienia się bezpośrednio (jak wpływ zlecenia botów w ai.js), bez wydarzenia.
 // ---------------------------------------------------------------------------------
-const ESG_DEMAND_RULES = { A: 0.01, B: 0, C: -0.01, D: -0.02 }; // g5: plan (+1,5 / −1,5 / −3%) dawał różnicę zwrotu A–D ok. 7 pp rocznie (cel 2–5)
+const ESG_DEMAND_RULES = { A: 0.005, B: 0, C: -0.005, D: -0.01 }; // g5: plan (+1,5 / −1,5 / −3%) dawał różnicę zwrotu A–D ok. 7 pp; g9 przy +1 / −1 / −2: 8 pp (głównie selekcja: D to spółki w złej kondycji)
 /** Kwartalne zmiany kursu z popytu ESG: [{ stock, d }]; suma d × kapitalizacja = 0. */
 function getEsgDemandShifts() {
     const { top, bottom } = getRateURanking(), impulse = s => top.includes(s) ? ESG_RATEU_RULES.topImpulse : bottom.includes(s) ? ESG_RATEU_RULES.bottomImpulse : 0; // G7: publikacja RateU (część składnika G5, nie dodatek)
@@ -613,4 +613,12 @@ function processEsgRegulationQuarterly() {
         if (!st.criterion && level >= ESG_REG_RULES.criterionLevel && Math.random() < ESG_REG_RULES.criterionYear) announce(true);
         else if (st.criterion && level < ESG_REG_RULES.criterionLevel) announce(false);
     }
+}
+
+/** G10: spółka z Platynowej albo elitarnych poniżej litery wymaganej przez kryterium ESG (obowiązujące albo ogłoszone). */
+function isBelowEsgGate(stock) {
+    const st = getEsgRegState(), need = ESG_REG_RULES.need[stock?.exchange];
+    if (!need || !(st.criterion || st.pending?.on)) return false;
+    const g = getEsgRating(stock) || getEsgTrue(stock)?.grade;
+    return ESG_GRADE_ORDER.indexOf(g) > ESG_GRADE_ORDER.indexOf(need);
 }

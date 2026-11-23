@@ -17504,7 +17504,7 @@ group('0.18.3 Mechaniki grafu', () => {
         try {
             for (const a of AUDITORS) if (a.id !== esgId) ratingState.banned[a.id] = macro.quarter + 10;
             const grade = auditStock(s); assertEq(ratingIndex(grade), Math.max(0, getTrueRatingIndex(s) - 2), 'ocena −2'); assert(getEsgRating(s), 'ocena ESG'); assertEq(s.esgRating.auditor, esgId);
-            assertEq(getEsgCreditAdj({ grade: 'D', g: 60 }), -2); assertEq(getEsgCreditAdj({ grade: 'A', g: 80 }), 1); assertEq(getEsgCreditAdj({ grade: 'B', g: 60 }), 0); assertEq(getEsgCreditAdj(null), 0);
+            assertEq(getEsgCreditAdj({ grade: 'D', g: 60 }), -1); assertEq(getEsgCreditAdj({ grade: 'A', g: 80 }), 1); assertEq(getEsgCreditAdj({ grade: 'B', g: 60 }), 0); assertEq(getEsgCreditAdj(null), 0);
             delete s.esgRating; ratingState.banned = { ...banned }; ratingState.banned[esgId] = macro.quarter + 10;
             for (const a of AUDITORS) if (a.id !== ratingState.noEsg) ratingState.banned[a.id] = macro.quarter + 10;
             const g2 = auditStock(s); assertEq(ratingIndex(g2), getTrueRatingIndex(s), 'audytor bez ESG: bez ryzyka ESG'); assertEq(getEsgRating(s), null, 'i bez oceny ESG');
