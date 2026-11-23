@@ -17654,6 +17654,29 @@ group('0.18.3 Mechaniki grafu', () => {
         assert(/na razie krajowe/.test(renderEsgBlock({ foreignSource: {}, symbol: 'X.DE' })), 'zagraniczna');
         assert(![none, pub, mine].some(h => /[\u{1F300}-\u{1FAFF}]/u.test(h)), 'bez emoji');
     });
+    test('0.18.9 G9: poziom 4: jedno rozporządzenie na rok, kara tylko za greenwashing; poziom 5: kryterium ESG ogłoszone kwartał wcześniej', () => {
+        const honest = makeCompany('EH9', { sector: ['Technologia'] }), green = makeCompany('EW9', { sector: ['Technologia'] });
+        [honest, green].forEach(c => { c.exchange = 'GOLD'; c.cash = 1e9; c.fundamentals = { ...(c.fundamentals || {}), revenue: 1e8 }; c.ethicsClaim = { q: 0 }; });
+        green.ceo = { traits: [{ id: 'chciwy' }, { id: 'skompromitowany' }, { id: 'sklonny_do_korupcji' }] }; green.knfBanUntil = 999;
+        resetWorld([honest, green]); ensureEnergy(); clearEsgCache(); society.energy.esgReg = null;
+        assert(['A', 'B'].includes(getEsgTrue(honest).grade) && ['C', 'D'].includes(getEsgTrue(green).grade), `uczciwa ${getEsgTrue(honest).grade}, nieuczciwa ${getEsgTrue(green).grade}`);
+        const lvl = oversight.energy.level, q0 = macro.quarter, p0 = green.price, c0 = green.cash;
+        try {
+            oversight.energy.level = 4;
+            let regs = 0; for (let i = 1; i <= 8; i++) { macro.quarter = Math.ceil(q0 / 4) * 4 + i; const before = getEsgRegState().log.length; processEsgRegulationQuarterly(); regs += getEsgRegState().log.length - before; }
+            assertEq(regs, 2, 'jedno rozporządzenie na rok');
+            assert(green.esgPenalty && !green.ethicsClaim && green.price < p0 && green.cash < c0 && green.esgRating.official, 'kara za greenwashing');
+            assert(!honest.esgPenalty && honest.ethicsClaim, 'uczciwa bez kary');
+            clearEsgCache(); assert(getEsgTrue(green).g <= 20, 'G −20');
+            const rnd = Math.random; Math.random = () => 0.01; oversight.energy.level = 5; const st = getEsgRegState(); st.pending = null; st.criterion = false;
+            try { macro.quarter = Math.ceil(macro.quarter / 4) * 4 + 4; processEsgRegulationQuarterly(); } finally { Math.random = rnd; }
+            assert(st.pending?.on && !st.criterion, 'ogłoszone, jeszcze nie obowiązuje');
+            macro.quarter += 1; processEsgRegulationQuarterly(); assert(st.criterion && !st.pending, 'obowiązuje po kwartale');
+            honest.esgRating = { grade: 'B', q: macro.quarter, until: macro.quarter + 4 }; green.esgRating.grade = 'D';
+            assert(meetsEsgGate(honest, 'RUBY') && !meetsEsgGate(green, 'PLATINUM'), 'kryterium: B na Rubinową, D nie na Platynową');
+            green.exchange = 'PLATINUM'; assert(meetsEsgGate(green, 'PLATINUM'), 'okres przejściowy dla spółki już na poziomie');
+        } finally { oversight.energy.level = lvl; macro.quarter = q0; society.energy.esgReg = null; }
+    });
     test('0.18.9 G1: pokrycie: Platynowa zawsze dostaje ocenę, Brązowa bez deklaracji nie', () => {
         const p = makeCompany('ESP', { sector: ['Finanse'] }), z = makeCompany('ESZ', { sector: ['Finanse'] }); p.exchange = 'PLATINUM'; z.exchange = 'BRONZE';
         resetWorld([p, z]); clearEsgCache(); processEsgQuarterly();

@@ -981,6 +981,7 @@ function eliteQualifies(stock, tier) {
     if (!r || !rating || !(plat > 0) || ratingIndex(rating.grade) < ratingIndex(r.grade) || getMarketCap(stock) < plat * r.capMult) return false;
     if (r.profitQ) { const h = stock.fundamentals?.history || []; if (h.length < r.profitQ || !h.slice(-r.profitQ).every(x => (Number(x.netIncome) || 0) > 0)) return false; }
     if (r.divQ && !((Number(stock.dividendStreak) || 0) >= r.divQ)) return false;
+    if (typeof meetsEsgGate === 'function' && !meetsEsgGate(stock, tier)) return false; // 0.18.9 G9: kryterium ESG UEiE
     return true;
 }
 function getDiamondScore(stock, pool) {

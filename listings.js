@@ -659,7 +659,7 @@ function meetsRatingGate(stock, tier) {
     const need = GATE_BY_TIER[tier];
     if (!need) return true;
     const r = getValidRating(stock);
-    return Boolean(r && ratingIndex(r.grade) >= ratingIndex(need));
+    return Boolean(r && ratingIndex(r.grade) >= ratingIndex(need)) && (typeof meetsEsgGate !== 'function' || meetsEsgGate(stock, tier)); // 0.18.9 G9: kryterium ESG UEiE
 }
 /** Ujawnienie przekupstwa: spadek kursu, kara dla spółki, audytor traci licencję na 8 kw., wpis o śledztwie policji. Unieważnia tylko tę ocenę (0.18.7 E5). */
 function revealBribedRating(stock, rating = getRatings(stock).find(r => r.bribed && !r.revealed)) {
