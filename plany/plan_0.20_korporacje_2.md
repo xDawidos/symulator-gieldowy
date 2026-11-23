@@ -11,6 +11,28 @@ Polecenie użytkownika z 2026-11-23: wersja 0.20 z analizą wydatków i mechanik
 | K3 | Drabina rozwoju | **5 szczebli:** Lokalna → Regionalna → Krajowa → Potentat krajowy → Międzynarodowa. „Okoliczny monopolista” nie jest szczeblem, tylko stanem pilnowanym przez urząd antymonopolowy |
 | K4 | Obieg płac | **W 0.20:** wypłaty → dochód gospodarstw w mieście → popyt (część K2 niżej). 0.21 Rynek pracy 2 traci ten punkt |
 
+**Drugie decyzje (2026-11-23, propozycje planowania przyjęte przez użytkownika):**
+
+| Nr | Propozycja | Decyzja | Część |
+|---|---|---|---|
+| W1 | Walka miast o centralę | zgoda | K11 |
+| W2 | Kierunek rozwoju wybiera WZA | zgoda | K12 |
+| W3 | Rozbicie marży na karcie spółki | zgoda | K13 |
+| W4 | Konsolidacja grup kapitałowych | zgoda **z rozszerzeniem:** więcej typów grup, typy specjalistyczne, więcej mechanik łączących i dzielących | K16–K19 (wersja 0.20.3) |
+| W5 | Konkurencja lokalna | zgoda **z dopiskiem:** limit wynika z ograniczonej ludności miasta, podatków miejskich i czasem z geografii | K15 |
+| W6 | Restrukturyzacja przy spadku po drabinie | zgoda | K14 |
+| W7 | Dodatkowe pomysły planowania | użytkownik poprosił o propozycje; P1–P3 na końcu pliku czekają na akceptację | — |
+
+## Podział na podwersje (decyzja planowania 2026-11-23)
+
+Po W1–W6 zakres przekracza 10 części, więc 0.20 dzielimy na trzy podwersje, każdą z kontrolą jak K10:
+
+| Wersja | Nazwa | Części |
+|---|---|---|
+| **0.20.1** | Drabina i ludzie | K0 (pomiar), K1 drabina, K2 obieg płac, K3 działy botów, K4 profile, K11 centrala, K12 WZA, K13 rozbicie marży, K14 restrukturyzacja, UI z K9 dla tych części, kontrola |
+| **0.20.2** | Rynek firm | K5 OTC, K6 IPO z deficytu, K7 import awaryjny, K8 kooperacje z grafu, K15 konkurencja lokalna, UI z K9 (mapa: siedziby i OTC), kontrola |
+| **0.20.3** | Grupy kapitałowe | K16 typy grup, K17 mechaniki łączące, K18 mechaniki dzielące, K19 życie grupy (konsolidacja, cash pooling, ceny transferowe, rating grupy), UI, kontrola |
+
 ## Nowa kolejność wersji (K1)
 
 | Wersja | Nazwa | Zakres w skrócie |
@@ -101,7 +123,21 @@ Polecenie użytkownika z 2026-11-23: wersja 0.20 z analizą wydatków i mechanik
 | **K7** | **Import awaryjny:** ponad limit `importHeadroom` odbiorca może kupić brakującą część po cenie ×1,5–2 (przez `costPass`). Twardy niedobór (`shortagePass`) działa tylko na część, której import awaryjny nie pokrył (np. przepustowość szlaku z 0.19.1 P5a) | test: kwartały z niedoborem > 20% spadają o ≥ 50% względem K0; marże odbiorców ± 0,3 pp |
 | **K8** | **Relacje firm z grafu:** nowe kooperacje dobierane z grafu (dostawca i odbiorca tego samego dobra, ten sam albo sąsiedni szczebel miasta), a nie losowo. Przy szczeblu Krajowa+ również kontrakty dostaw z ceną stałą na 4 kw. (osłona przed skokiem ceny wsadu, jak `getChainContractFactor`) | test: ≥ 70% nowych kooperacji zgodnych z grafem; liczba kooperacji ±20% od K0 |
 | **K9** | **UI:** karta spółki (szczebel, 4 filary z paskami i słowem, co odblokuje następny szczebel, profile, miasta siedziby i oddziałów), lista spółek (szczebel w wierszu i filtr), Państwo → mapa kraju (siedziby i OTC na mapie z 0.19.2). Ikony SVG, ciemny motyw, kolor nie jest jedynym nośnikiem | test DOM karty i filtra |
-| **K10** | **Kontrola** (seria 24 × 6,5 roku i 10 × 20 lat, `raporty/kontrola_0.20.md`) | GIG 20 lat 10–13% i ± 0,3 pp od bazy; marże 0 ± 0,3 pp; zanieczyszczenie bez pogorszenia; elitarne jak w 0.18.9; czas kroku ≤ 900 ms/kw.; zapis + ≤ 5%; 0 błędów w 40 grach |
+| **K10** | **Kontrola** (seria 24 × 6,5 roku i 10 × 20 lat, `raporty/kontrola_0.20.N.md`, osobno po 0.20.1, 0.20.2 i 0.20.3) | GIG 20 lat 10–13% i ± 0,3 pp od bazy; marże 0 ± 0,3 pp; zanieczyszczenie bez pogorszenia; elitarne jak w 0.18.9; czas kroku ≤ 900 ms/kw.; zapis + ≤ 5%; 0 błędów w 40 grach |
+
+### Części dodane 2026-11-23 (W1–W6)
+
+| Część | Wersja | Zakres | Test i bramka |
+|---|---|---|---|
+| **K11** | 0.20.1 | **Walka miast o centralę:** siedziba daje miastu podatek miejski, fundusz płac zarządu i specjalistów (obieg z K2) oraz prestiż (atrakcyjność, migracja). Gdy spółka na szczeblu Regionalnym lub wyższym rozważa przeprowadzkę, miasta wojewódzkie i Stolica składają oferty (ulga podatku miejskiego na 4–8 kw., grunt pod biurowiec, szybsze pozwolenia), a burmistrz decyduje według budżetu miasta. Przeprowadzka do Stolicy (warunek szczebla Krajowego, K1) zabiera dawnemu miastu część dochodu i miejsc pracy. Gracz z udziałem kontrolnym decyduje sam, a jako darczyńca miasta (0.14) może sfinansować ofertę | test: przeprowadzka zmienia podatki i fundusz płac obu miast; ulgi nie dają budżetom ujemnych sald; w 20 latach 5–20 przeprowadzek |
+| **K12** | 0.20.1 | **Kierunek rozwoju wybiera WZA:** profil przy awansie (K4) to uchwała walnego. W spółce kontrolowanej gracz wybiera sam; przy mniejszym udziale głosuje udziałami (istniejące walne), a boty i zarząd głosują według cech prezesa i sektora. Wynik głosowania z rozbiciem na głosy w historii spółki | test: wynik zgodny z głosami; gracz z 51% zawsze przesądza; bez nowego okna modalnego (decyzja w oknie walnego) |
+| **K13** | 0.20.1 | **Rozbicie marży na karcie:** wykres kaskadowy albo lista: marża profilu → koszt pracy (`getLaborMarginAdj`) → wsady z grafu → kooperacje → strategia i profil → erozja konkurencyjna → wynik. Składniki są już liczone w `companies.js:3280–3330`; trzeba je zapisać w `lastReportBreakdown` | test: suma składników = marża kwartału (± 0,01 pp); widok w stanie pustym (spółka bez historii) |
+| **K14** | 0.20.1 | **Restrukturyzacja przy spadku:** utrata szczebla uruchamia program naprawczy: zamknięcie części oddziałów (zwolnienia w ich miastach, obieg z K2), sprzedaż jednego profilu (wraca do wyboru przy ponownym awansie), opcjonalna sprzedaż segmentu (K18). Przez 4 kw. spółka nie może awansować, a po udanej naprawie (zysk 2 kw.) odzyskuje pełne możliwości. Wpis w Gazecie | test: w 20 latach 5–15% spółek spada o szczebel; po naprawie ≥ 50% wraca na poprzedni w 3 latach; drabina nie dryfuje do góry (udział Potentat + Międzynarodowa w roku 20 ≤ 2 × roku 1) |
+| **K15** | 0.20.2 | **Konkurencja lokalna (W5):** miasto ma **pojemność rynku** dla podsektora: zależy od ludności i klas miasta (popyt lokalny), podatków miejskich (wyższe podatki zmniejszają liczbę opłacalnych firm) i **geografii** (tag miasta z 0.19.2: Port dla stoczni, Zagłębie dla wydobycia, Kurort dla turystyki, brak dla pozostałych). Spółki z siedzibą albo oddziałem ponad pojemność wchodzą w **wojnę cenową**: −1 do −3 pp marży u wszystkich w tym podsektorze i mieście, aż ktoś się przeniesie, zamknie oddział albo przejmie konkurenta (M&A). Podsektory eksportowe (kat. 1–2) mają większą pojemność niż lokalne usługi (kat. 0) | test: średnia odchyłek marż w kraju 0 ± 0,3 pp; wojna cenowa w 5–15% par miasto × podsektor; kończy się w ≤ 8 kw. w ≥ 70% przypadków |
+| **K16** | 0.20.3 | **Typy grup kapitałowych (W4):** grupa = matka i córki (dziś `isSubsidiaryOf`) z **typem** wyznaczanym ze struktury segmentów członków i grafu: **holding finansowy** (córki z różnych sektorów, zarządzanie portfelem), **koncern pionowy** (dostawca i odbiorca tego samego dobra w grafie: tańszy wsad wewnątrz grupy), **grupa pozioma** (ten sam podsektor: skala, uwaga urzędu antymonopolowego), **konglomerat** (≥ 3 sektory: dyskonto konglomeratu z 0.14 T3 i odporność na cykl). **Typy specjalistyczne** (warunki z sektorów): energetyczna (wytwarzanie + sieci + rafinerie: własny miks energii członków), budowlano-deweloperska (Budowlany + Nieruchomości/REIT: własne przetargi), bankowo-ubezpieczeniowa (bank + Finanse: sprzedaż krzyżowa, nadzór KNF), rolno-spożywcza („od pola do półki”: rolnictwo + przetwórstwo + handel), medialno-technologiczna (Media + Gaming + Technologia: usługi cyfrowe z 0.19.3), zbrojeniowa (Obronność + Przemysł: priorytet zamówień państwa, kontrola skarbu przy przejęciu). Każdy typ ma 1–2 skutki i 1 ryzyko | test: typ wynika z członków (bez losowania); każdy typ zwykły w ≥ 1 grze na 3; typ specjalistyczny w ≥ 1 grze na 5; marże grup ± 0,5 pp |
+| **K17** | 0.20.3 | **Mechaniki łączące:** **fuzja** (dwie spółki w jedną, parytet wymiany akcji, głosowanie WZA obu stron, zgoda urzędu antymonopolowego), **joint venture** (wspólna córka dwóch grup, np. blok jądrowy z `members`, uogólniony na dowolny projekt), **alians strategiczny** (bez kapitału: kooperacja z K8 na 8 kw. z warunkami), **wymiana udziałów krzyżowych** (do 10–20%, ochrona przed przejęciem), **przejęcie odwrotne** (mała spółka giełdowa przejmuje dużą prywatną albo OTC: alternatywa IPO) | test: masa akcji zachowana przy fuzji; niezmiennik akcji w obrocie; JV rozliczane obu matkom według udziałów |
+| **K18** | 0.20.3 | **Mechaniki dzielące:** spin-off i carve-out (są: `SPINOFF_DOMESTIC_LIMIT`), **sprzedaż dywizji** (segment przechodzi do innej spółki lub grupy za gotówkę), **podział nakazany przez urząd antymonopolowy** (stan „monopolista” z K3: wydzielenie segmentu w 4 kw.), **żądanie podziału przez aktywistę** (fundusz albo bot z ≥ 5% przy dyskoncie konglomeratu > 15% wnioskuje na WZA o wydzielenie), **zamknięcie grupy** (matka sprzedaje wszystkie córki i staje się spółką jednosegmentową) | test: suma wycen po podziale ≥ 95% przed (bez kreacji wartości z niczego, poza zniknięciem dyskonta); liczba spółek w limitach 0.18.4 A4 |
+| **K19** | 0.20.3 | **Życie grupy:** **konsolidacja** (wyniki córek w sprawozdaniu matki według udziału, karta matki z widokiem grupy), **cash pooling** (wspólna gotówka grupy na kredyt: niższe odsetki, ryzyko zarażenia przy bankructwie córki), **ceny transferowe** (dzisiejsze tunelowanie z kooperacji jako jawna polityka grupy, kontrolowana przez skarbówkę i KNF: kara przy nadużyciu), **rating grupy** (audytor ocenia grupę, córka nie może mieć oceny wyższej niż grupa + 1), **szczebel grupy** (drabina K1 liczona dla grupy, gdy konsolidacja ≥ 50% przychodu) | test: konsolidacja nie liczy przychodu podwójnie w GIG ani w grafie; cash pooling bez ujemnej gotówki członków; kara za ceny transferowe w ≥ 1 grze na 3 |
 
 **Pliki:** `corp.js` (nowy: szczeble, filary, profile, odblokowania), `companies.js` (działy botów, `privateCompanies` → OTC, debiuty z deficytu, kooperacje z grafu), `chains.js` (moc OTC, import awaryjny), `core.js` (`demandIndex` z dochodu miast), `state.js` (miasta z 0.19.2: dochód gospodarstw, pojemność), `listings.js` (debiut z OTC), `ui.js` (karta, lista, mapa), `main.js` (migracja zapisu), `tests/`.
 
@@ -113,6 +149,9 @@ Polecenie użytkownika z 2026-11-23: wersja 0.20 z analizą wydatków i mechanik
 |---|---|---|
 | Karta spółki: ścieżka rozwoju | K1, K4, K9 | szczebel, 4 filary (pasek i słowo), następny próg i odblokowania, profile, wybór profilu w spółce kontrolowanej |
 | Lista spółek: szczebel | K9 | znaczek szczebla w wierszu, filtr |
+| Karta spółki: rozbicie marży i kronika | K13, P3 | wykres kaskadowy marży, kronika (awanse, fuzje, rekordy) |
+| Walne: wybór kierunku i oferty miast | K11, K12 | uchwała o profilu z głosami, porównanie ofert miast przy przeprowadzce centrali |
+| Grupa kapitałowa | K16–K19 | widok grupy na karcie matki: typ i jego skutki, członkowie, konsolidacja, cash pooling, rating grupy, działania łączące i dzielące |
 | Mapa kraju: siedziby i OTC | K5, K9 | warstwa na mapie z 0.19.2: siedziby, oddziały, moc OTC per miasto (dobro i skala) |
 
 ## Ryzyka
@@ -120,9 +159,12 @@ Polecenie użytkownika z 2026-11-23: wersja 0.20 z analizą wydatków i mechanik
 - **Obieg płac (K2) to pętla sprzężenia** (zwolnienia → spadek popytu → spadek przychodu → zwolnienia). Potrzebny limit zmiany na kwartał i pomiar w czarnych łabędziach (0.18.8 D5).
 - **Drabina a poziomy giełd:** dwie skale wielkości mylą gracza. Na karcie muszą mieć różne nazwy i opis („zasięg” wobec „parkiet”).
 - **OTC zmienia podaż w grafie:** wymaga ponownej kalibracji `b = 1` i pomiaru marż.
-- **Zakres:** 0.20 jest duża (L). Jeśli specyfikacja pokaże więcej niż 10 części, dzielimy na 0.20.1 (K0–K4: drabina, płace, działy) i 0.20.2 (K5–K9: OTC, IPO, import, relacje, UI).
+- **Zakres:** podział na 0.20.1, 0.20.2 i 0.20.3 (wyżej). Grupy kapitałowe (0.20.3) dotykają zapisu (struktura grup) i niezmiennika akcji w obrocie, więc idą ostatnie.
+- **Grupy a GIG:** konsolidacja nie może zmieniać indeksu (spółki notowane liczone raz).
 
-## Propozycje planowania (do potwierdzenia przy specyfikacji)
+## Propozycje planowania (do potwierdzenia)
 
-- **Propozycja planowania:** podział 0.20 na 0.20.1 i 0.20.2 jak w ryzykach.
-- **Propozycja planowania:** profile z K4 przechodzą na córki (córka dziedziczy jeden profil matki).
+- **Przyjęte:** podział na podwersje; profile z K4 przechodzą na córki (córka dziedziczy jeden profil matki, K16).
+- **P1. Rywale:** każda spółka od szczebla Regionalnego ma jednego **rywala** (ten sam podsektor, podobny szczebel, najlepiej to samo miasto, czyli para z K15). Rywalizacja daje wydarzenia: kampania cenowa, podkupienie prezesa albo specjalistów, wyścig o przetarg, wrogie przejęcie. Po przejęciu, bankructwie albo zmianie szczebla rywal się zmienia. Tani element RPG (z istniejących mechanik), widoczny na karcie i w Gazecie. Wersja: 0.20.2.
+- **P2. Firmy rodzinne i sukcesja:** część spółek ma założyciela albo rodzinę z pakietem (np. 20–50%). Przy odejściu prezesa-założyciela następuje sukcesja: dziecko (losowe cechy z G3 0.18.9), zawodowy menedżer albo spór rodzinny (sprzedaż pakietu, okazja do przejęcia dla gracza). Daje historie i decyzje przy walnym. Wersja: 0.20.3 (z grupami, bo rodziny często mają holdingi).
+- **P3. Kronika spółki:** na karcie rok założenia, awanse i spadki po drabinie, fuzje, rekordy (największy zysk, najwyższa wycena), prezesi. Tylko zapis istniejących zdarzeń z limitem jak CV z 0.18.8 D1. Wersja: 0.20.1.
