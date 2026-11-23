@@ -2372,7 +2372,7 @@ function maybeTriggerForcedEmission() {
     const names = ['Fundusz Emerytalny Północ', 'Skarbiec Rodziny Kowalskich', 'Holding Zachodni', 'Kasa Oszczędnościowa Delta'];
     const name = names[Math.floor(Math.random() * names.length)];
     playerFund.emissionOffer = { name, units: Math.max(1, Math.ceil(value / nav)), expiresQ: (typeof macro === 'object' ? macro.quarter : 0) + 4 };
-    const text = `🏛️ ${name} chce zainwestować ok. ${formatZl(value, 0)}. Rozpocznij kampanię emisyjną (Klienci i udziały), by przyjąć ofertę.`;
+    const text = `🏛️ ${name} chce zainwestować ok. ${formatZl(value, 0)}. Rozpocznij kampanię emisyjną (O funduszu → Kampanie), by przyjąć ofertę.`;
     logEvent(text, 'review');
     if (typeof pushNotification === 'function') pushNotification(text, () => { if (typeof openJuMarket === 'function') openJuMarket(); });
 }
@@ -2962,7 +2962,7 @@ function getFundEthicsIssue() {
     const caught = big.find(s => Number.isFinite(s.workforce.greyCaughtQuarter) && (macro?.quarter ?? 0) - s.workforce.greyCaughtQuarter <= 4);
     if (caught) return `w portfelu jest ${caught.name}, złapana na szarej strefie`;
     if (big.length && typeof getAverageSatisfaction === 'function' && getAverageSatisfaction(big) < 45) return 'spółki z dużym udziałem funduszu źle traktują pracowników';
-    return null;
+    return typeof getFundEsgIssue === 'function' ? getFundEsgIssue() : null; // 0.18.9 G6a: udział C i D
 }
 
 /** Średnie zadowolenie pracowników w spółkach portfela (ważone wartością pozycji). */
@@ -3803,7 +3803,7 @@ function getClientCharacter(client) {
 
 function randomCharacter(trust = 50) {
     const isPoliceProgram = typeof oversight === 'object' && (oversight?.police?.level >= 5);
-    const weights = { sly: 1.2, careful: 1.4, fearful: 1, brave: 0.8 + trust / 100, rich: 0.3 + trust / 200, miser: 1, ethical: 0.6, senior: 0.8, modern: 0.9, officer: isPoliceProgram ? 0.9 : 0 };
+    const weights = { sly: 1.2, careful: 1.4, fearful: 1, brave: 0.8 + trust / 100, rich: 0.3 + trust / 200, miser: 1, ethical: 0.6 * (typeof isFundEthical === 'function' && isFundEthical() ? ESG_FUND_RULES.clientWeight : 1), senior: 0.8, modern: 0.9, officer: isPoliceProgram ? 0.9 : 0 };
     const total = Object.values(weights).reduce((sum, w) => sum + w, 0);
     let roll = Math.random() * total;
     for (const [key, weight] of Object.entries(weights)) {
@@ -3977,7 +3977,7 @@ function getClientSatisfactionDrift(client, def, ctx) {
         bearMarket: -DRAWDOWN_ABSOLUTE_SHARE * Math.max(0, (ctx.benchmarkDrawdown || 0) - 0.10) * def.volAversion * 0.3,
         // Opłata standardowa jest neutralna: kara dopiero powyżej MANAGEMENT_FEE_ANNUAL, niższa — mała premia.
         fees: -(def.feeSensitivity || 0) * 0.01 * Math.max(0, fee / MANAGEMENT_FEE_ANNUAL - 1) - (fee - MANAGEMENT_FEE_ANNUAL) * 0.4,
-        ethics: def.ethical && ctx.ethicsIssue ? -0.08 : 0
+        ethics: (def.ethical && ctx.ethicsIssue ? -0.08 : 0) + (def.ethical && typeof isFundEthical === 'function' && isFundEthical() ? ESG_FUND_RULES.satQ / 13 : 0) // 0.18.9 G6b: fundusz etyczny
     };
     return parts;
 }
@@ -4032,7 +4032,8 @@ function getFundCapacityFactor(assets = getFundAssets()) {
 function getOrganicInflowRate(trust = playerFund?.trust ?? 50) {
     const reputation = getPlayerReputationFactor();
     const trustGate = Math.max(0, Math.min(1, (trust - 25) / 25)); // 0.14.2 P12: 0 poniżej 25, liniowo do 50, potem bez zmian
-    return getFundCapacityFactor() * trustGate * Math.max(0, Math.min(0.5, ORGANIC_INFLOW_BASE + (trust - 50) / 50 * 0.04 + getRecentExcessAnnual() * 1.2 + reputation * 0.03));
+    const ethical = typeof isFundEthical === 'function' && isFundEthical() ? 1 + ESG_FUND_RULES.inflow : 1; // 0.18.9 G6b: fundusz etyczny +15%
+    return ethical * getFundCapacityFactor() * trustGate * Math.max(0, Math.min(0.5, ORGANIC_INFLOW_BASE + (trust - 50) / 50 * 0.04 + getRecentExcessAnnual() * 1.2 + reputation * 0.03));
 }
 
 /** Roczna stopa dopłat obecnych klientów (zadowoleni z zaufaniem): rośnie z wynikiem vs GIG. */

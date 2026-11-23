@@ -17570,6 +17570,41 @@ group('0.18.3 Mechaniki grafu', () => {
         assert(eco.includes(formatZl(200000, 0)) && /Wersja eko/.test(eco), 'wersja eko: +20%'); assertEq(renderEcoOption(s, getCatalogEntryById('marketing_campaign'), 1000), '', 'tylko produkcja');
         assert(!/[\u{1F300}-\u{1FAFF}]/u.test(host.innerHTML), 'bez emoji');
     });
+    test('0.18.9 G6: 20% NAV w C to powód niezadowolenia klientów etycznych; fundusz etyczny: napływ +15%, limit C 5%, kara po kwartale, wycofanie −3', () => {
+        const c = makeCompany('ETC', { sector: ['Finanse'] }), a = makeCompany('ETA', { sector: ['Finanse'] }); [c, a].forEach(x => { x.price = 100; x.totalShares = 1e7; });
+        resetWorld([c, a]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' }); clearEsgCache();
+        c.esgRating = { grade: 'C', e: 50, s: 50, g: 50, q: macro.quarter, until: macro.quarter + 4 }; a.esgRating = { grade: 'A', e: 80, s: 80, g: 80, q: macro.quarter, until: macro.quarter + 4 };
+        const nav = getFundAssets(); playerPortfolio[c.symbol] = { shares: Math.round(nav * 0.2 / 100), avgPrice: 100, assetType: 'stock' };
+        assert(/C i D/.test(getFundEthicsIssue() || ''), `powód: ${getFundEthicsIssue()}`);
+        const def = CLIENT_TYPES.ethical, parts = getClientSatisfactionDrift({ satisfaction: 0.6 }, def, { excess: 0, trust: 50, maxDrawdown: 0, ethicsIssue: getFundEthicsIssue() });
+        assert(parts.ethics < 0, 'klient etyczny traci zadowolenie');
+        const base = getOrganicInflowRate(70); assert(setFundEthical(true).ok && isFundEthical(), 'deklaracja');
+        const r = getOrganicInflowRate(70) / Math.max(1e-9, base); assert(base === 0 || (r >= 1.1 && r <= 1.2), `napływ ×${r}`);
+        assert(getEthicalFundBreaches().some(b => b.cls === 'C'), 'limit C przekroczony');
+        const trust0 = playerFund.trust; assertEq(processEthicalFundQuarterly(), 'warning'); assertEq(playerFund.trust, trust0, 'najpierw ostrzeżenie');
+        macro.quarter += 1; assertEq(processEthicalFundQuarterly(), 'penalty'); assertEq(playerFund.trust, trust0 - ESG_FUND_RULES.breachTrust, 'po kwartale −5'); macro.quarter -= 1;
+        const w = getEthicalOrderWarning(c, 1000); assert(w && w.over && w.cls === 'C', 'ostrzeżenie w zleceniu');
+        playerPortfolio[c.symbol].shares = 0; assertEq(getEthicalFundBreaches().length, 0, 'po sprzedaży w limitach');
+        const t1 = playerFund.trust; assert(setFundEthical(false).ok && playerFund.trust === t1 - 3, 'wycofanie −3'); assert(!setFundEthical(true).ok, 'powrót po 4 kw.');
+    });
+    test('0.18.9 G6 (makieta 35): okno O funduszu: 4 zakładki, przełącznik ustawia fundusz etyczny, 6% w C: przekroczenie z terminem i licznik w Przeglądzie', () => {
+        const c = makeCompany('EOC', { sector: ['Finanse'] }); c.price = 100; c.totalShares = 1e7;
+        resetWorld([c]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' }); clearEsgCache();
+        c.esgRating = { grade: 'C', e: 50, s: 50, g: 50, q: macro.quarter, until: macro.quarter + 4 };
+        const xhr = new XMLHttpRequest(); xhr.open('GET', '../index.html', false); xhr.send(); const had = document.getElementById('clients-modal');
+        const modal = had || document.body.appendChild(new DOMParser().parseFromString(xhr.responseText, 'text/html').getElementById('clients-modal')); openJuMarket('overview');
+        try {
+            assertEq(document.getElementById('ju-title').textContent, 'O funduszu'); assertEq(modal.querySelectorAll('[role=tab]').length, 4, 'zakładki');
+            const sw = modal.querySelector('#ju-ethical [role=switch]'); assertEq(sw.getAttribute('aria-checked'), 'false'); sw.click();
+            assert(isFundEthical(), 'przełącznik włącza');
+            playerPortfolio[c.symbol] = { shares: Math.round(getFundAssets() * 0.06 / 100), avgPrice: 100, assetType: 'stock' }; renderJuMarket();
+            assert(modal.querySelector('#ju-ethical [role=alert]') && /Popraw do końca/.test(modal.querySelector('#ju-ethical').textContent), 'przekroczenie z terminem');
+            assert(modal.querySelector('#ju-tab-overview .wn-count'), 'licznik w Przeglądzie');
+            setJuTab('clients'); assert(document.getElementById('ju-pane-overview').hidden && !document.getElementById('ju-pane-clients').hidden, 'przełączanie zakładek');
+            assert(/Fundusz etyczny: limit C/.test(renderEthicalFundLine()), 'linia w panelu');
+            assert(!/[\u{1F300}-\u{1FAFF}]/u.test(modal.querySelector('#ju-ethical').innerHTML), 'bez emoji');
+        } finally { modal.style.display = 'none'; juTab = 'overview'; delete playerPortfolio[c.symbol]; if (!had) modal.remove(); }
+    });
     test('0.18.9 G1: pokrycie: Platynowa zawsze dostaje ocenę, Brązowa bez deklaracji nie', () => {
         const p = makeCompany('ESP', { sector: ['Finanse'] }), z = makeCompany('ESZ', { sector: ['Finanse'] }); p.exchange = 'PLATINUM'; z.exchange = 'BRONZE';
         resetWorld([p, z]); clearEsgCache(); processEsgQuarterly();

@@ -151,6 +151,7 @@ function processEsgQuarterly() {
         if (needsEsgAudit(stock)) auditEsg(stock);
     }
     applyEsgDemandQuarterly(); // G5
+    if (typeof playerFund === 'object' && playerFund) processEthicalFundQuarterly(); // G6
 }
 
 // ---------------------------------------------------------------------------------
@@ -359,4 +360,86 @@ function orderEsgProjectByPlayer(symbol, id) {
     if (gov.pendingAgm) gov.pendingAgm.items.push(item); else gov.proposals.push({ type: 'esgProject', projectId: id });
     if (typeof logEvent === 'function') logEvent(`Fundusz zgłasza na walne ${stock.name} projekt ESG: ${p.name}.`, 'review');
     return { ok: true, message: `Zgłoszono na walne: ${p.name}.` };
+}
+
+// ---------------------------------------------------------------------------------
+// G6: klient etyczny i fundusz etyczny (makieta 35).
+// (a) Trzeci powód niezadowolenia klientów etycznych: udział NAV w spółkach C i D (ocena publiczna albo Twoje badanie) > 15%, D liczy się podwójnie.
+// (b) Fundusz etyczny (`playerFund.ethical`): napływ +15%, klienci etyczni 2 × częściej, ich zadowolenie +0,02 na kwartał.
+//     Limity: D 0%, C ≤ 5% NAV, B i bez oceny ≤ 40% NAV. Przekroczenie: wiadomość, kwartał na poprawę, potem zaufanie −5 i odejścia klientów etycznych.
+//     Wycofanie deklaracji: zaufanie −3, powrót najwcześniej po 4 kw.
+// ---------------------------------------------------------------------------------
+const ESG_FUND_RULES = { issueShare: 0.15, inflow: 0.15, clientWeight: 2, satQ: 0.02, limits: { D: 0, C: 0.05, B: 0.40 }, graceQ: 1, breachTrust: 5, breachSat: 0.25, withdrawTrust: 3, rejoinQ: 4 };
+/** Litera spółki z punktu widzenia funduszu: Twoje badanie (G7) przed oceną publiczną. */
+function getFundEsgGrade(stock) {
+    const study = typeof getPlayerEsgStudy === 'function' ? getPlayerEsgStudy(stock) : null;
+    return study?.esg?.grade || getEsgRating(stock) || null;
+}
+/** Udział NAV w akcjach według klasy ESG: { A, B, C, D, none, list: { C: [symbole], ... } }. */
+function getFundEsgShares(extra = null) {
+    const nav = typeof getFundAssets === 'function' ? getFundAssets() : 0, out = { A: 0, B: 0, C: 0, D: 0, none: 0, list: { A: [], B: [], C: [], D: [], none: [] } };
+    if (!(nav > 0)) return out;
+    const add = (stock, value) => { const g = getFundEsgGrade(stock) || 'none'; out[g] += value / nav; if (!out.list[g].includes(stock.symbol)) out.list[g].push(stock.symbol); };
+    for (const [sym, pos] of Object.entries(typeof playerPortfolio === 'object' ? playerPortfolio : {})) {
+        const st = stocks.find(x => x.symbol === sym); if (!st || st.assetType || !(pos?.shares > 0)) continue;
+        add(st, pos.shares * st.price);
+    }
+    if (extra?.stock && extra.value > 0) add(extra.stock, extra.value);
+    return out;
+}
+/** Powód niezadowolenia klientów etycznych z udziału C i D (null, gdy w normie). */
+function getFundEsgIssue() {
+    const sh = getFundEsgShares(), bad = sh.C + 2 * sh.D;
+    return bad > ESG_FUND_RULES.issueShare ? `${formatNumberPl(bad * 100, 0)}% NAV w spółkach nieetycznych (C i D, D liczone podwójnie)` : null;
+}
+const isFundEthical = () => Boolean(playerFund?.ethical?.on);
+/** Przekroczone limity funduszu etycznego: [{ cls, share, limit, symbols }]; B liczy też spółki bez oceny. */
+function getEthicalFundBreaches(shares = getFundEsgShares()) {
+    const L = ESG_FUND_RULES.limits, eps = 1e-9;
+    return [['D', shares.D, L.D, shares.list.D], ['C', shares.C, L.C, shares.list.C], ['B', shares.B + shares.none, L.B, [...shares.list.B, ...shares.list.none]]]
+        .filter(([, v, l]) => v > l + eps).map(([cls, share, limit, symbols]) => ({ cls, share, limit, symbols }));
+}
+function canSetFundEthical(on) {
+    if (!playerFund) return { ok: false, message: 'Brak funduszu.' };
+    const e = playerFund.ethical || {};
+    if (on && e.on) return { ok: false, message: 'Fundusz jest już etyczny.' };
+    if (on && Number.isFinite(e.offUntil) && esgQuarter() < e.offUntil) return { ok: false, message: `Powrót do deklaracji najwcześniej w ${formatQuarterDate(e.offUntil)}.` };
+    if (!on && !e.on) return { ok: false, message: 'Fundusz nie jest etyczny.' };
+    return { ok: true };
+}
+function setFundEthical(on) {
+    const c = canSetFundEthical(on); if (!c.ok) return c;
+    const q = esgQuarter();
+    if (on) playerFund.ethical = { on: true, since: q, breachSince: null };
+    else { playerFund.ethical = { on: false, offUntil: q + ESG_FUND_RULES.rejoinQ }; playerFund.trust = Math.max(0, (Number(playerFund.trust) || 0) - ESG_FUND_RULES.withdrawTrust); }
+    if (typeof logEvent === 'function') logEvent(on ? 'Fundusz ogłasza się etycznym: limity spółek C i D w portfelu.' : 'Fundusz wycofuje deklarację etyczną. Zaufanie klientów spada.', 'review');
+    return { ok: true, message: on ? 'Fundusz jest etyczny.' : 'Deklaracja wycofana.' };
+}
+/** Co kwartał: limity funduszu etycznego (ostrzeżenie, kwartał na poprawę, potem kara). */
+function processEthicalFundQuarterly() {
+    if (!isFundEthical()) return null;
+    const e = playerFund.ethical, q = esgQuarter(), br = getEthicalFundBreaches();
+    if (!br.length) { e.breachSince = null; return null; }
+    const text = br.map(b => `${b.cls}: ${formatNumberPl(b.share * 100, 1)}% NAV (limit ${formatNumberPl(b.limit * 100, 0)}%)`).join(', ');
+    if (e.breachSince == null) {
+        e.breachSince = q;
+        if (typeof addMail === 'function') addMail({ sender: 'Dział zgodności', subject: 'Fundusz etyczny: limit przekroczony', body: `Przekroczony limit ${text}. Masz kwartał na poprawę (do końca ${formatQuarterDate(q + ESG_FUND_RULES.graceQ)}). Potem zaufanie spada, a klienci etyczni odchodzą.`, importance: 2, symbol: br[0].symbols[0] });
+        return 'warning';
+    }
+    if (q - e.breachSince < ESG_FUND_RULES.graceQ) return 'grace';
+    playerFund.trust = Math.max(0, (Number(playerFund.trust) || 0) - ESG_FUND_RULES.breachTrust);
+    for (const c of playerFund.clients || []) if (c.type === 'ethical') { c.satisfaction = Math.max(0, c.satisfaction - ESG_FUND_RULES.breachSat); if (typeof noteClientHistory === 'function') noteClientHistory(c, `Fundusz etyczny łamie limit (${text}).`); }
+    e.breachSince = q;
+    if (typeof logEvent === 'function') logEvent(`Fundusz etyczny dalej łamie limit (${text}): zaufanie −${ESG_FUND_RULES.breachTrust}, klienci etyczni odchodzą.`, 'review');
+    return 'penalty';
+}
+/** Linia ostrzeżenia w szufladzie zlecenia (bez blokady zakupu): '' gdy fundusz nie jest etyczny albo zakup mieści się w limicie. */
+function getEthicalOrderWarning(stock, qty) {
+    if (!isFundEthical() || !stock || !(qty > 0)) return null;
+    const g = getFundEsgGrade(stock) || 'none', cls = g === 'none' ? 'B' : g, limit = ESG_FUND_RULES.limits[cls];
+    if (limit == null) return null;
+    const sh = getFundEsgShares({ stock, value: qty * stock.price }), share = cls === 'B' ? sh.B + sh.none : sh[cls];
+    const nav = getFundAssets(), now = getFundEsgShares(), nowShare = cls === 'B' ? now.B + now.none : now[cls];
+    const room = Math.max(0, Math.floor((limit - nowShare) * nav / Math.max(0.01, stock.price)));
+    return { cls, share, limit, over: share > limit + 1e-9, room, graded: g !== 'none' };
 }

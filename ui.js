@@ -716,6 +716,8 @@ function updateDrawerImpact(symbol) {
     box.innerHTML = `Wartość ~${formatZl(e.value, 0)} · prowizja ~${formatZl(e.commission, 2)} · poślizg ~${e.slip >= 0.0005 ? `${formatNumberPl(e.slip * 100)}%` : '0%'} (średnia cena), kurs po zleceniu ~${e.impact >= 0.0005 ? `${formatNumberPl(e.impact * 100)}%` : '0%'} w Twoją niekorzyść`
         + `${e.impact >= 0.01 ? ' <span class="text-warn">— duże zlecenie przy małym obrocie (płynność!)</span>' : ''} · ${formatNumberPl(e.share * 100, 1)}% akcji w obrocie (${formatInt(e.freeFloat)})`;
     if (e.impact >= 0.01 && typeof unlockAcademyEntry === 'function') unlockAcademyEntry('wplyw');
+    const w = typeof getEthicalOrderWarning === 'function' && activeTradingAccount !== 'private' ? getEthicalOrderWarning(stock, quantity) : null; // 0.18.9 G6 (makieta 35): bez blokady zakupu
+    if (w) box.insertAdjacentHTML('beforeend', `<p class="lim-warn${w.over ? '' : ' ok'}" role="status">${w.over ? uiIcon('alert', 14) : uiIcon('lisc', 14)}<span>Fundusz etyczny: po zakupie spółki ${w.cls === 'B' ? (w.graded ? 'B' : 'bez oceny (liczone jak B)') : w.cls} to <b>${formatNumberPl(w.share * 100, 1)}% NAV</b> przy limicie ${formatNumberPl(w.limit * 100, 0)}%.${w.over ? ` W limicie zmieści się jeszcze ${formatInt(w.room)} akcji.` : ''}</span></p>`);
 }
 
 function closeOpenStockDrawer() {
@@ -7121,7 +7123,7 @@ function renderFundFlowReasons() {
     const queued = typeof getQueuedRedemptionUnits === 'function' ? getQueuedRedemptionUnits() : 0;
     box.innerHTML = quarterTable(stats.last, 'Ostatni kwartał') + quarterTable(stats.current, 'Bieżący kwartał')
         + `<p class="text-sm">Bramka umorzeń: wykorzystano ${formatNumberPl(gateUsed, 1)}% z ${formatNumberPl(REDEMPTION_GATE_SHARE * 100, 0)}%, w kolejce ${formatNumberPl(queued, 1)} udziałów.</p>`
-        + `<p class="text-xs text-muted">Nowe udziały powstają tylko w kampanii emisyjnej (Klienci i udziały); duży klient składa ofertę, a Ty decydujesz, czy ją przyjąć.</p>`;
+        + `<p class="text-xs text-muted">Nowe udziały powstają tylko w kampanii emisyjnej (O funduszu → Kampanie); duży klient składa ofertę, a Ty decydujesz, czy ją przyjąć.</p>`;
 }
 
 /** Skrót z powiadomienia: otwiera panel przepływów funduszu. */
@@ -7176,7 +7178,7 @@ function renderFundSummary() {
         </div>
         <div class="fund-period-progress" title="Postęp okresu oceny (15 min gry)">
             <div style="width:${(periodProgress * 100).toFixed(1)}%"></div>
-        </div>`;
+        </div>${typeof renderEthicalFundLine === 'function' ? renderEthicalFundLine() : ''}`;
     updateEmissionControls();
 }
 
@@ -7327,9 +7329,9 @@ function renderPrivatePanel() {
            Kupowanie akcji, które fundusz kupił w tym tygodniu, grozi kontrolą compliance.</p>`;
 }
 
-/** 0.16.1: emisja tylko przez kampanię — przycisk prowadzi do panelu „Klienci i udziały” z kartą kampanii. */
+/** 0.16.1: emisja tylko przez kampanię — przycisk prowadzi do okna „O funduszu”, zakładka Kampanie. */
 function handleFundEmission() {
-    if (typeof openJuMarket === 'function') openJuMarket();
+    if (typeof openJuMarket === 'function') openJuMarket('campaigns');
 }
 
 // =================================================================================
@@ -8352,9 +8354,76 @@ function renderCommercialBanksList() {
 
 let juView = { filter: 'all', clientId: null };
 
-function openJuMarket() {
+let juTab = 'overview';
+const JU_TABS = [['overview', 'Przegląd'], ['clients', 'Klienci'], ['market', 'Rynek udziałów'], ['campaigns', 'Kampanie']];
+function openJuMarket(tab = null) {
+    if (tab) juTab = tab;
     document.getElementById('clients-modal').style.display = 'block';
     renderJuMarket();
+}
+/** 0.18.9 G6 (makieta 35): zakładki okna „O funduszu” (strzałki przełączają). */
+function setJuTab(tab, focus = false) {
+    juTab = tab; renderJuMarket();
+    const main = document.getElementById('ju-main'); if (main) main.scrollTop = 0;
+    if (focus) document.getElementById(`ju-tab-${tab}`)?.focus();
+}
+function renderJuTabs() {
+    const nav = document.getElementById('ju-tabs'); if (!nav) return;
+    const breaches = typeof isFundEthical === 'function' && isFundEthical() ? getEthicalFundBreaches().length : 0;
+    nav.innerHTML = JU_TABS.map(([id, label]) => `<button id="ju-tab-${id}" class="wn-tab" role="tab" aria-selected="${juTab === id}" aria-controls="ju-pane-${id}" tabindex="${juTab === id ? 0 : -1}" onclick="setJuTab('${id}')">${label}${id === 'overview' && breaches ? `<span class="wn-count" aria-label="${breaches} przekroczony limit">${breaches}</span>` : ''}</button>`).join('');
+    nav.onkeydown = e => { const i = JU_TABS.findIndex(t => t[0] === juTab), d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0; if (d) { e.preventDefault(); setJuTab(JU_TABS[(i + d + JU_TABS.length) % JU_TABS.length][0], true); } };
+    for (const [id] of JU_TABS) { const pane = document.getElementById(`ju-pane-${id}`); if (pane) pane.hidden = juTab !== id; }
+}
+/** Zdanie stanu w nagłówku okna. */
+function getJuHeadline() {
+    if (typeof isFundEthical === 'function' && isFundEthical()) {
+        const br = getEthicalFundBreaches()[0], e = playerFund.ethical;
+        return br ? `Fundusz etyczny: limit spółek ${br.cls === 'B' ? 'B i bez oceny' : br.cls} przekroczony, popraw do końca ${formatQuarterDate((e.breachSince ?? macro.quarter) + ESG_FUND_RULES.graceQ)}.` : 'Fundusz etyczny: w limitach.';
+    }
+    return `${playerFund.clients.length} klientów, zaufanie ${formatNumberPl(playerFund.trust, 0)}.`;
+}
+/** Karta „Fundusz etyczny” (makieta 35): przełącznik, limity z paskami, przekroczenie, potwierdzenie wyłączenia. */
+let juEthicalConfirm = false;
+function renderEthicalFundCard() {
+    if (typeof ESG_FUND_RULES === 'undefined' || !playerFund) return '';
+    const on = isFundEthical(), e = playerFund.ethical || {}, sh = getFundEsgShares(), L = ESG_FUND_RULES.limits, pc = v => formatNumberPl(v * 100, 1);
+    const head = `<div class="of-fe-sw"><h3 id="fe-t">${uiIcon('lisc', 16)}Fundusz etyczny</h3><span class="of-sw-state" aria-hidden="true">${on ? 'włączony' : 'wyłączony'}</span><button type="button" class="sw" role="switch" aria-checked="${on}" aria-labelledby="fe-t" onclick="toggleEthicalFundFromUi()"><i aria-hidden="true"></i></button></div>`;
+    if (!on) {
+        const bad = sh.C + 2 * sh.D, wait = Number.isFinite(e.offUntil) && macro.quarter < e.offUntil;
+        return `<section class="of-card of-fe" aria-labelledby="fe-t">${head}<p>Gdy ogłosisz fundusz etyczny: <b>napływ nowych pieniędzy +15%</b>, klienci etyczni przychodzą 2 razy częściej. W zamian limity: spółki D 0%, C do 5%, B i bez oceny do 40% NAV. Na dopasowanie portfela masz 1 kwartał.${wait ? ` Ponowne włączenie najwcześniej w ${escapeHtml(formatQuarterDate(e.offUntil))}.` : ''}</p>
+            <div class="of-reason">${uiIcon('klienci', 14)}<span>Klienci etyczni patrzą na spółki C i D: dziś ${pc(bad)}% NAV (D liczy się podwójnie). Niezadowolenie zaczyna się od ${formatNumberPl(ESG_FUND_RULES.issueShare * 100, 0)}%.</span></div></section>`;
+    }
+    const br = getEthicalFundBreaches(sh);
+    const meters = [['D', sh.D, L.D, 'Spółki D'], ['C', sh.C, L.C, 'Spółki C'], ['B', sh.B + sh.none, L.B, 'Spółki B i bez oceny']].map(([g, v, lim, name]) => {
+        const over = v > lim + 1e-9, scale = Math.max(lim * 1.5, 0.1, v * 1.1);
+        return `<li><span class="lb">${esgBadge(g)} ${name}</span><span class="v n${over ? ' over' : ''}">${over ? uiIcon('alert', 12) + ' ' : ''}${pc(v)}% z ${formatNumberPl(lim * 100, 0)}%${over ? '<span class="sr-only"> limit przekroczony</span>' : ''}</span><span class="of-meter${over ? ' over' : ''}" role="img" aria-label="${name}: ${pc(v)}% NAV przy limicie ${formatNumberPl(lim * 100, 0)}%${over ? ', przekroczony' : ''}"><i style="width:${Math.min(100, v / scale * 100)}%"></i><b style="left:${lim / scale * 100}%"></b></span></li>`;
+    }).join('');
+    const alert = br.length ? `<div class="of-alert" role="alert">${uiIcon('alert', 16)}<div>${br.map(b => `<b>Limit spółek ${b.cls === 'B' ? 'B i bez oceny' : b.cls} przekroczony: ${pc(b.share)}% NAV przy limicie ${formatNumberPl(b.limit * 100, 0)}%.</b>`).join(' ')} Popraw do końca ${escapeHtml(formatQuarterDate((e.breachSince ?? macro.quarter) + ESG_FUND_RULES.graceQ))}. Potem zaufanie −${ESG_FUND_RULES.breachTrust} i odejścia klientów etycznych.<ul>${br.flatMap(b => b.symbols.slice(0, 4).map(sym => { const st = stocks.find(x => x.symbol === sym); const g = getFundEsgGrade(st); return `<li>${escapeHtml(st?.name || sym)} (${escapeHtml(sym)}), ${g ? `ESG ${g}` : 'bez oceny'}</li>`; })).join('')}</ul></div></div>` : '';
+    const confirm = juEthicalConfirm ? `<div class="of-confirm" role="group" aria-label="Potwierdź wyłączenie"><p>Wyłączenie deklaracji: zaufanie −${ESG_FUND_RULES.withdrawTrust}, a ponowne włączenie najwcześniej w ${escapeHtml(formatQuarterDate(macro.quarter + ESG_FUND_RULES.rejoinQ))}.</p><div class="of-btns"><button class="btn-secondary" type="button" onclick="confirmEthicalFundOff(true)">Wyłącz</button><button class="btn-secondary" type="button" id="fe-keep" onclick="confirmEthicalFundOff(false)">Zostaw włączony</button></div></div>` : '';
+    return `<section class="of-card of-fe" aria-labelledby="fe-t">${head}<p>Od ${escapeHtml(formatQuarterDate(e.since))}. <b>Napływ nowych pieniędzy +15%</b>, klienci etyczni przychodzą 2 razy częściej i są bardziej zadowoleni. W zamian limity udziału w NAV:</p><ul class="of-lim">${meters}</ul>${alert}${confirm}</section>`;
+}
+function toggleEthicalFundFromUi() {
+    if (isFundEthical()) { juEthicalConfirm = true; renderJuMarket(); document.getElementById('fe-keep')?.focus(); return; }
+    const r = setFundEthical(true); showToast(r.ok ? r.message : r.message, r.ok ? 'success' : 'warning'); renderJuMarket();
+}
+function confirmEthicalFundOff(yes) {
+    juEthicalConfirm = false;
+    if (yes) { const r = setFundEthical(false); showToast(r.message, r.ok ? 'info' : 'warning'); }
+    renderJuMarket();
+}
+/** Klienci w skrócie: typ z ikoną, liczba, średnie zadowolenie. */
+function renderJuClientMix() {
+    const by = {};
+    for (const c of playerFund.clients) { const b = by[c.type] = by[c.type] || [0, 0]; b[0]++; b[1] += c.satisfaction; }
+    const rows = Object.entries(by).sort((a, b) => b[1][0] - a[1][0]).map(([k, [n, sum]]) => { const def = CLIENT_TYPES[k] || {}, avg = Math.round(sum / n * 100); return `<li>${dataIcon(def.icon, 14)}<span>${escapeHtml(def.label || k)}</span><span class="n">${n}</span><span class="of-sat${avg < 50 ? ' low' : ''}" role="img" aria-label="Zadowolenie ${avg} na 100"><i style="width:${avg}%"></i></span><span class="n">${avg}</span></li>`; }).join('');
+    return `<section class="of-card" aria-labelledby="mix-t"><h3 id="mix-t">${uiIcon('klienci', 16)}Klienci w skrócie</h3><p>Liczba i średnie zadowolenie według typu.</p><ul class="of-mix">${rows || '<li class="text-muted">Brak klientów.</li>'}</ul></section>`;
+}
+/** Linia stanu funduszu etycznego w panelu „Mój fundusz”. */
+function renderEthicalFundLine() {
+    if (typeof isFundEthical !== 'function' || !playerFund) return '';
+    const on = isFundEthical(), br = on ? getEthicalFundBreaches()[0] : null;
+    const text = !on ? 'Fundusz nie jest etyczny' : br ? `Fundusz etyczny: limit ${br.cls === 'B' ? 'B i bez oceny' : br.cls} przekroczony` : 'Fundusz etyczny: w limitach';
+    return `<p class="fe-line${br ? ' over' : ''}">${uiIcon(br ? 'alert' : 'lisc', 14)}<span>${text}</span><a href="#" onclick="event.preventDefault(); openJuMarket('overview')">O funduszu</a></p>`;
 }
 
 function setJuClientFilter(filter) {
@@ -8373,19 +8442,15 @@ function formatPremium(value) {
     return `<span class="${pct > 0.05 ? 'text-up' : pct < -0.05 ? 'text-down' : 'text-muted'}">${pct >= 0 ? '+' : ''}${formatNumberPl(pct, 1)}%</span>`;
 }
 
-/** B4: opłata za zarządzanie i kampania marketingowa (pod paskiem rynku JU). */
+/** B4: opłata za zarządzanie (Przegląd) i kampanie (zakładka Kampanie) w oknie „O funduszu” (0.18.9 G6, makieta 35). */
 function renderJuDecisions() {
-    const ticker = document.getElementById('ju-ticker');
-    if (!ticker || !playerFund) return;
-    let box = document.getElementById('ju-decisions');
-    if (!box) { box = document.createElement('div'); box.id = 'ju-decisions'; box.className = 'bank-grid mt-3'; ticker.after(box); }
-    if (box.contains(document.activeElement)) return;
+    const fee = document.getElementById('ju-fee'), camps = document.getElementById('ju-campaigns');
+    if (!playerFund) return;
+    if (fee && !fee.contains(document.activeElement)) fee.innerHTML = `<section class="of-card" aria-labelledby="fee-t"><h3 id="fee-t">${uiIcon('teczka', 16)}Opłata za zarządzanie</h3><p>Niższa opłata przyciąga klientów, zwłaszcza skner. Wyższa zasila budżet korporacji i Twój udział, ale klienci wrażliwi na koszty odchodzą. Zmiana raz na kwartał.</p>
+            <div class="of-field"><input type="text" inputmode="decimal" id="fee-rate-input" value="${(getPlayerFeeRate() * 100).toFixed(2)}" aria-label="Opłata w procentach rocznie" aria-describedby="fee-h"><button class="btn-secondary" onclick="setPlayerFeeRate(parseFloat(document.getElementById('fee-rate-input').value.replace(',', '.'))); renderJuMarket();">Ustaw</button><small id="fee-h">% rocznie, od 0,5 do 3; teraz ${formatNumberPl((getPlayerFeeRate() * 100), 2)}%, standard ${formatNumberPl((MANAGEMENT_FEE_ANNUAL * 100), 1)}%</small></div></section>`;
+    if (!camps || camps.contains(document.activeElement)) return;
     const campaign = playerFund.campaign;
-    box.innerHTML = `
-        <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('teczka', 20)}</span><div><h4>Opłata za zarządzanie</h4><span class="bank-card-type">teraz ${formatNumberPl((getPlayerFeeRate() * 100), 2)}% rocznie · standard ${formatNumberPl((MANAGEMENT_FEE_ANNUAL * 100), 1)}%</span></div></header>
-            <p class="text-sm">Niższa opłata przyciąga klientów (zwłaszcza skner), wyższa zasila budżet korporacji i Twój udział, ale klienci wrażliwi na koszty odchodzą. Zmiana raz na kwartał.</p>
-            <div class="bank-card-form"><input type="text" inputmode="decimal" id="fee-rate-input" value="${(getPlayerFeeRate() * 100).toFixed(2)}" aria-label="Opłata w % rocznie">
-            <button onclick="setPlayerFeeRate(parseFloat(document.getElementById('fee-rate-input').value.replace(',', '.'))); renderJuMarket();">Ustaw (0,5–3%)</button></div></article>
+    camps.innerHTML = `
         <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('megafon', 20)}</span><div><h4>Kampania marketingowa</h4><span class="bank-card-type">koszt ${formatZl(getMarketingCost(), 0)} z budżetu korporacji · ${MARKETING_WEEKS} tyg.</span></div></header>
             ${campaign?.weeksLeft > 0 ? `<p class="text-sm">Trwa: ${dataIcon(MARKETING_TARGETS[campaign.target].icon)} ${MARKETING_TARGETS[campaign.target].label}, zostało ${campaign.weeksLeft} tyg.</p>`
                 : `<p class="text-sm">Dodatkowi kupujący udziały z wybranej grupy klientów. Nowe wpłaty nadal wymagają zaufania ≥ 50.</p>
@@ -8402,13 +8467,17 @@ function renderJuMarket() {
     const weekFlows = playerStats ? playerStats.inflow : 0;
     const best = funds.find(fund => fund.id === juMarket.bestFundId);
 
+    renderJuTabs(); // 0.18.9 G6 (makieta 35)
+    const head = document.getElementById('ju-headline'); if (head) head.textContent = getJuHeadline();
+    const eth = document.getElementById('ju-ethical'); if (eth && !eth.contains(document.activeElement)) eth.innerHTML = renderEthicalFundCard();
+    const mix = document.getElementById('ju-mix'); if (mix) mix.innerHTML = renderJuClientMix();
     document.getElementById('ju-ticker').innerHTML = [
-        ['Klienci funduszu', playerFund.clients.length],
+        ['NAV', formatZl(getFundAssets(), 0)],
+        ['Zaufanie', formatNumberPl(playerFund.trust, 0)],
+        ['Klienci', playerFund.clients.length],
         ['Wpłaty nowych (tydz.)', formatZl(weekFlows, 0)],
         ['Premia do NAV', formatPremium(playerStats?.premium)],
         ['Obrót udziałami (tydz.)', formatNumberPl(playerStats?.volume || 0, 1)],
-        ['Tydzień rynku', juMarket.week],
-        ['Najlepiej sprzedaje się', best ? escapeHtml(best.name) : '—']
     ].map(([label, value]) => `<div class="bank-ticker-item"><span>${label}</span><strong>${value}</strong></div>`).join('');
     renderJuDecisions();
 
@@ -8446,7 +8515,7 @@ function renderJuMarket() {
         const def = CLIENT_TYPES[key];
         const count = key === 'all' ? playerFund.clients.length : playerFund.clients.filter(client => client.type === key).length;
         if (key !== 'all' && !count) return '';
-        return `<button class="${juView.filter === key ? 'active' : ''}" onclick="setJuClientFilter('${key}')">${key === 'all' ? 'Wszyscy' : `${dataIcon(def.icon)} ${def.label}`} (${count})</button>`;
+        return `<button class="${juView.filter === key ? 'active' : ''}" aria-pressed="${juView.filter === key}" onclick="setJuClientFilter('${key}')">${key === 'all' ? 'Wszyscy' : `${dataIcon(def.icon)} ${def.label}`} (${count})</button>`;
     }).join('');
 
     const nav = getFundNav();
