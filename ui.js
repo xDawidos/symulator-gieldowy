@@ -2004,6 +2004,7 @@ function renderStockTableRow(stock, isSubsidiary, parentSymbol, stockTableBody, 
     metaLine.innerHTML = `${escapeHtml(primarySector)} · <span class="ms-tick">${escapeHtml(stock.symbol)}</span>${escapeHtml(metaRest)}`; // makieta 18 cz. 3: ticker w Condensed (bez osobnej kolumny — nazwa zostaje szeroka)
     metaLine.title = metaLine.textContent; // pełny opis, gdy wiersz jest ucięty
     const pubRating = typeof getPublicRating === 'function' ? getPublicRating(stock) : null; // 0.18.7 E0a: ocena publiczna (≥ A) w wierszu listy
+    if (typeof renderEsgRowBadge === 'function') { const esgB = renderEsgRowBadge(stock); if (esgB) metaLine.insertAdjacentHTML('afterbegin', esgB); } // 0.18.9 G8 (makieta 34): po znaczku oceny kredytowej
     if (pubRating) metaLine.insertAdjacentHTML('afterbegin', renderRatingChip(stock, pubRating)); // makieta 26 + 0.18.7 E5 (skala audytora, „+N”)
     metaLine.prepend(infoButton); // 0.18.6 O6 (D50): karta i gwiazdka w linii opisu — nazwa ma całą szerokość kolumny
     infoButton.insertAdjacentHTML('afterend', favoriteButtonHtml(stock.symbol, stock.name));
@@ -4571,6 +4572,7 @@ function renderCompanyCardOverview(stock) {
                 ${stock.ceo?.name ? `<h4>Prezes</h4><p class="m-0"><strong>${uiIcon('zarzad', 14)} ${escapeHtml(stock.ceo.name)}</strong>${!foreign && stock.ceo.id ? ` <button class="ceo-link" onclick="openTiedProfile('${escapeHtml(getCeoRelationKey(stock.ceo.id))}')">${uiIcon('grupa', 12)} Profil w Tied</button>` : ''}</p>
                     <p class="text-xs text-muted mt-0">wiek ${stock.ceo.age ?? '—'}, staż ${Math.floor((stock.ceo.tenure || 0) / 4)} lat</p>
                     <div class="ceo-traits-container">${traits}</div>` : ''}
+                ${typeof renderEsgShortcut === 'function' ? renderEsgShortcut(stock) : ''}
                 ${stock.deputies?.length ? `<h4>Wiceprezesi</h4><ul class="ceo-deputies">${stock.deputies.map(deputy => `<li>${escapeHtml(deputy.name)} <button class="ceo-link" onclick="openTiedProfile('${escapeHtml(getCeoRelationKey(deputy.id))}')">${uiIcon('grupa', 12)} Profil w Tied</button></li>`).join('')}</ul>` : ''}
                 ${typeof renderCompanyEnergyKpi === 'function' ? renderCompanyEnergyKpi(stock) : ''}
                 ${!foreign ? renderEcoImpactSection(stock) : ''}
@@ -4591,7 +4593,7 @@ function describeForeignCompany(stock) {
 
 function renderForeignCardManage(stock) {
     const i = stock.foreignSource, o = getOversight(i.country), held = getIssuerHeld(i) / Math.max(1, i.shares);
-    return `<p class="text-sm">Udział funduszu: <strong>${formatNumberPl(held * 100, 2)}%</strong>. Nadzór kraju: <strong>${escapeHtml(o.name)}</strong> — próg wezwania ${Math.round(o.callThreshold * 100)}% (kupno ponad próg grozi ostrzeżeniem, karą i nakazem odsprzedaży).</p>
+    return renderEsgBlock(stock) + `<p class="text-sm">Udział funduszu: <strong>${formatNumberPl(held * 100, 2)}%</strong>. Nadzór kraju: <strong>${escapeHtml(o.name)}</strong> — próg wezwania ${Math.round(o.callThreshold * 100)}% (kupno ponad próg grozi ostrzeżeniem, karą i nakazem odsprzedaży).</p>
         <p class="text-sm text-muted">Walne zgromadzenia, spółki zależne i zlecenia strategii dla obcych spółek nie działają w tej wersji — kurs, raporty, dywidendy, splity i prezes są takie same jak u krajowych.</p>`;
 }
 
@@ -4697,6 +4699,57 @@ function renderValuationSection(stock, f) {
         <p class="text-xs text-muted">Różne metody dają różne wyniki — traktuj je jako przedział, nie jedną cenę.${level < 2 ? ' Kolejne metody: Analityk Finansowy poziom 2.' : ''}</p>${consensus}`;
 }
 
+// =================================================================================
+// 0.18.9 G8 (makieta 34): Etyka i ESG w karcie spółki — znaczek w wierszu listy, skrót w Przeglądzie, pełny blok w Zarządzaniu
+// =================================================================================
+/** Kara za greenwashing w ostatnich 8 kw. (G9): wpis albo null. */
+const getEsgPenaltyRecent = stock => (stock?.esgPenalty && macro.quarter - stock.esgPenalty.q < 8 ? stock.esgPenalty : null);
+/** Znaczek ESG w wierszu listy: ocena publiczna (pierwszeństwo), inaczej Twoje badanie; bez oceny pusto. */
+function renderEsgRowBadge(stock) {
+    if (!stock || stock.assetType || stock.foreignSource || typeof getEsgRating !== 'function') return '';
+    const pub = getEsgRating(stock), study = typeof getPlayerEsgStudy === 'function' ? getPlayerEsgStudy(stock) : null, pen = getEsgPenaltyRecent(stock);
+    const grade = pub || study?.esg?.grade; if (!grade && !pen) return '';
+    const mine = !pub && Boolean(study?.esg);
+    const badge = grade ? (mine ? `<span class="esg g-${grade} mine"><span class="k" aria-hidden="true">ESG</span>${grade}<span class="esg-mine-w" aria-hidden="true">Twoje</span><span class="sr-only">: ocena ESG ${grade}, ${ESG_WORD[grade]}, Twoje badanie</span></span>` : esgBadge(grade)) : '';
+    const penIc = pen ? `<span class="esg-pen" title="Kara za greenwashing ${escapeHtml(formatQuarterDate(pen.q))}">${uiIcon('alert', 12)}<span class="sr-only">kara za greenwashing ${escapeHtml(formatQuarterDate(pen.q))}</span></span>` : '';
+    return `${badge}${penIc}`;
+}
+/** Pasek filaru 0–100 z kreskami progów liter. */
+function esgPillarBar(name, key, v) {
+    const g = esgGrade(v), marks = ESG_RULES.grades.slice(0, 3).map(([, t]) => `<b style="left:${t}%"></b>`).join('');
+    return `<li class="g-${g}"><span class="nm">${name}</span><span class="esg-pil"><span><i aria-hidden="true">${key}</i>${g}</span></span><span class="esg-bar" role="img" aria-label="${name}: ${g}, ${Math.round(v)} na 100 punktów"><i style="width:${Math.max(0, Math.min(100, v))}%"></i>${marks}</span><span class="n">${Math.round(v)}</span></li>`;
+}
+function renderEsgPillarList(v) { return `<ul class="esg-bars">${esgPillarBar('Środowisko', 'E', v.e)}${esgPillarBar('Społeczeństwo', 'S', v.s)}${esgPillarBar('Ład korporacyjny', 'G', v.g)}</ul>`; }
+function esgClaimText(stock) { return stock.ethicsClaim ? `<span class="esg-claim">${uiIcon('lisc', 12)} deklaruje etykę</span>` : '<span class="esg-claim muted">bez deklaracji</span>'; }
+/** Skrót w Przeglądzie (prawa kolumna pod Prezesem): tylko przy ocenie publicznej albo Twoim badaniu. */
+function renderEsgShortcut(stock) {
+    if (!stock || stock.foreignSource || typeof getEsgView !== 'function') return '';
+    const v = getEsgView(stock); if (!v) return '';
+    const weakest = ['e', 's', 'g'].sort((a, b) => v[a] - v[b])[0], aud = v.mine ? 'Twoje badanie' : escapeHtml(AUDITORS.find(a => a.id === v.auditor)?.name || 'audytor');
+    const until = v.mine ? getPlayerEsgStudy(stock)?.until : stock.esgRating?.until;
+    return `<section class="esg-short" aria-labelledby="esg-s-${stock.symbol}"><h4 id="esg-s-${stock.symbol}">Etyka i ESG</h4>
+        <p class="m-0">${esgBadge(v.grade, { mine: v.mine })} <span class="esg-word">${ESG_WORD[v.grade]}</span> · ${esgClaimText(stock)}</p>
+        <p class="text-xs text-muted m-0">${aud}, ważne do ${escapeHtml(formatQuarterDate(until))} · najsłabszy filar: ${ESG_PILLAR_NAMES[weakest]} ${Math.round(v[weakest])} pkt</p>
+        <a href="#" class="text-xs" onclick="event.preventDefault(); typeof setCompanyCardTab === 'function' && setCompanyCardTab('manage')">Szczegóły w zakładce Zarządzanie</a></section>`;
+}
+/** Pełny blok „Etyka i ESG” (Zarządzanie): ocena publiczna, brak oceny, Twoje badanie z różnicą względem deklaracji, kara za greenwashing. */
+function renderEsgBlock(stock) {
+    if (!stock || typeof getEsgRating !== 'function') return '';
+    if (stock.foreignSource) return `<section class="esg-block" aria-label="Etyka i ESG"><h4>Etyka i ESG</h4><p class="m-0">${esgBadge(null)} <span class="text-sm text-muted">Oceny ESG są na razie krajowe.</span></p></section>`;
+    const pub = getEsgRating(stock) ? stock.esgRating : null, study = typeof getPlayerEsgStudy === 'function' ? getPlayerEsgStudy(stock) : null, pen = getEsgPenaltyRecent(stock);
+    const aud = id => escapeHtml(AUDITORS.find(a => a.id === id)?.name || id);
+    const main = pen && pen.official && !pub ? '' : pub ? `<div class="esg-main">${esgBadge(pub.grade, { big: true })}<div><b>${ESG_WORD[pub.grade]}</b>, wynik ${Math.round(getEsgScoreOf(pub))} pkt<br><span class="text-xs text-muted">${pen?.official ? 'ocena urzędu (UEiE)' : aud(pub.auditor)}, ${escapeHtml(formatQuarterDate(pub.q))}, ważna do ${escapeHtml(formatQuarterDate(pub.until))}</span></div><span class="esg-claim-w">${esgClaimText(stock)}</span></div>${Number.isFinite(pub.e) ? renderEsgPillarList(pub) : ''}`
+        : `<div class="esg-main">${esgBadge(null)}<div>${esgClaimText(stock)}<br><span class="text-xs text-muted">Oceniane są spółki z Platynowej i elitarnych, ze Złotej co rok, a niższe, gdy same zamówią ocenę albo ogłoszą etykę.</span></div></div><p class="text-sm m-0"><a href="#" onclick="event.preventDefault(); rateuView.tab = 'order'; rateuView.symbol = '${stock.symbol}'; openInternetPage('rateu')">Zamów badanie w RateU</a></p>`;
+    let mine = '';
+    if (study?.esg) {
+        const diff = stock.ethicsClaim && study.claim === 'green';
+        mine = `<div class="esg-mine"><p class="m-0"><span class="mine-tag">Twoje badanie</span> ${aud(study.auditor)}, ${escapeHtml(formatQuarterDate(study.ready))}, ważne do ${escapeHtml(formatQuarterDate(study.until))}</p>
+            <div class="esg-main">${esgBadge(study.esg.grade, { big: true, mine: true })}<div><b>${ESG_WORD[study.esg.grade]}</b>, wynik ${study.esg.score} pkt</div></div>${renderEsgPillarList(study.esg)}
+            ${diff ? `<p class="esg-warn" role="note">${uiIcon('alert', 14)}<span>Deklaracja etyki nie zgadza się z badaniem. Przy rozporządzeniu UEiE spółce grozi kara za greenwashing.</span></p>` : study.claim === 'ok' ? `<p class="text-xs m-0">${uiIcon('ok', 12)} deklaracja zgodna z badaniem</p>` : ''}</div>`;
+    } else if (study?.credit) mine = `<p class="text-xs text-muted m-0"><span class="mine-tag">Twoje badanie</span> ${aud(study.auditor)}: ${escapeHtml(formatAuditorGrade(study.credit, study.auditor))}, nie bada ESG.</p>`;
+    const penBox = pen ? `<p class="esg-warn" role="note">${uiIcon('alert', 14)}<span><b>Kara za greenwashing, ${escapeHtml(formatQuarterDate(pen.q))}.</b> Deklaracja wycofana. Kara ${formatZl(pen.fine, 0)} (${formatNumberPl(pen.revenuePct * 100, 1)}% przychodu), kurs −${formatNumberPl(pen.drop * 100, 0)}%, ład korporacyjny −20 do ${escapeHtml(formatQuarterDate(pen.q + 8))}.</span></p>` : '';
+    return `<section class="esg-block" aria-label="Etyka i ESG"><h4>Etyka i ESG</h4>${main}${mine}${penBox}</section>`;
+}
 function renderCompanyCardManage(stock) {
     const pct = typeof getFundStakePct === 'function' ? getFundStakePct(stock) : 0;
     const governed = typeof isGovernedCompany === 'function' && isGovernedCompany(stock);
@@ -4710,6 +4763,7 @@ function renderCompanyCardManage(stock) {
             ${pct > 0.5 ? `<button onclick="openManagementModal('${stock.symbol}')">${uiIcon('korona', 14)} Zarządzaj spółką</button>` : ''}
         </div>
         ${typeof renderEnergyManage === 'function' ? renderEnergyManage(stock) : ''}
+        ${renderEsgBlock(stock)}
         ${renderStrategyOrders(stock)}`;
 }
 

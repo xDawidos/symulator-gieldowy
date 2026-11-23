@@ -17637,6 +17637,23 @@ group('0.18.3 Mechaniki grafu', () => {
             assert(INTERNET_FAVORITES.some(f => f.id === 'rateu' && f.host === 'rateu.pl'), 'w ulubionych');
         } finally { root.remove(); ratingState = saved; oversight.energy.level = lvl; rateuView = { tab: 'ranking', symbol: null, auditor: null }; }
     });
+    test('0.18.9 G8 (makieta 34): skrót w Przeglądzie tylko przy ocenie lub badaniu; blok: ocena, brak oceny, Twoje badanie z greenwashingiem, kara; znaczek w wierszu', () => {
+        const st = makeCompany('EG8', { sector: ['Przemysł'] }); resetWorld([st]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' }); clearEsgCache();
+        const hasLetterText = html => { const d = document.createElement('div'); d.innerHTML = html; return [...d.querySelectorAll('.esg:not(.none)')].every(b => /ocena ESG [ABCD], /.test(b.textContent)); };
+        assertEq(renderEsgShortcut(st), '', 'bez oceny: bez skrótu'); assertEq(renderEsgRowBadge(st), '', 'bez oceny: bez znaczka');
+        const none = renderEsgBlock(st); assert(/brak oceny/.test(none) && /Zamów badanie w RateU/.test(none), 'stan: brak oceny');
+        st.esgRating = { grade: 'B', e: 64, s: 61, g: 66, q: macro.quarter, until: macro.quarter + 4, auditor: 'aud1' };
+        const pub = renderEsgBlock(st); assert(/pojedyncze zarzuty/.test(pub) && (pub.match(/class="esg-bar"/g) || []).length === 3 && hasLetterText(pub), 'stan: ocena publiczna');
+        assert(/Etyka i ESG/.test(renderEsgShortcut(st)) && /ESG.*B/.test(renderEsgRowBadge(st)), 'skrót i znaczek przy ocenie');
+        delete st.esgRating; st.ethicsClaim = { q: 0, green: true };
+        getEsgStudies().push({ symbol: st.symbol, auditor: 'aud2', esgAudit: true, q: macro.quarter - 1, ready: macro.quarter, until: macro.quarter + 4, done: true, esg: { e: 30, s: 40, g: 50, grade: 'D', score: 39 }, claim: 'green' });
+        const mine = renderEsgBlock(st); assert(/Twoje badanie/.test(mine) && /nie zgadza się/.test(mine) && hasLetterText(mine), 'stan: Twoje badanie z różnicą');
+        assert(/Twoje/.test(renderEsgRowBadge(st)) && /Etyka i ESG/.test(renderEsgShortcut(st)), 'znaczek i skrót z badania');
+        st.esgPenalty = { q: macro.quarter, fine: 1e6, revenuePct: 0.02, drop: 0.06, official: true };
+        assert(/Kara za greenwashing/.test(renderEsgBlock(st)) && /kara za greenwashing/.test(renderEsgRowBadge(st)), 'stan: kara');
+        assert(/na razie krajowe/.test(renderEsgBlock({ foreignSource: {}, symbol: 'X.DE' })), 'zagraniczna');
+        assert(![none, pub, mine].some(h => /[\u{1F300}-\u{1FAFF}]/u.test(h)), 'bez emoji');
+    });
     test('0.18.9 G1: pokrycie: Platynowa zawsze dostaje ocenę, Brązowa bez deklaracji nie', () => {
         const p = makeCompany('ESP', { sector: ['Finanse'] }), z = makeCompany('ESZ', { sector: ['Finanse'] }); p.exchange = 'PLATINUM'; z.exchange = 'BRONZE';
         resetWorld([p, z]); clearEsgCache(); processEsgQuarterly();
