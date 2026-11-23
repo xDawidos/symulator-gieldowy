@@ -1,4 +1,4 @@
-# 35. Fundusz etyczny (panel Mój fundusz i szuflada zlecenia; 0.18.9 G6) — do akceptacji (2026-11-23)
+# 35. Fundusz etyczny (panel Mój fundusz i szuflada zlecenia; 0.18.9 G6) — zaakceptowane 2026-11-23
 
 Makieta: [makiety/35_fundusz_etyczny.html](makiety/35_fundusz_etyczny.html) (samodzielna). Plan: `plany/plan_0.18.9_esg.md`, G6. Bez nowych okien: przełącznik i potwierdzenie są w panelu, ostrzeżenie w istniejącej szufladzie zlecenia (`stock-drawer-impact`).
 

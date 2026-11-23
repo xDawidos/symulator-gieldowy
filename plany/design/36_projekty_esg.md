@@ -1,4 +1,4 @@
-# 36. Projekty ESG (okno Inwestycje spółki; 0.18.9 G4) — do akceptacji (2026-11-23)
+# 36. Projekty ESG (okno Inwestycje spółki; 0.18.9 G4) — zaakceptowane 2026-11-23
 
 Makieta: [makiety/36_projekty_esg.html](makiety/36_projekty_esg.html) (samodzielna). Plan: `plany/plan_0.18.9_esg.md`, G4. Bez nowego okna: istniejące okno `openCompanyInvestments` dostaje dwie sekcje, a karty z katalogu opcję „wersja eko”.
 
@@ -27,8 +27,8 @@ Filary nie mają własnych barw: kolory należą do liter A–D, a filar rozpozn
 | Audyt łańcucha dostaw | G | 0,8% | 2 kw. | +6, ujawnia powiązania z D |
 | Program antykorupcyjny | G | 1% | 3 kw. | +10 |
 
-## Do planu (czat planowania)
-- Gracz bez większości: czy może zgłosić projekt jako uchwałę na walnym (makieta to sugeruje w ramce), czy tylko większościowiec? Plan mówi „WZA albo większość”.
+## Decyzje (koordynator 0.18, 2026-11-23)
+- Gracz **bez większości** może zgłosić projekt ESG jako **uchwałę na walnym (WZA)**; o realizacji decyduje głosowanie. **Większościowiec** zleca projekt od razu. Ramka „bez kontroli” w makiecie mówi o tej drodze; w kodzie przycisk w tym stanie prowadzi do zgłoszenia uchwały zamiast „Zleć”.
 
 ## Prompt dla czatu kodu
-> Według `plany/design/36_projekty_esg.md` i makiety `plany/design/makiety/36_projekty_esg.html` (po wdrożeniu G4 planu 0.18.9): w oknie Inwestycje spółki (`openCompanyInvestments`) dodaj nad katalogiem stan oceny ESG spółki, sekcję „Projekty ESG” z `ESG_PROJECTS` (ikona, filar z nazwą, opis, skutek słowem i liczbą, koszt w PLN z udziałem przychodu i czasem, przycisk „Zleć” wyłączony dla projektu w toku i bez kontroli spółki, z ramką powodu) i sekcję „Trwające projekty” z paskiem postępu w kwartałach. Pozycje `INVESTMENT_CATALOG` z emisjami lub produkcją dostają pole „Wersja eko” (koszt +20%, `ecoCut` +5 pp do `ecoMax`) z paskiem redukcji emisji i ceną w przycisku. Bez nowego okna i bez emoji. Testy DOM: 9 projektów z filarem i skutkiem słowem; przycisk wyłączony bez kontroli i dla projektu w toku; zlecenie dodaje pozycję do trwających; wersja eko zmienia koszt o 20%.
+> Według `plany/design/36_projekty_esg.md` i makiety `plany/design/makiety/36_projekty_esg.html` (po wdrożeniu G4 planu 0.18.9): w oknie Inwestycje spółki (`openCompanyInvestments`) dodaj nad katalogiem stan oceny ESG spółki, sekcję „Projekty ESG” z `ESG_PROJECTS` (ikona, filar z nazwą, opis, skutek słowem i liczbą, koszt w PLN z udziałem przychodu i czasem, przycisk „Zleć” dla większościowca, a bez większości „Zgłoś na walne” tworzący uchwałę WZA; wyłączony dla projektu w toku) i sekcję „Trwające projekty” z paskiem postępu w kwartałach. Pozycje `INVESTMENT_CATALOG` z emisjami lub produkcją dostają pole „Wersja eko” (koszt +20%, `ecoCut` +5 pp do `ecoMax`) z paskiem redukcji emisji i ceną w przycisku. Bez nowego okna i bez emoji. Testy DOM: 9 projektów z filarem i skutkiem słowem; bez większości przycisk tworzy uchwałę WZA zamiast zlecenia; przycisk wyłączony dla projektu w toku; zlecenie dodaje pozycję do trwających; wersja eko zmienia koszt o 20%.

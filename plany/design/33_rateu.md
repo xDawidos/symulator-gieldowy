@@ -1,4 +1,4 @@
-# 33. RateU (Internet; 0.18.9 G7) — do akceptacji (2026-11-23)
+# 33. RateU (Internet; 0.18.9 G7) — zaakceptowane 2026-11-23
 
 Makieta: [makiety/33_rateu.html](makiety/33_rateu.html) (samodzielna). Plan: `plany/plan_0.18.9_esg.md`, G7. Wspólne style liter ESG są w makietach 33–36 takie same (blok „litery ESG”).
 
@@ -21,9 +21,9 @@ Makieta: [makiety/33_rateu.html](makiety/33_rateu.html) (samodzielna). Plan: `pl
 
 Telefon: kolumny tabel jedna pod drugą (`@media (max-width: 900px)`), formularz zamówienia w jednej kolumnie.
 
-## Do planu (czat planowania)
-- Test G7 mówi „zakładka Ekologia ukryta poniżej poziomu 4”, a zlecenie designu mówi o stanie zablokowanym z opisem. Makieta pokazuje zakładkę zablokowaną (gracz wie, że istnieje i co ją otwiera). Proponuję zmienić test na „zablokowana z opisem, bez listy”.
-- Ponowne zamówienie badania spółki z ważnym badaniem: makieta blokuje (opcja wyłączona). Do potwierdzenia w planie.
+## Decyzje (koordynator 0.18, 2026-11-23)
+- Zakładka Ekologia poniżej poziomu 4 UEiE jest **zablokowana z opisem, bez listy** (jak w makiecie). Test G7 sprawdza blokadę zamiast ukrycia.
+- Spółki z ważnym badaniem **nie można zbadać ponownie**: opcja w `select` jest wyłączona z dopiskiem „masz już badanie” (jak w makiecie).
 
 ## Prompt dla czatu kodu
-> Według `plany/design/33_rateu.md` i makiety `plany/design/makiety/33_rateu.html` (po wdrożeniu G1–G5 planu 0.18.9): dodaj RateU jako siódmą stronę Internetu (`INTERNET_FAVORITES`: `id: 'rateu'`, `host: 'rateu.pl'`, ikona `ranking`, ton morski) z sekcją `net-page-rateu`. Strona ma trzy zakładki ARIA (tablist, strzałki): Ranking (2 × 10 według oceny publicznej, łącznie i E S G, audytor i data, „masz X% NAV” przy spółkach w portfelu), Zamów badanie (Etos Consulting, `select` spółek, koszt 0,02% kapitalizacji w widełkach 15 000–300 000 PLN z `recordPayment`, wynik po 1 kw., ważny 4 kw., limit 4 na kwartał, lista Twoich badań ze zgodnością deklaracji) i Ekologia (od poziomu UEiE 4; niżej stan zablokowany z kłódką i poziomem urzędu). Znaczki liter ESG jako wspólna funkcja (np. `esgBadgeHtml(grade, { mine, big })` i `esgPillarsHtml`) z barwami A morski, B niebieski, C pomarańczowy, D różany; zawsze z literą i przedrostkiem ESG, bez emoji. Testy: Ranking 10 + 10; badanie odejmuje opłatę w widełkach i daje wynik po 1 kw.; piąte badanie w kwartale niemożliwe; Ekologia bez listy poniżej poziomu 4; brak emoji.
+> Według `plany/design/33_rateu.md` i makiety `plany/design/makiety/33_rateu.html` (po wdrożeniu G1–G5 planu 0.18.9): dodaj RateU jako siódmą stronę Internetu (`INTERNET_FAVORITES`: `id: 'rateu'`, `host: 'rateu.pl'`, ikona `ranking`, ton morski) z sekcją `net-page-rateu`. Strona ma trzy zakładki ARIA (tablist, strzałki): Ranking (2 × 10 według oceny publicznej, łącznie i E S G, audytor i data, „masz X% NAV” przy spółkach w portfelu), Zamów badanie (Etos Consulting, `select` spółek, koszt 0,02% kapitalizacji w widełkach 15 000–300 000 PLN z `recordPayment`, wynik po 1 kw., ważny 4 kw., limit 4 na kwartał, lista Twoich badań ze zgodnością deklaracji) i Ekologia (od poziomu UEiE 4; niżej stan zablokowany z kłódką i poziomem urzędu). Znaczki liter ESG jako wspólna funkcja (np. `esgBadgeHtml(grade, { mine, big })` i `esgPillarsHtml`) z barwami A morski, B niebieski, C pomarańczowy, D różany; zawsze z literą i przedrostkiem ESG, bez emoji. Testy: Ranking 10 + 10; badanie odejmuje opłatę w widełkach i daje wynik po 1 kw.; piąte badanie w kwartale niemożliwe; Ekologia zablokowana z opisem i bez listy poniżej poziomu 4; spółka z ważnym badaniem wyłączona w wyborze; brak emoji.
