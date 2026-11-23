@@ -187,6 +187,10 @@ Słowa użytkownika: różne giełdy mają różne progi wejścia, najzwyklejsze
 - **Pliki:** `listings.js`, `finance.js` (oversight.knf), `ui.js`, `main.js` (stan zasad w zapisie).
 - **Bramka:** w serii 20 lat 1–4 zmiany zasad; debiuty na grę w ±20% względem bazy; rozkład poziomów nadal w bramce E0a.
 
+#### E0e. ESG jako kryterium awansu (dopisane 2026-11-23, wdrożenie w 0.18.9 G9)
+
+- Gdy UEiE jest na poziomie 5, raz w roku z szansą 25% wprowadza ESG jako kryterium awansu: Platynowa ≥ C, Rubinowa ≥ B, Szmaragdowa i Diamentowa ≥ B. Ogłoszenie i okres przejściowy jak w E0d (1 kw. wcześniej, 4 kw. dla notowanych). Kryterium znika, gdy UEiE spadnie poniżej 5. Szczegóły: `plan_0.18.9_esg.md`.
+
 ### E1. Stopniowe odblokowywanie → przeniesione do 1.0
 
 Decyzja użytkownika 2026-11-18: E1 przechodzi do wersji 1.0 (ostatniej wersji gry), `plan_1.0.md`. W 0.18.7 nic nie jest blokowane; wariant „zablokowane” stanu pustego (O2) zostaje w komponencie, ale nieużywany.
