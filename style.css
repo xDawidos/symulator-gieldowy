@@ -6414,3 +6414,49 @@ fieldset.sector-chips { border: 0; margin: 0; padding: 0; min-inline-size: 0; }
 .ev li svg { margin-top: 2px; color: var(--color-text-muted); }
 .ev .swan svg { color: var(--color-text-down); }
 @media (max-width: 760px) { .hi { grid-template-columns: minmax(0, 1fr); } .hi-side { border-right: 0; border-bottom: 1px solid var(--ink-700); } }
+
+/* 0.18.9 ESG: znaczki liter (wspólne dla makiet 33–36) i projekty ESG w oknie Inwestycje spółki (makieta 36) */
+.esg { --e-c: var(--color-text-secondary); display: inline-flex; align-items: center; gap: 4px; height: 18px; padding: 0 5px; border: 1px solid color-mix(in srgb, var(--e-c) 60%, transparent); border-radius: 3px; color: var(--e-c); font: 600 11px var(--font-family-mono); white-space: nowrap; flex: none; }
+.esg .k { font-weight: 400; font-size: 10px; color: var(--color-text-muted); }
+.g-A { --e-c: var(--teal-400); } .g-B { --e-c: var(--blue-400); } .g-C { --e-c: var(--orange-400); } .g-D { --e-c: var(--rose-400); }
+.esg.big { height: 30px; padding: 0 10px; font-size: 18px; gap: 6px; } .esg.big .k { font-size: 12px; }
+.esg.none { --e-c: var(--ink-400); font-family: var(--font-family-sans); font-weight: 400; }
+.esg.mine { border-style: dashed; }
+.mine-tag { display: inline-flex; align-items: center; gap: 4px; padding: 0 6px; border: 1px solid rgba(245, 165, 36, .35); border-radius: 4px; color: var(--amber-300); font-size: 11px; white-space: nowrap; }
+.esg-pil { display: inline-flex; gap: 4px; }
+.esg-pil > span { display: inline-flex; align-items: center; gap: 3px; height: 20px; padding: 0 5px; border-radius: 3px; background: color-mix(in srgb, var(--e-c, var(--ink-400)) 14%, transparent); color: var(--e-c, var(--color-text-secondary)); font: 600 11px var(--font-family-mono); }
+.esg-pil > span i { font-style: normal; font-weight: 400; color: var(--color-text-muted); }
+.esg-word { font-size: 12px; color: var(--color-text-secondary); }
+.esg-inv { display: grid; gap: 6px; margin-bottom: 14px; }
+.esg-inv h5 { display: flex; align-items: center; gap: 6px; margin: 8px 0 0; }
+.esg-now { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border-radius: 6px; background: var(--color-bg-sunken); font-size: 12px; color: var(--color-text-muted); }
+.esg-pj { list-style: none; margin: 0; padding: 0; border: 1px solid var(--ink-700); border-radius: 6px; }
+.esg-pj li { display: grid; grid-template-columns: 28px minmax(0, 1.6fr) minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--ink-750); }
+.esg-pj li:last-child { border-bottom: 0; }
+.esg-pj .ico { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 6px; background: var(--color-bg-sunken); color: var(--color-text-secondary); }
+.esg-pj .nm b { display: block; font-weight: 600; }
+.esg-pj .nm small { color: var(--color-text-muted); font-size: 12px; }
+.esg-pj .pf { display: inline-flex; align-items: center; gap: 4px; margin-right: 6px; padding: 0 6px; border-radius: 3px; background: var(--color-bg-sunken); color: var(--color-text-secondary); font-size: 11px; font-weight: 600; }
+.esg-pj .eff { font-size: 12px; color: var(--color-text-secondary); }
+.esg-pj .eff b { color: var(--color-text-primary); font-weight: 600; }
+.esg-pj .eff small { display: block; color: var(--color-text-muted); }
+.esg-pj .go { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.esg-pj .go small { font-size: 11px; color: var(--color-text-muted); white-space: nowrap; }
+.esg-pj .go button { display: inline-flex; align-items: center; gap: 4px; }
+@media (max-width: 680px) { .esg-pj li { grid-template-columns: 28px minmax(0, 1fr); } .esg-pj .eff, .esg-pj .go { grid-column: 2; align-items: flex-start; } }
+.esg-nocontrol { display: flex; gap: 6px; align-items: flex-start; margin: 0; padding: 8px 10px; border: 1px solid var(--ink-600); border-radius: 4px; font-size: 12px; color: var(--color-text-secondary); }
+.esg-run { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.esg-run li { display: grid; grid-template-columns: minmax(0, 1fr) 160px; gap: 4px 12px; align-items: center; padding: 8px 12px; border: 1px solid var(--ink-700); border-radius: 6px; font-size: 12px; }
+.esg-run b { font-weight: 600; font-size: 13px; } .esg-run small { color: var(--color-text-muted); }
+.esg-run .pr { display: grid; gap: 3px; text-align: right; }
+.esg-prog { display: block; height: 6px; border-radius: 3px; background: var(--ink-750); position: relative; }
+.esg-prog i { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--ink-300); }
+@media (max-width: 560px) { .esg-run li { grid-template-columns: 1fr; } .esg-run .pr { text-align: left; } }
+.esg-eco { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border: 1px dashed var(--ink-500); border-radius: 4px; font-size: 12px; color: var(--color-text-secondary); cursor: pointer; }
+.esg-eco:has(input:checked) { border-style: solid; border-color: color-mix(in srgb, var(--teal-400) 60%, transparent); }
+.esg-eco input { margin: 2px 0 0; accent-color: var(--teal-400); width: 16px; height: 16px; }
+.esg-eco b { color: var(--color-text-primary); font-weight: 600; }
+.esg-eco .cut { display: block; margin-top: 4px; }
+.esg-cutbar { display: inline-block; vertical-align: middle; position: relative; width: 140px; height: 6px; border-radius: 3px; background: var(--ink-750); margin-right: 6px; }
+.esg-cutbar i { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--teal-400); }
+.esg-cutbar s { position: absolute; top: 0; bottom: 0; border-radius: 0 3px 3px 0; background: color-mix(in srgb, var(--teal-400) 45%, transparent); text-decoration: none; }

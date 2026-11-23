@@ -209,16 +209,17 @@ function getEsgCreditAdj(esg) {
 // (+20% kosztu pozycji, ecoCut +5%, razem do ecoMax); (c) brak szarej strefy działa przez filar S;
 // (d) projekty ESG: filar, koszt jako udział rocznego przychodu, czas, przyrost filaru (stock.esgBonus, do 20 na filar).
 // ---------------------------------------------------------------------------------
+// Liczby z makiety 36 (zaakceptowana 2026-11-23); kalibracja w G11. Ikony z UI_ICON_PATHS.
 const ESG_PROJECTS = [
-    { id: 'forest', name: 'Nasadzenia leśne', pillar: 'e', cost: 0.008, q: 2, gain: [3, 5], text: 'Tysiące drzew na terenach po zakładach.' },
-    { id: 'wastewater', name: 'Oczyszczalnia ścieków', pillar: 'e', cost: 0.025, q: 4, gain: [5, 8], heatCut: 0.5, emitOnly: true, text: 'Mniej zanieczyszczeń i mniej incydentów ekologicznych.' },
-    { id: 'solar_roofs', name: 'Panele na dachach zakładów', pillar: 'e', cost: 0.03, q: 4, gain: [3, 5], ecoCut: 0.03, emitOnly: true, text: 'Własny prąd z dachów: niższe emisje.' },
-    { id: 'recycling', name: 'Recykling opakowań', pillar: 'e', cost: 0.015, q: 3, gain: [3, 6], text: 'Opakowania wracają do obiegu.' },
-    { id: 'community', name: 'Program dla lokalnej społeczności', pillar: 's', cost: 0.008, q: 2, gain: [3, 5], text: 'Remonty szkół i boisk przy zakładach.' },
-    { id: 'internships', name: 'Szkolenia i staże', pillar: 's', cost: 0.012, q: 3, gain: [4, 6], satisfaction: 3, text: 'Staże dla absolwentów i kursy dla załogi.' },
-    { id: 'foundation', name: 'Fundacja edukacyjna', pillar: 's', cost: 0.02, q: 4, gain: [5, 8], text: 'Stypendia i programy dla szkół.' },
-    { id: 'supply_audit', name: 'Audyt łańcucha dostaw', pillar: 'g', cost: 0.008, q: 2, gain: [3, 5], text: 'Sprawdzenie dostawców pod kątem pracy i korupcji.' },
-    { id: 'anticorruption', name: 'Program antykorupcyjny', pillar: 'g', cost: 0.012, q: 3, gain: [4, 7], text: 'Kodeks, szkolenia i niezależny kanał zgłoszeń.' }
+    { id: 'forest', name: 'Nasadzenia leśne', pillar: 'e', cost: 0.005, q: 2, gain: [4, 4], icon: 'lisc', text: 'Las wokół zakładów.' },
+    { id: 'wastewater', name: 'Oczyszczalnia ścieków', pillar: 'e', cost: 0.02, q: 4, gain: [8, 8], incidentMult: 0.7, emitOnly: true, icon: 'emisje', text: 'Własna oczyszczalnia przy fabryce.', extra: 'incydenty ekologiczne o 30% rzadsze' },
+    { id: 'solar_roofs', name: 'Panele na dachach zakładów', pillar: 'e', cost: 0.03, q: 3, gain: [6, 6], ecoCut: 0.03, emitOnly: true, icon: 'slonce', text: 'Energia ze słońca na własne potrzeby.', extra: 'emisje niższe o 3 pp' },
+    { id: 'recycling', name: 'Recykling opakowań', pillar: 'e', cost: 0.01, q: 2, gain: [5, 5], icon: 'odswiez', text: 'Zwrot i przerób opakowań.' },
+    { id: 'community', name: 'Program dla lokalnej społeczności', pillar: 's', cost: 0.005, q: 2, gain: [5, 5], icon: 'serce', text: 'Dofinansowanie szkół i klubów.' },
+    { id: 'internships', name: 'Szkolenia i staże', pillar: 's', cost: 0.01, q: 4, gain: [6, 6], satisfaction: 3, icon: 'pracownik', text: 'Staże i kursy dla pracowników.', extra: 'zadowolenie pracowników +3' },
+    { id: 'foundation', name: 'Fundacja edukacyjna', pillar: 's', cost: 0.015, q: 4, gain: [8, 8], icon: 'akademia', text: 'Stypendia w regionie.' },
+    { id: 'supply_audit', name: 'Audyt łańcucha dostaw', pillar: 'g', cost: 0.008, q: 2, gain: [6, 6], icon: 'lancuch', text: 'Sprawdzenie dostawców i partnerów.', extra: 'ujawnia powiązania ze spółkami D' },
+    { id: 'anticorruption', name: 'Program antykorupcyjny', pillar: 'g', cost: 0.01, q: 3, gain: [10, 10], icon: 'waga', text: 'Procedury, szkolenia, sygnaliści.' }
 ];
 const ESG_PROJECT_RULES = { maxBonus: 20, yearChance: 0.025, pressure: 1, claimBoost: 1.5, cashFloor: 2, keepDone: 3, ecoUpgradeShare: 0.2, ecoUpgradeCut: 0.05, ecoUpgradeChance: 0.4 }; // g4: 6%/rok dawało 45% spółek z projektem po 20 latach (cel 10–25%)
 const ECO_UPGRADE_IDS = ['new_factory', 'new_mine', 'chip_factory', 'pharma_factory', 'energy_plant', 'food_processing_plant', 'production_facility', 'textile_factory', 'electronics_assembly', 'brewery', 'industrial_park'];
@@ -268,7 +269,8 @@ function finishEsgProject(stock, entry) {
     const b = stock.esgBonus = stock.esgBonus || {};
     b[entry.pillar] = Math.min(ESG_PROJECT_RULES.maxBonus, (Number(b[entry.pillar]) || 0) + entry.gain);
     if (p?.ecoCut) { stock.ecoCut = (Number(stock.ecoCut) || 0) + p.ecoCut; if (typeof clearEmissionCache === 'function') clearEmissionCache(); }
-    if (p?.heatCut && stock.ecoHeat) stock.ecoHeat = +(stock.ecoHeat * p.heatCut).toFixed(3);
+    if (p?.incidentMult) stock.ecoIncidentMult = p.incidentMult;
+    if (p?.id === 'supply_audit' && typeof logEvent === 'function') { const bad = stocks.filter(x => x !== stock && (x.symbol === stock.isSubsidiaryOf || x.isSubsidiaryOf === stock.symbol) && getEsgBase(x).grade === 'D'); if (bad.length) logEvent(`${stock.name}: audyt łańcucha dostaw ujawnia powiązania ze spółkami ocenianymi na D (${bad.map(x => x.symbol).join(', ')}).`, 'company'); }
     if (p?.satisfaction && stock.workforce) stock.workforce.satisfaction = Math.min(100, (Number(stock.workforce.satisfaction) || 0) + p.satisfaction);
     stock.esgProjectsDone = (Number(stock.esgProjectsDone) || 0) + 1;
 }
@@ -304,7 +306,10 @@ function ecoUpgradeInvestment(stock, project) {
     return true;
 }
 function onInvestmentFinishedEsg(stock, project) {
-    if (!canEcoUpgrade(stock, project) || (typeof canFundControlAgm === 'function' && canFundControlAgm(stock))) return;
+    if (!canEcoUpgrade(stock, project)) return;
+    const own = stock.ecoOrders || [];
+    if (own.includes(project.id)) { stock.ecoOrders = own.filter(id => id !== project.id); if (!stock.ecoOrders.length) delete stock.ecoOrders; ecoUpgradeInvestment(stock, project); return; } // wersja eko zamówiona przez gracza (makieta 36)
+    if (typeof canFundControlAgm === 'function' && canFundControlAgm(stock)) return;
     const p = typeof getEcoPressure === 'function' ? getEcoPressure() / 100 : 0;
     if (Math.random() < ESG_PROJECT_RULES.ecoUpgradeChance * getCeoProjectFactor(stock, 'e') * (1 + p)) ecoUpgradeInvestment(stock, project);
 }
@@ -327,4 +332,31 @@ function applyEsgDemandQuarterly() {
     const shifts = getEsgDemandShifts();
     for (const { stock, d } of shifts) if (d) stock.price = Math.max(0.01, stock.price * (1 + d));
     return shifts;
+}
+
+// ---------------------------------------------------------------------------------
+// G4 (makieta 36): gracz z większością zleca projekt od razu; z głosami, ale bez większości, zgłasza go jako uchwałę na walnym.
+// ---------------------------------------------------------------------------------
+const ESG_WORD = { A: 'etyczna', B: 'pojedyncze zarzuty', C: 'nieetyczna', D: 'duże zarzuty' };
+const ESG_PILLAR_NAMES = { e: 'Środowisko', s: 'Społeczeństwo', g: 'Ład korporacyjny' };
+const getEsgProjectSize = pts => pts >= 9 ? 'duży' : pts >= 5 ? 'średni' : 'mały';
+/** Projekty ESG zgłoszone przez fundusz na walne (czekają na głosowanie). */
+function getEsgAgmProposals(stock) {
+    const gov = stock?.governance; if (!gov) return [];
+    return [...(gov.proposals || []), ...(gov.pendingAgm?.items || [])].filter(x => x.type === 'esgProject').map(x => x.projectId);
+}
+function orderEsgProjectByPlayer(symbol, id) {
+    const stock = stocks.find(s => s.symbol === symbol), p = getEsgProject(id);
+    if (!stock || !p) return { ok: false, message: 'Nieznany projekt.' };
+    if (!canStartEsgProject(stock, p)) return { ok: false, message: 'Ten projekt jest już w toku albo filar ma pełny wzrost.' };
+    if (canFundControlAgm(stock)) {
+        const entry = startEsgProject(stock, id, 'player');
+        return entry ? { ok: true, message: `Zlecono: ${p.name}.` } : { ok: false, message: 'Nie udało się zlecić projektu.' };
+    }
+    if (!(getFundStakePct(stock) > 0)) return { ok: false, message: 'Projekt może zgłosić tylko akcjonariusz.' };
+    if (getEsgAgmProposals(stock).includes(id)) return { ok: false, message: 'Ten projekt jest już zgłoszony na walne.' };
+    const gov = ensureGovernance(stock), item = { id: `p-esg-${id}`, kind: 'activist', type: 'esgProject', projectId: id, by: 'player', label: `Wniosek funduszu: projekt ESG „${p.name}”`, playerVote: 'for' };
+    if (gov.pendingAgm) gov.pendingAgm.items.push(item); else gov.proposals.push({ type: 'esgProject', projectId: id });
+    if (typeof logEvent === 'function') logEvent(`Fundusz zgłasza na walne ${stock.name} projekt ESG: ${p.name}.`, 'review');
+    return { ok: true, message: `Zgłoszono na walne: ${p.name}.` };
 }

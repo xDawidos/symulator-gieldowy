@@ -8425,11 +8425,12 @@ function optimizeBankChoice(stock) {
     }
 }
 
-function forceCompanyInvestment(symbol, investmentId) {
+function forceCompanyInvestment(symbol, investmentId, eco = false) {
     const stock = stocks.find(s => s.symbol === symbol);
     if (!stock) return;
 
     const result = startCompanyInvestment(stock, investmentId, 'owner');
+    if (result.ok && eco && typeof ECO_UPGRADE_IDS === 'object' && ECO_UPGRADE_IDS.includes(investmentId)) stock.ecoOrders = [...new Set([...(stock.ecoOrders || []), investmentId])]; // 0.18.9 G4: dopłata 20% przy zakończeniu
 
     if (!result.ok) {
         showToast(result.message, 'error');

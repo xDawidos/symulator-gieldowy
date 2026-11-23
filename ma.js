@@ -1736,6 +1736,7 @@ function buildAgmAgenda(stock) {
     if (isForeignShare(stock)) items.push(...getForeignAgmItems(stock)); // wynagrodzenia, zmiana prezesa
 
     for (const proposal of gov.proposals) {
+        if (proposal.type === 'esgProject') { items.push({ id: `p-esg-${proposal.projectId}`, kind: 'activist', type: 'esgProject', projectId: proposal.projectId, by: 'player', label: `Wniosek funduszu: projekt ESG „${getEsgProject(proposal.projectId)?.name || proposal.projectId}”` }); continue; } // 0.18.9 G4
         items.push({ id: `p-${proposal.type}`, kind: 'activist', type: proposal.type, by: 'player', label: `Wniosek funduszu: ${ACTIVIST_PROPOSALS[proposal.type].label}` });
     }
     gov.proposals = [];
@@ -1919,6 +1920,10 @@ function applyAgmResolution(stock, item) {
         case 'spinoff': { // 0.14 T4: wydzielenie po uchwale walnego
             const child = typeof executeSpinoff === 'function' ? executeSpinoff(stock) : null;
             return child ? `nowa spółka: ${child.name} (${child.symbol})` : 'wydzielenie odłożone';
+        }
+        case 'esgProject': { // 0.18.9 G4: uchwała o projekcie ESG (wniosek funduszu bez większości)
+            const entry = typeof startEsgProject === 'function' ? startEsgProject(stock, item.projectId, 'agm') : null;
+            return entry ? `spółka zleca projekt ESG (${formatZl(entry.cost, 0)})` : 'projekt niemożliwy';
         }
         case 'raiseDividend': {
             const order = DIVIDEND_POLICY_ORDER;

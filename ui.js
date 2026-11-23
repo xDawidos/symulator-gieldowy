@@ -8843,14 +8843,15 @@ function renderInvestmentPanel(stock, container, canAct) {
         else if (!canAct) action = '<span class="text-muted">—</span>';
         else if (!canFinanceAmount(stock, isConstruction ? getConstructionSpec(inv.id).cost * 1.2 : cost)) action = '<span class="text-down">brak środków</span>';
         else if (limitReached) action = '<span class="text-warn">limit projektów</span>';
-        else action = `<button class="btn-xs" onclick="forceCompanyInvestment('${stock.symbol}', '${inv.id}')">${isConstruction ? 'Przetarg' : 'Zleć'}</button>`;
+        else action = `<button class="btn-xs" onclick="forceCompanyInvestment('${stock.symbol}', '${inv.id}', Boolean(document.getElementById('eco-${stock.symbol}-${inv.id}')?.checked)); refreshInvestmentViews('${stock.symbol}')">${isConstruction ? 'Przetarg' : 'Zleć'}</button>`;
+        const eco = canAct && typeof renderEcoOption === 'function' ? renderEcoOption(stock, inv, cost) : ''; // 0.18.9 G4
         return `<tr>
             <td class="inv-name">${investmentIcon(inv)}${escapeHtml(inv.name)}</td>
             <td>${formatZl(cost, 0)}</td>
             <td>${inv.durationDays} dni</td>
             <td>${formatNumberPl((getExpectedAnnualRoi(inv.incomeBonus) * 100), 0)}% / rok</td>
             <td>${action}</td>
-        </tr>`;
+        </tr>${eco ? `<tr class="esg-eco-row"><td colspan="5">${eco}</td></tr>` : ''}`;
     }).join('');
 
     section.innerHTML = `
@@ -8865,6 +8866,59 @@ function renderInvestmentPanel(stock, container, canAct) {
     container.appendChild(section);
 }
 
+// =================================================================================
+// 0.18.9 ESG: wspólne znaczki (makiety 33–36) i sekcje w oknie Inwestycje spółki (G4, makieta 36)
+// =================================================================================
+/** Znaczek oceny łącznej: litera z przedrostkiem ESG i tekstem dla czytnika; `mine` = Twoje badanie (przerywana ramka). */
+function esgBadge(grade, o = {}) {
+    if (!grade) return '<span class="esg none">brak oceny</span>';
+    return `<span class="esg g-${grade}${o.big ? ' big' : ''}${o.mine ? ' mine' : ''}"><span class="k" aria-hidden="true">ESG</span>${grade}<span class="sr-only">: ocena ESG ${grade}, ${ESG_WORD[grade]}${o.mine ? ', Twoje badanie' : ''}</span></span>`;
+}
+/** Filary E, S, G jako litery (z punktami, gdy `pts`). */
+function esgPillars(v, pts = false) {
+    return `<span class="esg-pil">${['e', 's', 'g'].map(k => { const g = esgGrade(v[k]); return `<span class="g-${g}" title="${ESG_PILLAR_NAMES[k]}"><i aria-hidden="true">${k.toUpperCase()}</i>${g}<span class="sr-only"> ${ESG_PILLAR_NAMES[k]} ${g}, ${Math.round(v[k])} pkt</span>${pts ? `<i aria-hidden="true">${Math.round(v[k])}</i>` : ''}</span>`; }).join('')}</span>`;
+}
+/** Ocena do pokazania graczowi: Twoje badanie (G7), inaczej publiczna; null bez oceny. */
+function getEsgView(stock) {
+    const study = typeof getPlayerEsgStudy === 'function' ? getPlayerEsgStudy(stock) : null;
+    if (study?.esg) return { ...study.esg, mine: true, q: study.q };
+    const r = stock?.esgRating;
+    return getEsgRating(stock) ? { grade: r.grade, e: r.e, s: r.s, g: r.g, q: r.q, auditor: r.auditor, mine: false } : null;
+}
+function renderEsgInvestSection(stock) {
+    if (!stock || stock.assetType || stock.isBankStock || typeof ESG_PROJECTS === 'undefined') return '';
+    const ctl = canFundControlAgm(stock), stake = getFundStakePct(stock), pctTxt = formatNumberPl(stake * 100, 0);
+    const v = getEsgView(stock), score = v ? Math.round(ESG_RULES.weights.e * v.e + ESG_RULES.weights.s * v.s + ESG_RULES.weights.g * v.g) : 0;
+    const now = `<div class="esg-now"><span>Ocena ESG spółki${v ? ` (${v.mine ? 'Twoje badanie' : 'publiczna'}, ${escapeHtml(formatQuarterDate(v.q))})` : ''}:</span>${esgBadge(v?.grade, { mine: v?.mine })}${v ? `<span class="esg-word">${ESG_WORD[v.grade]}, ${score} pkt</span>${esgPillars(v, true)}` : ''}</div>`;
+    const running = (stock.esgProjects || []).filter(x => !x.done), proposed = getEsgAgmProposals(stock), q = macro.quarter;
+    const canAsk = ctl || stake > 0;
+    const rows = ESG_PROJECTS.map(p => {
+        const busy = running.some(x => x.id === p.id), prop = proposed.includes(p.id), ok = canStartEsgProject(stock, p), cost = getEsgProjectCost(stock, p), pts = p.gain[0];
+        const label = busy ? 'w toku' : prop ? 'zgłoszony na walne' : !ok ? 'niedostępny' : ctl ? `Zleć za ${formatZl(cost, 0)}` : `${uiIcon('glosowanie', 14)}Zgłoś na walne`;
+        const aria = ctl ? `Zleć ${p.name} za ${formatZl(cost, 0)}` : `Zgłoś ${p.name} na walne, koszt ${formatZl(cost, 0)}`;
+        return `<li><span class="ico">${uiIcon(p.icon, 16)}</span><span class="nm"><b>${escapeHtml(p.name)}</b><small><span class="pf">${p.pillar.toUpperCase()} ${ESG_PILLAR_NAMES[p.pillar]}</span>${escapeHtml(p.text)}</small></span>
+            <span class="eff"><b>${ESG_PILLAR_NAMES[p.pillar]} +${pts} pkt</b> (${getEsgProjectSize(pts)})${p.extra ? `<small>${escapeHtml(p.extra)}</small>` : ''}</span>
+            <span class="go">${canAsk ? `<button class="btn-xs" type="button" data-esg-project="${p.id}" ${busy || prop || !ok ? 'disabled' : ''} aria-label="${aria}" onclick="esgProjectFromUi('${stock.symbol}', '${p.id}')">${label}</button>` : ''}<small>${formatNumberPl(p.cost * 100, 1)}% przychodu, ${p.q} kw.</small></span></li>`;
+    }).join('');
+    const nocontrol = !ctl && stake > 0 ? `<p class="esg-nocontrol">${uiIcon('glosowanie', 14)}<span>Projekty ESG zleca większościowiec od razu. Masz ${pctTxt}% głosów, bez większości: możesz zgłosić projekt jako uchwałę na najbliższym walnym. Przejdzie tylko wtedy, gdy zgodzą się pozostali akcjonariusze. Wtedy spółka sama zleci projekt.</span></p>` : '';
+    const run = running.map(x => { const p = getEsgProject(x.id), of = Math.max(1, x.until - x.q), done = Math.max(0, Math.min(of, q - x.q)); return `<li><span><b>${escapeHtml(p?.name || x.id)}</b><br><small>od ${escapeHtml(formatQuarterDate(x.q))}, po zakończeniu ${ESG_PILLAR_NAMES[x.pillar]} +${x.gain} pkt</small></span><span class="pr"><span class="esg-prog" role="img" aria-label="Postęp ${done} z ${of} kwartałów"><i style="width:${done / of * 100}%"></i></span><small>${done} z ${of} kw.</small></span></li>`; })
+        .concat(proposed.map(id => { const p = getEsgProject(id); return `<li><span><b>${escapeHtml(p?.name || id)}</b><br><small>uchwała na najbliższe walne, po przyjęciu ${ESG_PILLAR_NAMES[p?.pillar]} +${p?.gain[0]} pkt</small></span><span class="pr"><span class="esg-word">${uiIcon('glosowanie', 12)} czeka na głosowanie</span><small>za: Twoje ${pctTxt}%, potrzeba ponad 50%</small></span></li>`; })).join('');
+    return `<section class="esg-inv" aria-labelledby="esg-pj-t-${stock.symbol}">${now}
+        <h5 id="esg-pj-t-${stock.symbol}">${uiIcon('lisc', 16)} Projekty ESG</h5><p class="text-xs text-muted">Koszt jako część rocznego przychodu spółki, płaci spółka. Punkty filaru rosną po zakończeniu projektu.</p>${nocontrol}<ul class="esg-pj">${rows}</ul>
+        <h5>${uiIcon('zegar', 16)} Trwające projekty</h5><ul class="esg-run">${run || '<li><small class="text-muted">Brak trwających projektów.</small></li>'}</ul></section>`;
+}
+function esgProjectFromUi(symbol, id) {
+    const r = orderEsgProjectByPlayer(symbol, id);
+    showToast(r.message, r.ok ? 'success' : 'warning');
+    refreshInvestmentViews(symbol);
+}
+/** Pole „Wersja eko” przy pozycji katalogu z produkcją (makieta 36): +20% kosztu, redukcja emisji +5 pp do maks. */
+function renderEcoOption(stock, inv, cost) {
+    if (!ECO_UPGRADE_IDS.includes(inv.id) || getStockEcoCut(stock) >= ENERGY_OFFICE_RULES.ecoMax) return '';
+    const cut = getStockEcoCut(stock), max = ENERGY_OFFICE_RULES.ecoMax, to = Math.min(max, cut + ESG_PROJECT_RULES.ecoUpgradeCut), pc = v => formatNumberPl(v * 100, 0);
+    return `<label class="esg-eco"><input type="checkbox" id="eco-${stock.symbol}-${inv.id}"><span><b>Wersja eko</b>: koszt +20% (<span class="n">+${formatZl(cost * ESG_PROJECT_RULES.ecoUpgradeShare, 0)}</span>, płatne przy zakończeniu), emisje spółki niższe o 5 punktów procentowych.<span class="cut"><span class="esg-cutbar" role="img" aria-label="Redukcja emisji: dziś ${pc(cut)}%, po ulepszeniu ${pc(to)}%, maksimum ${pc(max)}%"><i style="width:${cut / max * 100}%"></i><s style="left:${cut / max * 100}%;width:${(to - cut) / max * 100}%"></s></span><span class="text-muted">redukcja emisji ${pc(cut)}% → <b>${pc(to)}%</b> z maks. ${pc(max)}%</span></span></span></label>`;
+}
+
 /** Okno inwestycji dla dowolnej spółki (podgląd; akcje tylko przy władzy korony). */
 function openCompanyInvestments(symbol) {
     const stock = stocks.find(s => s.symbol === symbol);
@@ -8873,6 +8927,7 @@ function openCompanyInvestments(symbol) {
     if (!stock || !modal || !body) return;
     document.getElementById('company-investments-title').textContent = `Inwestycje: ${stock.name} (${stock.symbol})`;
     body.innerHTML = '';
+    if (typeof renderEsgInvestSection === 'function') body.insertAdjacentHTML('beforeend', renderEsgInvestSection(stock)); // 0.18.9 G4 (makieta 36)
     renderInvestmentPanel(stock, body, getFundStakePct(stock) > 0.5);
     modal.style.display = 'block';
 }

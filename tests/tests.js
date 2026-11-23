@@ -17550,6 +17550,26 @@ group('0.18.3 Mechaniki grafu', () => {
         assert(dc[0] > 0 && dc[2] < 0, 'A w górę, D w dół'); assertEq(dc[3], 0, 'bez oceny bez zmian');
         assert(Math.abs(dc[0] + dc[1] + dc[2]) < 1e-6 * cap0.reduce((a, b) => a + b, 0), `suma ${dc[0] + dc[1] + dc[2]}`);
     });
+    test('0.18.9 G4 UI (makieta 36): 9 projektów z filarem i skutkiem słowem; większościowiec zleca, bez większości uchwała WZA; w toku wyłączony; wersja eko +20%', () => {
+        const s = makeCompany('EUI', { sector: ['Przemysł'] }); s.cash = 1e9; s.fundamentals = { ...(s.fundamentals || {}), revenue: 1e8 }; s.totalShares = 1000;
+        resetWorld([s]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' }); clearEsgCache();
+        const host = document.createElement('div'), draw = () => { host.innerHTML = renderEsgInvestSection(s); return host; };
+        playerPortfolio[s.symbol] = { shares: 120, avgPrice: s.price, assetType: 'stock' };
+        draw(); const items = host.querySelectorAll('.esg-pj li'); assertEq(items.length, 9, 'projekty');
+        assert([...items].every(li => /Środowisko|Społeczeństwo|Ład korporacyjny/.test(li.querySelector('.pf').textContent) && /\((mały|średni|duży)\)/.test(li.querySelector('.eff').textContent)), 'filar i skutek słowem');
+        assert(host.querySelector('.esg-nocontrol') && /Zgłoś na walne/.test(host.querySelector('[data-esg-project="forest"]').textContent), 'bez większości: zgłoszenie');
+        const r1 = orderEsgProjectByPlayer(s.symbol, 'forest'); assert(r1.ok && !(s.esgProjects || []).length, 'bez większości nie zleca od razu');
+        assert(getEsgAgmProposals(s).includes('forest'), 'uchwała WZA'); draw(); assert(host.querySelector('[data-esg-project="forest"]').disabled, 'zgłoszony: wyłączony');
+        const item = buildAgmAgenda(s).find(i => i.type === 'esgProject'); assert(item && item.projectId === 'forest', 'w porządku obrad');
+        assert(/spółka zleca/.test(applyAgmResolution(s, item)) && s.esgProjects.some(x => x.id === 'forest' && x.by === 'agm'), 'uchwała przyjęta: spółka zleca');
+        playerPortfolio[s.symbol].shares = 600; draw(); assert(!host.querySelector('.esg-nocontrol'), 'większość: bez ramki');
+        assert(/Zleć za/.test(host.querySelector('[data-esg-project="community"]').textContent), 'większość: zleć');
+        assert(orderEsgProjectByPlayer(s.symbol, 'community').ok && s.esgProjects.some(x => x.id === 'community' && x.by === 'player'), 'zlecenie od razu');
+        draw(); assert(host.querySelector('[data-esg-project="community"]').disabled && host.querySelectorAll('.esg-run li').length >= 2, 'w toku: wyłączony i w trwających');
+        const inv = getCatalogEntryById('new_factory'), eco = renderEcoOption(s, inv, 1000000);
+        assert(eco.includes(formatZl(200000, 0)) && /Wersja eko/.test(eco), 'wersja eko: +20%'); assertEq(renderEcoOption(s, getCatalogEntryById('marketing_campaign'), 1000), '', 'tylko produkcja');
+        assert(!/[\u{1F300}-\u{1FAFF}]/u.test(host.innerHTML), 'bez emoji');
+    });
     test('0.18.9 G1: pokrycie: Platynowa zawsze dostaje ocenę, Brązowa bez deklaracji nie', () => {
         const p = makeCompany('ESP', { sector: ['Finanse'] }), z = makeCompany('ESZ', { sector: ['Finanse'] }); p.exchange = 'PLATINUM'; z.exchange = 'BRONZE';
         resetWorld([p, z]); clearEsgCache(); processEsgQuarterly();

@@ -980,7 +980,7 @@ function processEcoIncidents(e = society.energy) {
     const out = [], kinds = Object.keys(ECO_INCIDENTS), total = kinds.reduce((a, k) => a + ECO_INCIDENTS[k].weight, 0);
     for (const s of top) {
         if (out.length >= ECO_INCIDENT_RULES.maxPerQ) break;
-        if (Math.random() >= ECO_INCIDENT_RULES.chance * p / 100) continue;
+        if (Math.random() >= ECO_INCIDENT_RULES.chance * p / 100 * (Number(s.ecoIncidentMult) || 1)) continue; // 0.18.9 G4: oczyszczalnia ścieków
         let r = Math.random() * total, kind = kinds[0]; for (const k of kinds) { r -= ECO_INCIDENTS[k].weight; if (r <= 0) { kind = k; break; } }
         out.push(runEcoIncident(s, kind));
     }
