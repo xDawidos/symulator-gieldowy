@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+  <!-- 0.18: nowe ikony (24×24, kreska 1,8). Do przeniesienia do img/ikony/ i UI_ICON_PATHS przez czat kodu. -->
+  <symbol id="ic-huta" viewBox="0 0 24 24"><path d="M3 21h18M5 21V11h6v10M11 21v-6h8v6M7 11V5h2v6M14 12c0-1.5 1.5-1.5 1.5-3M17.5 12c0-1.5 1.5-1.5 1.5-3"/></symbol>
+  <symbol id="ic-fabryka" viewBox="0 0 24 24"><path d="M3 21V11l5 3v-3l5 3v-3l5 3V4h3v17zM7 17h2M12 17h2M17 17h1"/></symbol>
+  <symbol id="ic-szok" viewBox="0 0 24 24"><path d="M9 15l-2 2a3 3 0 0 1-4-4l3-3a3 3 0 0 1 4 0M15 9l2-2a3 3 0 0 1 4 4l-3 3a3 3 0 0 1-4 0M8 3v3M3 8h3M16 21v-3M21 16h-3"/></symbol>
+  <symbol id="ic-szlak" viewBox="0 0 24 24"><path d="M5 21a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM19 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM6.5 17.5C10 14 8 9 12 8s5-2 5.5-3"/></symbol>
+  <symbol id="ic-audyt" viewBox="0 0 24 24"><path d="M13 21H6V3h8l4 4v5M14 3v4h4M9 9h3M9 13h4M17 21l-1.6-1.6M15 20a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/></symbol>
+  <symbol id="ic-debiut" viewBox="0 0 24 24"><path d="M12 3v2M6 9a6 6 0 0 1 12 0v5l2 3H4l2-3zM10 20a2 2 0 0 0 4 0M3 5l2 2M21 5l-2 2"/></symbol>
+  <symbol id="ic-surowiec-iron" viewBox="0 0 24 24"><path d="M4 17l4-8h8l4 8zM4 17h16v3H4zM9 9l1-4h4l1 4"/></symbol>
+  <symbol id="ic-surowiec-copper" viewBox="0 0 24 24"><path d="M12 3a4 4 0 0 1 4 4v2h2l1 12H5L6 9h2V7a4 4 0 0 1 4-4zM9 14h6"/></symbol>
+  <symbol id="ic-surowiec-coffee" viewBox="0 0 24 24"><path d="M12 3c4 0 7 4 7 9s-3 9-7 9-7-4-7-9 3-9 7-9zM12 4c-2 3-2 6 0 8s2 5 0 8"/></symbol>
+  <symbol id="ic-magistrala" viewBox="0 0 24 24"><path d="M3 12h18M6 8v8M12 8v8M18 8v8M3 6h18M3 18h18"/></symbol>
+</svg>

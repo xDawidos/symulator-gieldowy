@@ -129,7 +129,7 @@ const ACADEMY_ENTRIES = {
         example: () => {
             const s = bestBy(pickListed(x => x.fundamentals.peRatio > 0), x => getMarketCapValue(x));
             const med = s && getSectorMedians(getMainSector(s));
-            return s && med?.pe ? `${s.name}: C/Z ${s.fundamentals.peRatio.toFixed(1)}, mediana sektora ${getMainSector(s)}: ${med.pe.toFixed(1)}.` : '';
+            return s && med?.pe ? `${s.name}: C/Z ${formatNumberPl(s.fundamentals.peRatio, 1)}, mediana sektora ${getMainSector(s)}: ${formatNumberPl(med.pe, 1)}.` : '';
         },
         quiz: [
             { q: 'Kurs 50 PLN, zysk na akcję 5 PLN. Ile wynosi C/Z?', a: ['10', '5', '250'], c: 0 },
@@ -150,7 +150,7 @@ const ACADEMY_ENTRIES = {
     cwk: {
         title: 'C/WK i wartość księgowa', icon: '📚',
         text: 'Wartość księgowa to majątek spółki minus jej długi (kapitał własny). C/WK = kurs / wartość księgowa na akcję. Poniżej 1 rynek wycenia spółkę taniej niż jej majątek netto — często dlatego, że majątek przynosi mało zysku.',
-        example: () => { const s = pickListed(x => x.fundamentals.pbRatio > 0).sort((a, b) => a.fundamentals.pbRatio - b.fundamentals.pbRatio)[0]; return s ? `Najniższe C/WK: ${s.name} — ${s.fundamentals.pbRatio.toFixed(2)}.` : ''; },
+        example: () => { const s = pickListed(x => x.fundamentals.pbRatio > 0).sort((a, b) => a.fundamentals.pbRatio - b.fundamentals.pbRatio)[0]; return s ? `Najniższe C/WK: ${s.name} — ${formatNumberPl(s.fundamentals.pbRatio, 2)}.` : ''; },
         quiz: [
             { q: 'Majątek 10 mln PLN, długi 4 mln PLN. Wartość księgowa to…', a: ['6 mln PLN', '14 mln PLN', '10 mln PLN'], c: 0 },
             { q: 'C/WK = 0,7 oznacza, że…', a: ['rynek wycenia spółkę poniżej jej majątku netto', 'spółka ma 70% zadłużenia', 'spółka wypłaca 70% zysku'], c: 0 },
@@ -160,7 +160,7 @@ const ACADEMY_ENTRIES = {
     dywidenda: {
         title: 'Dywidenda i stopa dywidendy', icon: '💰',
         text: 'Dywidenda to część zysku wypłacana akcjonariuszom. Stopa dywidendy = dywidendy z roku / kurs. Bardzo wysoka stopa bywa pułapką: jeśli spółka wypłaca więcej, niż zarabia, dywidenda zostanie obcięta.',
-        example: () => { const s = bestBy(pickListed(), x => getTrailingDividendYield(x)); return s && getTrailingDividendYield(s) > 0 ? `Najwyższa stopa dywidendy: ${s.name} — ${(getTrailingDividendYield(s) * 100).toFixed(2)}%.` : 'Na razie żadna spółka nie wypłaciła dywidendy w tym roku.'; },
+        example: () => { const s = bestBy(pickListed(), x => getTrailingDividendYield(x)); return s && getTrailingDividendYield(s) > 0 ? `Najwyższa stopa dywidendy: ${s.name} — ${formatNumberPl((getTrailingDividendYield(s) * 100), 2)}%.` : 'Na razie żadna spółka nie wypłaciła dywidendy w tym roku.'; },
         quiz: [
             { q: 'Kurs 40 PLN, dywidendy z roku 2 PLN. Stopa dywidendy = ?', a: ['5%', '2%', '20%'], c: 0 },
             { q: 'Kiedy wysoka stopa dywidendy jest sygnałem ostrzegawczym?', a: ['Gdy spółka wypłaca więcej, niż zarabia', 'Zawsze jest dobra', 'Gdy spółka ma mało długów'], c: 0 },
@@ -170,7 +170,7 @@ const ACADEMY_ENTRIES = {
     zadluzenie: {
         title: 'Zadłużenie', icon: '🏦',
         text: 'Zadłużenie (zobowiązania / aktywa) pokazuje, jaka część majątku jest finansowana długiem. Dług zwiększa zyski w dobrych czasach, ale w recesji odsetki zjadają wynik. Powyżej ~70% spółka jest wrażliwa na kryzys i wzrost stóp.',
-        example: () => { const s = bestBy(pickListed(x => x.balanceSheet?.assets > 0), x => x.balanceSheet.liabilities / x.balanceSheet.assets); return s ? `Najbardziej zadłużona: ${s.name} — ${(s.balanceSheet.liabilities / s.balanceSheet.assets * 100).toFixed(0)}% aktywów.` : ''; },
+        example: () => { const s = bestBy(pickListed(x => x.balanceSheet?.assets > 0), x => x.balanceSheet.liabilities / x.balanceSheet.assets); return s ? `Najbardziej zadłużona: ${s.name} — ${formatNumberPl((s.balanceSheet.liabilities / s.balanceSheet.assets * 100), 0)}% aktywów.` : ''; },
         quiz: [
             { q: 'Aktywa 100 mln PLN, zobowiązania 80 mln PLN. Zadłużenie = ?', a: ['80%', '20%', '125%'], c: 0 },
             { q: 'Bank Centralny podnosi stopy. Która spółka ucierpi najbardziej?', a: ['Mocno zadłużona', 'Bez długów z dużą gotówką', 'Każda tak samo'], c: 0 },
@@ -180,7 +180,7 @@ const ACADEMY_ENTRIES = {
     marza: {
         title: 'Marża', icon: '✂️',
         text: 'Marża netto = zysk netto / przychody. Pokazuje, ile z każdej złotówki sprzedaży zostaje jako zysk. Sektory różnią się marżami (technologia zwykle wyższe niż handel), więc porównuj spółki w obrębie sektora.',
-        example: () => { const s = bestBy(pickListed(x => x.fundamentals.revenueTtm > 0), x => x.fundamentals.netIncomeTtm / x.fundamentals.revenueTtm); return s ? `Najwyższa marża netto: ${s.name} — ${(s.fundamentals.netIncomeTtm / s.fundamentals.revenueTtm * 100).toFixed(1)}%.` : ''; },
+        example: () => { const s = bestBy(pickListed(x => x.fundamentals.revenueTtm > 0), x => x.fundamentals.netIncomeTtm / x.fundamentals.revenueTtm); return s ? `Najwyższa marża netto: ${s.name} — ${formatNumberPl((s.fundamentals.netIncomeTtm / s.fundamentals.revenueTtm * 100), 1)}%.` : ''; },
         quiz: [
             { q: 'Przychody 10 mln PLN, zysk netto 1 mln PLN. Marża netto = ?', a: ['10%', '1%', '90%'], c: 0 },
             { q: 'Wysoka inflacja kosztów zwykle…', a: ['obniża marże', 'podnosi marże', 'nie ma wpływu na marże'], c: 0 },
@@ -190,7 +190,7 @@ const ACADEMY_ENTRIES = {
     roe: {
         title: 'ROE (rentowność kapitału)', icon: '🔁',
         text: 'ROE = zysk netto / kapitał własny. Mówi, ile zysku spółka wypracowuje z pieniędzy akcjonariuszy. Wysokie ROE przy niskim zadłużeniu to znak dobrego biznesu; wysokie ROE „napompowane” długiem jest ryzykowne.',
-        example: () => { const s = bestBy(pickListed(), x => getCompanyMetrics(x)?.roe); const m = s && getCompanyMetrics(s); return m?.roe ? `Najwyższe ROE: ${s.name} — ${(m.roe * 100).toFixed(1)}%.` : ''; },
+        example: () => { const s = bestBy(pickListed(), x => getCompanyMetrics(x)?.roe); const m = s && getCompanyMetrics(s); return m?.roe ? `Najwyższe ROE: ${s.name} — ${formatNumberPl((m.roe * 100), 1)}%.` : ''; },
         quiz: [
             { q: 'Zysk 3 mln PLN, kapitał własny 20 mln PLN. ROE = ?', a: ['15%', '6,7%', '23%'], c: 0 },
             { q: 'Dwie spółki mają ROE 20%. Która jest bezpieczniejsza?', a: ['Ta z mniejszym zadłużeniem', 'Ta z większym zadłużeniem', 'Są tak samo bezpieczne'], c: 0 },
@@ -210,7 +210,7 @@ const ACADEMY_ENTRIES = {
     raport: {
         title: 'Raport kwartalny i konsensus', icon: '📰',
         text: 'Co kwartał spółki publikują wyniki. Kurs reaguje nie na sam wynik, lecz na różnicę względem oczekiwań (konsensusu). Dobry wynik, ale gorszy od oczekiwań, potrafi obniżyć kurs.',
-        example: () => { const s = pickListed(x => Number.isFinite(x.lastSurprise) && Math.abs(x.lastSurprise) > 0.15)[0]; return s ? `${s.name}: ostatni zysk ${s.lastSurprise > 0 ? 'powyżej' : 'poniżej'} oczekiwań o ${(Math.abs(s.lastSurprise) * 100).toFixed(0)}%.` : ''; },
+        example: () => { const s = pickListed(x => Number.isFinite(x.lastSurprise) && Math.abs(x.lastSurprise) > 0.15)[0]; return s ? `${s.name}: ostatni zysk ${s.lastSurprise > 0 ? 'powyżej' : 'poniżej'} oczekiwań o ${formatNumberPl((Math.abs(s.lastSurprise) * 100), 0)}%.` : ''; },
         quiz: [
             { q: 'Spółka zarobiła 10% więcej niż rok temu, ale analitycy czekali na +30%. Kurs prawdopodobnie…', a: ['spadnie', 'mocno wzrośnie', 'się nie zmieni'], c: 0 },
             { q: 'Czym jest konsensus?', a: ['Średnią prognozą analityków przed raportem', 'Zgodą zarządu na dywidendę', 'Ceną z emisji akcji'], c: 0 },
@@ -230,7 +230,7 @@ const ACADEMY_ENTRIES = {
     nav: {
         title: 'NAV i jednostki funduszu', icon: '💼',
         text: 'NAV (wartość aktywów netto) na udział to wartość funduszu podzielona przez liczbę udziałów. Klienci kupują i umarzają udziały po NAV. Wynik funduszu mierzy się zmianą NAV, nie wielkością aktywów — napływ klientów nie jest zyskiem.',
-        example: () => playerFund ? `Twój fundusz: NAV ${getFundNav().toFixed(4)} PLN na jednostkę, aktywa ${formatZl(getFundAssets(), 0)}.` : '',
+        example: () => playerFund ? `Twój fundusz: NAV ${formatZl(getFundNav(), 4)} na jednostkę, aktywa ${formatZl(getFundAssets(), 0)}.` : '',
         quiz: [
             { q: 'Klienci wpłacają do funduszu 1 mln PLN. NAV na jednostkę…', a: ['się nie zmienia — przybywa jednostek', 'rośnie o 1 mln PLN', 'spada'], c: 0 },
             { q: 'Czym mierzy się wynik zarządzającego?', a: ['Zmianą NAV na jednostkę', 'Wielkością aktywów', 'Liczbą klientów'], c: 0 },
@@ -240,7 +240,7 @@ const ACADEMY_ENTRIES = {
     benchmark: {
         title: 'Benchmark (GIG)', icon: '🎯',
         text: 'Benchmark to punkt odniesienia — u Ciebie indeks GIG. Zarządzający jest oceniany za wynik ponad benchmark (alfa). Zarobić 5%, gdy rynek urósł 15%, to słaby wynik; stracić 3%, gdy rynek spadł 15%, to dobry.',
-        example: () => playerFund ? `Bieżący okres: fundusz ${((getFundNav() / playerFund.current.startNav - 1) * 100).toFixed(1)}%, GIG ${((getBenchmarkValue() / playerFund.current.startBenchmark - 1) * 100).toFixed(1)}%.` : '',
+        example: () => playerFund ? `Bieżący okres: fundusz ${formatNumberPl(((getFundNav() / playerFund.current.startNav - 1) * 100), 1)}%, GIG ${formatNumberPl(((getBenchmarkValue() / playerFund.current.startBenchmark - 1) * 100), 1)}%.` : '',
         quiz: [
             { q: 'Fundusz +8%, GIG +12%. Wynik względem benchmarku (alfa)?', a: ['−4 pkt proc.', '+8 pkt proc.', '+20 pkt proc.'], c: 0 },
             { q: 'Fundusz −5%, GIG −15%. Jak ocenić wynik?', a: ['Dobrze — fundusz pobił rynek', 'Źle — fundusz stracił', 'Nie da się ocenić'], c: 0 },
@@ -250,7 +250,7 @@ const ACADEMY_ENTRIES = {
     dywersyfikacja: {
         title: 'Dywersyfikacja', icon: '🧺',
         text: 'Dywersyfikacja to rozłożenie pieniędzy na wiele spółek i sektorów. Zmniejsza ryzyko jednej wpadki (bankructwo, afera), ale nie chroni przed spadkiem całego rynku. Zbyt duża liczba pozycji rozmywa przewagę z dobrych wyborów.',
-        example: () => { const d = typeof getDiversificationStats === 'function' && playerFund ? getDiversificationStats() : null; return d ? `Twój fundusz: ${d.count} spółek, największa pozycja ${(d.maxShare * 100).toFixed(0)}% aktywów.` : ''; },
+        example: () => { const d = typeof getDiversificationStats === 'function' && playerFund ? getDiversificationStats() : null; return d ? `Twój fundusz: ${d.count} spółek, największa pozycja ${formatNumberPl((d.maxShare * 100), 0)}% aktywów.` : ''; },
         quiz: [
             { q: 'Przed jakim ryzykiem dywersyfikacja NIE chroni?', a: ['Spadkiem całego rynku', 'Bankructwem jednej spółki', 'Aferą w jednej firmie'], c: 0 },
             { q: 'Masz 90% aktywów w jednej spółce. To…', a: ['bardzo duże ryzyko koncentracji', 'dobra dywersyfikacja', 'bez znaczenia'], c: 0 },
@@ -260,7 +260,7 @@ const ACADEMY_ENTRIES = {
     zmiennosc: {
         title: 'Zmienność i obsunięcie', icon: '🎢',
         text: 'Zmienność to skala wahań wartości. Obsunięcie (drawdown) to spadek od szczytu. Klienci boją się dużych obsunięć — nawet jeśli wynik końcowy jest dobry. Dlatego liczy się nie tylko zysk, ale i droga do niego.',
-        example: () => playerFund ? `Twoje największe obsunięcie w tym okresie: ${(playerFund.current.maxDrawdown * 100).toFixed(1)}%.` : '',
+        example: () => playerFund ? `Twoje największe obsunięcie w tym okresie: ${formatNumberPl((playerFund.current.maxDrawdown * 100), 1)}%.` : '',
         quiz: [
             { q: 'Fundusz rośnie do 120, spada do 90, wraca do 110. Obsunięcie od szczytu = ?', a: ['25%', '10%', '30%'], c: 0 },
             { q: 'Po spadku o 50% ile trzeba zarobić, żeby wrócić do punktu wyjścia?', a: ['100%', '50%', '25%'], c: 0 },
@@ -270,7 +270,7 @@ const ACADEMY_ENTRIES = {
     obligacje: {
         title: 'Obligacje i ryzyko kredytowe', icon: '📄',
         text: 'Obligacja to pożyczka dla emitenta: dostajesz odsetki (kupon) i zwrot nominału na koniec. Im bardziej ryzykowny emitent, tym wyższe oprocentowanie — to zapłata za ryzyko niewypłacalności. Skarb Państwa płaci najmniej, bo jest najbezpieczniejszy.',
-        example: () => `Stopa bazowa Banku Centralnego: ${((centralBank?.baseInterestRate || 0) * 100).toFixed(2)}% — obligacje firm płacą więcej o premię za ryzyko.`,
+        example: () => `Stopa bazowa Banku Centralnego: ${formatNumberPl(((centralBank?.baseInterestRate || 0) * 100), 2)}% — obligacje firm płacą więcej o premię za ryzyko.`,
         quiz: [
             { q: 'Dlaczego obligacja ryzykownej firmy płaci więcej niż skarbowa?', a: ['To premia za ryzyko niewypłacalności', 'Bo firmy są bogatsze od państwa', 'Bo ma krótszy termin'], c: 0 },
             { q: 'Emitent ogłasza niewypłacalność. Co tracisz?', a: ['Kolejne kupony i często część nominału', 'Nic — obligacje są gwarantowane', 'Tylko ostatni kupon'], c: 0 },
@@ -280,7 +280,7 @@ const ACADEMY_ENTRIES = {
     lokata: {
         title: 'Lokata, stopy procentowe i inflacja', icon: '🏧',
         text: 'Lokata daje pewne odsetki, ale jeśli inflacja jest wyższa, realnie tracisz siłę nabywczą. Klienci porównują wynik funduszu z lokatą i inflacją — fundusz, który zarabia mniej niż lokata, traci zaufanie.',
-        example: () => `Inflacja: ${((macro?.inflation || 0) * 100).toFixed(1)}%, stopa lokat: ${(getDepositRate() * 100).toFixed(1)}% — realna stopa: ${((getDepositRate() - (macro?.inflation || 0)) * 100).toFixed(1)} pkt proc.`,
+        example: () => `Inflacja: ${formatNumberPl(((macro?.inflation || 0) * 100), 1)}%, stopa lokat: ${formatNumberPl((getDepositRate() * 100), 1)}% — realna stopa: ${formatNumberPl(((getDepositRate() - (macro?.inflation || 0)) * 100), 1)} pkt proc.`,
         quiz: [
             { q: 'Lokata 5%, inflacja 7%. Realny zysk to około…', a: ['−2%', '+5%', '+12%'], c: 0 },
             { q: 'Bank Centralny podnosi stopy. Lokaty zwykle…', a: ['drożeją (wyższe oprocentowanie)', 'tanieją', 'znikają'], c: 0 },
@@ -350,7 +350,7 @@ const ACADEMY_ENTRIES = {
     wplyw: {
         title: 'Płynność rynku i wpływ zlecenia', icon: '🌊',
         text: 'Gdy w obrocie jest mało akcji, duże zlecenie samo przesuwa kurs: kupując, podbijasz cenę, sprzedając — zbijasz. Do tego dochodzi prowizja rynku. Duży fundusz w małej spółce płaci więc więcej, niż pokazuje kurs — dlatego dzieli zlecenia albo wybiera płynne spółki.',
-        example: () => { const s = pickListed().sort((a, b) => getFreeFloatShares(a) - getFreeFloatShares(b))[0]; return s ? `Najmniej płynna: ${s.name} — w wolnym obrocie ${getFreeFloatShares(s).toLocaleString('pl-PL')} akcji.` : ''; },
+        example: () => { const s = pickListed().sort((a, b) => getFreeFloatShares(a) - getFreeFloatShares(b))[0]; return s ? `Najmniej płynna: ${s.name} — w wolnym obrocie ${formatInt(getFreeFloatShares(s))} akcji.` : ''; },
         quiz: [
             { q: 'Kupujesz 20% wolnego obrotu małej spółki jednym zleceniem. Co się stanie?', a: ['Sam podbijesz kurs i kupisz drożej', 'Kupisz po kursie z ekranu', 'Kurs spadnie'], c: 0 },
             { q: 'Jak ograniczyć wpływ dużego zlecenia?', a: ['Podzielić je na mniejsze części w czasie', 'Kupić wszystko naraz', 'Kupić na koncie prywatnym'], c: 0 },
@@ -385,7 +385,7 @@ Object.assign(ACADEMY_ENTRIES, {
     strukturaSpoleczna: {
         title: 'Struktura społeczna a popyt', icon: '👥',
         text: 'Ludzie z różnych klas wydają inaczej: zamożni więcej na turystykę, nieruchomości i finanse, biedniejsi — na żywność i podstawowe usługi. Gdy rośnie klasa średnia, rośnie popyt na dobra „wyższego rzędu”. Indeks popytu w zakładce Kraj streszcza strukturę klas w jednej liczbie (start = 1,00).',
-        example: () => societyReady() ? `Dziś: klasa biedna ${(society.classes.poor * 100).toFixed(1)}%, indeks popytu ${society.demandIndex.toFixed(3)}.` : '',
+        example: () => societyReady() ? `Dziś: klasa biedna ${formatNumberPl((society.classes.poor * 100), 1)}%, indeks popytu ${formatNumberPl(society.demandIndex, 3)}.` : '',
         quiz: [
             { q: 'Klasa średnia rośnie kosztem biednej. Co dzieje się z indeksem popytu?', a: ['Rośnie', 'Spada', 'Nie zmienia się'], c: 0 },
             { q: 'Która branża najbardziej korzysta na bogaceniu się społeczeństwa?', a: ['Turystyka', 'Żywność', 'Energia'], c: 0 },
@@ -415,7 +415,7 @@ Object.assign(ACADEMY_ENTRIES, {
     spinoff: {
         title: 'Spin-off i dywidenda rzeczowa', icon: '✂️',
         text: 'Spin-off to wydzielenie części spółki do nowej, osobno notowanej firmy. Akcjonariusze nie płacą: każdy dostaje akcje córki proporcjonalnie do akcji matki (dywidenda rzeczowa). W dniu wydzielenia kurs matki spada mniej więcej o wartość wydzielonej części, więc wartość pozycji się nie zmienia. Rynek zwykle nagradza zapowiedź (znika dyskonto konglomeratu), ale robi to od razu — po ogłoszeniu nie ma darmowego zysku. W wariancie carve-out matka zachowuje większość akcji córki (51–80%), a córka zostaje spółką zależną.',
-        example: () => { const e = spinoffLog[0]; const c = e && stocks.find(s => s.symbol === e.child); return c ? `${c.name} (${c.symbol}) wydzielona z ${e.parent}${e.carve ? ` — carve-out, matka ma ${(e.keep * 100).toFixed(0)}%` : ''}.` : 'Spółka z dwoma niepowiązanymi segmentami (np. Technologia i Energia) może wydzielić mniejszy segment, jeśli ma ≥ 30% przychodów.'; },
+        example: () => { const e = spinoffLog[0]; const c = e && stocks.find(s => s.symbol === e.child); return c ? `${c.name} (${c.symbol}) wydzielona z ${e.parent}${e.carve ? ` — carve-out, matka ma ${formatNumberPl((e.keep * 100), 0)}%` : ''}.` : 'Spółka z dwoma niepowiązanymi segmentami (np. Technologia i Energia) może wydzielić mniejszy segment, jeśli ma ≥ 30% przychodów.'; },
         quiz: [
             { q: 'Ile płaci akcjonariusz za akcje spółki wydzielonej w spin-offie?', a: ['nic — dostaje je proporcjonalnie do akcji matki', 'cenę rynkową', 'połowę ceny rynkowej'], c: 0 },
             { q: 'Co dzieje się z kursem matki w dniu wydzielenia?', a: ['spada o wartość wydzielonej części', 'rośnie o wartość córki', 'nie zmienia się'], c: 0 },
@@ -425,7 +425,7 @@ Object.assign(ACADEMY_ENTRIES, {
     sotp: {
         title: 'Wycena sumy części (SOTP)', icon: '🧮',
         text: 'Sum-of-the-parts: wartość spółki z kilkoma segmentami liczy się jako sumę wartości każdego segmentu, wycenionego mnożnikami jego własnego sektora. Konglomerat z niepowiązanymi segmentami często kosztuje mniej niż suma części (dyskonto konglomeratu, w grze do −10%). Wydzielenie segmentu usuwa to dyskonto — dlatego zapowiedź spin-offu podnosi kurs, a po wydzieleniu matka + córka są warte tyle co przed, plus efekt zapowiedzi.',
-        example: () => { const s = stocks.find(x => !x.isBankrupt && !x.assetType && getStockSegments(x).length >= 2 && getConglomerateDiscount(x) > 0); return s ? `${s.name}: segmenty ${getStockSegments(s).map(g => `${g.sector} ${(g.share * 100).toFixed(0)}%`).join(', ')}, dyskonto konglomeratu ${(getConglomerateDiscount(s) * 100).toFixed(0)}%.` : 'Dyskonto konglomeratu: −4% za każdy segment niepowiązany z głównym, najwyżej −10%.'; },
+        example: () => { const s = stocks.find(x => !x.isBankrupt && !x.assetType && getStockSegments(x).length >= 2 && getConglomerateDiscount(x) > 0); return s ? `${s.name}: segmenty ${getStockSegments(s).map(g => `${g.sector} ${formatNumberPl((g.share * 100), 0)}%`).join(', ')}, dyskonto konglomeratu ${formatNumberPl((getConglomerateDiscount(s) * 100), 0)}%.` : 'Dyskonto konglomeratu: −4% za każdy segment niepowiązany z głównym, najwyżej −10%.'; },
         quiz: [
             { q: 'Czym jest wycena SOTP?', a: ['sumą wartości segmentów wycenianych osobno', 'wyceną z jednego C/Z całej spółki', 'ceną z ostatniej transakcji'], c: 0 },
             { q: 'Co usuwa dyskonto konglomeratu?', a: ['wydzielenie niepowiązanego segmentu', 'emisja akcji', 'skup akcji'], c: 0 },
@@ -435,7 +435,7 @@ Object.assign(ACADEMY_ENTRIES, {
     grupaKapitalowa: {
         title: 'Grupa kapitałowa i holding', icon: '🏢',
         text: 'Grupa kapitałowa to spółka matka razem ze spółkami zależnymi, w których ma ponad 50% głosów. Holding sam niczego nie produkuje — zarządza pakietami akcji. W grze koncern 🏢 to spółka z czołówki kapitalizacji (górne 15%), która ma co najmniej 2 segmenty działalności, w tym jeden niepowiązany z głównym, albo 2 spółki zależne, albo 2 segmenty i spółkę zależną. Wartość grupy liczy się sumą części: każdy segment wyceniony mnożnikiem swojego sektora plus rynkowa wartość pakietów w zależnych. Gdy kurs jest niżej niż suma części, mówimy o dyskoncie holdingowym; gdy wyżej — o premii.',
-        example: () => { const s = stocks.find(x => typeof isConcern === 'function' && isConcern(x)); if (!s) return 'Koncern: górne 15% kapitalizacji oraz segmenty niepowiązane, ≥ 2 spółki zależne albo ≥ 2 segmenty i spółka zależna.'; const p = getSumOfParts(s); return `${s.name}: kapitalizacja ${formatZl(p.cap, 0)}, suma części ${formatZl(p.total, 0)}${p.premium !== null ? ` (${p.premium >= 0 ? 'premia' : 'dyskonto'} ${(Math.abs(p.premium) * 100).toFixed(0)}%)` : ''}.`; },
+        example: () => { const s = stocks.find(x => typeof isConcern === 'function' && isConcern(x)); if (!s) return 'Koncern: górne 15% kapitalizacji oraz segmenty niepowiązane, ≥ 2 spółki zależne albo ≥ 2 segmenty i spółka zależna.'; const p = getSumOfParts(s); return `${s.name}: kapitalizacja ${formatZl(p.cap, 0)}, suma części ${formatZl(p.total, 0)}${p.premium !== null ? ` (${p.premium >= 0 ? 'premia' : 'dyskonto'} ${formatNumberPl((Math.abs(p.premium) * 100), 0)}%)` : ''}.`; },
         quiz: [
             { q: 'Kiedy spółka jest zależna od matki?', a: ['gdy matka ma ponad 50% głosów', 'gdy matka ma 5% akcji', 'gdy działają w tym samym sektorze'], c: 0 },
             { q: 'Kurs koncernu jest niższy od sumy części. To…', a: ['dyskonto holdingowe', 'premia holdingowa', 'dywidenda rzeczowa'], c: 0 },
@@ -455,7 +455,7 @@ Object.assign(ACADEMY_ENTRIES, {
     podmiotyPowiazane: {
         title: 'Transakcje z podmiotami powiązanymi', icon: '🚩',
         text: 'Gdy jeden właściciel kontroluje dwie spółki, ale ma w nich różne udziały (np. 80% i 20%), opłaca mu się przerzucać zysk tam, gdzie ma więcej — przez ceny w umowach między spółkami. To tunelowanie: akcjonariusze mniejszościowi spółki poszkodowanej tracą. W grze taka kooperacja dostaje czerwoną flagę „transakcje z podmiotami powiązanymi” (Księgowy, poziom 4). Pakiet mniejszościowy może złożyć skargę do KNF; jeśli warunki były nierynkowe i KNF to wykaże, beneficjent zwraca korzyść z grzywną, a umowa wraca do cen rynkowych.',
-        example: () => { const c = cooperations.find(x => x.flag); if (!c) return 'Przykład: właściciel ma 80% spółki A i 20% spółki B — umowa A–B to transakcja z podmiotem powiązanym.'; return `${c.flag.name}: ${(c.flag.pctA * 100).toFixed(0)}% w ${c.a} i ${(c.flag.pctB * 100).toFixed(0)}% w ${c.b} — kooperacja z czerwoną flagą.`; },
+        example: () => { const c = cooperations.find(x => x.flag); if (!c) return 'Przykład: właściciel ma 80% spółki A i 20% spółki B — umowa A–B to transakcja z podmiotem powiązanym.'; return `${c.flag.name}: ${formatNumberPl((c.flag.pctA * 100), 0)}% w ${c.a} i ${formatNumberPl((c.flag.pctB * 100), 0)}% w ${c.b} — kooperacja z czerwoną flagą.`; },
         quiz: [
             { q: 'Właściciel ma 80% spółki A i 20% spółki B. Gdzie opłaca mu się „przenieść” zysk?', a: ['do spółki A', 'do spółki B', 'nigdzie — to bez różnicy'], c: 0 },
             { q: 'Kto traci na tunelowaniu?', a: ['akcjonariusze mniejszościowi spółki poszkodowanej', 'tylko państwo', 'nikt'], c: 0 },
@@ -464,12 +464,12 @@ Object.assign(ACADEMY_ENTRIES, {
     },
     splitReverseSplit: {
         title: 'Split i reverse split', icon: '🔀',
-        text: 'Split to podział akcji: spółka wymienia każdą akcję na kilka (np. 5:1), a kurs spada tyle razy, ile akcji przybywa. Kapitalizacja i wartość Twojej pozycji zostają bez zmian — to jak rozmiana banknotu na drobne. Spółki dzielą akcje, gdy kurs jest bardzo wysoki, bo tanie akcje łatwiej kupować. Reverse split (konsolidacja, np. 1:10) robi odwrotnie: wiele akcji zamienia się w jedną, a kurs rośnie — stosują go spółki z kursem poniżej 1 zł, żeby nie wyglądać na „grosze” i uniknąć zawieszenia handlu. Ułamki akcji, których nie da się wymienić, spółka wypłaca gotówką. Sam podział nie czyni spółki ani lepszą, ani gorszą (reverse split bywa sygnałem kłopotów). W grze: split od 1000 zł, konsolidacja poniżej 1 zł; wykresy i dywidendy na akcję są przeliczane wstecz.',
-        example: () => { const e = splitLog[splitLog.length - 1]; return e ? `${e.name}: ${e.kind === 'split' ? 'split' : 'konsolidacja'} ${formatSplitRatio(e.kind === 'split' ? e.ratio : 1 / e.ratio)} w kw. ${e.quarter} — kurs ${e.priceBefore.toFixed(2)} → ${e.priceAfter.toFixed(2)} zł.` : 'Przykład: akcja za 1200 zł po splicie 3:1 kosztuje 400 zł, a Ty masz 3 razy więcej akcji.'; },
+        text: 'Split to podział akcji: spółka wymienia każdą akcję na kilka (np. 5:1), a kurs spada tyle razy, ile akcji przybywa. Kapitalizacja i wartość Twojej pozycji zostają bez zmian — to jak rozmiana banknotu na drobne. Spółki dzielą akcje, gdy kurs jest bardzo wysoki, bo tanie akcje łatwiej kupować. Reverse split (konsolidacja, np. 1:10) robi odwrotnie: wiele akcji zamienia się w jedną, a kurs rośnie — stosują go spółki z kursem poniżej 1 PLN, żeby nie wyglądać na „grosze” i uniknąć zawieszenia handlu. Ułamki akcji, których nie da się wymienić, spółka wypłaca gotówką. Sam podział nie czyni spółki ani lepszą, ani gorszą (reverse split bywa sygnałem kłopotów). W grze: split od 1000 PLN, konsolidacja poniżej 1 PLN; wykresy i dywidendy na akcję są przeliczane wstecz.',
+        example: () => { const e = splitLog[splitLog.length - 1]; return e ? `${e.name}: ${e.kind === 'split' ? 'split' : 'konsolidacja'} ${formatSplitRatio(e.kind === 'split' ? e.ratio : 1 / e.ratio)} w kw. ${e.quarter} — kurs ${formatNumberPl(e.priceBefore, 2)} → ${formatZl(e.priceAfter, 2)}.` : 'Przykład: akcja za 1200 PLN po splicie 3:1 kosztuje 400 PLN, a Ty masz 3 razy więcej akcji.'; },
         quiz: [
-            { q: 'Masz 10 akcji po 1200 zł. Spółka robi split 3:1. Ile masz akcji i po ile?', a: ['30 akcji po 400 zł', '10 akcji po 400 zł', '30 akcji po 1200 zł'], c: 0 },
+            { q: 'Masz 10 akcji po 1200 PLN. Spółka robi split 3:1. Ile masz akcji i po ile?', a: ['30 akcji po 400 PLN', '10 akcji po 400 PLN', '30 akcji po 1200 PLN'], c: 0 },
             { q: 'Jak split zmienia wartość Twojej pozycji?', a: ['nie zmienia jej', 'zwiększa ją', 'zmniejsza ją'], c: 0 },
-            { q: 'Konsolidacja 1:10: masz 25 akcji po 0,40 zł. Co dostaniesz?', a: ['2 akcje po 4 zł i gotówkę za pół akcji', '250 akcji po 0,04 zł', '25 akcji po 4 zł'], c: 0 }
+            { q: 'Konsolidacja 1:10: masz 25 akcji po 0,40 PLN. Co dostaniesz?', a: ['2 akcje po 4 PLN i gotówkę za pół akcji', '250 akcji po 0,04 PLN', '25 akcji po 4 PLN'], c: 0 }
         ]
     },
     warunkiRynkowe: {
@@ -524,18 +524,18 @@ Object.assign(ACADEMY_ENTRIES, {
     },
     dlugiHoryzont: {
         title: 'Długi horyzont inwestycji (atom)', icon: '☢️',
-        text: 'Blok jądrowy buduje się latami: przez cały ten czas spółka wydaje gotówkę, a przychodu z inwestycji nie ma. Na końcu decyduje regulator — może opóźnić start. Potem blok daje stabilny przychód przez dekady. Taka inwestycja obniża dziś zyski i wolne przepływy, a jej wartość zależy od cierpliwości kapitału i od polityki (kontrakty z państwem).',
+        text: 'Blok jądrowy buduje się latami: przez cały ten czas spółka wydaje gotówkę, a przychodu z inwestycji nie ma. Na końcu decyduje Urząd Energii i Ekologii — może opóźnić start. Potem blok daje stabilny przychód przez dekady. Taka inwestycja obniża dziś zyski i wolne przepływy, a jej wartość zależy od cierpliwości kapitału i od polityki (kontrakty z państwem).',
         example: () => { const s = stocks.find(x => x.nuclearBlock && !x.isBankrupt); return s ? `${s.name}: blok jądrowy — etap ${s.nuclearBlock.stage === 'operating' ? 'działa' : s.nuclearBlock.stage === 'approval' ? 'czeka na regulatora' : 'budowa'}, wydano ${formatZl(s.nuclearBlock.spent, 0)} z ${formatZl(s.nuclearBlock.cost, 0)}.` : 'Budowa bloku trwa 8–16 kwartałów, a regulator może dołożyć 2–4 kwartały opóźnienia.'; },
         quiz: [
             { q: 'Co dzieje się z wolnymi przepływami pieniężnymi w trakcie budowy bloku?', a: ['są niższe — gotówka idzie w budowę', 'rosną od pierwszego kwartału', 'nie zmieniają się'], c: 0 },
-            { q: 'Kto może opóźnić uruchomienie bloku?', a: ['regulator', 'akcjonariusze mniejszościowi', 'bank centralny'], c: 0 },
+            { q: 'Kto może opóźnić uruchomienie bloku?', a: ['Urząd Energii i Ekologii', 'akcjonariusze mniejszościowi', 'bank centralny'], c: 0 },
             { q: 'Od czego zależą kontrakty z państwem dla elektrowni?', a: ['od partii rządzącej', 'od kursu akcji', 'od liczby akcjonariuszy'], c: 0 }
         ]
     },
     regulacja: {
         title: 'Regulacja (fintech)', icon: '🏛️',
         text: 'Fintech działa na licencji nadzoru finansowego (KNF). Kontrola może przyjść w każdej chwili; firma w słabej kondycji ryzykuje karę albo zakaz przyjmowania nowych klientów, co zatrzymuje wzrost — główny argument za wysoką wyceną fintechu. Ryzyko regulacyjne nie widać w wynikach, dopóki nie nastąpi.',
-        example: () => { const s = stocks.find(x => !x.isBankrupt && getSubsectorMechanicShare(x, 'knf') > 0); return s ? `${s.name} (fintech): kondycja ${(Number(s.financialHealth) || 0).toFixed(1)}${isKnfGrowthBlocked(s) ? ' — trwa zakaz nowych klientów' : ''}. Kontrola KNF: ok. 10% szans w roku.` : 'Kontrola KNF: ok. 10% szans w roku; przy słabej kondycji kara albo zakaz nowych klientów na 2 kwartały.'; },
+        example: () => { const s = stocks.find(x => !x.isBankrupt && getSubsectorMechanicShare(x, 'knf') > 0); return s ? `${s.name} (fintech): kondycja ${formatNumberPl((Number(s.financialHealth) || 0), 1)}${isKnfGrowthBlocked(s) ? ' — trwa zakaz nowych klientów' : ''}. Kontrola KNF: ok. 10% szans w roku.` : 'Kontrola KNF: ok. 10% szans w roku; przy słabej kondycji kara albo zakaz nowych klientów na 2 kwartały.'; },
         quiz: [
             { q: 'Co grozi fintechowi w słabej kondycji przy kontroli KNF?', a: ['kara albo zakaz nowych klientów', 'nic, kontrola dotyczy tylko banków', 'automatyczna dywidenda'], c: 0 },
             { q: 'Dlaczego zakaz nowych klientów mocno uderza w kurs fintechu?', a: ['wycena opiera się na szybkim wzroście', 'fintech traci wszystkie aktywa', 'kurs zależy tylko od dywidendy'], c: 0 },
@@ -565,7 +565,7 @@ Object.assign(ACADEMY_ENTRIES, {
     konglomerat: {
         title: 'Dyskonto konglomeratu', icon: '🏚️',
         text: 'Inwestorzy płacą mniej za spółkę z wieloma niepowiązanymi biznesami: trudniej ją ocenić, a zarząd może przenosić pieniądze między segmentami nieefektywnie. W grze wycena docelowa spada o 4% za każdy niepowiązany segment ponad pierwszy (najwyżej −10%). Rozbicie konglomeratu (np. wydzielenie spółki) często tę wartość odblokowuje.',
-        example: () => { const s = stocks.find(x => !x.isBankrupt && !x.assetType && typeof getConglomerateDiscount === 'function' && getConglomerateDiscount(x) > 0); return s ? `${s.name}: dyskonto konglomeratu −${(getConglomerateDiscount(s) * 100).toFixed(0)}% (${getStockSegments(s).map(seg => seg.sector).join(', ')}).` : 'Dyskonto: −4% za każdy niepowiązany segment ponad pierwszy, najwyżej −10%.'; },
+        example: () => { const s = stocks.find(x => !x.isBankrupt && !x.assetType && typeof getConglomerateDiscount === 'function' && getConglomerateDiscount(x) > 0); return s ? `${s.name}: dyskonto konglomeratu −${formatNumberPl((getConglomerateDiscount(s) * 100), 0)}% (${getStockSegments(s).map(seg => seg.sector).join(', ')}).` : 'Dyskonto: −4% za każdy niepowiązany segment ponad pierwszy, najwyżej −10%.'; },
         quiz: [
             { q: 'Dlaczego konglomeraty bywają wyceniane taniej?', a: ['trudniej je ocenić i zarządzać kapitałem', 'mają zawsze mniejsze zyski', 'nie płacą podatków'], c: 0 },
             { q: 'Spółka ma segment główny Chemia i dwa niepowiązane. Dyskonto w grze?', a: ['−8%', '−4%', '−20%'], c: 0 },
@@ -575,7 +575,7 @@ Object.assign(ACADEMY_ENTRIES, {
     segmenty: {
         title: 'Segmenty działalności', icon: '🧩',
         text: 'Duża spółka rzadko robi jedną rzecz. Segmenty to części działalności, np. bank z ubezpieczeniami albo przemysł z energetyką. Wycenę i ryzyko spółki liczy się jako średnią segmentów ważoną ich udziałem w przychodach. Segment główny (największy udział) decyduje, z jakim sektorem porównujemy spółkę.',
-        example: () => { const s = bestBy(stocks.filter(x => !x.assetType && !x.isBankrupt && getStockSegments(x).length > 1), x => getStockSegments(x).length); return s ? `${s.name}: ${getStockSegments(s).map(seg => `${seg.sector} ${(seg.share * 100).toFixed(0)}%`).join(', ')} — sektor główny ${getMainSector(s)}.` : ''; },
+        example: () => { const s = bestBy(stocks.filter(x => !x.assetType && !x.isBankrupt && getStockSegments(x).length > 1), x => getStockSegments(x).length); return s ? `${s.name}: ${getStockSegments(s).map(seg => `${seg.sector} ${formatNumberPl((seg.share * 100), 0)}%`).join(', ')} — sektor główny ${getMainSector(s)}.` : ''; },
         quiz: [
             { q: 'Spółka ma 70% przychodów z energetyki i 30% z chemii. Jej sektor główny to…', a: ['Energia', 'Chemia', 'oba po równo'], c: 0 },
             { q: 'Profil ryzyka spółki z kilkoma segmentami to…', a: ['średnia segmentów ważona udziałami', 'profil najmniejszego segmentu', 'zawsze profil rynku'], c: 0 },
@@ -585,7 +585,7 @@ Object.assign(ACADEMY_ENTRIES, {
     kosztPracy: {
         title: 'Koszt pracy i wydajność', icon: '👷',
         text: 'Płace to często największy koszt spółki: od kilku procent przychodów u dewelopera do 40% w usługach. Liczy się nie sama płaca, ale płaca na jednostkę pracy — wydajność. Wyższe płace przy jeszcze wyższej wydajności obniżają koszt. Zakładka Zatrudnienie pokazuje koszt pracy w % przychodów na tle sektora.',
-        example: () => { const s = bestBy(workforceListed(), x => x.workforce.laborShare); return s ? `Najbardziej pracochłonna: ${s.name} — koszt pracy ok. ${(s.workforce.laborShare * getLaborCostIndex(s) * 100).toFixed(0)}% przychodów.` : ''; },
+        example: () => { const s = bestBy(workforceListed(), x => x.workforce.laborShare); return s ? `Najbardziej pracochłonna: ${s.name} — koszt pracy ok. ${formatNumberPl((s.workforce.laborShare * getLaborCostIndex(s) * 100), 0)}% przychodów.` : ''; },
         quiz: [
             { q: 'Płace rosną o 5%, wydajność o 10%. Koszt pracy na jednostkę produkcji…', a: ['spada', 'rośnie', 'się nie zmienia'], c: 0 },
             { q: 'W której branży koszt pracy jest zwykle największy względem przychodów?', a: ['Usługi', 'Nieruchomości', 'Energia'], c: 0 },
@@ -595,7 +595,7 @@ Object.assign(ACADEMY_ENTRIES, {
     dzwignia: {
         title: 'Dźwignia operacyjna', icon: '🏋️',
         text: 'Gdy duża część kosztów jest stała albo sztywna (płace, umowy), mała zmiana przychodów mocno zmienia zysk. To dźwignia operacyjna: w dobrych czasach zysk rośnie szybciej niż sprzedaż, w złych — spada szybciej. Strajk, który obniża przychody o 10%, może zabrać dużo więcej niż 10% zysku.',
-        example: () => { const s = workforceListed().find(x => x.workforce.strike); return s ? `${s.name}: strajk obniża przychody kwartału o ${(s.workforce.strike.pct * 100).toFixed(0)}%.` : 'Obecnie żadna spółka nie strajkuje.'; },
+        example: () => { const s = workforceListed().find(x => x.workforce.strike); return s ? `${s.name}: strajk obniża przychody kwartału o ${formatNumberPl((s.workforce.strike.pct * 100), 0)}%.` : 'Obecnie żadna spółka nie strajkuje.'; },
         quiz: [
             { q: 'Przychody 100, koszty stałe 80, zysk 20. Przychody spadają o 10%. Zysk spada o…', a: ['50%', '10%', '20%'], c: 0 },
             { q: 'Wysoka dźwignia operacyjna oznacza…', a: ['większe wahania zysku niż przychodów', 'wysokie zadłużenie', 'niską wycenę'], c: 0 },
@@ -605,7 +605,7 @@ Object.assign(ACADEMY_ENTRIES, {
     szaraStrefa: {
         title: 'Szara strefa', icon: '🕶️',
         text: 'Zatrudnianie „na czarno” obniża koszty (niższe płace, brak podatków), więc podnosi marżę — dopóki nie przyjdzie Inspekcja Pracy. Kara bywa wielokrotnością zaoszczędzonych pieniędzy, a do tego dochodzi spadek kursu i utrata klientów, którzy nie chcą takich spółek w portfelu. Dla państwa to utracone podatki.',
-        example: () => { const s = workforceListed().filter(x => getGreyShare(x) > 0.05).sort((a, b) => getGreyShare(b) - getGreyShare(a))[0]; return s ? `${s.name}: ok. ${(getGreyShare(s) * 100).toFixed(0)}% zatrudnionych bez umów.` : 'Żadna spółka nie ma dziś ponad 5% szarej strefy.'; },
+        example: () => { const s = workforceListed().filter(x => getGreyShare(x) > 0.05).sort((a, b) => getGreyShare(b) - getGreyShare(a))[0]; return s ? `${s.name}: ok. ${formatNumberPl((getGreyShare(s) * 100), 0)}% zatrudnionych bez umów.` : 'Żadna spółka nie ma dziś ponad 5% szarej strefy.'; },
         quiz: [
             { q: 'Dlaczego szara strefa podnosi marżę?', a: ['Niższe płace i brak podatków od pracy', 'Wyższe ceny produktów', 'Lepsza wydajność'], c: 0 },
             { q: 'Co grozi spółce złapanej przez Inspekcję Pracy?', a: ['Kara, spadek kursu i utrata części klientów', 'Nic', 'Tylko upomnienie'], c: 0 },
@@ -615,7 +615,7 @@ Object.assign(ACADEMY_ENTRIES, {
     phillips: {
         title: 'Krzywa Phillipsa', icon: '📉',
         text: 'Krzywa Phillipsa opisuje zależność: gdy bezrobocie jest niskie, firmy konkurują o ludzi i płace rosną szybciej; gdy wysokie — płace stoją. Rosnące płace podnoszą inflację, a Bank Centralny odpowiada stopami. Dlatego dane z rynku pracy poruszają kursy.',
-        example: () => societyReady() ? `Bezrobocie ${(macro.unemployment * 100).toFixed(1)}% (naturalne ${(NATURAL_UNEMPLOYMENT * 100).toFixed(0)}%), realne płace pracowników: ${society.wages.workers.toFixed(3)}.` : '',
+        example: () => societyReady() ? `Bezrobocie ${formatNumberPl((macro.unemployment * 100), 1)}% (naturalne ${formatNumberPl((NATURAL_UNEMPLOYMENT * 100), 0)}%), realne płace pracowników: ${formatNumberPl(society.wages.workers, 3)}.` : '',
         quiz: [
             { q: 'Bezrobocie spada poniżej naturalnego. Co dzieje się z płacami?', a: ['Rosną szybciej', 'Spadają', 'Nic'], c: 0 },
             { q: 'Szybki wzrost płac może skłonić Bank Centralny do…', a: ['podwyżki stóp', 'obniżki stóp', 'drukowania pieniędzy'], c: 0 },
@@ -625,7 +625,7 @@ Object.assign(ACADEMY_ENTRIES, {
     niedobor: {
         title: 'Niedobór talentów i płace', icon: '🧠',
         text: 'Specjalistów nie da się „wyprodukować” w kwartał — kształcenie trwa latami. Gdy firmy potrzebują ich więcej, niż kształci kraj, płace specjalistów rosną, a spółki technologiczne, badawcze i medyczne wolniej się rozwijają. Edukacja to inwestycja z opóźnieniem 4–8 lat.',
-        example: () => societyReady() ? `Niedobór specjalistów: ${society.shortage.toFixed(2)} (powyżej 1 = brakuje ludzi), edukacja ${society.education.toFixed(0)}/100.` : '',
+        example: () => societyReady() ? `Niedobór specjalistów: ${formatNumberPl(society.shortage, 2)} (powyżej 1 = brakuje ludzi), edukacja ${formatNumberPl(society.education, 0)}/100.` : '',
         quiz: [
             { q: 'Niedobór specjalistów rośnie. Którym spółkom to szkodzi najbardziej?', a: ['Technologicznym i badawczym', 'Spożywczym', 'Deweloperom'], c: 0 },
             { q: 'Państwo zwiększa nakłady na edukację. Kiedy rynek pracy to odczuje?', a: ['Po kilku latach', 'Od razu', 'Nigdy'], c: 0 },
@@ -635,7 +635,7 @@ Object.assign(ACADEMY_ENTRIES, {
     drenaz: {
         title: 'Drenaż mózgów', icon: '✈️',
         text: 'Gdy kraj traci atrakcyjność (niskie płace, złe nastroje w firmach, bezrobocie), najszybciej wyjeżdżają najlepiej wykształceni — mają najwięcej możliwości za granicą. To drenaż mózgów: kraj traci specjalistów, w których wykształcenie zainwestował, a niedobór talentów rośnie.',
-        example: () => societyReady() ? `Atrakcyjność kraju: ${Number(society.migration.attractiveness || 0).toFixed(0)}/100; fale emigracji w tej grze: ${society.migration.emigrationWaves || 0}.` : '',
+        example: () => societyReady() ? `Atrakcyjność kraju: ${formatNumberPl(Number(society.migration.attractiveness || 0), 0)}/100; fale emigracji w tej grze: ${society.migration.emigrationWaves || 0}.` : '',
         quiz: [
             { q: 'Kto wyjeżdża najczęściej przy fali emigracji?', a: ['Specjaliści', 'Emeryci', 'Prezesi spółek państwowych'], c: 0 },
             { q: 'Jak drenaż mózgów wpływa na płace specjalistów w kraju?', a: ['Podnosi je — jest ich mniej', 'Obniża je', 'Nie wpływa'], c: 0 },
@@ -665,7 +665,7 @@ Object.assign(ACADEMY_ENTRIES, {
     esg: {
         title: 'ESG: litera S', icon: '🌱',
         text: 'ESG to ocena spółek pod kątem środowiska (E), społeczeństwa (S) i ładu korporacyjnego (G). Litera S to m.in. traktowanie pracowników: płace, bezpieczeństwo, brak pracy na czarno. Coraz więcej inwestorów — jak klienci „Etyczni” w Twoim funduszu — omija spółki, które źle traktują ludzi.',
-        example: () => { const avg = typeof getAverageSatisfaction === 'function' ? getAverageSatisfaction() : null; return avg !== null ? `Średnie zadowolenie pracowników na giełdzie: ${avg.toFixed(0)}/100.` : ''; },
+        example: () => { const avg = typeof getAverageSatisfaction === 'function' ? getAverageSatisfaction() : null; return avg !== null ? `Średnie zadowolenie pracowników na giełdzie: ${formatNumberPl(avg, 0)}/100.` : ''; },
         quiz: [
             { q: 'Czego dotyczy litera S w ESG?', a: ['Społeczeństwa i pracowników', 'Sprzedaży', 'Strategii podatkowej'], c: 0 },
             { q: 'Klient „Etyczny” wycofa pieniądze, gdy fundusz…', a: ['ma duże udziały w spółkach z niezadowoloną załogą lub szarą strefą', 'ma obligacje skarbowe', 'płaci dywidendy'], c: 0 },
@@ -675,7 +675,7 @@ Object.assign(ACADEMY_ENTRIES, {
     placaMinimalna: {
         title: 'Płaca minimalna', icon: '💵',
         text: 'Płaca minimalna podnosi zarobki najsłabiej opłacanych i pomaga biednym awansować. Ma jednak koszt: firmy pracochłonne (usługi, budowlanka, handel) płacą więcej, część miejsc pracy znika (bezrobocie lekko rośnie), a niektóre firmy uciekają w szarą strefę.',
-        example: () => societyReady() ? `Dziś płaca minimalna: ${describeLawLevel('minWage')} (realne płace taniej siły: ${society.wages.cheap.toFixed(3)}).` : '',
+        example: () => societyReady() ? `Dziś płaca minimalna: ${describeLawLevel('minWage')} (realne płace taniej siły: ${formatNumberPl(society.wages.cheap, 3)}).` : '',
         quiz: [
             { q: 'Płaca minimalna rośnie. Które spółki ucierpią najbardziej?', a: ['Pracochłonne: usługi, budowlanka', 'Deweloperzy', 'Energetyka'], c: 0 },
             { q: 'Jaki jest typowy skutek uboczny wyższej płacy minimalnej?', a: ['Nieco wyższe bezrobocie', 'Niższa inflacja', 'Spadek zatrudnienia w administracji'], c: 0 },
@@ -705,7 +705,7 @@ Object.assign(ACADEMY_ENTRIES, {
     rynekNasycony: {
         title: 'Rynek nasycony', icon: '🧱',
         text: `Giełda ma ograniczoną pojemność: kapitał inwestorów i uwaga analityków rozkładają się na wszystkie notowane spółki. Gdy krajowych spółek jest więcej niż ok. ${LISTING_SOFT_CAP}, debiuty zdarzają się rzadziej, startupy dostają mniejsze i droższe finansowanie (inwestor żąda większego udziału), a słabe firmy szybciej trafiają do koszyka śmieciowego, upadają albo są przejmowane. Do limitu nie liczą się spółki zależne, startupy z inkubatora ani spółki z rynków internetowych.`,
-        example: () => typeof getListedCompanyCount === 'function' ? `Dziś: ${getListedCompanyCount()} spółek krajowych (miękki limit ${LISTING_SOFT_CAP}), presja rynku ${(getCrowdingPressure() * 100).toFixed(0)}%.` : '',
+        example: () => typeof getListedCompanyCount === 'function' ? `Dziś: ${getListedCompanyCount()} spółek krajowych (miękki limit ${LISTING_SOFT_CAP}), presja rynku ${formatNumberPl((getCrowdingPressure() * 100), 0)}%.` : '',
         quiz: [
             { q: 'Na giełdzie jest dużo więcej spółek niż zwykle. Co dzieje się ze startupami?', a: ['Dostają mniej pieniędzy na gorszych warunkach', 'Łatwiej debiutują', 'Nic się nie zmienia'], c: 0 },
             { q: 'Które spółki najszybciej znikają z nasyconego rynku?', a: ['Słabe i zadłużone', 'Największe', 'Te z dywidendą'], c: 0 },
@@ -719,7 +719,7 @@ Object.assign(ACADEMY_ENTRIES, {
             const gig = typeof marketIndexes !== 'undefined' ? marketIndexes.find(i => i.id === 'GIG') : null;
             if (!gig || !gig.weights) return 'GIG stosuje limit 10% wagi na pojedynczą spółkę.';
             const topEntry = Object.entries(gig.weights).sort((a, b) => b[1] - a[1])[0];
-            return topEntry ? `W GIG największa spółka (${topEntry[0]}) ma wagę ${(topEntry[1] * 100).toFixed(1)}% (limit 10%).` : 'W GIG waga żadnej spółki nie przekracza 10%.';
+            return topEntry ? `W GIG największa spółka (${topEntry[0]}) ma wagę ${formatNumberPl((topEntry[1] * 100), 1)}% (limit 10%).` : 'W GIG waga żadnej spółki nie przekracza 10%.';
         },
         quiz: [
             { q: 'Od czego zależy waga spółki w indeksie ważonym kapitalizacją?', a: ['Od wartości rynkowej (kurs × liczba akcji)', 'Tylko od samej ceny pojedynczej akcji', 'Od liczby pracowników spółki'], c: 0 },
@@ -732,9 +732,7 @@ Object.assign(ACADEMY_ENTRIES, {
         text: 'Na dojrzałym rynku pewne spółki przechodzą 6–8 kwartalne cykle skrajnych emocji inwestorów. Jednorożec (Unicorn) notuje dynamiczny wzrost przychodów (+5–7%), wyższe marże i premię wyceny (+25%), lecz po falach silnych wzrostów inwestorzy okresowo realizują zyski (korekta -15–20%). Z kolei Gasnąca Gwiazda zmaga się ze spadkiem przychodów i marż, a jej wycena cierpi z powodu dyskonta, przeplatanego jedynie krótkimi, technicznymi odbiciami ulgi (dead-cat bounce). Role te rotują na rynku w formie sztafety.',
         example: () => {
             const unicorn = typeof stocks !== 'undefined' ? stocks.find(s => s.marketStar?.type === 'unicorn') : null;
-            const fading = typeof stocks !== 'undefined' ? stocks.find(s => s.marketStar?.type === 'fading_star') : null;
             if (unicorn) return `Obecny jednorożec na rynku: ${unicorn.name} (${unicorn.symbol}) — pozostało ${unicorn.marketStar.quartersLeft} kw. cyklu.`;
-            if (fading) return `Obecna gasnąca gwiazda: ${fading.name} (${fading.symbol}) — pozostało ${fading.marketStar.quartersLeft} kw. cyklu.`;
             return 'Jednorożce i gasnące gwiazdy wyłaniają się na rynku od 3. kwartału gry.';
         },
         quiz: [
@@ -750,7 +748,7 @@ Object.assign(ACADEMY_ENTRIES, {
             const regime = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null;
             const peak = regime?.gigPeak || 1000;
             const cur = typeof getGigIndexValue === 'function' ? getGigIndexValue() : 1000;
-            return `Lokalny szczyt GIG: ${peak.toFixed(1)} pkt. Bieżące obsunięcie od szczytu: ${(((cur - peak) / peak) * 100).toFixed(1)}%.`;
+            return `Lokalny szczyt GIG: ${formatNumberPl(peak, 1)} pkt. Bieżące obsunięcie od szczytu: ${formatNumberPl((((cur - peak) / peak) * 100), 1)}%.`;
         },
         quiz: [
             { q: 'Czym różni się korekta od bessy?', a: ['Korekta to spadek o 10–20%, bessa przekracza 20% i trwa dłużej', 'Korekta dotyczy tylko spółek technologicznych', 'W korekcie giełda jest zamknięta'], c: 0 },
@@ -967,7 +965,7 @@ Object.assign(ACADEMY_ENTRIES, {
         text: 'Zarząd sam wybiera moment emisji i skupu akcji. Gdy rynek płaci za akcje dużo (hossa, wysoka wycena), spółka chętnie sprzedaje nowe akcje — dostaje dużo gotówki za mały kawałek firmy, ale dotychczasowi akcjonariusze mają mniejszy udział w zysku (rozwodnienie). Gdy akcje są tanie (bessa, panika), spółka z zapasem gotówki skupuje własne akcje — zostaje ich mniej, więc każda daje większy udział w zysku.',
         example: () => {
             const premium = typeof getMarketRegime === 'function' ? Number(getMarketRegime('home')?.premium) || 0 : 0;
-            return `Premia rynku: ${premium >= 0 ? '+' : ''}${(premium * 100).toFixed(0)}% — ${premium > 0.10 ? 'zarządy częściej proponują emisje' : premium < -0.15 ? 'zarządy z gotówką częściej proponują skup akcji' : 'wyceny są umiarkowane'}.`;
+            return `Premia rynku: ${premium >= 0 ? '+' : ''}${formatNumberPl((premium * 100), 0)}% — ${premium > 0.10 ? 'zarządy częściej proponują emisje' : premium < -0.15 ? 'zarządy z gotówką częściej proponują skup akcji' : 'wyceny są umiarkowane'}.`;
         },
         quiz: [
             { q: 'Kiedy emisja nowych akcji jest najkorzystniejsza dla spółki?', a: ['Gdy akcje są drogie', 'Gdy akcje są tanie', 'Zawsze tak samo'], c: 0 },
@@ -1044,8 +1042,7 @@ Object.assign(ACADEMY_ENTRIES, {
         title: 'Pułapka wartości (Value Trap)', icon: '🕳️',
         text: 'Pułapka wartości to sytuacja, w której spółka wydaje się niezwykle tania według tradycyjnych wskaźników (bardzo niskie C/Z lub C/WK poniżej 1), lecz w rzeczywistości jej model biznesowy chyli się ku upadkowi, przychody kurczą się, a rynkowa pozycja gaśnie (np. Gasnąca Gwiazda). Kupowanie takich spółek wyłącznie z powodu „niskiej ceny” często prowadzi do wieloletnich strat.',
         example: () => {
-            const fading = typeof stocks !== 'undefined' ? stocks.find(s => s.marketStar?.type === 'fading_star') : null;
-            return fading ? `Obecna gasnąca gwiazda na parkiecie: ${fading.name} (${fading.symbol}) — C/Z: ${fading.fundamentals?.peRatio?.toFixed(1) || 'N/A'}.` : 'Uważaj na spółki ze spadającymi przychodami, nawet jeśli ich C/Z wydaje się atrakcyjne.';
+            return 'Uważaj na spółki ze spadającymi przychodami, nawet jeśli ich C/Z wydaje się atrakcyjne.';
         },
         quiz: [
             { q: 'Czym jest pułapka wartości?', a: ['Pozornie tanią spółką, której biznes trwale słabnie i przynosi straty', 'Zablokowaniem konta maklerskiego przez giełdę', 'Opłatą za wycenę portfela'], c: 0 },
@@ -1060,7 +1057,7 @@ Object.assign(ACADEMY_ENTRIES, {
             const regime = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null;
             if (!regime) return 'Wskaźnik nastrojów rynku wymaga ukończenia szkolenia Analityka Indeksowego.';
             const phaseName = regime.shownPhase ? (MARKET_PHASES[regime.shownPhase]?.name || regime.shownPhase) : 'w trakcie potwierdzania';
-            return `Aktualny wskaźnik Strachu i Chciwości: ${regime.sentiment}/100. Potwierdzona faza rynku: ${phaseName} (premia rynkowa: ${(regime.premium * 100).toFixed(1)}%).`;
+            return `Aktualny wskaźnik Strachu i Chciwości: ${regime.sentiment}/100. Potwierdzona faza rynku: ${phaseName} (premia rynkowa: ${formatNumberPl((regime.premium * 100), 1)}%).`;
         },
         quiz: [
             { q: 'Dlaczego fazy rynku (hossa, bessa) potwierdzane są w analizie z opóźnieniem?', a: ['Ponieważ punkt zwrotny można pewnie potwierdzić dopiero po trwałej zmianie trendu', 'Z powodu problemów technicznych giełdy', 'Żeby analitycy mieli czas na urlop'], c: 0 },
@@ -1074,7 +1071,7 @@ Object.assign(ACADEMY_ENTRIES, {
         example: () => {
             const bubble = typeof getActiveSectorBubble === 'function' ? getActiveSectorBubble() : null;
             if (bubble) {
-                return `Aktualna gorączka rynkowa: sektor ${bubble.name} z premią wyceny ${(bubble.premium * 100).toFixed(0)}% (faza: ${bubble.phase}).`;
+                return `Aktualna gorączka rynkowa: sektor ${bubble.name} z premią wyceny ${formatNumberPl((bubble.premium * 100), 0)}% (faza: ${bubble.phase}).`;
             }
             return 'Obecnie na rynku nie ma aktywnej bańki sektorowej — wyceny branżowe pozostają w normie.';
         },
@@ -1159,7 +1156,7 @@ function checkAcademyTriggers() {
         unlockAcademyEntry('krach_bezpieczniki');
         unlockAcademyEntry('pozyczkodawca');
     }
-    if (stocks.some(s => s.marketStar?.type === 'fading_star')) {
+    if (stocks.some(s => s.marketStar?.type === 'fading_star' && (playerPortfolio?.[s.symbol]?.shares || 0) > 0)) { // hasło dopiero, gdy gracz ją trzyma — inaczej wskazuje ukrytą spółkę
         unlockAcademyEntry('pulapka_wartosci');
     }
     if (getSkillLevel('accountant') >= 3) unlockAcademyEntry('przeplywy');
@@ -1188,6 +1185,11 @@ function checkAcademyTriggers() {
         if (society.budget?.deficitQuarters >= 2) unlockAcademyEntry('deficyt');
         if (playerFund.clients?.some(c => c.type === 'ethical')) unlockAcademyEntry('esg');
     }
+    if (typeof commodityState === 'object' && commodityState) { // 0.17 S7
+        if (COMMODITY_IDS.some(id => Math.abs(getCommodityTrendRatio(id) - 1) > 0.2)) { unlockAcademyEntry('cyklSurowcowy'); unlockAcademyEntry('kosztWsadu'); }
+        if (FREIGHT_IDS.some(id => Math.abs(getFreightTrendRatio(id) - 1) > 0.2)) unlockAcademyEntry('frachtWaskieGardla');
+        if (typeof isDefenseBoosted === 'function' && isDefenseBoosted()) unlockAcademyEntry('bezpieczenstwoZbrojenia');
+    }
 }
 
 /** Zdarzenia z podpowiedzią po błędzie gracza. */
@@ -1196,7 +1198,7 @@ function onAcademyEvent(kind, stock = null) {
     const held = stock && ((playerPortfolio[stock.symbol]?.shares || 0) > 0 || (playerWallet?.portfolio?.[stock.symbol]?.shares || 0) > 0);
     if (kind === 'bankruptcy' && held) {
         const debt = stock.balanceSheet?.assets > 0 ? stock.balanceSheet.liabilities / stock.balanceSheet.assets : null;
-        unlockAcademyEntry(debt !== null && debt > 0.7 ? 'zadluzenie' : 'bankructwo', `${stock.name} upadła${debt !== null ? ` (zadłużenie ${(debt * 100).toFixed(0)}%)` : ''}`);
+        unlockAcademyEntry(debt !== null && debt > 0.7 ? 'zadluzenie' : 'bankructwo', `${stock.name} upadła${debt !== null ? ` (zadłużenie ${formatNumberPl((debt * 100), 0)}%)` : ''}`);
     } else if (kind === 'tragicReport' && held) {
         unlockAcademyEntry('raport', `${stock.name}: wynik mocno poniżej oczekiwań`);
     } else if (kind === 'bondDefault') {
@@ -1258,7 +1260,7 @@ function academyQuizSubmit(id) {
     if (answers.some(a => a === undefined)) { showToast('Odpowiedz na wszystkie pytania.', 'warning'); return; }
     academyView.result = submitAcademyQuiz(id, answers);
     academyView.answers = answers;
-    if (academyView.result?.reward) showToast(`🎓 Quiz zaliczony! +${academyView.result.reward} PLN do portfela.`, 'success');
+    if (academyView.result?.reward) showToast(`🎓 Quiz zaliczony! +${formatZl(academyView.result.reward, 0)} do portfela.`, 'success');
     renderCvPanel();
 }
 
@@ -1285,15 +1287,15 @@ function renderAcademyPanel() {
         const quiz = entry.quiz.map((q, qi) => {
             const order = getQuizOrder(selected, qi, q.a.length);
             const chosen = result ? Number(academyView.answers?.[qi]) : null;
-            return `<fieldset class="academy-q"><legend>${qi + 1}. ${escapeHtml(q.q)}</legend>
-                ${order.map(ai => `<label class="${result ? (ai === q.c ? 'text-up' : ai === chosen ? 'text-down' : '') : ''}"><input type="radio" name="aq-${qi}" value="${ai}" ${chosen === ai ? 'checked' : ''}> ${escapeHtml(q.a[ai])}</label>`).join('')}
+            return `<fieldset class="academy-q"><legend>${qi + 1}. ${escapeHtml(localizeCurrencyText(q.q))}</legend>
+                ${order.map(ai => `<label class="${result ? (ai === q.c ? 'text-up' : ai === chosen ? 'text-down' : '') : ''}"><input type="radio" name="aq-${qi}" value="${ai}" ${chosen === ai ? 'checked' : ''}> ${escapeHtml(localizeCurrencyText(q.a[ai]))}</label>`).join('')}
             </fieldset>`;
         }).join('');
         detail = `
             <h3 class="mt-0">${entry.icon} ${escapeHtml(entry.title)}</h3>
-            <p>${escapeHtml(entry.text)}</p>
-            ${example ? `<p class="academy-example">🎮 <strong>W Twojej grze:</strong> ${escapeHtml(example)}</p>` : ''}
-            <h4>Quiz ${academy.quizzes[selected] ? '— zaliczony ✔' : `— za zaliczenie ${ACADEMY_QUIZ_REWARD} PLN`}</h4>
+            <p>${escapeHtml(localizeCurrencyText(entry.text))}</p>
+            ${example ? `<p class="academy-example">🎮 <strong>W Twojej grze:</strong> ${escapeHtml(localizeCurrencyText(example))}</p>` : ''}
+            <h4>Quiz ${academy.quizzes[selected] ? '— zaliczony ✔' : `— za zaliczenie ${formatZl(ACADEMY_QUIZ_REWARD, 0)}`}</h4>
             ${quiz}
             ${result ? `<p class="${result.passed ? 'text-up' : 'text-down'}">${result.passed ? '✅ Wszystko dobrze!' : `Poprawne: ${result.correct}/${result.total} — spróbuj jeszcze raz.`}</p>` : ''}
             <button onclick="academyQuizSubmit('${selected}')">Sprawdź odpowiedzi</button>`;
@@ -1503,7 +1505,7 @@ function renderScannerResults() {
     const flagsOn = typeof getRedFlags === 'function' && getSkillLevel('accountant') >= 4;
     const hasIndexLvl5 = typeof getSkillLevel === 'function' && getSkillLevel('indexAnalystLvl1') >= 5;
     const rows = runScanner();
-    const pct = v => v === null || v === undefined || !Number.isFinite(v) ? '—' : `${(v * 100).toFixed(1)}%`;
+    const pct = v => v === null || v === undefined || !Number.isFinite(v) ? '—' : `${formatNumberPl((v * 100), 1)}%`;
     const fx = v => v === null || v === undefined || !Number.isFinite(v) ? '—' : v.toFixed(1);
     const head = (key, label, title) => `<th class="clickable" title="${escapeHtml(title)}" onclick="setScannerSort('${key}')">${label}${scannerView.sort === key ? (scannerView.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`;
     const cls = (v, med, lowerBetter) => !Number.isFinite(v) || !Number.isFinite(med) ? '' : (lowerBetter ? v < med * 0.85 : v > med * 1.15) ? 'text-up' : (lowerBetter ? v > med * 1.15 : v < med * 0.85) ? 'text-down' : '';
@@ -1518,15 +1520,15 @@ function renderScannerResults() {
             </tr></thead>
             <tbody>${rows.slice(0, 120).map(({ stock, m, med, work, upside, sectorPremium }) => `<tr class="clickable" onclick="openDescriptionModal('${stock.symbol}')">
                 <td>${escapeHtml(stock.name)} <span class="text-xs text-muted">${escapeHtml(stock.symbol)}</span><span class="text-xs text-muted d-block">${escapeHtml(getStockActivityLabel(stock))}</span></td>
-                <td class="text-xs" title="${escapeHtml(getSubsectorMedians(getMainSector(stock), getMainSubsector(stock)) ? `Mediana C/Z podsektora: ${getSubsectorMedians(getMainSector(stock), getMainSubsector(stock)).pe?.toFixed(1)}` : 'Podsektor (T2)')}">${escapeHtml(getMainSubsector(stock) || '—')}${getStockSegments(stock).find(seg => seg.niche) ? ` · 🏷️ ${escapeHtml(getStockSegments(stock).find(seg => seg.niche).niche)}` : ''}</td>
+                <td class="text-xs" title="${escapeHtml(getSubsectorMedians(getMainSector(stock), getMainSubsector(stock)) ? `Mediana C/Z podsektora: ${formatNumberPl(getSubsectorMedians(getMainSector(stock), getMainSubsector(stock)).pe, 1)}` : 'Podsektor (T2)')}">${escapeHtml(getMainSubsector(stock) || '—')}${getStockSegments(stock).find(seg => seg.niche) ? ` · 🏷️ ${escapeHtml(getStockSegments(stock).find(seg => seg.niche).niche)}` : ''}</td>
                 <td class="cell-number">${formatZl(m.cap, 0)}</td>
                 <td class="cell-number ${cls(m.pe, med.pe, true)}">${fx(m.pe)}</td>
-                <td class="cell-number ${cls(m.pb, med.pb, true)}">${m.pb ? m.pb.toFixed(2) : '—'}</td>
-                ${hasIndexLvl5 ? `<td class="cell-number">${typeof formatSectorPremiumCell === 'function' ? formatSectorPremiumCell(sectorPremium, typeof isCompanyInSectorBubble === 'function' && isCompanyInSectorBubble(stock)) : `${(sectorPremium * 100).toFixed(0)}%`}</td>` : ''}
+                <td class="cell-number ${cls(m.pb, med.pb, true)}">${m.pb ? formatNumberPl(m.pb, 2) : '—'}</td>
+                ${hasIndexLvl5 ? `<td class="cell-number">${typeof formatSectorPremiumCell === 'function' ? formatSectorPremiumCell(sectorPremium, typeof isCompanyInSectorBubble === 'function' && isCompanyInSectorBubble(stock)) : `${formatNumberPl((sectorPremium * 100), 0)}%`}</td>` : ''}
                 <td class="cell-number ${cls(m.dy, med.dy, false)}">${pct(m.dy)}</td>
                 <td class="cell-number ${cls(m.debt, med.debt, true)}">${pct(m.debt)}</td>
                 ${level >= 2 ? `<td class="cell-number ${cls(m.roe, med.roe, false)}">${pct(m.roe)}</td><td class="cell-number ${cls(m.margin, med.margin, false)}">${pct(m.margin)}</td><td class="cell-number ${m.growth > 0 ? 'text-up' : m.growth < 0 ? 'text-down' : ''}">${pct(m.growth)}</td>` : ''}
-                <td class="cell-number">${m.health.toFixed(1)}</td>
+                <td class="cell-number">${formatNumberPl(m.health, 1)}</td>
                 ${renderScannerWorkforceCells(work)}
                 ${level >= 3 ? `<td class="cell-number ${upside > 0.15 ? 'text-up' : upside < -0.15 ? 'text-down' : ''}">${pct(upside)}</td>` : ''}
                 ${flagsOn ? (() => { const flags = getRedFlags(stock); return `<td class="cell-number ${flags.length >= 2 ? 'text-down' : ''}" title="${escapeHtml(flags.map(f => f.label).join(', '))}">${flags.length || ''}</td>`; })() : ''}
@@ -1537,8 +1539,8 @@ function renderScannerResults() {
 function renderScannerWorkforceCells(work) {
     if (!work) return '<td>—</td><td>—</td><td>—</td><td>—</td>';
     const vs = work.laborVsSector;
-    return `<td class="cell-number ${vs > 0.05 ? 'text-down' : vs < -0.05 ? 'text-up' : ''}" title="względem mediany sektora: ${vs >= 0 ? '+' : ''}${(vs * 100).toFixed(0)}%">${(work.labor * 100).toFixed(1)}%</td>
-        <td class="cell-number ${work.satisfaction >= 70 ? 'text-up' : work.satisfaction < 40 ? 'text-down' : ''}">${work.satisfaction.toFixed(0)}</td>
+    return `<td class="cell-number ${vs > 0.05 ? 'text-down' : vs < -0.05 ? 'text-up' : ''}" title="względem mediany sektora: ${vs >= 0 ? '+' : ''}${formatNumberPl((vs * 100), 0)}%">${formatNumberPl((work.labor * 100), 1)}%</td>
+        <td class="cell-number ${work.satisfaction >= 70 ? 'text-up' : work.satisfaction < 40 ? 'text-down' : ''}">${formatNumberPl(work.satisfaction, 0)}</td>
         <td>${{ none: '—', company: '✊ zakł.', sector: '✊ sekt.' }[work.union]}</td>
         <td class="${work.risk === 'wysokie' || work.risk === 'trwa' ? 'text-down' : ''}">${escapeHtml(work.risk || '—')}</td>`;
 }
@@ -1715,7 +1717,7 @@ const MENTOR_TASKS = {
         lesson: 'zmiennosc',
         check: task => (playerFund?.periods || []).some(p => p.number > (task.data.fromPeriod ?? 0) && p.maxDrawdown < 0.05),
         init: task => { task.data.fromPeriod = playerFund?.periods?.slice(-1)[0]?.number ?? 0; },
-        progress: () => `bieżące obsunięcie ${((playerFund?.current?.maxDrawdown || 0) * 100).toFixed(1)}%`
+        progress: () => `bieżące obsunięcie ${formatNumberPl(((playerFund?.current?.maxDrawdown || 0) * 100), 1)}%`
     },
     riskQuiz: {
         track: 'risk', title: 'Egzamin z ryzyka',
@@ -1824,7 +1826,7 @@ function checkMentorTasks() {
         playerWallet.cash += MENTOR_REWARD;
         recordPayment('external:korporacja', 'player-wallet', MENTOR_REWARD, `Zadanie mentora: ${def.title}`);
         if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry(def.lesson);
-        if (typeof pushNotification === 'function') pushNotification(`🎓 ${MENTOR_NAME}: zadanie „${def.title}” zaliczone (+${MENTOR_REWARD} PLN)`, () => openMentor());
+        if (typeof pushNotification === 'function') pushNotification(`🎓 ${MENTOR_NAME}: zadanie „${def.title}” zaliczone (+${formatZl(MENTOR_REWARD, 0)})`, () => openMentor());
     }
     // Certyfikaty: ścieżka z wymaganą liczbą zadań.
     for (const [id, track] of Object.entries(MENTOR_TRACKS)) {
@@ -1877,7 +1879,7 @@ function renderMentorPanel() {
         let progress = '';
         try { progress = def.progress(task); } catch (e) { progress = ''; }
         return `<li class="mentor-task"><div><strong>${MENTOR_TRACKS[def.track].icon} ${escapeHtml(def.title)}</strong>
-            <p class="text-sm m-0">${escapeHtml(def.text)}</p><span class="text-xs text-muted">${escapeHtml(progress)} · nagroda ${MENTOR_REWARD} PLN</span></div>
+            <p class="text-sm m-0">${escapeHtml(def.text)}</p><span class="text-xs text-muted">${escapeHtml(progress)} · nagroda ${formatZl(MENTOR_REWARD, 0)}</span></div>
             <button class="btn-xs btn-secondary" onclick="openAcademy('${def.lesson}')">📘 Hasło</button></li>`;
     }).join('');
     const done = Object.keys(mentor.done).map(id => MENTOR_TASKS[id]).filter(Boolean).map(def => `<li>✅ ${escapeHtml(def.title)}</li>`).join('');
@@ -2110,7 +2112,7 @@ Object.assign(ACADEMY_ENTRIES, {
     reitNieruchomosci: {
         title: 'REIT — fundusz nieruchomości', get icon() { return academyIcon('magazyn'); },
         text: 'REIT to spółka, która posiada i wynajmuje nieruchomości (biura, magazyny, hotele, szpitale). Jej przychód to wartość portfela × stopa najmu × obłożenie, minus koszty utrzymania i odsetki od długu. W zamian za przywileje podatkowe REIT musi wypłacać co najmniej 80% zysku jako dywidendę, więc dywidenda jest stała i przewidywalna (w grze 3–8% rocznie). REIT jest zadłużony — miarą jest LTV, czyli dług do wartości portfela (w grze nie więcej niż 60%) — dlatego jest bardzo wrażliwy na stopy procentowe: wyższe stopy podnoszą odsetki i obniżają wartość nieruchomości i premię do wartości aktywów netto (NAV). W recesji i pandemii spada obłożenie biur, handlu i hoteli, a magazyny bywają odporne.',
-        example: () => { const r = stocks.find(x => x.assetType === 'REIT' && x.reit && !x.isBankrupt); return r ? `${r.name}: portfel ${formatZl(r.reit.portfolioValue, 0)}, obłożenie ${formatNumberPl(r.reit.occupancy * 100, 0)}%, LTV ${formatNumberPl(getReitLtv(r) * 100, 0)}%, stopa dywidendy ok. ${formatNumberPl(getReitDividendYield(r) * 100, 1)}%.` : 'Przykład: portfel za 100 mln zł, obłożenie 92%, stopa najmu 7,5% — przychód z najmu ok. 6,9 mln zł rocznie.'; },
+        example: () => { const r = stocks.find(x => x.assetType === 'REIT' && x.reit && !x.isBankrupt); return r ? `${r.name}: portfel ${formatZl(r.reit.portfolioValue, 0)}, obłożenie ${formatNumberPl(r.reit.occupancy * 100, 0)}%, LTV ${formatNumberPl(getReitLtv(r) * 100, 0)}%, stopa dywidendy ok. ${formatNumberPl(getReitDividendYield(r) * 100, 1)}%.` : 'Przykład: portfel za 100 mln PLN, obłożenie 92%, stopa najmu 7,5% — przychód z najmu ok. 6,9 mln PLN rocznie.'; },
         quiz: [
             { q: 'Jaką część zysku REIT musi wypłacić jako dywidendę?', a: ['co najmniej 80%', 'najwyżej 10%', 'nic — to jego wybór'], c: 0 },
             { q: 'Co się dzieje z REIT-em, gdy stopy procentowe rosną?', a: ['rosną odsetki, a wycena spada', 'zyskuje na wartości', 'nic'], c: 0 },
@@ -2120,7 +2122,7 @@ Object.assign(ACADEMY_ENTRIES, {
     ryzykoKredytowe: {
         title: 'Ryzyko kredytowe', get icon() { return academyIcon('bank'); },
         text: 'Bank zarabia na różnicy między oprocentowaniem kredytów a depozytów (marża odsetkowa), ale ryzykuje, że dłużnik nie spłaci. Dlatego bank nie pożycza jednemu dłużnikowi więcej niż 10% swojego kapitału (limit koncentracji) i tworzy odpisy na złe kredyty. Szczególnie ryzykowni są deweloperzy i wykonawcy budowlani: ich zyski zależą od cyklu, a zabezpieczeniem są nieruchomości, które w kryzysie tanieją. W kryzysie bankowym banki z dużą ekspozycją na budownictwo i nieruchomości tworzą odpisy, tracą zysk i kurs, a firmy nie dostają nowych kredytów.',
-        example: () => { const b = commercialBanks.find(x => x.isActive && x.exposure && Object.keys(x.exposure).length); if (!b) return 'Przykład: bank z kapitałem 100 mln zł pożyczy jednemu deweloperowi najwyżej 10 mln zł.'; const e = getBankDeveloperExposure(b); return `${b.name}: kredyty dla spółek ${formatZl(e.total, 0)}, w tym dla deweloperów (Budowlany, Nieruchomości) ${formatZl(e.developer, 0)}; limit na jednego dłużnika ${formatZl(getBankCapital(b) * BANK_CONCENTRATION_LIMIT, 0)}.`; },
+        example: () => { const b = commercialBanks.find(x => x.isActive && x.exposure && Object.keys(x.exposure).length); if (!b) return 'Przykład: bank z kapitałem 100 mln PLN pożyczy jednemu deweloperowi najwyżej 10 mln PLN.'; const e = getBankDeveloperExposure(b); return `${b.name}: kredyty dla spółek ${formatZl(e.total, 0)}, w tym dla deweloperów (Budowlany, Nieruchomości) ${formatZl(e.developer, 0)}; limit na jednego dłużnika ${formatZl(getBankCapital(b) * BANK_CONCENTRATION_LIMIT, 0)}.`; },
         quiz: [
             { q: 'Dlaczego bank ogranicza kredyty dla jednego dłużnika do 10% kapitału?', a: ['by upadłość jednego klienta nie zniszczyła banku', 'bo tak chce klient', 'by płacić niższe podatki'], c: 0 },
             { q: 'Z czego bank zarabia na kredytach i depozytach?', a: ['z marży odsetkowej', 'z opłat za logowanie', 'z dywidend klientów'], c: 0 },
@@ -2142,12 +2144,12 @@ Object.assign(ACADEMY_ENTRIES, {
         ]
     },
     gieldaPrywatna: {
-        title: 'Giełda prywatna i ryzyko oszustwa', get icon() { return academyIcon('alert'); },
-        text: 'Giełda prywatna ma najłagodniejsze wymogi i najsłabszy nadzór. Dlatego przyciąga spółki, które nie dostałyby się gdzie indziej — także takie, które ukrywają problemy. W grze oszustwa księgowe zdarzają się tam ok. 5 razy częściej niż na GPW i są wykrywane później, a ujawnienie boli mocniej: odpis, spadek kursu i zmiana zarządu. Zasada ostrożności: mała pozycja, dywersyfikacja, audyt przed większym zakupem. Fundusz może mieć na giełdzie prywatnej najwyżej 20% swojej wartości.',
-        example: () => { const p = stocks.filter(s => getStockMarket(s) === 'PRV' && !s.isBankrupt); return p.length ? `Na giełdzie prywatnej notowanych jest ${p.length} spółek; trwających oszustw: ${p.filter(s => s.fraud).length} (widoczne dopiero po audycie lub ujawnieniu).` : 'Na giełdzie prywatnej nie ma jeszcze żadnej spółki — trafiają tu słabe spółki z NewHorizons.'; },
+        title: 'Włoska Giełda i ryzyko oszustwa', get icon() { return academyIcon('alert'); },
+        text: 'Włoska Giełda ma najłagodniejsze wymogi i najsłabszy nadzór. Dlatego przyciąga spółki, które nie dostałyby się gdzie indziej — także takie, które ukrywają problemy. W grze oszustwa księgowe zdarzają się tam ok. 5 razy częściej niż na GPW i są wykrywane później, a ujawnienie boli mocniej: odpis, spadek kursu i zmiana zarządu. Zasada ostrożności: mała pozycja, dywersyfikacja, audyt przed większym zakupem. Fundusz może mieć na Włoskiej Giełdzie najwyżej 20% swojej wartości.',
+        example: () => { const p = stocks.filter(s => getStockMarket(s) === 'PRV' && !s.isBankrupt); return p.length ? `Na Włoskiej Giełdzie notowanych jest ${p.length} spółek; trwających oszustw: ${p.filter(s => s.fraud).length} (widoczne dopiero po audycie lub ujawnieniu).` : 'Na Włoskiej Giełdzie nie ma jeszcze żadnej spółki — trafiają tu słabe spółki z NewHorizons.'; },
         quiz: [
-            { q: 'Jak często oszustwa zdarzają się na giełdzie prywatnej względem GPW?', a: ['ok. 5 razy częściej', 'tak samo często', 'rzadziej'], c: 0 },
-            { q: 'Jak ograniczyć ryzyko na giełdzie prywatnej?', a: ['mała pozycja, dywersyfikacja i audyt', 'jedna duża pozycja', 'kupować na kredyt'], c: 0 },
+            { q: 'Jak często oszustwa zdarzają się na Włoskiej Giełdzie względem GPW?', a: ['ok. 5 razy częściej', 'tak samo często', 'rzadziej'], c: 0 },
+            { q: 'Jak ograniczyć ryzyko na Włoskiej Giełdzie?', a: ['mała pozycja, dywersyfikacja i audyt', 'jedna duża pozycja', 'kupować na kredyt'], c: 0 },
             { q: 'Co grozi spółce po ujawnieniu oszustwa?', a: ['odpis, spadek kursu i zmiana zarządu', 'premia od nadzoru', 'nic'], c: 0 }
         ]
     },

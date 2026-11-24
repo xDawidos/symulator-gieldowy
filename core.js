@@ -29,6 +29,7 @@ let isGamePaused = true;
 let currentlyDisplayedChartSymbol = null;
 let playerAccessLevel = 0; // Poziom dostępu do giełd
 let currentSortState = 'none'; // 'none', 'price_asc', 'price_desc'
+let countrySortState = 'none'; // 0.16.9: kolejność bloków krajów na liście akcji: 'none', 'asc', 'desc'
 let lastWeekStockPrices = {};
 
 
@@ -91,19 +92,20 @@ function getRandomElement(arr) {
 
 // Funkcja pauzy (używana przez UI)
 function togglePauseGame() {
+    if (typeof isIntroActive === 'function' && isIntroActive()) return; // 0.16.10: zegar stoi do końca scenki startowej
     isGamePaused = !isGamePaused;
-    const pauseButton = document.getElementById('pause-game-btn');
-    if (pauseButton) {
-        if (isGamePaused) {
-            pauseButton.textContent = 'Wznów';
-            pauseButton.classList.add('is-paused');
-            console.log('--- GRA ZAPAUZOWANA ---');
-        } else {
-            pauseButton.textContent = 'Pauza';
-            pauseButton.classList.remove('is-paused');
-            console.log('--- GRA WZNOWIONA ---');
-        }
-    }
+    if (!isGamePaused) sessionEverRun = true;
+    updateSessionControls();
+}
+
+/** Makieta 18 (R5): stan sesji słowem i przycisk „Rozpocznij grę” (przed pierwszym tygodniem), potem „Wznów” albo „Wstrzymaj”. */
+let sessionEverRun = false;
+function updateSessionControls() {
+    const cal = typeof getGameCalendar === 'function' ? getGameCalendar() : { absQuarter: 1, week: 1 };
+    const atStart = !sessionEverRun && cal.absQuarter === 0 && cal.week === 1;
+    const btn = document.getElementById('pause-game-btn'), state = document.getElementById('session-state');
+    if (btn) { btn.textContent = isGamePaused ? (atStart ? 'Rozpocznij grę' : 'Wznów') : 'Wstrzymaj'; btn.classList.toggle('is-paused', isGamePaused); }
+    if (state) { state.classList.toggle('is-on', !isGamePaused); state.lastElementChild.textContent = isGamePaused ? 'Sesja wstrzymana' : 'Sesja trwa'; }
 }
 
 function togglePriceSort() {
@@ -117,6 +119,11 @@ function togglePriceSort() {
     }
     console.log(`Nowy stan sortowania: ${currentSortState}`); // Log diagnostyczny
     displayStocks(getCurrentInputValues()); // Odśwież tabelę z nowym sortowaniem
+}
+
+function toggleCountrySort() {
+    countrySortState = countrySortState === 'none' ? 'asc' : countrySortState === 'asc' ? 'desc' : 'none';
+    displayStocks(getCurrentInputValues());
 }
 
 function initializeGameTimeRelatedVariables() {
@@ -568,7 +575,7 @@ function createTender(
 
     logEvent(
         `Ogłoszono przetarg: ${spec.name}, zamawiający: ${clientCompany.name}, ` +
-        `budżet: ${amount.toLocaleString('pl-PL')} PLN. ` +
+        `budżet: ${formatZl(amount, 0)}. ` +
         `Przyjmowanie ofert: ${Math.ceil(duration / 1000)} s symulacji.`,
         'construction'
     );
@@ -634,7 +641,7 @@ function bidOnTender(tenderId, bidderCompany, bidPrice, bidTime) {
     logEvent(
         `${existingIndex >= 0 ? 'Aktualizacja oferty' : 'Nowa oferta'}: ` +
         `${bidderCompany.name} — ${tender.buildingType.name}, ` +
-        `${price.toLocaleString('pl-PL')} PLN, ${bid.time} dni budowy.`,
+        `${formatZl(price, 0)}, ${bid.time} dni budowy.`,
         'construction'
     );
 
@@ -868,7 +875,7 @@ function awardTender(tenderId) {
 
         logEvent(
             `${bid.bidder.name} wygrywa przetarg na ${tender.buildingType.name} za ` +
-            `${price.toLocaleString('pl-PL')} PLN.`,
+            `${formatZl(price, 0)}.`,
             'construction'
         );
 
@@ -889,7 +896,8 @@ function autoAwardExpiredTenders() {
             !tender.projectId &&
             tender.remainingGameMs <= 0
         ) {
-            awardTender(tender.id);
+            if (tender.infra && typeof awardInfraTender === 'function') awardInfraTender(tender); // 0.17 S5: projekty państwa
+            else awardTender(tender.id);
         }
     }
 }
@@ -955,7 +963,7 @@ function generateAIBids() {
     if (builders.length === 0) return;
 
     for (const tender of activeTenders) {
-        if (tender.status !== 'open' || tender.clientCompany?.isPlayer) continue;
+        if (tender.status !== 'open' || tender.clientCompany?.isPlayer || tender.infra?.highway) continue; // 0.17 S5: odcinki autostrady — oferty pakietowe przy rozstrzygnięciu
         if (!Array.isArray(tender.evaluatedBy)) tender.evaluatedBy = [];
 
         for (const builder of builders) {
@@ -1000,8 +1008,9 @@ function getContractValue(project) {
 
 function getMilestonePaymentTarget(project, milestone) {
     const rules = CONSTRUCTION_RULES;
-    const workShare = 1 - rules.advanceRate - rules.retentionRate;
-    return getContractValue(project) * (rules.advanceRate + workShare * milestone);
+    const advance = Number(project.advanceRate ?? rules.advanceRate); // 0.17 S5: zaliczka państwa 30% przy infrastrukturze
+    const workShare = 1 - advance - rules.retentionRate;
+    return getContractValue(project) * (advance + workShare * milestone);
 }
 
 /** Wypłata z depozytu (escrow) zamawiającego do wykonawcy. Wykonawca księguje ją jako zaliczkę (zobowiązanie). */
@@ -1023,7 +1032,7 @@ function releaseEscrowToBuilder(project, amount, purpose) {
 }
 
 function payDueMilestones(project) {
-    const milestones = CONSTRUCTION_RULES.milestones;
+    const milestones = Array.isArray(project.milestones) ? project.milestones : CONSTRUCTION_RULES.milestones; // 0.17 S5: odbiory co 10% przy infrastrukturze
 
     while (
         project.milestonesPaid < milestones.length &&
@@ -1134,6 +1143,8 @@ function startConstructionProject(tender, winningBid) {
         deadlineMs: durationDays * dayMs,
         plannedDurationMs: durationDays * dayMs,
         dayMs,
+        advanceRate: Number(tender.advanceRate) > 0 ? Number(tender.advanceRate) : CONSTRUCTION_RULES.advanceRate,
+        ...(Array.isArray(tender.milestones) ? { milestones: tender.milestones.slice() } : {}),
         technologyBonuses: { ...technologyBonuses },
         speedMultiplier: getBuilderSpeedMultiplier(builder),
         performanceFactor,
@@ -1182,12 +1193,12 @@ function startConstructionProject(tender, winningBid) {
     tender.startDate = project.startTime;
 
     // Zaliczka dla wykonawcy.
-    releaseEscrowToBuilder(project, price * CONSTRUCTION_RULES.advanceRate, 'Zaliczka przy podpisaniu umowy');
+    releaseEscrowToBuilder(project, price * project.advanceRate, 'Zaliczka przy podpisaniu umowy');
 
     logEvent(
         `${builder.name} rozpoczyna budowę ${building.name} (termin: ${durationDays} dni budowy). ` +
-        `Zaliczka ${(price * CONSTRUCTION_RULES.advanceRate).toFixed(0)} PLN, ` +
-        `planowane koszty ${estimatedCost.toFixed(0)} PLN.`,
+        `Zaliczka ${formatZl((price * CONSTRUCTION_RULES.advanceRate), 0)}, ` +
+        `planowane koszty ${formatZl(estimatedCost, 0)}.`,
         'construction'
     );
 
@@ -1240,7 +1251,7 @@ function hireSubcontractorForProject(project, specId = null) {
     if (typeof noteSubcontractorHire === 'function') noteSubcontractorHire(project, spec);
 
     project.events.push({ type: 'subcontractor', description: `Zatrudniono podwykonawcę ${spec.name}`, gameTimeMs: project.elapsedGameMs });
-    logEvent(`${project.builder.name} zatrudnia podwykonawcę ${spec.name} przy ${project.tender.buildingType.name} (${fee.toFixed(0)} PLN).`, 'construction');
+    logEvent(`${project.builder.name} zatrudnia podwykonawcę ${spec.name} przy ${project.tender.buildingType.name} (${formatZl(fee, 0)}).`, 'construction');
 
     return true;
 }
@@ -1291,8 +1302,8 @@ function runWeeklyProjectEvents(project) {
             project.excusedDelayMs += extraWork;
 
             recordPayment(client, `escrow:${project.id}`, extra, 'Dopłata za zmianę zamówienia', project.id);
-            project.events.push({ type: 'change_order', cause: 'client', description: `Zmiana zamówienia (+${extra} PLN)`, gameTimeMs: project.elapsedGameMs });
-            logEvent(`${client.name} zmienia zakres ${project.tender.buildingType.name}: +${extra.toLocaleString('pl-PL')} PLN, termin wydłużony.`, 'construction');
+            project.events.push({ type: 'change_order', cause: 'client', description: `Zmiana zamówienia (+${formatZl(extra, 0)})`, gameTimeMs: project.elapsedGameMs });
+            logEvent(`${client.name} zmienia zakres ${project.tender.buildingType.name}: +${formatZl(extra, 0)}, termin wydłużony.`, 'construction');
             return;
         }
     }
@@ -1528,12 +1539,15 @@ function completeConstructionProject(project) {
 
     // Bilans zamawiającego bez zmian: depozyt zamienia się w budynek wg ceny nabycia.
     const purchasePrice = revenue;
-    addBuildingToClient(client, project, {
-        status: 'completed',
-        purchasePrice,
-        marketValue: Number(project.tender.buildingType.estimatedMarketValue) || purchasePrice
-    });
-    if (typeof onReitBuildingCompleted === 'function') onReitBuildingCompleted(client, project, purchasePrice); // 0.15.5 B5: obiekt zwiększa portfel REIT-u
+    if (project.tender.infra && typeof onInfraProjectCompleted === 'function') onInfraProjectCompleted(project); // 0.17 S5: przepustowość zamiast budynku
+    else {
+        addBuildingToClient(client, project, {
+            status: 'completed',
+            purchasePrice,
+            marketValue: Number(project.tender.buildingType.estimatedMarketValue) || purchasePrice
+        });
+        if (typeof onReitBuildingCompleted === 'function') onReitBuildingCompleted(client, project, purchasePrice); // 0.15.5 B5: obiekt zwiększa portfel REIT-u
+    }
 
     if (Number(project.tender.buildingType.healthBonus) > 0) {
         client.financialHealth = Math.min(5, (Number(client.financialHealth) || 0) + Number(project.tender.buildingType.healthBonus) * 0.5);
@@ -1562,9 +1576,9 @@ function completeConstructionProject(project) {
 
     logEvent(
         `Odebrano ${project.tender.buildingType.name} dla ${client.name}. ${builder.name}: ` +
-        `przychód ${revenue.toFixed(0)} PLN, koszty ${project.costsPaid.toFixed(0)} PLN` +
-        (penalty > 0 ? `, kara ${penalty.toFixed(0)} PLN` : '') +
-        (bonus > 0 ? `, premia ${bonus.toFixed(0)} PLN` : '') + '.',
+        `przychód ${formatZl(revenue, 0)}, koszty ${formatZl(project.costsPaid, 0)}` +
+        (penalty > 0 ? `, kara ${formatZl(penalty, 0)}` : '') +
+        (bonus > 0 ? `, premia ${formatZl(bonus, 0)}` : '') + '.',
         'construction'
     );
 
@@ -1658,7 +1672,7 @@ function cancelConstructionProject(project, reason = 'Anulowanie', faultParty = 
         postPeriodEntry(client, `contract_client_${project.id}`, { otherIncome: penaltyCollected - uncollected });
     }
 
-    if (unfinishedValue > 0) {
+    if (unfinishedValue > 0 && !project.tender.infra) {
         addBuildingToClient(client, project, { status: 'unfinished', purchasePrice: unfinishedValue, marketValue: unfinishedValue * 0.6 });
     }
 
@@ -1676,14 +1690,15 @@ function cancelConstructionProject(project, reason = 'Anulowanie', faultParty = 
     project.tender.status = 'cancelled';
     project.tender.cancelReason = project.cancelReason;
     project.tender.completionDate = project.completionDate;
+    if (project.tender.infra && typeof onInfraProjectCancelled === 'function') onInfraProjectCancelled(project); // 0.17 S5
 
     constructionProjects = constructionProjects.filter(item => item.id !== project.id);
     if (builder.constructionStats) builder.constructionStats.currentProjects = getActiveProjectsForBuilder(builder).length;
 
     logEvent(
         `Anulowano budowę ${project.tender.buildingType.name}. ${project.cancelReason} ` +
-        `Zwrot dla ${client.name}: ${(escrowRefund + refundCollected).toFixed(0)} PLN. ` +
-        `Wykonawca zatrzymuje ${revenue.toFixed(0)} PLN przy kosztach ${project.costsPaid.toFixed(0)} PLN.`,
+        `Zwrot dla ${client.name}: ${formatZl((escrowRefund + refundCollected), 0)}. ` +
+        `Wykonawca zatrzymuje ${formatZl(revenue, 0)} przy kosztach ${formatZl(project.costsPaid, 0)}.`,
         'construction'
     );
 
@@ -1820,8 +1835,8 @@ function getGdpDriver() {
 // (profile, cykle, mediany, filtry, skaner, Akademia). Podsektor może nadpisać pola profilu sektora.
 const SECTOR_GROUPS = [
     { id: 'finance',  name: 'Finanse',            icon: '💰', sectors: ['Bankowość', 'Finanse'] },
-    { id: 'consumer', name: 'Konsumpcja',         icon: '🛒', sectors: ['Żywność', 'Dobra konsumpcyjne', 'Turystyka', 'Media', 'Gaming'] },
-    { id: 'industry', name: 'Przemysł i surowce', icon: '🏭', sectors: ['Przemysł', 'Chemia', 'Energia', 'Budowlany', 'Transport i logistyka'] },
+    { id: 'consumer', name: 'Konsumpcja',         icon: '🛒', sectors: ['Żywność', 'Rybołówstwo', 'Alkohole', 'Dobra konsumpcyjne', 'Turystyka', 'Media', 'Gaming'] },
+    { id: 'industry', name: 'Przemysł i surowce', icon: '🏭', sectors: ['Przemysł', 'Motoryzacja', 'Chemia', 'Energia', 'Budowlany', 'Transport i logistyka'] },
     { id: 'health',   name: 'Zdrowie i nauka',    icon: '🏥', sectors: ['Medycyna', 'Badania'] },
     { id: 'tech',     name: 'Technologia',        icon: '💻', sectors: ['Technologia'] },
     { id: 'realty',   name: 'Nieruchomości',      icon: '🏢', sectors: ['Nieruchomości'] },
@@ -1839,25 +1854,36 @@ const SECTORS = {
             'Fintech': { profile: { beta: 1.5, pe: 25 }, delta: { growth: 0.05 }, specialist: true, mechanic: 'knf', weight: 4 } // T2: licencja KNF (waga ×4 w losowaniu — decyzja użytkownika)
         } },
     'Żywność':               { icon: '🍞', profile: { beta: 0.5, rateSens: 0.4, pe: 15, margin: 0.12, growth: 0.03, ps: 1.0, da: 0.03 },
-        subsectors: { 'Rolnictwo': { peopleSubsidy: true } } },                                             // dotacje Ludowców (0.13)
+        subsectors: { 'Rolnictwo': { peopleSubsidy: true }, 'Słodycze': {}, 'Herbata': { profile: { beta: 0.5 } }, 'Przetwórstwo spożywcze': {} } }, // 0.18.1 P1: Przetwórstwo spożywcze                              // dotacje Ludowców (0.13); Słodycze: 0.16.3 G11
+    'Rybołówstwo':           { icon: '🐟', profile: { beta: 0.6, rateSens: 0.4, pe: 14, margin: 0.12, growth: 0.02, ps: 1.0, da: 0.05 } }, // 0.16.3 G11: stabilne, popyt mało elastyczny (0,3), koszt pracy 25%
+    'Alkohole':              { icon: '🍺', profile: { beta: 0.5, rateSens: 0.4, pe: 17, margin: 0.20, growth: 0.02, ps: 2.0, da: 0.04 }, // 0.16.2 G6a: defensywne, popyt mało elastyczny (0,4)
+        subsectors: { 'Piwowarstwo i napoje': {} } },
     'Dobra konsumpcyjne':    { icon: '🛍️', profile: { beta: 1.0, rateSens: 0.6, pe: 16, margin: 0.14, growth: 0.04, ps: 1.3, da: 0.03 } },
     'Turystyka':             { icon: '✈️', profile: { beta: 1.5, rateSens: 0.8, pe: 15, margin: 0.15, growth: 0.04, ps: 1.5, da: 0.06 } },
     'Media':                 { icon: '📺', profile: { beta: 1.1, rateSens: 0.6, pe: 14, margin: 0.18, growth: 0.02, ps: 1.8, da: 0.04 },
         niches: { 'TV': { event: 'season' }, 'Rozrywka': { event: 'season' } } },                               // T3: hit albo klapa sezonu
     'Gaming':                { icon: '🎮', profile: { beta: 1.4, rateSens: 1.0, pe: 20, margin: 0.25, growth: 0.07, ps: 3.0, da: 0.06 } },
     'Przemysł':              { icon: '⚙️', profile: { beta: 1.3, rateSens: 0.8, pe: 13, margin: 0.14, growth: 0.03, ps: 1.0, da: 0.05 },
-        subsectors: { 'Robotyka': { delta: { growth: 0.02, margin: 0.02 } } } },
-    'Chemia':                { icon: '⚗️', profile: { beta: 1.2, rateSens: 0.7, pe: 13, margin: 0.16, growth: 0.03, ps: 1.1, da: 0.05 } },
+        subsectors: { 'Robotyka': { delta: { growth: 0.02, margin: 0.02 } }, 'Przemysł ciężki': { profile: { beta: 1.4, da: 0.08 } }, 'Wydobycie': { listedOnly: true }, 'Handel surowcami': { listedOnly: true },
+            'Hutnictwo': { profile: { beta: 1.4, da: 0.07 } }, 'Maszyny': {}, 'Stocznie': { profile: { beta: 1.3, da: 0.06 } }, // 0.18.1 P1: ogniwa łańcucha metali
+            'Leśnictwo': { profile: { beta: 0.9 } }, 'Papiernie': {}, 'Przemysł lotniczy': { profile: { beta: 1.4 } } } }, // 0.18.2 G1–G3 // Przemysł ciężki: 0.16.4 G18; Wydobycie, Handel surowcami: 0.17 S2 (tylko przypisane spółki)
+    'Motoryzacja':           { icon: '🚗', profile: { beta: 1.4, rateSens: 1.0, pe: 12, margin: 0.12, growth: 0.03, ps: 0.8, da: 0.05 } }, // 0.16.2 G6a: cykliczna, koszt pracy 22% przychodów
+    'Chemia':                { icon: '⚗️', profile: { beta: 1.2, rateSens: 0.7, pe: 13, margin: 0.16, growth: 0.03, ps: 1.1, da: 0.05 },
+        subsectors: { 'Chemia polimerowa': {}, 'Nawozy': {}, 'Farmacja': { profile: { beta: 0.9 } }, 'Baterie': { profile: { beta: 1.4 } } } }, // 0.18.2 G2: Baterie // 0.18.1 P1: ogniwa łańcucha ropy (profil emisji z podsektora, energy.js)
     'Energia':               { icon: '⚡', profile: { beta: 0.8, rateSens: 0.9, pe: 12, margin: 0.25, growth: 0.02, ps: 1.5, da: 0.08 },
         subsectors: {
             'Energetyka jądrowa': { profile: { beta: 0.4, da: 0.14, pe: 14 }, mechanic: 'nuclear' },        // T2: budowa bloku
-            'OZE': { mult: { rateSens: 1.5 }, partySubsidy: true }                                           // dotacje według partii
+            'OZE': { mult: { rateSens: 1.5 }, partySubsidy: true },                                          // dotacje według partii
+            'Rafinerie': { listedOnly: true }, 'Gaz': { listedOnly: true },                                  // 0.17 S2: tylko przypisane spółki
+            'Energetyka węglowa': { listedOnly: true }, 'Energetyka gazowa': { listedOnly: true }            // 0.17.2 E1: tylko przypisane spółki
         } },
     'Budowlany':             { icon: '🏗️', profile: { beta: 1.5, rateSens: 1.3, pe: 11, margin: 0.10, growth: 0.03, ps: 0.7, da: 0.03 } },
     'Transport i logistyka': { icon: '🚚', profile: { beta: 1.2, rateSens: 0.7, pe: 13, margin: 0.14, growth: 0.03, ps: 1.0, da: 0.07 }, // dawny „Transport”
         subsectors: {
             'Logistyka': { profile: { pe: 14, margin: 0.12, growth: 0.04, da: 0.06 } },                      // dawna „Logistyka”
-            'Lotnictwo': { profile: { beta: 1.8 }, energySens: 0.5 }                                         // drogie paliwo: odwrotnie do cyklu Energii
+            'Lotnictwo': { profile: { beta: 1.8 }, energySens: 0.5, freight: 'air' },                        // drogie paliwo: odwrotnie do cyklu Energii
+            'Morski': { profile: { beta: 1.5 }, freight: 'sea' },                                            // 0.17 S4: armatorzy (indeks frachtu morskiego)
+            'Lądowy': { profile: { beta: 1.0 }, freight: 'land' }                                            // 0.17 S4: kolej i ciężarówki
         } },
     'Medycyna':              { icon: '💊', profile: { beta: 0.6, rateSens: 0.6, pe: 20, margin: 0.22, growth: 0.05, ps: 3.0, da: 0.05 },
         subsectors: {
@@ -1868,6 +1894,7 @@ const SECTORS = {
     'Badania':               { icon: '🔬', profile: { beta: 0.9, rateSens: 0.8, pe: 25, margin: 0.20, growth: 0.07, ps: 4.0, da: 0.05 } },
     'Technologia':           { icon: '💻', profile: { beta: 1.3, rateSens: 1.2, pe: 22, margin: 0.28, growth: 0.08, ps: 3.5, da: 0.05 },
         subsectors: {
+            'Telekomunikacja': { listedOnly: true },                                                        // 0.17.3: tylko przypisane spółki
             'Półprzewodniki': { profile: { beta: 1.8 }, cycleDepth: 1.5, specialist: true },
             'Sztuczna inteligencja': { profile: { pe: 35 }, delta: { growth: 0.06 }, vol: 1.3, specialist: true }
         },
@@ -1899,6 +1926,9 @@ const SECTOR_NAME_WORDS = {
     'Technologia': ['Tech', 'Soft', 'Digital', 'Data'],
     'Nieruchomości': ['Estate', 'Properties', 'Development', 'Dom'],
     'Obronność': ['Defense', 'Guard', 'Shield', 'Arms'],
+    'Motoryzacja': ['Motors', 'Auto', 'Drive', 'Wheels'],
+    'Alkohole': ['Brew', 'Spirits', 'Cellar', 'Hops'],
+    'Rybołówstwo': ['Fish', 'Catch', 'Trawl', 'Marine'],
     'Usługi': ['Service', 'Serwis', 'Partner', 'Pro']
 };
 
@@ -1988,7 +2018,7 @@ const SUBSECTOR_RANDOM_CHANCE = 0.3; // nowe spółki i startupy: szansa na pods
 function assignRandomSubsector(stock, chance = SUBSECTOR_RANDOM_CHANCE) {
     const main = getMainSegment(stock);
     if (!main || main.subsector || !isValidSegmentList(stock.segments)) return null;
-    const options = Object.entries(SECTORS[main.sector]?.subsectors || {}).filter(([name]) => !name.startsWith('Bank '));
+    const options = Object.entries(SECTORS[main.sector]?.subsectors || {}).filter(([name, def]) => !name.startsWith('Bank ') && !def.listedOnly); // 0.17 S2: podsektory surowcowe tylko z przydziału
     if (!options.length || !(Math.random() < chance)) return null;
     const total = options.reduce((sum, [, def]) => sum + (def.weight || 1), 0);
     let roll = Math.random() * total;
@@ -2002,7 +2032,10 @@ const SUBSECTOR_START_ASSIGNMENTS = {
     BLP: ['Medycyna', 'Sprzęt medyczny'],          // Błyskawiczna Proteza
     VTG: ['Medycyna', 'Biotechnologia'],           // VitaGen
     PUR: ['Energia', 'Energetyka jądrowa'],        // Państwowy Uran
-    TRN: ['Energia', 'Energetyka jądrowa'],        // Tauron (państwowy) — decyzja 12: państwowy program jądrowy
+    TRN: ['Energia', 'Energetyka węglowa'],        // Tauron (państwowy), 0.17.2 E1: opis i dane zgodne, węgiel
+    ESA: ['Energia', 'Energetyka węglowa'],        // Elektrownia SA
+    PING: ['Energia', 'Energetyka gazowa'],        // PING
+    WIW: ['Energia', 'OZE'],                       // WielkiWoltaż
     BEW: ['Energia', 'OZE'],                       // Bałtycka Energia
     ENG: ['Energia', 'OZE'],                       // Energa
     CTX: ['Technologia', 'Sztuczna inteligencja'], // Cortex Neural
@@ -2012,7 +2045,19 @@ const SUBSECTOR_START_ASSIGNMENTS = {
     WZM: ['Żywność', 'Rolnictwo'],                 // Miejskie Ziemniaki
     GROM: ['Obronność', 'Drony'],                  // Grom Systems
     WIP: ['Finanse', 'Fintech'],                   // WinPost — płatności (segmenty: Fintech 60%, Technologia 40%)
-    CRO: ['Finanse', 'Fintech']                    // Cyber-Ochrona — cyberbezpieczeństwo płatności (Fintech 50%, Usługi 50%)
+    CRO: ['Finanse', 'Fintech'],                   // Cyber-Ochrona — cyberbezpieczeństwo płatności (Fintech 50%, Usługi 50%)
+    PES: ['Energia', 'Rafinerie'],                 // 0.17 S2: PetroState
+    NAG: ['Energia', 'Gaz'],                       // NatGaz
+    ZST: ['Przemysł', 'Wydobycie'],                // Złoty Stok
+    SLS: ['Żywność', 'Rolnictwo'],                 // Słodki Spichlerz
+    GRT: ['Transport i logistyka', 'Morski'],      // 0.17 S4: GrubyTransport
+    CFL: ['Transport i logistyka', 'Lotnictwo'],   // CargoFLY
+    PKC: ['Transport i logistyka', 'Lądowy'],      // PKP Cargo
+    TIR: ['Transport i logistyka', 'Lądowy'],      // Tir-Pol Spedycja
+    KWM: ['Przemysł', 'Wydobycie'],                // 0.17.3: Kopalnie Węgla
+    STM: ['Przemysł', 'Stocznie'],                 // Stocznia Morska (0.18.1 P1: dawniej Przemysł ciężki)
+    BTX: ['Przemysł', 'Przemysł ciężki'],          // Betonex
+    ORT: ['Technologia', 'Telekomunikacja']        // Orzeł Telekom
 };
 // Spółki przekształcone przy przydziale (decyzja użytkownika: jedna istniejąca spółka staje się fintechem).
 const SUBSECTOR_START_SEGMENTS = {
@@ -2038,6 +2083,28 @@ function applyStartSubsectors() {
         if (seg && !seg.subsector) { seg.subsector = entry[1]; assigned++; }
     }
     if (typeof macro === 'object' && macro) macro.subsectorsAssigned = true;
+    return assigned;
+}
+
+// 0.18.1 P1: ogniwa łańcuchów (Hutnictwo, Maszyny, Stocznie, Chemia polimerowa, Nawozy, Farmacja, Przetwórstwo spożywcze). Raz na świat, także dla zapisu
+// sprzed 0.18.1 (flaga `macro.subsectors018`); nadpisuje podsektor tylko z listy `from` (STM: Przemysł ciężki → Stocznie).
+const SUBSECTOR_ASSIGNMENTS_018 = {
+    ANN: ['Przemysł', 'Maszyny'], STM: ['Przemysł', 'Stocznie', ['Przemysł ciężki']], HUT: ['Przemysł', 'Hutnictwo'], MTP: ['Motoryzacja', null],
+    SIK: ['Chemia', 'Nawozy'], KUP: ['Chemia', 'Farmacja'], MEF: ['Chemia', 'Farmacja'], ECL: ['Chemia', 'Chemia polimerowa'],
+    SUM: ['Żywność', 'Przetwórstwo spożywcze'], FIX: ['Żywność', 'Przetwórstwo spożywcze'], KFX: ['Żywność', 'Przetwórstwo spożywcze'],
+    DRZ: ['Przemysł', 'Leśnictwo'], OGP: ['Chemia', 'Baterie'] // 0.18.2 G1–G2: nowe spółki (ogniwa bez producenta w PL)
+};
+function applySubsectors018() {
+    if (typeof macro === 'object' && macro?.subsectors018) return 0;
+    let assigned = 0;
+    for (const stock of stocks) {
+        const entry = SUBSECTOR_ASSIGNMENTS_018[stock.symbol];
+        if (!entry || !entry[1] || stock.isBankrupt || stock.assetType) continue;
+        ensureStockSegments(stock);
+        const seg = stock.segments.find(s => s.sector === entry[0]);
+        if (seg && (!seg.subsector || (entry[2] || []).includes(seg.subsector))) { seg.subsector = entry[1]; assigned++; }
+    }
+    if (typeof macro === 'object' && macro) macro.subsectors018 = true;
     return assigned;
 }
 
@@ -2490,7 +2557,7 @@ function advanceMarketRegimeQuarterly(market = 'home') {
         }
         const isRetro = !regime.shownPhase;
         const gigChange = (gigVal - (regime.startGig || gigVal)) / (regime.startGig || 1);
-        const gigPctStr = (gigChange >= 0 ? '+' : '') + (gigChange * 100).toFixed(0) + '%';
+        const gigPctStr = formatPct(gigChange, 0);
 
         let desc = '';
         if (isRetro) {
@@ -2555,13 +2622,13 @@ function sendMarketPhaseRetrospective(endedPhase, regime) {
     const gigVal = getGigIndexValue();
     const startGig = regime.startGig || gigVal;
     const gigChange = (gigVal - startGig) / (startGig || 1);
-    const gigPct = (gigChange >= 0 ? '+' : '') + (gigChange * 100).toFixed(1) + '%';
+    const gigPct = formatPct(gigChange, 1);
 
     const periods = (typeof playerFund !== 'undefined' && playerFund?.periods) ? playerFund.periods : [];
     const fundChangeVal = periods.length ? (periods[periods.length - 1].fundReturn || 0) : 0;
-    const fundPct = (fundChangeVal >= 0 ? '+' : '') + (fundChangeVal * 100).toFixed(1) + '%';
-    const fundDd = (((typeof playerFund !== 'undefined' && playerFund?.current?.maxDrawdown) || 0) * 100).toFixed(1) + '%';
-    const gigDd = Math.abs((((regime.gigTrough || gigVal) - (regime.gigPeak || gigVal)) / (regime.gigPeak || 1)) * 100).toFixed(1) + '%';
+    const fundPct = formatPct(fundChangeVal, 1);
+    const fundDd = formatNumberPl(((typeof playerFund !== 'undefined' && playerFund?.current?.maxDrawdown) || 0) * 100, 1) + '%';
+    const gigDd = formatNumberPl(Math.abs((((regime.gigTrough || gigVal) - (regime.gigPeak || gigVal)) / (regime.gigPeak || 1)) * 100), 1) + '%';
 
     let bestSector = 'Technologia';
     let worstSector = 'Finanse';
@@ -2791,12 +2858,8 @@ function pickSpilloverSector(sourceCandidateId) {
     return pool.length > 0 ? pool[Math.floor(Math.random() * pool.length)] : null;
 }
 
-/** Co kwartał: postęp bańki sektorowej lub losowanie nowej. */
-function advanceSectorBubblesQuarterly() {
-    const regime = getMarketRegime('home');
-    const phaseKey = regime?.phase || 'bull';
-
-    // 0. Sprawdzenie Tarczy Antybańkowej (Megaprojekt SMSR Poziom 3)
+/** Tarcza Antybańkowa SMSR 3: tłumi aktywną bańkę; zwraca true, gdy tarcza działa (kwartał kończy się). */
+function applySectorBubbleShield() {
     if (typeof isMarketStabilityProjectUnlocked === 'function' && isMarketStabilityProjectUnlocked(3)) {
         const smsr = typeof getMarketStabilityProject === 'function' ? getMarketStabilityProject() : null;
         if (smsr && smsr.shieldActive) {
@@ -2808,93 +2871,262 @@ function advanceSectorBubblesQuarterly() {
                 sectorBubbleCooldown = 4;
                 updateAllSectorPremiums();
             }
-            return;
+            return true;
         }
     }
+    return false;
+}
+
+/** Brak aktywnej bańki: odliczanie przerwy albo losowanie nowej bańki. */
+function tryStartSectorBubble(phaseKey) {
+    if (sectorBubbleCooldown > 0) {
+        sectorBubbleCooldown--;
+        return;
+    }
+
+    // Szansa 5%/kw., x2 w Hossie i Euforii, x0 w Bessie i Kapitulacji
+    let phaseMult = 1.0;
+    if (phaseKey === 'bull' || phaseKey === 'euphoria') phaseMult = 2.0;
+    else if (phaseKey === 'bear' || phaseKey === 'capitulation') phaseMult = 0.0;
+
+    const startChance = 0.05 * phaseMult;
+    if (startChance > 0 && Math.random() < startChance) {
+        // Losujemy kandydata z wagami
+        const weightedList = SECTOR_BUBBLE_CANDIDATES.map(c => ({
+            candidate: c,
+            weight: getSectorBubbleCandidateWeight(c)
+        }));
+        const totalWeight = weightedList.reduce((sum, item) => sum + item.weight, 0);
+        let roll = Math.random() * totalWeight;
+        let picked = weightedList[0].candidate;
+        for (const item of weightedList) {
+            roll -= item.weight;
+            if (roll <= 0) {
+                picked = item.candidate;
+                break;
+            }
+        }
+
+        // Losowanie typu bańki:
+        // 35% krótki rajd ('rally'), 25% rozwleczona potężna bańka ('extended'), 40% klasyczna ('classic')
+        const typeRoll = Math.random();
+        let bType = 'classic';
+        let startPrem = 0.08 + Math.random() * 0.04;
+        if (typeRoll < 0.35) {
+            bType = 'rally';
+            startPrem = 0.14 + Math.random() * 0.05; // szybki, ekscytujący start
+        } else if (typeRoll < 0.60) {
+            bType = 'extended';
+            startPrem = 0.08 + Math.random() * 0.04; // powolny, systematyczny start
+        }
+
+        activeSectorBubble = {
+            candidateId: picked.id,
+            name: picked.name,
+            sector: picked.sector,
+            subsector: picked.subsector,
+            type: bType, // 'rally' | 'extended' | 'classic'
+            phase: 'inflating', // 'inflating' | 'popping' | 'recovering'
+            premium: startPrem,
+            quarters: 1,
+            popDuration: 0,
+            popTarget: 0,
+            popStartPremium: 0,
+            recoveryQuarters: 0,
+            spilloverSector: null,
+            spilloverApplied: false
+        };
+        updateAllSectorPremiums();
+
+        if (typeof pushNews === 'function' && canPushMoodNews()) {
+            pushNews(`🫧 Nowa bańka spekulacyjna w branży ${picked.name}!`);
+        }
+        // Powiadomienia SMSR:
+        if (typeof isMarketStabilityProjectUnlocked === 'function') {
+            if (isMarketStabilityProjectUnlocked(2)) {
+                if (typeof logEvent === 'function') {
+                    logEvent(`🔥 [SMSR Poziom 2 - Radar Live]: Wykryto narodziny bańki spekulacyjnej w sektorze ${picked.name} (typ: ${getBubbleTypeName(bType)}, premia startowa: +${formatNumberPl((startPrem * 100), 0)}%).`, 'market');
+                }
+            } else if (isMarketStabilityProjectUnlocked(1)) {
+                const smsr = typeof getMarketStabilityProject === 'function' ? getMarketStabilityProject() : null;
+                if (smsr) {
+                    const curQ = typeof macro === 'object' && Number.isFinite(macro.quarter) ? macro.quarter : 0;
+                    smsr.delayedWarnings.push({
+                        targetQuarter: curQ + 1, // opóźnienie o 1 kwartał
+                        name: picked.name,
+                        sector: picked.sector
+                    });
+                }
+            }
+        }
+    }
+    return;
+}
+
+/** Faza narastania bańki: premia rośnie, możliwe pęknięcie i ostrzeżenia SMSR. */
+function advanceInflatingBubble(bubble) {
+    const prevPremium = bubble.premium;
+    const minBubbleLimit = 0.22; // Minimalny limit bańki: dopóki < 22%, nie pęka samoczynnie
+
+    let popChance = 0;
+    if (bubble.premium >= minBubbleLimit) {
+        if (bubble.type === 'rally') {
+            // Krótki rajd: rośnie szybko, wysoka szansa pęknięcia
+            popChance = 0.30 + 0.15 * Math.max(0, bubble.quarters - 2);
+        } else if (bubble.type === 'extended') {
+            // Rozwleczona bańka: trwa dłużej, ale po 4-5 kwartałach ryzyko gwałtownie wzrasta
+            popChance = 0.03 + 0.05 * bubble.premium + 0.025 * Math.max(0, bubble.quarters - 3);
+        } else {
+            // Klasyczna bańka:
+            popChance = 0.06 + 0.12 * bubble.premium + 0.04 * Math.max(0, bubble.quarters - 2);
+        }
+
+        // Czynniki makro podwajające szansę pęknięcia
+        let doubleTriggers = false;
+        if (typeof centralBank === 'object' && Number(centralBank?.lastRateChange) >= 0.005) {
+            doubleTriggers = true;
+        }
+        if (typeof isMarketCrashing === 'function' && isMarketCrashing()) {
+            doubleTriggers = true;
+        }
+        if (typeof stocks !== 'undefined' && Array.isArray(stocks)) {
+            const sectorSurprises = stocks
+                .filter(s => isCompanyInSectorBubble(s, bubble) && Number.isFinite(s.lastSurprise))
+                .map(s => s.lastSurprise);
+            if (sectorSurprises.length > 0) {
+                const sorted = [...sectorSurprises].sort((a, b) => a - b);
+                const medSurprise = sorted[Math.floor(sorted.length / 2)];
+                if (medSurprise < -0.05) {
+                    doubleTriggers = true;
+                }
+            }
+        }
+        if (doubleTriggers) popChance *= 2.0;
+    }
+
+    if (bubble.premium >= minBubbleLimit && Math.random() < popChance) {
+        // PĘKNIĘCIE!
+        bubble.phase = 'popping';
+        if (bubble.type === 'rally') {
+            // Rajd pęka gwałtownie w 1-2 kwartały
+            bubble.popDuration = Math.floor(1 + Math.random() * 2); // 1-2 kw.
+            bubble.popTarget = -(0.16 + Math.random() * 0.08); // spadek -16..-24%
+        } else if (bubble.type === 'extended') {
+            // Rozwleczona bańka pęka potężnie i głęboko
+            bubble.popDuration = Math.floor(2 + Math.random() * 3); // 2-4 kw.
+            const durationPanic = Math.min(0.20, bubble.quarters * 0.018);
+            bubble.popTarget = -(0.24 + Math.random() * 0.10 + durationPanic); // -25..-48%
+        } else {
+            // Klasyczna bańka
+            bubble.popDuration = Math.floor(2 + Math.random() * 2); // 2-3 kw.
+            const durationPanic = Math.min(0.12, bubble.quarters * 0.015);
+            bubble.popTarget = -(0.18 + Math.random() * 0.08 + durationPanic);
+        }
+
+        bubble.popStartPremium = bubble.premium;
+        bubble.quartersInPop = 0;
+
+        if (typeof logEvent === 'function') {
+            logEvent(`💥 PĘKNIĘCIE BAŃKI! Euforia w sektorze ${bubble.name} dobiegła końca. Inwestorzy w panice wyprzedają akcje!`, 'market');
+        }
+        if (typeof isMarketStabilityProjectUnlocked === 'function' && isMarketStabilityProjectUnlocked(2)) {
+            if (typeof logEvent === 'function') {
+                logEvent(`🚨 [SMSR Poziom 2 - Radar]: ALARM! Bańka w sektorze ${bubble.name} pękła! Fala wyprzedaży zmierza do dołka ${formatNumberPl((bubble.popTarget * 100), 0)}%.`, 'market');
+            }
+        }
+    } else {
+        // POMPOWANIE:
+        let growth = 0.05 + Math.random() * 0.05;
+        if (bubble.type === 'rally') {
+            growth = 0.10 + Math.random() * 0.08; // dynamiczny wystrzał
+        } else if (bubble.type === 'extended') {
+            growth = 0.05 + Math.random() * 0.06; // stabilny mocny wzrost
+            // Rozlewanie się na inne sektory (spillover) gdy premia > 45%
+            if (bubble.premium > 0.45 && !bubble.spilloverApplied) {
+                const extraSec = pickSpilloverSector(bubble.candidateId);
+                if (extraSec) {
+                    bubble.spilloverSector = extraSec;
+                    bubble.spilloverApplied = true;
+                    if (typeof logEvent === 'function') {
+                        logEvent(`🌐 Efekt rozlania! Gorączka z sektora ${bubble.name} przenosi się także na ${extraSec.name}!`, 'market');
+                    }
+                }
+            }
+        } else {
+            growth = 0.05 + Math.random() * 0.05; // klasyczna
+        }
+
+        bubble.premium = Math.min(1.50, bubble.premium + growth);
+
+        // Wiadomość w pasku newsów przy przekroczeniu +30% po raz pierwszy
+        if (prevPremium <= 0.30 && bubble.premium > 0.30) {
+            if (typeof logEvent === 'function') {
+                logEvent(`📢 Media: gorączka sektora ${bubble.name}! Inwestorzy płacą rekordowe premie za spółki z branży.`, 'market');
+            }
+        }
+
+        // Radar SMSR Poziom 2: ostrzeżenie o przekroczeniu progu krytycznego
+        if (typeof isMarketStabilityProjectUnlocked === 'function' && isMarketStabilityProjectUnlocked(2)) {
+            if (prevPremium < 0.22 && bubble.premium >= 0.22) {
+                if (typeof logEvent === 'function') {
+                    const rInfo = typeof getBubbleRiskInfo === 'function' ? getBubbleRiskInfo(bubble) : { label: 'Średnie' };
+                    logEvent(`🔥 [SMSR Poziom 2 - Radar]: Sektor ${bubble.name} przekroczył próg krytyczny (+${formatNumberPl((bubble.premium * 100), 0)}%). Ryzyko pęknięcia: ${rInfo.label}.`, 'market');
+                }
+            }
+        }
+    }
+}
+
+/** Faza pękania bańki. */
+function advancePoppingBubble(bubble) {
+    bubble.quartersInPop = (bubble.quartersInPop || 0) + 1;
+    const progress = Math.min(1.0, bubble.quartersInPop / Math.max(1, bubble.popDuration));
+    bubble.premium = bubble.popStartPremium + (bubble.popTarget - bubble.popStartPremium) * progress;
+
+    if (progress >= 1.0) {
+        bubble.phase = 'recovering';
+        bubble.recoveryQuarters = 0;
+        // Recovery: od 3 do 6 kwartałów w zależności od długości bańki i głębokości dołka
+        const depthFactor = Math.abs(bubble.popTarget); // np. 0.20 - 0.50
+        let recQuarters = 3;
+        if (depthFactor > 0.35 || bubble.quarters >= 8) recQuarters = 6;
+        else if (depthFactor > 0.25 || bubble.quarters >= 5) recQuarters = Math.random() < 0.5 ? 4 : 5;
+        else if (bubble.type === 'rally') recQuarters = 3;
+        else recQuarters = Math.floor(3 + Math.random() * 2); // 3-4
+
+        bubble.recoveryTotalQuarters = Math.max(3, Math.min(6, recQuarters));
+        bubble.recoveryStartPremium = bubble.premium;
+    }
+}
+
+/** Faza powrotu bańki do normy. */
+function advanceRecoveringBubble(bubble) {
+    bubble.recoveryQuarters = (bubble.recoveryQuarters || 0) + 1;
+    const totalRecovery = bubble.recoveryTotalQuarters || 4;
+    const progress = Math.min(1.0, bubble.recoveryQuarters / totalRecovery);
+    bubble.premium = bubble.recoveryStartPremium * (1.0 - progress);
+
+    if (progress >= 1.0) {
+        // Koniec cyklu bańki
+        activeSectorBubble = null;
+        sectorBubbleCooldown = 4; // przerwa 4 kwartały po pęknięciu
+        if (typeof logEvent === 'function') {
+            logEvent(`Uspokojenie nastrojów w sektorze ${bubble.name}: wyceny powróciły do normy fundamentalnej.`, 'market');
+        }
+    }
+}
+
+/** Co kwartał: postęp bańki sektorowej lub losowanie nowej. */
+function advanceSectorBubblesQuarterly() {
+    const regime = getMarketRegime('home');
+    const phaseKey = regime?.phase || 'bull';
+
+    // 0. Sprawdzenie Tarczy Antybańkowej (Megaprojekt SMSR Poziom 3)
+    if (applySectorBubbleShield()) return;
 
     // 1. Jeśli nie ma aktywnej bańki
     if (!activeSectorBubble) {
-        if (sectorBubbleCooldown > 0) {
-            sectorBubbleCooldown--;
-            return;
-        }
-
-        // Szansa 5%/kw., x2 w Hossie i Euforii, x0 w Bessie i Kapitulacji
-        let phaseMult = 1.0;
-        if (phaseKey === 'bull' || phaseKey === 'euphoria') phaseMult = 2.0;
-        else if (phaseKey === 'bear' || phaseKey === 'capitulation') phaseMult = 0.0;
-
-        const startChance = 0.05 * phaseMult;
-        if (startChance > 0 && Math.random() < startChance) {
-            // Losujemy kandydata z wagami
-            const weightedList = SECTOR_BUBBLE_CANDIDATES.map(c => ({
-                candidate: c,
-                weight: getSectorBubbleCandidateWeight(c)
-            }));
-            const totalWeight = weightedList.reduce((sum, item) => sum + item.weight, 0);
-            let roll = Math.random() * totalWeight;
-            let picked = weightedList[0].candidate;
-            for (const item of weightedList) {
-                roll -= item.weight;
-                if (roll <= 0) {
-                    picked = item.candidate;
-                    break;
-                }
-            }
-
-            // Losowanie typu bańki:
-            // 35% krótki rajd ('rally'), 25% rozwleczona potężna bańka ('extended'), 40% klasyczna ('classic')
-            const typeRoll = Math.random();
-            let bType = 'classic';
-            let startPrem = 0.08 + Math.random() * 0.04;
-            if (typeRoll < 0.35) {
-                bType = 'rally';
-                startPrem = 0.14 + Math.random() * 0.05; // szybki, ekscytujący start
-            } else if (typeRoll < 0.60) {
-                bType = 'extended';
-                startPrem = 0.08 + Math.random() * 0.04; // powolny, systematyczny start
-            }
-
-            activeSectorBubble = {
-                candidateId: picked.id,
-                name: picked.name,
-                sector: picked.sector,
-                subsector: picked.subsector,
-                type: bType, // 'rally' | 'extended' | 'classic'
-                phase: 'inflating', // 'inflating' | 'popping' | 'recovering'
-                premium: startPrem,
-                quarters: 1,
-                popDuration: 0,
-                popTarget: 0,
-                popStartPremium: 0,
-                recoveryQuarters: 0,
-                spilloverSector: null,
-                spilloverApplied: false
-            };
-            updateAllSectorPremiums();
-
-            if (typeof pushNews === 'function' && canPushMoodNews()) {
-                pushNews(`🫧 Nowa bańka spekulacyjna w branży ${picked.name}!`);
-            }
-            // Powiadomienia SMSR:
-            if (typeof isMarketStabilityProjectUnlocked === 'function') {
-                if (isMarketStabilityProjectUnlocked(2)) {
-                    if (typeof logEvent === 'function') {
-                        logEvent(`🔥 [SMSR Poziom 2 - Radar Live]: Wykryto narodziny bańki spekulacyjnej w sektorze ${picked.name} (typ: ${getBubbleTypeName(bType)}, premia startowa: +${(startPrem * 100).toFixed(0)}%).`, 'market');
-                    }
-                } else if (isMarketStabilityProjectUnlocked(1)) {
-                    const smsr = typeof getMarketStabilityProject === 'function' ? getMarketStabilityProject() : null;
-                    if (smsr) {
-                        const curQ = typeof macro === 'object' && Number.isFinite(macro.quarter) ? macro.quarter : 0;
-                        smsr.delayedWarnings.push({
-                            targetQuarter: curQ + 1, // opóźnienie o 1 kwartał
-                            name: picked.name,
-                            sector: picked.sector
-                        });
-                    }
-                }
-            }
-        }
+        tryStartSectorBubble(phaseKey);
         return;
     }
 
@@ -2903,151 +3135,13 @@ function advanceSectorBubblesQuarterly() {
     bubble.quarters++;
 
     if (bubble.phase === 'inflating') {
-        const prevPremium = bubble.premium;
-        const minBubbleLimit = 0.22; // Minimalny limit bańki: dopóki < 22%, nie pęka samoczynnie
-
-        let popChance = 0;
-        if (bubble.premium >= minBubbleLimit) {
-            if (bubble.type === 'rally') {
-                // Krótki rajd: rośnie szybko, wysoka szansa pęknięcia
-                popChance = 0.30 + 0.15 * Math.max(0, bubble.quarters - 2);
-            } else if (bubble.type === 'extended') {
-                // Rozwleczona bańka: trwa dłużej, ale po 4-5 kwartałach ryzyko gwałtownie wzrasta
-                popChance = 0.03 + 0.05 * bubble.premium + 0.025 * Math.max(0, bubble.quarters - 3);
-            } else {
-                // Klasyczna bańka:
-                popChance = 0.06 + 0.12 * bubble.premium + 0.04 * Math.max(0, bubble.quarters - 2);
-            }
-
-            // Czynniki makro podwajające szansę pęknięcia
-            let doubleTriggers = false;
-            if (typeof centralBank === 'object' && Number(centralBank?.lastRateChange) >= 0.005) {
-                doubleTriggers = true;
-            }
-            if (typeof isMarketCrashing === 'function' && isMarketCrashing()) {
-                doubleTriggers = true;
-            }
-            if (typeof stocks !== 'undefined' && Array.isArray(stocks)) {
-                const sectorSurprises = stocks
-                    .filter(s => isCompanyInSectorBubble(s, bubble) && Number.isFinite(s.lastSurprise))
-                    .map(s => s.lastSurprise);
-                if (sectorSurprises.length > 0) {
-                    const sorted = [...sectorSurprises].sort((a, b) => a - b);
-                    const medSurprise = sorted[Math.floor(sorted.length / 2)];
-                    if (medSurprise < -0.05) {
-                        doubleTriggers = true;
-                    }
-                }
-            }
-            if (doubleTriggers) popChance *= 2.0;
-        }
-
-        if (bubble.premium >= minBubbleLimit && Math.random() < popChance) {
-            // PĘKNIĘCIE!
-            bubble.phase = 'popping';
-            if (bubble.type === 'rally') {
-                // Rajd pęka gwałtownie w 1-2 kwartały
-                bubble.popDuration = Math.floor(1 + Math.random() * 2); // 1-2 kw.
-                bubble.popTarget = -(0.16 + Math.random() * 0.08); // spadek -16..-24%
-            } else if (bubble.type === 'extended') {
-                // Rozwleczona bańka pęka potężnie i głęboko
-                bubble.popDuration = Math.floor(2 + Math.random() * 3); // 2-4 kw.
-                const durationPanic = Math.min(0.20, bubble.quarters * 0.018);
-                bubble.popTarget = -(0.24 + Math.random() * 0.10 + durationPanic); // -25..-48%
-            } else {
-                // Klasyczna bańka
-                bubble.popDuration = Math.floor(2 + Math.random() * 2); // 2-3 kw.
-                const durationPanic = Math.min(0.12, bubble.quarters * 0.015);
-                bubble.popTarget = -(0.18 + Math.random() * 0.08 + durationPanic);
-            }
-
-            bubble.popStartPremium = bubble.premium;
-            bubble.quartersInPop = 0;
-
-            if (typeof logEvent === 'function') {
-                logEvent(`💥 PĘKNIĘCIE BAŃKI! Euforia w sektorze ${bubble.name} dobiegła końca. Inwestorzy w panice wyprzedają akcje!`, 'market');
-            }
-            if (typeof isMarketStabilityProjectUnlocked === 'function' && isMarketStabilityProjectUnlocked(2)) {
-                if (typeof logEvent === 'function') {
-                    logEvent(`🚨 [SMSR Poziom 2 - Radar]: ALARM! Bańka w sektorze ${bubble.name} pękła! Fala wyprzedaży zmierza do dołka ${(bubble.popTarget * 100).toFixed(0)}%.`, 'market');
-                }
-            }
-        } else {
-            // POMPOWANIE:
-            let growth = 0.05 + Math.random() * 0.05;
-            if (bubble.type === 'rally') {
-                growth = 0.10 + Math.random() * 0.08; // dynamiczny wystrzał
-            } else if (bubble.type === 'extended') {
-                growth = 0.05 + Math.random() * 0.06; // stabilny mocny wzrost
-                // Rozlewanie się na inne sektory (spillover) gdy premia > 45%
-                if (bubble.premium > 0.45 && !bubble.spilloverApplied) {
-                    const extraSec = pickSpilloverSector(bubble.candidateId);
-                    if (extraSec) {
-                        bubble.spilloverSector = extraSec;
-                        bubble.spilloverApplied = true;
-                        if (typeof logEvent === 'function') {
-                            logEvent(`🌐 Efekt rozlania! Gorączka z sektora ${bubble.name} przenosi się także na ${extraSec.name}!`, 'market');
-                        }
-                    }
-                }
-            } else {
-                growth = 0.05 + Math.random() * 0.05; // klasyczna
-            }
-
-            bubble.premium = Math.min(1.50, bubble.premium + growth);
-
-            // Wiadomość w pasku newsów przy przekroczeniu +30% po raz pierwszy
-            if (prevPremium <= 0.30 && bubble.premium > 0.30) {
-                if (typeof logEvent === 'function') {
-                    logEvent(`📢 Media: gorączka sektora ${bubble.name}! Inwestorzy płacą rekordowe premie za spółki z branży.`, 'market');
-                }
-            }
-
-            // Radar SMSR Poziom 2: ostrzeżenie o przekroczeniu progu krytycznego
-            if (typeof isMarketStabilityProjectUnlocked === 'function' && isMarketStabilityProjectUnlocked(2)) {
-                if (prevPremium < 0.22 && bubble.premium >= 0.22) {
-                    if (typeof logEvent === 'function') {
-                        const rInfo = typeof getBubbleRiskInfo === 'function' ? getBubbleRiskInfo(bubble) : { label: 'Średnie' };
-                        logEvent(`🔥 [SMSR Poziom 2 - Radar]: Sektor ${bubble.name} przekroczył próg krytyczny (+${(bubble.premium * 100).toFixed(0)}%). Ryzyko pęknięcia: ${rInfo.label}.`, 'market');
-                    }
-                }
-            }
-        }
+        advanceInflatingBubble(bubble);
     }
 
     if (bubble.phase === 'popping') {
-        bubble.quartersInPop = (bubble.quartersInPop || 0) + 1;
-        const progress = Math.min(1.0, bubble.quartersInPop / Math.max(1, bubble.popDuration));
-        bubble.premium = bubble.popStartPremium + (bubble.popTarget - bubble.popStartPremium) * progress;
-
-        if (progress >= 1.0) {
-            bubble.phase = 'recovering';
-            bubble.recoveryQuarters = 0;
-            // Recovery: od 3 do 6 kwartałów w zależności od długości bańki i głębokości dołka
-            const depthFactor = Math.abs(bubble.popTarget); // np. 0.20 - 0.50
-            let recQuarters = 3;
-            if (depthFactor > 0.35 || bubble.quarters >= 8) recQuarters = 6;
-            else if (depthFactor > 0.25 || bubble.quarters >= 5) recQuarters = Math.random() < 0.5 ? 4 : 5;
-            else if (bubble.type === 'rally') recQuarters = 3;
-            else recQuarters = Math.floor(3 + Math.random() * 2); // 3-4
-
-            bubble.recoveryTotalQuarters = Math.max(3, Math.min(6, recQuarters));
-            bubble.recoveryStartPremium = bubble.premium;
-        }
+        advancePoppingBubble(bubble);
     } else if (bubble.phase === 'recovering') {
-        bubble.recoveryQuarters = (bubble.recoveryQuarters || 0) + 1;
-        const totalRecovery = bubble.recoveryTotalQuarters || 4;
-        const progress = Math.min(1.0, bubble.recoveryQuarters / totalRecovery);
-        bubble.premium = bubble.recoveryStartPremium * (1.0 - progress);
-
-        if (progress >= 1.0) {
-            // Koniec cyklu bańki
-            activeSectorBubble = null;
-            sectorBubbleCooldown = 4; // przerwa 4 kwartały po pęknięciu
-            if (typeof logEvent === 'function') {
-                logEvent(`Uspokojenie nastrojów w sektorze ${bubble.name}: wyceny powróciły do normy fundamentalnej.`, 'market');
-            }
-        }
+        advanceRecoveringBubble(bubble);
     }
 
     updateAllSectorPremiums();
@@ -3072,42 +3166,7 @@ function formatSectorPremiumCell(premium, isBubble = false) {
     return `<span class="sector-premium ${cls}">${icon} ${sign}${pct}%</span>${badge}`;
 }
 
-/** Debug: ręczne wywołanie bańki sektorowej. */
-function debugTriggerSectorBubble(candId = 'ai', initialPremium = 0.35) {
-    const cand = SECTOR_BUBBLE_CANDIDATES.find(c => c.id === candId) || SECTOR_BUBBLE_CANDIDATES[0];
-    activeSectorBubble = {
-        candidateId: cand.id,
-        name: cand.name,
-        sector: cand.sector,
-        subsector: cand.subsector,
-        phase: 'inflating',
-        premium: initialPremium,
-        quarters: 1,
-        popDuration: 0,
-        popTarget: 0,
-        popStartPremium: 0,
-        recoveryQuarters: 0
-    };
-    sectorBubbleCooldown = 0;
-    updateAllSectorPremiums();
-    if (typeof logEvent === 'function') {
-        logEvent(`🛠️ [DEBUG] Wywołano bańkę sektorową: ${cand.name} (premia +${(initialPremium * 100).toFixed(0)}%).`, 'review');
-    }
-}
 
-/** Debug: natychmiastowe pęknięcie bańki sektorowej. */
-function debugPopSectorBubble() {
-    if (!activeSectorBubble) return;
-    activeSectorBubble.phase = 'popping';
-    activeSectorBubble.popDuration = 2;
-    activeSectorBubble.popTarget = -0.20;
-    activeSectorBubble.popStartPremium = activeSectorBubble.premium;
-    activeSectorBubble.quartersInPop = 0;
-    updateAllSectorPremiums();
-    if (typeof logEvent === 'function') {
-        logEvent(`🛠️ [DEBUG] Wymuszono pęknięcie bańki sektorowej: ${activeSectorBubble.name}.`, 'review');
-    }
-}
 
 // =================================================================================
 // 0.15 H4: KRACH, MARGIN CALL, BEZPIECZNIKI I REAKCJA INSTYTUCJI
@@ -3193,7 +3252,7 @@ function triggerMarketHalt(level, durationSec, currentDropPct = 0) {
     marketHalt.triggeredThisWeek[level] = true;
     marketHalt.lastDropPct = currentDropPct;
 
-    const pctStr = (Math.abs(currentDropPct) * 100).toFixed(1) + '%';
+    const pctStr = formatNumberPl(Math.abs(currentDropPct) * 100, 1) + '%';
     const haltMsg = level === 3 
         ? `🚨 BEZPIECZNIK GIEŁDOWY 3. STOPNIA! Spadek indeksu GIG o -${pctStr}! Handel na parkiecie ZAWIESZONY do końca tygodnia gry!`
         : `⚠️ BEZPIECZNIK GIEŁDOWY ${level}. STOPNIA! Spadek indeksu GIG o -${pctStr}! Handel na parkiecie wstrzymany na ${durationSec} s.`;
@@ -3386,7 +3445,7 @@ function reactCentralBankToCrash(forceCut = false) {
         centralBank.baseInterestRate = newRate;
         centralBank.lastRateChange = -0.005;
         if (typeof logEvent === 'function') {
-            logEvent(`🏛️ Bank Centralny zwołuje nadzwyczajne posiedzenie po krachu! Obniżka stopy bazowej o 50 pb do ${(newRate * 100).toFixed(1)}%!`, 'macro');
+            logEvent(`🏛️ Bank Centralny zwołuje nadzwyczajne posiedzenie po krachu! Obniżka stopy bazowej o 50 pb do ${formatNumberPl((newRate * 100), 1)}%!`, 'macro');
         }
         if (typeof pushNews === 'function') {
             pushNews('🏛️ Bank Centralny obniża stopy procentowe o 50 pb w odpowiedzi na krach!');
@@ -3395,7 +3454,7 @@ function reactCentralBankToCrash(forceCut = false) {
             addMail({
                 sender: 'NBP',
                 subject: 'Nadzwyczajna decyzja Rady Polityki Pieniężnej: cięcie stóp o 50 pb',
-                body: `W odpowiedzi na załamanie rynkowe i spadek płynności na giełdzie, Bank Centralny zdecydował o natychmiastowym obniżeniu stopy referencyjnej o 50 punktów bazowych do poziomu ${(newRate * 100).toFixed(1)}%.`,
+                body: `W odpowiedzi na załamanie rynkowe i spadek płynności na giełdzie, Bank Centralny zdecydował o natychmiastowym obniżeniu stopy referencyjnej o 50 punktów bazowych do poziomu ${formatNumberPl((newRate * 100), 1)}%.`,
                 importance: 2
             });
         }
@@ -3430,7 +3489,7 @@ function executeMarginCalls() {
                     if ((ai.portfolio[symbol]?.shares || 0) < before) soldAny = true;
                 }
                 if (soldAny && typeof logEvent === 'function') {
-                    logEvent(`⚠️ MARGIN CALL: ${ai.name} (dźwignia ${(leverage * 100).toFixed(0)}%) przymusowo wyprzedaje akcje pod wezwanie banku!`, 'market');
+                    logEvent(`⚠️ MARGIN CALL: ${ai.name} (dźwignia ${formatNumberPl((leverage * 100), 0)}%) przymusowo wyprzedaje akcje pod wezwanie banku!`, 'market');
                 }
             }
         }
@@ -3477,7 +3536,7 @@ function checkPlayerMarginCall() {
     const assetsAfter = getFundPortfolioValue() + Math.max(0, playerCash);
     const leverageAfter = debtAfter > 0 ? debtAfter / (assetsAfter + debtAfter) : 0;
     const soldText = sold.length ? ` Sprzedane pozycje: ${sold.map(s => `${s.symbol} ${s.quantity} szt.`).join(', ')}.` : '';
-    const text = `Margin call: fundusz spłacił ${formatZl(repaid, 0)} pożyczek lombardowych (dźwignia ${(leverage * 100).toFixed(0)}% → ${(leverageAfter * 100).toFixed(0)}%).${soldText}`;
+    const text = `Margin call: fundusz spłacił ${formatZl(repaid, 0)} pożyczek lombardowych (dźwignia ${formatNumberPl((leverage * 100), 0)}% → ${formatNumberPl((leverageAfter * 100), 0)}%).${soldText}`;
     if (typeof logEvent === 'function') logEvent(`🚨 ${text}`, 'market');
     if (typeof showToast === 'function') showToast(`🚨 ${text}`, 'error');
     if (typeof addMail === 'function') {
@@ -3493,15 +3552,7 @@ function checkPlayerMarginCall() {
 
 // 0.15.3 W0 (naprawa B5): szok sektorowy (applySectorShock) jest stanem z czasem trwania w crises.js i sumuje się z bańką w updateAllSectorPremiums.
 
-/** Debug: ręczne wywołanie krachu rynkowego. */
-function debugTriggerMarketCrash() {
-    triggerMarketCrash();
-}
 
-/** Debug: ręczne wywołanie bezpiecznika giełdowego. */
-function debugTriggerMarketHalt(level = 1, durationSec = 15) {
-    triggerMarketHalt(level, durationSec, level === 1 ? -0.075 : (level === 2 ? -0.135 : -0.21));
-}
 
 // 0.15.4 P6: limit dominacji. Jedna spółka (Orzeł Telekom, Cortex, Biurowce Obsługi Rachunkowej) potrafiła mieć 20–33% kapitalizacji
 // rynku i niemal stale zasiadała w górnej trójce. Udział w kapitalizacji ponad próg obniża mnożnik wyceny (nasycenie rynku, regulatorzy,
@@ -3551,7 +3602,7 @@ function getValuationMultiplier(stock) {
     const interest = typeof getAristocratValuationFactor === 'function' ? getAristocratValuationFactor(stock) : 1; // zainteresowanie arystokratą
     const projects = typeof getSpecialProjectValuation === 'function' ? getSpecialProjectValuation(stock) : 1; // projekty specjalne
     const starMult = stock.marketStar?.type === 'unicorn' ? 1.25 : (stock.marketStar?.type === 'fading_star' ? 0.80 : 1);
-    return Math.max(0.4, Math.min(2.0, cycleMult * rateMult * sectorMult * interest * projects * starMult * getDominanceFactor(stock)));
+    return Math.max(0.4, Math.min(2.0, cycleMult * rateMult * sectorMult * interest * projects * starMult * getDominanceFactor(stock) * (typeof getSecurityValuationFactor === 'function' ? getSecurityValuationFactor(stock) : 1))); // S6: premia za ryzyko kraju
 }
 
 /** Szansa na zdarzenie pozytywne zależnie od fazy (eventy rynkowe). */
@@ -3625,6 +3676,11 @@ let allBonds = []; // Lista posiadanych obligacji
 let activeBonds = []; // Oferty na rynku
 let allTBills = []; // Lista bonów skarbowych
 let currentTBillAuction = null;
+
+/** Zegar aukcji: czas gry (stoi na pauzie, biegnie z prędkością gry), a nie zegar ścienny. */
+function getAuctionNow() {
+    return typeof gameScheduler === 'object' && gameScheduler ? gameScheduler.clockMs : Date.now();
+}
 
 // --- Indeksy ---
 let marketIndexes = [
@@ -3737,7 +3793,118 @@ function updateInterestRates() {
     const centralTab = document.getElementById('bank-content-central');
     if (bankModal?.style.display === 'block' && centralTab?.style.display === 'block') {
          const baseRateEl = document.getElementById('bc-base-rate-display');
-         if(baseRateEl) baseRateEl.textContent = (centralBank.baseInterestRate * 100).toFixed(1); // Aktualizuj stopę bazową
+         if(baseRateEl) baseRateEl.textContent = formatNumberPl(centralBank.baseInterestRate * 100, 1); // Aktualizuj stopę bazową
+    }
+}
+
+/** Tik ceny: modyfikatory dryfu i zmienności (faza spółki, arystokrata, cechy CEO, efekt M&A). */
+function getStockTickModifiers(stock, regime, now) {
+    let priceGrowthModifier = 1.0;
+    let volatilityModifier = (regime?.volMult || 1.0);
+    let isVolatilityCapped = false; 
+
+    // Modyfikatory fazy korporacyjnej (bez zmian)
+    switch (stock.corporatePhase) {
+        case CORPORATE_PHASES.GROWTH: priceGrowthModifier += 0.015; volatilityModifier += 0.1; break;
+        case CORPORATE_PHASES.STABILITY: volatilityModifier -= 0.1; break;
+        case CORPORATE_PHASES.DECLINE: priceGrowthModifier -= 0.02; volatilityModifier += 0.15; break;
+        case CORPORATE_PHASES.REORGANIZATION: volatilityModifier += 0.2; break;
+        case CORPORATE_PHASES.GOLDEN_YEAR: priceGrowthModifier += 0.04; volatilityModifier -= 0.05; break;
+        case CORPORATE_PHASES.SHADOW_DESCENT: priceGrowthModifier -= 0.05; volatilityModifier += 0.25; break;
+        case CORPORATE_PHASES.INNOVATION_PUSH: priceGrowthModifier += 0.01; volatilityModifier += 0.1; break;
+    }
+
+    // Dywidendowy arystokrata: stabilność i przyrost (dividends.js)
+    if (stock.isDividendAristocrat) {
+        volatilityModifier -= ARISTOCRAT_BONUS.stability;
+        priceGrowthModifier += ARISTOCRAT_BONUS.growth;
+    }
+
+    // Modyfikatory cech CEO (bez zmian)
+    if (stock.ceo && stock.ceo.traits) {
+        stock.ceo.traits.forEach(trait => {
+            switch (trait.id) {
+                case 'wyjadacz': priceGrowthModifier += 0.01; break;
+                case 'rekin': priceGrowthModifier += 0.05; break;
+                case 'filar_w_branzy': priceGrowthModifier += 0.01; break;
+                case 'tyran': priceGrowthModifier -= 0.02; break;
+                case 'rozrzutny': priceGrowthModifier -= 0.02; break;
+                case 'nieudacznik': priceGrowthModifier -= 0.05; volatilityModifier += 0.05; break;
+                case 'biurowy_dron': priceGrowthModifier -= 0.01; break;
+                case 'hobbista': volatilityModifier += 0.02; break;
+                case 'konserwatysta': volatilityModifier *= 0.97; break; // 0.18.9 G3
+                case 'wizjoner': volatilityModifier += 0.05; break;
+                case 'stoik': volatilityModifier *= 0.60; break;
+                case 'pewniak': isVolatilityCapped = true; break;
+                case 'ryzykant': volatilityModifier += 0.10; break;
+                case 'ksiegowy': volatilityModifier *= 0.95; break;
+                case 'lowca_glow': volatilityModifier += 0.15; break;
+            }
+            const fx = typeof ceoTraits === 'object' ? ceoTraits[trait.id]?.fx : null; // 0.16.3 G13b: cechy krajowe opisane danymi
+            if (fx) { priceGrowthModifier += fx.growth || 0; volatilityModifier *= fx.vol || 1; }
+        });
+    }
+    
+    // ===>>> NOWY BLOK: ZASTOSOWANIE EFEKTÓW M&A (SYNERGIA/DYSSYNERGIA) <<<===
+    if (stock.mergerEffect) {
+        if (now < stock.mergerEffect.expiryTime) {
+            // Jeśli modyfikator jest aktywny, dodaj jego wartość (dodatnią lub ujemną)
+            priceGrowthModifier += stock.mergerEffect.effectValue;
+        } else {
+            // Czas modyfikatora minął, usuń go
+            logEvent(`[M&A Efekt] Efekt ${stock.mergerEffect.type} dla ${stock.name} wygasł.`);
+            stock.mergerEffect = null;
+        }
+    }
+    // ===>>> KONIEC NOWEGO BLOKU <<<===
+    return { priceGrowthModifier, volatilityModifier, isVolatilityCapped };
+}
+
+/** Tik ceny: blokada handlu po dwóch tygodniach poniżej 1 zł i jej zdjęcie. */
+function updateTradeLockAfterTick(stock) {
+    stock.belowOneTicks = stock.price < 1.00 ? (stock.belowOneTicks || 0) + 1 : 0;
+    if (stock.price < 1.00 && !stock.isTradeLocked && !stock.tradeHalted && stock.belowOneTicks >= 120) {
+        stock.isTradeLocked = true;
+        logEvent(`⛔ Handel akcjami ${stock.name} (${stock.symbol}) wstrzymany — kurs od dwóch tygodni poniżej ${formatZl(1, 0)}.`, 'review');
+    } else if (stock.price > 1.50 && stock.isTradeLocked && !stock.tradeHalted) {
+        stock.isTradeLocked = false;
+        logEvent(`✅ Wznowiono handel akcjami ${stock.name} (${stock.symbol}).`, 'review');
+    }
+}
+
+/** Tik ceny: historia liniowa i świece (limit zależny od Analitycznego Umysłu). */
+function recordStockPriceHistory(stock, chartNow) {
+    let historyLimitCandles = 15 * 4;
+    let historyLimitLine = 15 * 60;
+    const mindLevel = getSkillLevel('analyticalMind');
+    if (mindLevel === 1) {
+        historyLimitCandles = 20 * 4;
+        historyLimitLine = 20 * 60;
+    } else if (mindLevel >= 2) {
+        historyLimitCandles = 25 * 4;
+        historyLimitLine = 25 * 60;
+    }
+
+    stock.lineHistory.push({ time: chartNow, price: stock.price });
+    if (stock.lineHistory.length > historyLimitLine) {
+        stock.lineHistory.shift(); 
+    }
+
+    const candle = stock.currentCandle;
+    if (candle) {
+        candle.close = stock.price;
+        if (stock.price > candle.high) candle.high = stock.price;
+        if (stock.price < candle.low) candle.low = stock.price;
+
+        if (chartNow - candle.time >= CANDLE_INTERVAL) {
+            stock.candlestickHistory.push(candle);
+            if (stock.candlestickHistory.length > historyLimitCandles) {
+                stock.candlestickHistory.shift(); 
+            }
+            stock.currentCandle = { time: chartNow, open: stock.price, high: stock.price, low: stock.price, close: stock.price };
+        }
+    } else {
+         stock.currentCandle = { time: chartNow, open: stock.price, high: stock.price, low: stock.price, close: stock.price };
     }
 }
 
@@ -3768,61 +3935,7 @@ function updateStockPrices() {
         }
         if (stock.tradeHalted) return; // notowania zawieszone (afera, scandals.js)
 
-        let priceGrowthModifier = 1.0;
-        let volatilityModifier = (regime?.volMult || 1.0);
-        let isVolatilityCapped = false; 
-
-        // Modyfikatory fazy korporacyjnej (bez zmian)
-        switch (stock.corporatePhase) {
-            case CORPORATE_PHASES.GROWTH: priceGrowthModifier += 0.015; volatilityModifier += 0.1; break;
-            case CORPORATE_PHASES.STABILITY: volatilityModifier -= 0.1; break;
-            case CORPORATE_PHASES.DECLINE: priceGrowthModifier -= 0.02; volatilityModifier += 0.15; break;
-            case CORPORATE_PHASES.REORGANIZATION: volatilityModifier += 0.2; break;
-            case CORPORATE_PHASES.GOLDEN_YEAR: priceGrowthModifier += 0.04; volatilityModifier -= 0.05; break;
-            case CORPORATE_PHASES.SHADOW_DESCENT: priceGrowthModifier -= 0.05; volatilityModifier += 0.25; break;
-            case CORPORATE_PHASES.INNOVATION_PUSH: priceGrowthModifier += 0.01; volatilityModifier += 0.1; break;
-        }
-
-        // Dywidendowy arystokrata: stabilność i przyrost (dividends.js)
-        if (stock.isDividendAristocrat) {
-            volatilityModifier -= ARISTOCRAT_BONUS.stability;
-            priceGrowthModifier += ARISTOCRAT_BONUS.growth;
-        }
-
-        // Modyfikatory cech CEO (bez zmian)
-        if (stock.ceo && stock.ceo.traits) {
-            stock.ceo.traits.forEach(trait => {
-                switch (trait.id) {
-                    case 'wyjadacz': priceGrowthModifier += 0.01; break;
-                    case 'rekin': priceGrowthModifier += 0.05; break;
-                    case 'filar_w_branzy': priceGrowthModifier += 0.01; break;
-                    case 'tyran': priceGrowthModifier -= 0.02; break;
-                    case 'rozrzutny': priceGrowthModifier -= 0.02; break;
-                    case 'nieudacznik': priceGrowthModifier -= 0.05; volatilityModifier += 0.05; break;
-                    case 'biurowy_dron': priceGrowthModifier -= 0.01; break;
-                    case 'hobbista': volatilityModifier += 0.02; break;
-                    case 'wizjoner': volatilityModifier += 0.05; break;
-                    case 'stoik': volatilityModifier *= 0.60; break;
-                    case 'pewniak': isVolatilityCapped = true; break;
-                    case 'ryzykant': volatilityModifier += 0.10; break;
-                    case 'ksiegowy': volatilityModifier *= 0.95; break;
-                    case 'lowca_glow': volatilityModifier += 0.15; break;
-                }
-            });
-        }
-        
-        // ===>>> NOWY BLOK: ZASTOSOWANIE EFEKTÓW M&A (SYNERGIA/DYSSYNERGIA) <<<===
-        if (stock.mergerEffect) {
-            if (now < stock.mergerEffect.expiryTime) {
-                // Jeśli modyfikator jest aktywny, dodaj jego wartość (dodatnią lub ujemną)
-                priceGrowthModifier += stock.mergerEffect.effectValue;
-            } else {
-                // Czas modyfikatora minął, usuń go
-                logEvent(`[M&A Efekt] Efekt ${stock.mergerEffect.type} dla ${stock.name} wygasł.`);
-                stock.mergerEffect = null;
-            }
-        }
-        // ===>>> KONIEC NOWEGO BLOKU <<<===
+        const { priceGrowthModifier, volatilityModifier, isVolatilityCapped } = getStockTickModifiers(stock, regime, now);
 
 
         // Inicjalizacja świec
@@ -3835,7 +3948,7 @@ function updateStockPrices() {
 
         // --- Ruch ceny jako zmiana PROCENTOWA ---
         // Δ% = szum + powrót do wartości godziwej + nastrój rynku + dryf (fazy, CEO, M&A) + boosty
-        let effectiveVolatility = stock.volatilityFactor * volatilityModifier * (typeof getCorruptionVolatilityFactor === 'function' ? getCorruptionVolatilityFactor() : 1) * getSubsectorModifier(stock, 'vol') * (typeof getStrategyVolatilityFactor === 'function' ? getStrategyVolatilityFactor(stock) : 1) * (typeof getMarketVolatilityFactor === 'function' ? getMarketVolatilityFactor(stock) : 1); // korupcja (0.11); T2: podsektor (SI ×1,3); T3: pivot ×1,3
+        let effectiveVolatility = stock.volatilityFactor * volatilityModifier * (stock.deputies ? getDeputyFactor(stock, 'volatility') : 1) * (typeof getCorruptionVolatilityFactor === 'function' ? getCorruptionVolatilityFactor() : 1) * getSubsectorModifier(stock, 'vol') * (typeof getStrategyVolatilityFactor === 'function' ? getStrategyVolatilityFactor(stock) : 1) * (typeof getMarketVolatilityFactor === 'function' ? getMarketVolatilityFactor(stock) : 1); // korupcja (0.11); T2: podsektor (SI ×1,3); T3: pivot ×1,3
         if (isVolatilityCapped) {
             effectiveVolatility = Math.max(0.5, Math.min(effectiveVolatility, 3.0));
         }
@@ -3959,14 +4072,7 @@ function updateStockPrices() {
 
         // Reszta funkcji (blokada handlu, bankructwo, historia cen, świece, ETFy) bez zmian...
         // B2: blokada dopiero po ~2 tygodniach gry poniżej 1 zł (wcześniej 80% szans co tick).
-        stock.belowOneTicks = stock.price < 1.00 ? (stock.belowOneTicks || 0) + 1 : 0;
-        if (stock.price < 1.00 && !stock.isTradeLocked && !stock.tradeHalted && stock.belowOneTicks >= 120) {
-            stock.isTradeLocked = true;
-            logEvent(`⛔ Handel akcjami ${stock.name} (${stock.symbol}) wstrzymany — kurs od dwóch tygodni poniżej 1 PLN.`, 'review');
-        } else if (stock.price > 1.50 && stock.isTradeLocked && !stock.tradeHalted) {
-            stock.isTradeLocked = false;
-            logEvent(`✅ Wznowiono handel akcjami ${stock.name} (${stock.symbol}).`, 'review');
-        }
+        updateTradeLockAfterTick(stock);
 
         if (stock.financialHealth <= -5 && !stock.isBankrupt) {
             let canGoBankrupt = true;
@@ -3976,38 +4082,7 @@ function updateStockPrices() {
             }
         }
 
-        let historyLimitCandles = 15 * 4;
-        let historyLimitLine = 15 * 60;
-        const mindLevel = getSkillLevel('analyticalMind');
-        if (mindLevel === 1) {
-            historyLimitCandles = 20 * 4;
-            historyLimitLine = 20 * 60;
-        } else if (mindLevel >= 2) {
-            historyLimitCandles = 25 * 4;
-            historyLimitLine = 25 * 60;
-        }
-
-        stock.lineHistory.push({ time: chartNow, price: stock.price });
-        if (stock.lineHistory.length > historyLimitLine) {
-            stock.lineHistory.shift(); 
-        }
-
-        const candle = stock.currentCandle;
-        if (candle) {
-            candle.close = stock.price;
-            if (stock.price > candle.high) candle.high = stock.price;
-            if (stock.price < candle.low) candle.low = stock.price;
-
-            if (chartNow - candle.time >= CANDLE_INTERVAL) {
-                stock.candlestickHistory.push(candle);
-                if (stock.candlestickHistory.length > historyLimitCandles) {
-                    stock.candlestickHistory.shift(); 
-                }
-                stock.currentCandle = { time: chartNow, open: stock.price, high: stock.price, low: stock.price, close: stock.price };
-            }
-        } else {
-             stock.currentCandle = { time: chartNow, open: stock.price, high: stock.price, low: stock.price, close: stock.price };
-        }
+        recordStockPriceHistory(stock, chartNow);
     }); // Koniec stocks.forEach
 
     // ETF-y: cena = wartość portfela / jednostki (etf.js)
@@ -4162,13 +4237,10 @@ function updateMarketIndexes() {
 
     // 1. Spółki giełdowe aktywne
     const activeStocks = stocks.filter(stock => !stock.assetType && !stock.isBankrupt && !stock.tradeHalted && stock.price > 0);
-    const stocksWithMarketCap = activeStocks.map(stock => ({
-        ...stock,
-        marketCap: stock.price * (stock.totalShares || 1)
-    }));
-
-    // 2. Posortuj spółki od największej do najmniejszej pod względem kapitalizacji
-    stocksWithMarketCap.sort((a, b) => b.marketCap - a.marketCap);
+    // 2. Posortuj spółki od największej do najmniejszej pod względem kapitalizacji.
+    // 0.18.5 W2: bez kopii spółek ({...stock} co tick kopiowało całe historie; 19% czasu kroku w profilu W0) — wagi czytają tylko symbol, kurs i liczbę akcji.
+    const capOf = stock => stock.price * (stock.totalShares || 1);
+    const stocksWithMarketCap = activeStocks.sort((a, b) => capOf(b) - capOf(a));
 
     // 3–4. SIG20 (20 największych), SIG40 i BSIG80 (jeśli uruchomione), ważone kapitalizacją. 0.15.4 P4: indeksy łańcuchowe jak GIG — zmiana liczby
     // akcji (split, konsolidacja) ani zmiana składu czołówki nie robi skoku; start jak dawniej: średnia cen ważona kapitalizacją.
@@ -4215,6 +4287,7 @@ function calculateNetWorth(entity) {
     value += allBonds.filter(bond => bond.ownerId === entity.id).reduce((sum, bond) => sum + (typeof getBondValue === 'function' ? getBondValue(bond) : (bond.faceValue || 1000)), 0);
     value += (entity.tBills || []).length * 1000;
     if (typeof getForeignCashPln === 'function') value += getForeignCashPln(entity); // 0.16.1 G2b
+    if (typeof getForeignSharesValue === 'function') value += getForeignSharesValue(entity.id); // 0.16.2 G8: akcje zagraniczne
     return value;
 }
 
@@ -4280,11 +4353,11 @@ function processWealthTax() {
 
                 if (entity.id === 'player') {
                     playerCash -= taxToPay;
-                    logEvent(`💸 Zapłacono roczny podatek od bogactwa: ${taxToPay.toFixed(2)} PLN (${(taxRate * 100).toFixed(0)}% od ${netWorth.toFixed(2)} PLN).`, 'review');
+                    logEvent(`💸 Zapłacono roczny podatek od bogactwa: ${formatZl(taxToPay, 2)} (${formatNumberPl((taxRate * 100), 0)}% od ${formatZl(netWorth, 2)}).`, 'review');
                     displayCash();
                 } else {
                     entity.cash -= taxToPay;
-                    console.log(`[AI Podatki] ${entity.name} zapłacił ${taxToPay.toFixed(2)} PLN podatku od bogactwa.`);
+                    console.log(`[AI Podatki] ${entity.name} zapłacił ${formatZl(taxToPay, 2)} podatku od bogactwa.`);
                 }
             } else if (entity.id === 'player' && sanEscobarLvl >= 3) {
                  // Informacja dla gracza, że uniknął podatku dzięki umiejętności
@@ -4345,7 +4418,7 @@ function processCityAndCitizenTaxes() {
 
     // Loguj tylko dla gracza
     if (playerCityTax > 0 && playerSanEscobarLvl < 4) { // Nie loguj, jeśli gracz nie płaci
-        logEvent(`🏛️ Zapłacono tygodniowy podatek miejski: ${playerCityTax.toFixed(2)} PLN.`);
+        logEvent(`🏛️ Zapłacono tygodniowy podatek miejski: ${formatZl(playerCityTax, 2)}.`);
     }
 }
 
@@ -4360,7 +4433,7 @@ function issueStateBonds() {
         const change = Math.random() < 0.5 ? 0.005 : -0.005;
         stateBondOffer.mediumTerm.interestBase += change;
         stateBondOffer.longTerm.interestBase += change;
-        logEvent(`🏛️ Bank Centralny koryguje oprocentowanie obligacji o ${change > 0 ? '+' : ''}${(change * 100).toFixed(1)}%!`, 'market');
+        logEvent(`🏛️ Bank Centralny koryguje oprocentowanie obligacji o ${change > 0 ? '+' : ''}${formatNumberPl((change * 100), 1)}%!`, 'market');
     }
 
     logEvent("🏛️ Bank Centralny wyemitował nową serię obligacji skarbowych.", 'market');
@@ -4373,7 +4446,7 @@ function issueStateBonds() {
 function checkTBillAccess() {
     if (!playerHasTBillAccess && calculateNetWorth('player') >= 100000) {
         playerHasTBillAccess = true;
-        logEvent("💰 Osiągnięto próg 100,000 PLN wartości netto! Odblokowano dostęp do aukcji bonów skarbowych w Banku Centralnym.", 'success');
+        logEvent(`💰 Osiągnięto próg ${formatZl(100000, 0)} wartości netto! Odblokowano dostęp do aukcji bonów skarbowych w Banku Centralnym.`, 'success');
         showToast("Odblokowano aukcje bonów skarbowych!", 'success');
         // Odśwież widok banku, jeśli jest otwarty
         if (document.getElementById('bank-modal').style.display === 'block') {
@@ -4390,12 +4463,12 @@ function checkTBillAccess() {
 }
 
 function placeTBillBid(bidder, quantity, price) {
-    if (!currentTBillAuction || Date.now() > currentTBillAuction.endTime) {
+    if (!currentTBillAuction || getAuctionNow() > currentTBillAuction.endTime) {
         if (bidder === 'player') alert("Aukcja nie jest aktywna.");
         return false;
     }
     if (isNaN(quantity) || quantity <= 0 || isNaN(price) || price <= 0 || price >= 1000) {
-        if (bidder === 'player') alert("Wprowadź poprawną ilość i cenę (poniżej 1000 PLN).");
+        if (bidder === 'player') alert(`Wprowadź poprawną ilość i cenę (poniżej ${formatZl(1000, 0)}).`);
         return false;
     }
 
@@ -4412,11 +4485,11 @@ function placeTBillBid(bidder, quantity, price) {
     currentTBillAuction.bids.push({ bidderId, quantity, price });
 
     if (bidder === 'player') {
-        logEvent(`Złożono ofertę zakupu ${quantity} bonów skarbowych po ${price.toFixed(2)} PLN.`, 'review');
+        logEvent(`Złożono ofertę zakupu ${quantity} bonów skarbowych po ${formatZl(price, 2)}.`, 'review');
         showToast("Oferta złożona!", 'success');
         openBankModal(); // Odśwież widok banku
     } else {
-        console.log(`[AI] ${bidder.name} złożył ofertę na ${quantity} bonów po ${price.toFixed(2)} PLN.`);
+        console.log(`[AI] ${bidder.name} złożył ofertę na ${quantity} bonów po ${formatZl(price, 2)}.`);
     }
     return true;
 }
@@ -4480,15 +4553,15 @@ function resolveTBillAuction() {
 
             // Poinformuj gracza o wyniku
             if (bid.bidderId === 'player') {
-                logEvent(`✅ Przydzielono Ci ${quantityToAllocate} bonów skarbowych po cenie ${bid.price.toFixed(2)} PLN.`, 'success');
+                logEvent(`✅ Przydzielono Ci ${quantityToAllocate} bonów skarbowych po cenie ${formatZl(bid.price, 2)}.`, 'success');
                 displayCash();
                 displayPortfolio();
             } else {
-                console.log(`[AI] ${bidderObject.name} wygrał ${quantityToAllocate} bonów po ${bid.price.toFixed(2)} PLN.`);
+                console.log(`[AI] ${bidderObject.name} wygrał ${quantityToAllocate} bonów po ${formatZl(bid.price, 2)}.`);
             }
 
         } else if (bid.bidderId === 'player') {
-            logEvent(`⚠️ Twoja oferta na ${bid.quantity} bonów po ${bid.price.toFixed(2)} PLN została odrzucona z powodu braku środków!`, 'error');
+            logEvent(`⚠️ Twoja oferta na ${bid.quantity} bonów po ${formatZl(bid.price, 2)} została odrzucona z powodu braku środków!`, 'error');
         }
     }
 
@@ -4511,7 +4584,7 @@ function checkTBillMaturities() {
         // SCALONO: Sprawdzamy `isTBill` (z Twojej wersji) ORAZ `ownerId` (z obu wersji)
         if (tBill.isTBill && tBill.ownerId === 'player' && now >= tBill.maturityDate) {
             playerCash += faceValue;
-            logEvent(`🪙 Bon skarbowy (zakup: ${tBill.purchasePrice.toFixed(2)} PLN) dojrzał. Otrzymujesz ${faceValue} PLN.`, 'review');
+            logEvent(`🪙 Bon skarbowy (zakup: ${formatZl(tBill.purchasePrice, 2)}) dojrzał. Otrzymujesz ${formatZl(faceValue, 0)}.`, 'review');
             allBonds.splice(i, 1); // Usuwamy z globalnej listy
             displayCash();
             displayPortfolio();
@@ -4526,7 +4599,7 @@ function checkTBillMaturities() {
              // SCALONO: Sprawdzamy `isTBill` (z Twojej wersji)
             if (tBill.isTBill && now >= tBill.maturityDate) {
                 ai.cash += faceValue;
-                console.log(`[AI] Bon skarbowy ${ai.name} (zakup: ${tBill.purchasePrice.toFixed(2)}) dojrzał. Otrzymuje ${faceValue} PLN.`);
+                console.log(`[AI] Bon skarbowy ${ai.name} (zakup: ${tBill.purchasePrice.toFixed(2)}) dojrzał. Otrzymuje ${formatZl(faceValue, 0)}.`);
                 ai.tBills.splice(i, 1);
             }
         }
@@ -4591,7 +4664,7 @@ function fundStateOwnedCompanies() {
             targetCompany.financialHealth += 0.5; // Lekka poprawa kondycji
             if(targetCompany.financialHealth > 5) targetCompany.financialHealth = 5;
 
-            logEvent(`🏛️ Bank Centralny zasila ${targetCompany.name} kwotą ${fundingAmount.toFixed(0)} PLN na rozwój!`, 'state');
+            logEvent(`🏛️ Bank Centralny zasila ${targetCompany.name} kwotą ${formatZl(fundingAmount, 0)} na rozwój!`, 'state');
         } else {
             console.log(`[BC Finansowanie] BC chciał wesprzeć ${targetCompany.name}, ale zabrakło środków.`);
         }
@@ -4662,13 +4735,13 @@ function checkPriceAlerts() {
 
         // Sprawdź alert kupna (cena spada poniżej progu)
         if (stock.priceAlerts.buy !== null && stock.price <= stock.priceAlerts.buy) {
-            showToast(`🔔 ALERT CENOWY: ${stock.name} osiągnął cenę zakupu ${stock.priceAlerts.buy.toFixed(2)} PLN!`, 'success', 7000);
+            showToast(`🔔 ALERT CENOWY: ${stock.name} osiągnął cenę zakupu ${formatZl(stock.priceAlerts.buy, 2)}!`, 'success', 7000);
             stock.priceAlerts.buy = null; // Wyłącz alert po aktywacji
         }
 
         // Sprawdź alert sprzedaży (cena rośnie powyżej progu)
         if (stock.priceAlerts.sell !== null && stock.price >= stock.priceAlerts.sell) {
-            showToast(`🔔 ALERT CENOWY: ${stock.name} osiągnął cenę sprzedaży ${stock.priceAlerts.sell.toFixed(2)} PLN!`, 'error', 7000);
+            showToast(`🔔 ALERT CENOWY: ${stock.name} osiągnął cenę sprzedaży ${formatZl(stock.priceAlerts.sell, 2)}!`, 'error', 7000);
             stock.priceAlerts.sell = null; // Wyłącz alert po aktywacji
         }
     });
@@ -4749,11 +4822,12 @@ const SECTOR_CYCLE_PHASES = {
 };
 
 const RULING_PARTIES = {
-    market: { name: 'Koalicja Rynkowa', privatization: 1.6, nationalization: 0.5, subsidies: 0.7, stateMood: -0.02 },
-    state:  { name: 'Blok Państwowy',   privatization: 0.4, nationalization: 1.6, subsidies: 1.5, stateMood: 0.03 },
-    people: { name: 'Ludowcy',          privatization: 0.8, nationalization: 1.0, subsidies: 1.3, stateMood: 0.01 }, // 0.13: płaca minimalna, zasiłki, mieszkania
+    market: { name: 'Koalicja Rynkowa', privatization: 1.6, nationalization: 0.5, subsidies: 0.7, stateMood: -0.02, defenseShare: 0.02 },
+    state:  { name: 'Blok Państwowy',   privatization: 0.4, nationalization: 1.6, subsidies: 1.5, stateMood: 0.03, defenseShare: 0.035 },
+    people: { name: 'Ludowcy',          privatization: 0.8, nationalization: 1.0, subsidies: 1.3, stateMood: 0.01, defenseShare: 0.02 }, // 0.13: płaca minimalna, zasiłki, mieszkania
     // 0.15.1: lubią nacjonalizacje, nie lubią koncernów (ustawa antymonopolowa), wspierają małe firmy (progi CIT)
-    social: { name: 'Socjaldemokraci',  privatization: 0.5, nationalization: 1.4, subsidies: 1.2, stateMood: 0.015 }
+    social: { name: 'Socjaldemokraci',  privatization: 0.5, nationalization: 1.4, subsidies: 1.2, stateMood: 0.015, defenseShare: 0.015 }, // 0.17 S6: defenseShare — udział budżetu obronnego w przychodach budżetu
+    green:  { name: 'Zieloni',          privatization: 0.7, nationalization: 1.1, subsidies: 1.4, stateMood: 0.01, defenseShare: 0.015 } // 0.17.2 E3: zamiast Socjaldemokratów (getFourthParty)
 };
 
 let macro = createMacroState();
@@ -4914,8 +4988,8 @@ function getPlannedRateChange(target) {
 }
 
 function describeRateChange(change) {
-    if (change > 0) return `podwyżka o ${(change * 100).toFixed(2)} pkt proc.`;
-    if (change < 0) return `obniżka o ${(-change * 100).toFixed(2)} pkt proc.`;
+    if (change > 0) return `podwyżka o ${formatNumberPl((change * 100), 2)} pkt proc.`;
+    if (change < 0) return `obniżka o ${formatNumberPl((-change * 100), 2)} pkt proc.`;
     return 'bez zmian';
 }
 
@@ -4960,12 +5034,12 @@ function applyRateSurprise(surprise) {
 }
 
 function publishRateDecision(change, expected, note = '') {
-    const rate = (centralBank.baseInterestRate * 100).toFixed(2);
+    const rate = formatNumberPl(centralBank.baseInterestRate * 100, 2); // 0.17.1 U6: przecinek dziesiętny
     const verb = change > 0 ? 'podnosi' : change < 0 ? 'obniża' : 'utrzymuje';
     const surprise = Math.abs(change - expected) >= 0.001 ? ' To niespodzianka dla rynku!' : ' Decyzja zgodna z oczekiwaniami.';
     const body = `Bank Centralny ${verb} stopę referencyjną ${change ? 'do' : 'na poziomie'} ${rate}% (${describeRateChange(change)}; oczekiwano: ${describeRateChange(expected)}).${surprise}${note} `
-        + `Inflacja ${(macro.inflation * 100).toFixed(1)}% (cel ${(INFLATION_TARGET * 100).toFixed(1)}%), bezrobocie ${(macro.unemployment * 100).toFixed(1)}%, PKB ${(macro.gdpAnnual * 100).toFixed(1)}% r/r. `
-        + `Kredyty od ${(LOAN_INTEREST_RATE * 100).toFixed(2)}%, depozyty ${(DEPOSIT_INTEREST_RATE * 100).toFixed(2)}%. `
+        + `Inflacja ${formatNumberPl((macro.inflation * 100), 1)}% (cel ${formatNumberPl((INFLATION_TARGET * 100), 1)}%), bezrobocie ${formatNumberPl((macro.unemployment * 100), 1)}%, PKB ${formatNumberPl((macro.gdpAnnual * 100), 1)}% r/r. `
+        + `Kredyty od ${formatNumberPl((LOAN_INTEREST_RATE * 100), 2)}%, depozyty ${formatNumberPl((DEPOSIT_INTEREST_RATE * 100), 2)}%. `
         + `Analitycy na kolejne posiedzenie oczekują: ${macro.expectation.label}.`;
     const subject = `📰 Gazeta Ekonomiczna: BC ${verb} stopy${change ? ` do ${rate}%` : ` (${rate}%)`}`;
     addMacroLog(`🏛️ ${subject.replace('📰 Gazeta Ekonomiczna: ', '')}`);
@@ -4991,7 +5065,7 @@ function runCentralBankAI() {
     if (traits.includes('Stabilizator')) reserveChange *= 0.2;
     if (Math.abs(reserveChange) > 0.001 && Math.random() < 0.3) {
         centralBank.reserveRequirement = clampValue(centralBank.reserveRequirement + reserveChange, 0.05, 0.25);
-        addMacroLog(`🏛️ Bank Centralny zmienia stopę rezerw obowiązkowych na ${(centralBank.reserveRequirement * 100).toFixed(0)}%.`);
+        addMacroLog(`🏛️ Bank Centralny zmienia stopę rezerw obowiązkowych na ${formatNumberPl((centralBank.reserveRequirement * 100), 0)}%.`);
     }
     if (Math.random() < Math.min(1, getRulingParty().subsidies * 0.5)) fundStateOwnedCompanies(); // dotacje zależą od partii rządzącej
 }
@@ -5017,7 +5091,7 @@ function supportElectionCampaign(partyId, amount) {
     election.donations = { market: 0, state: 0, people: 0, social: 0, ...(election.donations || {}) };
     const assets = getFundAssets();
     const given = Object.values(election.donations).reduce((sum, value) => sum + (Number(value) || 0), 0);
-    if (!(amount >= 100)) { showToast('Minimalna darowizna: 100 PLN.', 'warning'); return false; }
+    if (!(amount >= 100)) { showToast(`Minimalna darowizna: ${formatZl(100, 0)}.`, 'warning'); return false; }
     if (given + amount > assets * ELECTION_DONATION_LIMIT) { showToast(`Limit: 2% aktywów funduszu na kampanię (zostało ${formatZl(Math.max(0, assets * ELECTION_DONATION_LIMIT - given), 0)}).`, 'warning'); return false; }
     if (playerCash < amount) { showToast('Za mało gotówki funduszu.', 'error'); return false; }
     playerCash -= amount;
@@ -5059,6 +5133,7 @@ function advanceElectionCycle() {
     if (election.quartersLeft > 0) return;
 
     const previous = election.ruling;
+    maybeSwapGreens();
     const result = resolveElection(computePartySupport(true));
     election.terms = result.winner === previous ? (Number(election.terms) || 1) + 1 : 1;
     election.ruling = result.winner;
@@ -5071,7 +5146,7 @@ function advanceElectionCycle() {
     settlePoliticalFavor();
     if (typeof drawEducationPriority === 'function') drawEducationPriority();
     const party = getRulingParty();
-    const results = PARTY_IDS.map(id => `${RULING_PARTIES[id].name} ${result.support[id].toFixed(0)}%`).join(', ');
+    const results = PARTY_IDS.map(id => `${RULING_PARTIES[id].name} ${formatNumberPl(result.support[id], 0)}%`).join(', ');
     logEvent(`🗳️ WYBORY: ${change ? `zmiana władzy — wygrywa ${RULING_PARTIES[result.winner].name}` : `${RULING_PARTIES[result.winner].name} utrzymuje władzę`}${result.coalition ? ` (koalicja z: ${RULING_PARTIES[result.coalition.partner].name})` : ''}. Wyniki: ${results}. ${party.nationalization > 1 ? 'Więcej dotacji i nacjonalizacji.' : 'Kurs na prywatyzację i mniej dotacji.'}`, 'state');
     if (change) {
         for (const stock of stocks.filter(s => s.isStateOwned && !s.isBankrupt)) {
@@ -5152,6 +5227,7 @@ function triggerMacroShockEvent() {
     const event = pickMacroEvent(MACRO_SHOCK_EVENTS.filter(e => (e.type === 'positive') === wantPositive));
     if (!event) return null;
     if (typeof noteMacroShockForCrises === 'function') noteMacroShockForCrises(event); // 0.15.3: fałszywe alarmy (sygnały bez linii)
+    if (typeof applyCommodityMacroShock === 'function') applyCommodityMacroShock(event.id); // 0.17 S1: ropa, zboże, gaz i węgiel
     if (event.inflation) macro.shocks.inflation += event.inflation;
     for (const stock of stocks) {
         if (stock.assetType || stock.isBankrupt) continue;
@@ -5209,7 +5285,7 @@ const SOCIETY_CLASSES = [
 ];
 
 // Elastyczność przychodów sektora względem indeksu popytu (dobra luksusowe > 1, podstawowe < 1).
-const DEMAND_ELASTICITY = { 'Turystyka': 1.5, 'Gaming': 1.3, 'Nieruchomości': 1.2, 'Dobra konsumpcyjne': 1.0, 'Usługi': 0.8, 'Media': 0.6, 'Żywność': 0.3 };
+const DEMAND_ELASTICITY = { 'Motoryzacja': 1.3, 'Alkohole': 0.4, 'Rybołówstwo': 0.3, 'Turystyka': 1.5, 'Gaming': 1.3, 'Nieruchomości': 1.2, 'Dobra konsumpcyjne': 1.0, 'Usługi': 0.8, 'Media': 0.6, 'Żywność': 0.3 };
 const DEMAND_GROWTH_SCALE = 0.02;           // +(popyt − 1) × elastyczność × 2 pp na kwartał
 const POPULATION_NATURAL_GROWTH = 0.0005;   // +0,05% na kwartał
 const CLASS_MOBILITY_LIMIT = 0.008;         // ±0,8% udziału klasy na kwartał
@@ -5253,7 +5329,13 @@ const SOCIAL_LAWS = {
     tenderThreshold: { name: 'Próg wezwania', icon: '📣', levels: ['66%', '75%', '90%', '99%'], start: 0 },
     // 0.15.1 (Socjaldemokraci): CIT zależny od wielkości spółki; kontrola koncentracji rynku
     corpTaxBrackets: { name: 'Progi CIT', icon: '🧾', levels: ['liniowy', 'dwa progi', 'progresywny'], start: 0 },
-    antitrust: { name: 'Ustawa antymonopolowa', icon: '⚖️', levels: ['łagodna', 'standardowa', 'surowa'], start: 1 }
+    antitrust: { name: 'Ustawa antymonopolowa', icon: '⚖️', levels: ['łagodna', 'standardowa', 'surowa'], start: 1 },
+    // 0.17 S5: wydatki na infrastrukturę, zużycie przepustowości i szansa projektu państwa (INFRA_LEVELS w infrastructure.js)
+    infrastructure: { name: 'Finansowanie infrastruktury', icon: '🛣️', levels: ['Porzucenie', 'Łatanie dziur', 'Utrzymanie', 'Rozbudowa', 'Autostrady na wczoraj'], start: 2 },
+    // 0.17.2 E3: premia typu elektrowni (ENERGY_POLICY_TYPES), ceny prądu i opłata za emisje (energy.js)
+    energyPolicy: { name: 'Polityka energetyczna', icon: '⚡', uiIcon: 'prad', levels: ['Brak dofinansowań', 'Węgiel', 'Gaz', 'Atom', 'OZE'], start: 0 },
+    energySuppliers: { name: 'Dostawcy energii', icon: '🔌', uiIcon: 'firma', levels: ['Prywatna', 'Mieszana', 'Państwowa'], start: 1 },
+    climatePolicy: { name: 'Polityka klimatyczna', icon: '🌍', uiIcon: 'emisje', levels: ['Brak opłat', 'Niska', 'Średnia', 'Wysoka', 'Bardzo wysoka'], start: 1 }
 };
 // Progi CIT: [mała spółka (dolne 50% kapitalizacji), duża (górne 10%)] — zmiana stawki w pp.
 const CORP_TAX_BRACKETS = [[0, 0], [-0.04, 0.02], [-0.06, 0.05]];
@@ -5294,19 +5376,40 @@ const RIGHTS_UNION_MULT = [0.7, 1, 1.5];
 
 // Programy partii: kierunek zmian ustaw i priorytet edukacji.
 const PARTY_PROGRAMS = {
-    market: { moves: [['minWage', -1], ['benefits', -1], ['housing', -1], ['rights', -1], ['tenderThreshold', -1], ['corpTaxBrackets', -1], ['antitrust', -1]], education: 'high', deficit: 'cut' },
-    social: { moves: [['corpTaxBrackets', 1], ['antitrust', 1], ['benefits', 1], ['tenderThreshold', 1]], education: 'high', deficit: 'cit' },
-    state:  { moves: [['rights', 1], ['housing', 1], ['tenderThreshold', 1]], education: 'high', deficit: 'cit' },
-    people: { moves: [['minWage', 1], ['benefits', 1], ['housing', 1], ['tenderThreshold', 1]], education: 'medium', deficit: 'cit' }
+    market: { moves: [['minWage', -1], ['benefits', -1], ['housing', -1], ['rights', -1], ['tenderThreshold', -1], ['corpTaxBrackets', -1], ['antitrust', -1], ['infrastructure', -1], ['energySuppliers', -1], ['climatePolicy', -1], ['energyPolicy', 2, 'set']], education: 'high', deficit: 'cut' },
+    social: { moves: [['corpTaxBrackets', 1], ['antitrust', 1], ['benefits', 1], ['tenderThreshold', 1], ['energySuppliers', 1], ['climatePolicy', 1]], education: 'high', deficit: 'cit' },
+    green:  { moves: [['climatePolicy', 1], ['energyPolicy', 4, 'set'], ['antitrust', 1], ['rights', 1], ['benefits', 1]], education: 'high', deficit: 'cit' },
+    state:  { moves: [['rights', 1], ['housing', 1], ['tenderThreshold', 1], ['infrastructure', 1], ['energySuppliers', 1], ['energyPolicy', 3, 'set']], education: 'high', deficit: 'cit' },
+    people: { moves: [['minWage', 1], ['benefits', 1], ['housing', 1], ['tenderThreshold', 1], ['infrastructure', 1], ['climatePolicy', -1], ['energyPolicy', 1, 'set']], education: 'medium', deficit: 'cit' }
 };
 // Preferencje wyborcze klas: [Ludowcy, Blok Państwowy, Koalicja Rynkowa].
-const CLASS_VOTE = { poor: [35, 25, 10, 30], lowerMid: [30, 30, 25, 15], mid: [18, 32, 42, 8], upperMid: [10, 28, 57, 5], rich: [5, 20, 72, 3], veryRich: [5, 15, 78, 2] };
-const PARTY_IDS = ['people', 'state', 'market', 'social'];
+const CLASS_VOTE = { poor: [35, 25, 10, 30], lowerMid: [30, 30, 25, 15], mid: [24, 36, 32, 8], upperMid: [14, 35, 46, 5], // 0.17.1 S3: klasa średnia i wyższa średnia mniej za Koalicją Rynkową (struktura klas prawie stała, przewaga z wag 5–6 pp → ok. 3 pp)
+    rich: [5, 20, 72, 3], veryRich: [5, 15, 78, 2] };
+const PARTY_IDS = ['people', 'state', 'market', 'social']; // czwarte miejsce: Socjaldemokraci albo Zieloni (syncFourthParty)
+// 0.17.2 E3: Zieloni. Wagi zamiast kolumny Socjaldemokratów, szansa na start gry, zamiana na wyborach przy wysokim zanieczyszczeniu.
+const GREEN_VOTE = { poor: 14, lowerMid: 14, mid: 14, upperMid: 10, rich: 5, veryRich: 4 };
+const GREENS_START_CHANCE = 0.25, GREENS_SWAP_POLLUTION = 60, GREENS_SWAP_CHANCE = 0.3, GREENS_POLLUTION_SUPPORT = 0.1;
+const getFourthParty = () => PARTY_IDS[3];
+/** Pole society.greens: true po wejściu Zielonych, false w nowej grze bez nich, brak w starych zapisach (Socjaldemokraci na stałe). */
+function syncFourthParty() { PARTY_IDS[3] = society?.greens === true ? 'green' : 'social'; }
+/** Na wyborach: przy wysokim zanieczyszczeniu Zieloni zajmują miejsce Socjaldemokratów poza rządem. */
+function maybeSwapGreens(pollution = Number(society?.energy?.pollution) || 0, roll = Math.random()) {
+    const election = macro.election;
+    const pressure = typeof getEcoPressure === 'function' ? getEcoPressure() : 0, strong = pressure >= (typeof ECO_PRESSURE_RULES === 'object' ? ECO_PRESSURE_RULES.greensPressure : 101); // 0.18.6 O5: przy presji ≥ 60 Zieloni wchodzą od zanieczyszczenia 50, z szansą 50%
+    if (society.greens !== false || pollution < (strong ? ECO_PRESSURE_RULES.greensPollution : GREENS_SWAP_POLLUTION) || roll >= (strong ? ECO_PRESSURE_RULES.greensChance : GREENS_SWAP_CHANCE)) return false;
+    if (election.ruling === 'social' || election.coalition?.partner === 'social') return false;
+    society.greens = true;
+    syncFourthParty();
+    logSociety('🌿 Zieloni wchodzą do polityki i zajmują miejsce Socjaldemokratów. Zanieczyszczenie stało się tematem wyborów.');
+    return true;
+}
 const COALITION_THRESHOLD = 0.40;
 // Socjaldemokraci (decyzja użytkownika): sami nie wygrywają — są koalicjantem lewicy i rosną w kryzysie.
 const SOCIAL_COALITION_MIN = 10;     // % poparcia, od którego Ludowcy / Blok Państwowy wolą ich jako koalicjanta
 const SOCIAL_CRISIS_BONUS = 6;       // pp przy złej koniunkturze
-const ELECTION_FATIGUE = 5;          // pp na każdą kadencję u władzy
+const ELECTION_FATIGUE_FIRST = 0;    // pp po pierwszej kadencji (0.17.1 S3: kara tylko za długie rządy)
+const ELECTION_FATIGUE = 6;          // pp za każdą kolejną kadencję u władzy (0.17.1 S3: łatwiejsza pierwsza reelekcja, droższe długie rządy; wcześniej 5 × kadencje)
+const getElectionFatigue = terms => ELECTION_FATIGUE_FIRST + ELECTION_FATIGUE * (Math.max(1, Number(terms) || 1) - 1);
 const ELECTION_BAD_TIMES = 10;       // pp przy złej koniunkturze
 const PROTEST_TO_PEOPLE = 0.75;      // część odpływu od rządzących, która trafia do Ludowców
 const DEFICIT_BOND_QUARTERS = 4;
@@ -5355,6 +5458,7 @@ function ensureSocietyState() {
     society = { ...fresh, ...society };
     society.classes = { ...fresh.classes, ...(society.classes || {}) };
     society.laws = { ...fresh.laws, ...(society.laws || {}) };
+    syncFourthParty();
     society.wages = { ...fresh.wages, ...(society.wages || {}) };
     society.migration = { ...fresh.migration, ...(society.migration || {}) };
     society.budget = { ...fresh.budget, ...(society.budget || {}) };
@@ -5540,7 +5644,7 @@ function advanceSocietyQuarter() {
 
     const poorUp = typeof getLawPoorMobility === 'function' ? getLawPoorMobility() : 0;
     applyClassMobility(society, getClassMobilityShift(), poorUp);
-    society.demandIndex = getDemandIndex();
+    society.demandIndex = getDemandIndex() + (typeof getSecurityDemandAdj === 'function' ? getSecurityDemandAdj() : 0); // 0.17 S6: bezpieczeństwo
     advanceEducation();
 
     const growth = before > 0 ? society.population / before - 1 : 0;
@@ -5565,7 +5669,7 @@ function getSocietyUnemploymentShift() {
 }
 
 function formatPopulation(value) {
-    return `${(value / 1e6).toFixed(2).replace('.', ',')} mln`;
+    return `${formatNumberPl(value / 1e6, 2)} mln`;
 }
 
 // =================================================================================
@@ -5651,7 +5755,8 @@ function advanceWages() {
 function getCountryAttractiveness() {
     const satisfaction = typeof getAverageSatisfaction === 'function' ? getAverageSatisfaction() : 60;
     const unemployment = Number(macro?.unemployment) || NATURAL_UNEMPLOYMENT;
-    return clampValue(0.4 * satisfaction + 0.3 * 50 * getAverageWageIndex() + 0.3 * (100 - unemployment * 500), 0, 100);
+    const life = typeof getLifeAttractiveness === 'function' ? getLifeAttractiveness() : 0; // 0.17.2 E6: poziom życia
+    return clampValue(0.4 * satisfaction + 0.3 * 50 * getAverageWageIndex() + 0.3 * (100 - unemployment * 500) + life, 0, 100);
 }
 
 function advanceMigration() {
@@ -5688,7 +5793,8 @@ const LAW_ANNOUNCEMENT_EFFECTS = {
     minWage:  { 1: { 'Żywność': -0.015, 'Usługi': -0.02, 'Turystyka': -0.02, 'Budowlany': -0.015 }, '-1': { 'Usługi': 0.01, 'Turystyka': 0.01, 'Budowlany': 0.01 } },
     benefits: { 1: { 'Żywność': 0.015, 'Dobra konsumpcyjne': 0.015 }, '-1': { 'Żywność': -0.01, 'Dobra konsumpcyjne': -0.01 } },
     housing:  { 1: { 'Budowlany': 0.04, 'Nieruchomości': 0.03 }, '-1': { 'Budowlany': -0.03, 'Nieruchomości': -0.02 } },
-    rights:   { 1: { 'Przemysł': -0.01, 'Budowlany': -0.01, 'Usługi': -0.01 }, '-1': { 'Przemysł': 0.01, 'Budowlany': 0.01, 'Usługi': 0.01 } }
+    rights:   { 1: { 'Przemysł': -0.01, 'Budowlany': -0.01, 'Usługi': -0.01 }, '-1': { 'Przemysł': 0.01, 'Budowlany': 0.01, 'Usługi': 0.01 } },
+    infrastructure: { 1: { 'Budowlany': 0.03, 'Transport i logistyka': 0.01 }, '-1': { 'Budowlany': -0.02, 'Transport i logistyka': -0.005 } } // 0.17 S5
 };
 
 /** Przesunięcia biednych do średniej niższej z ustaw (na kwartał). */
@@ -5715,7 +5821,10 @@ function getLawMakingParty(withPartner = false) {
 
 function pickLawChange(partyId = getLawMakingParty()) {
     const program = PARTY_PROGRAMS[partyId] || PARTY_PROGRAMS.market;
-    const options = program.moves.filter(([law, delta]) => {
+    // ['ustawa', poziom, 'set']: ustawa bez kierunku (polityka energetyczna), partia chce konkretnej opcji
+    const moves = program.moves.map(([law, value, mode]) => [law, mode === 'set' ? value - (Number(society.laws[law]) || 0) : value]);
+    const options = moves.filter(([law, delta]) => {
+        if (!delta) return false;
         const level = Number(society.laws[law]) || 0;
         if (law === 'tenderThreshold' && level + delta > getTenderThresholdKnfCap()) return false; // partia nie przeforsuje progu ponad limit KNF
         return level + delta >= 0 && level + delta < SOCIAL_LAWS[law].levels.length;
@@ -5832,7 +5941,9 @@ function settleSocialBudget() {
     const baseline = cit + laborTaxesGross;
     if (!(budget.publicServices > 0)) budget.publicServices = baseline * 0.97;
     budget.revenue = revenue;
-    budget.spending = budget.publicServices + benefits + extra;
+    budget.infrastructureSpending = typeof settleInfraBudget === 'function' ? settleInfraBudget(revenue) : 0; // 0.17 S5: ustawa + raty projektów
+    budget.defense = typeof settleDefenseBudget === 'function' ? settleDefenseBudget(revenue) : 0; // 0.17 S6: budżet obronny
+    budget.spending = budget.publicServices + benefits + extra + budget.infrastructureSpending + budget.defense;
     budget.balance = revenue - budget.spending;
     budget.hasBalance = true;
     budget.publicServices = budget.publicServices * 0.8 + baseline * 0.97 * 0.2; // usługi publiczne: sztywne, z opóźnieniem
@@ -5857,7 +5968,7 @@ function updateBudgetBalance() {
         if (cut && !society.pendingLaw) announceLawChange('benefits', -1, party, 'cięcie wydatków po 2 latach deficytu');
         else if (budget.citAdd < DEFICIT_CIT_STEP * 2) {
             budget.citAdd += DEFICIT_CIT_STEP;
-            logSociety(`🏦 Dwa lata deficytu: rząd podnosi CIT o 2 pp (do ${((COMPANY_INCOME_TAX_RATE + budget.citAdd) * 100).toFixed(0)}%). Zyski spółek po podatku spadną.`);
+            logSociety(`🏦 Dwa lata deficytu: rząd podnosi CIT o 2 pp (do ${formatNumberPl(((COMPANY_INCOME_TAX_RATE + budget.citAdd) * 100), 0)}%). Zyski spółek po podatku spadną.`);
         }
     }
 }
@@ -5901,6 +6012,8 @@ function advanceSocialPolicy() {
     applyPendingLaw();
     settleSocialBudget();
     settleSocialPrograms();
+    if (typeof processInfraQuarterly === 'function') processInfraQuarterly(); // 0.17 S5: zużycie, przetargi, nowe projekty
+    if (typeof processEnergyQuarterly === 'function') processEnergyQuarterly(); // 0.17.2 E2: prąd
     if (society.housingProgram > 0) {
         society.housingProgram--;
         if (Math.random() < 0.5 * Math.max(1, Number(society.laws.housing) || 0)) commissionSocialHousing();
@@ -5925,7 +6038,7 @@ function getClassBasedSupport() {
     for (const cls of SOCIETY_CLASSES) {
         const share = Number(society?.classes?.[cls.id]) || 0;
         const prefs = CLASS_VOTE[cls.id];
-        PARTY_IDS.forEach((id, i) => { support[id] += share * prefs[i]; });
+        PARTY_IDS.forEach((id, i) => { support[id] += share * (id === 'green' ? GREEN_VOTE[cls.id] : prefs[i]); });
     }
     return support;
 }
@@ -5939,15 +6052,17 @@ function computePartySupport(withNoise = true) {
     // Zmęczenie władzą rośnie z każdą kadencją; zła koniunktura (recesja, inflacja, bezrobocie) szkodzi rządzącym,
     // a głosy protestu zbierają głównie Ludowcy.
     const badTimes = economyCycle.phase === 'recession' || macro.inflation > 0.05 || macro.unemployment > 0.09;
-    const penalty = ELECTION_FATIGUE * Math.max(1, Number(election.terms) || 1) + (badTimes ? ELECTION_BAD_TIMES : 0);
+    const penalty = getElectionFatigue(election.terms) + (badTimes ? ELECTION_BAD_TIMES : 0);
     if (support[ruling] !== undefined) {
         support[ruling] -= penalty;
         const others = PARTY_IDS.filter(id => id !== ruling);
         // Głosy protestu: głównie partie lewicowe (Ludowcy, Socjaldemokraci), reszta po równo.
-        const protest = others.filter(id => id === 'people' || id === 'social'), rest = others.filter(id => !protest.includes(id));
+        const protest = others.filter(id => id === 'people' || id === getFourthParty()), rest = others.filter(id => !protest.includes(id));
         others.forEach(id => { support[id] += penalty * (protest.includes(id) ? (rest.length ? PROTEST_TO_PEOPLE : 1) / protest.length : (1 - PROTEST_TO_PEOPLE) / rest.length); });
     }
-    if (badTimes && ruling !== 'social') support.social += SOCIAL_CRISIS_BONUS;
+    if (badTimes && ruling !== getFourthParty() && support.social !== undefined) support.social += SOCIAL_CRISIS_BONUS;
+    if (support[ruling] !== undefined && typeof getLifeVoteAdj === 'function') support[ruling] += getLifeVoteAdj(); // 0.17.2 E6
+    if (support.green !== undefined) support.green += Math.max(0, (Number(society.energy?.pollution) || 0) - 30) * GREENS_POLLUTION_SUPPORT + (typeof getEcoPressure === 'function' ? getEcoPressure() * ECO_PRESSURE_RULES.greensSupport : 0); // 0.18.6 O5: + presja × 0,05 pp
     const donations = election.donations || {};
     const assets = Math.max(1, typeof getFundAssets === 'function' && playerFund ? getFundAssets() : 1);
     PARTY_IDS.forEach(id => { support[id] += Math.min(10, (Number(donations[id]) || 0) / assets * 500); });
@@ -5963,7 +6078,7 @@ function resolveElection(support) {
     const ranked = [...PARTY_IDS].sort((a, b) => support[b] - support[a]);
     const winner = ranked[0];
     // Ludowcy i Blok Państwowy wolą Socjaldemokratów jako koalicjanta, jeśli ci mają choć 10%.
-    const partner = (winner === 'people' || winner === 'state') && support.social >= SOCIAL_COALITION_MIN ? 'social' : ranked[1];
+    const left = getFourthParty(), partner = (winner === 'people' || winner === 'state') && support[left] >= SOCIAL_COALITION_MIN ? left : ranked[1];
     const coalition = support[winner] < COALITION_THRESHOLD * 100 ? { partner, weights: { [winner]: support[winner], [partner]: support[partner] } } : null;
     return { winner, coalition, support };
 }
@@ -5982,6 +6097,77 @@ function getRulingParty() {
         nationalization: Math.round(mix('nationalization') * 100) / 100,
         subsidies: Math.round(mix('subsidies') * 100) / 100,
         stateMood: mix('stateMood'),
+        defenseShare: mix('defenseShare'),
         coalition: true
     };
+}
+
+// =================================================================================
+// 0.18.1 P2: ADAPTER ŁAŃCUCHÓW — zbiera jednostki „podsektor × kraj” ze spółek krajowych i obcych (przychód ostatniego kwartału w PLN,
+// produkcja surowców z profilu surowcowego), woła stepChains (chains.js, czysty moduł) raz na kwartał po raportach.
+// =================================================================================
+const CHAIN_CONTRACT_GOOD = { iron: 'iron_ore', copper: 'copper', coal: 'coal', oil: 'oil', gas: 'gas', grain: 'grain', gold: 'gold', uranium: 'uranium' };
+function getChainUnitKey(sector, subsector) { return subsector ? `${sector}/${subsector}` : sector; }
+function collectChainRows() {
+    const rows = [], home = typeof getStartCountry === 'function' ? getStartCountry() : 'PL';
+    const productsOf = (stock, revenue) => {
+        const prof = typeof getStockCommodityProfile === 'function' ? getStockCommodityProfile(stock) : null, out = {};
+        for (const [id, w] of Object.entries(prof?.product || {})) if (CHAIN_CONTRACT_GOOD[id] && w > 0) out[CHAIN_CONTRACT_GOOD[id]] = revenue * w;
+        for (const [g, w] of Object.entries(typeof CHAIN_COMPANY_PRODUCTS === 'object' ? CHAIN_COMPANY_PRODUCTS[stock.kind === 'share' ? stock.id : stock.symbol] || {} : {})) out[g] = (out[g] || 0) + revenue * w; // 0.18.2 G1
+        for (const [g, [parent, w]] of Object.entries(typeof CHAIN_COPRODUCTS === 'object' ? CHAIN_COPRODUCTS : {})) if (out[parent] > 0) out[g] = (out[g] || 0) + out[parent] * w; // srebro z miedzi, siarka z ropy
+        return out;
+    };
+    for (const stock of stocks) {
+        if (stock.assetType || stock.isBankrupt) continue;
+        const h = stock.fundamentals?.history?.[stock.fundamentals.history.length - 1];
+        if (!(h?.revenue > 0)) continue;
+        const priority = Boolean(stock.isStateOwned) || getMainSector(stock) === 'Obronność';
+        const products = productsOf(stock, h.revenue), prev = stock.fundamentals.history[stock.fundamentals.history.length - 2]?.revenue || 0;
+        const tech = Number(stock.departments?.research?.level) || 0; // M3: poziom badań spółki
+        getStockSegments(stock).forEach((seg, n) => rows.push({ key: getChainUnitKey(seg.sector, seg.subsector), country: home, revenue: h.revenue * seg.share, prev: prev * seg.share, products: n === 0 ? products : {}, priority, tech }));
+    }
+    for (const i of (typeof getForeignIssuerList === 'function' ? getForeignIssuerList() : [])) {
+        const h = i.fundamentals?.history?.[i.fundamentals.history.length - 1];
+        if (i.kind !== 'share' || !(h?.revenue > 0)) continue;
+        const fx = toPln(1, i.currency), rev = h.revenue * fx, prev = (i.fundamentals.history[i.fundamentals.history.length - 2]?.revenue || 0) * fx, products = productsOf(i, rev), priority = Boolean(i.state) || i.sectors[0]?.[0] === 'Obronność';
+        i.sectors.forEach(([sector, share], n) => rows.push({ key: getChainUnitKey(sector, n === 0 ? i.subsector : null), country: i.country, revenue: rev * share, prev: prev * share, products: n === 0 ? products : {}, priority }));
+    }
+    if (typeof MINT_ACTIVE !== 'undefined' && MINT_ACTIVE) { // 0.18.2 G7: Mennica państwowa (bez akcji) — skala: 2% przychodu banków kraju startowego
+        const banks = rows.filter(r => r.country === home && r.key.startsWith('Bankowość')).reduce((a, r) => a + r.revenue, 0), prevBanks = rows.filter(r => r.country === home && r.key.startsWith('Bankowość')).reduce((a, r) => a + (r.prev || 0), 0);
+        if (banks > 0) rows.push({ key: 'Mennica', country: home, revenue: banks * 0.02, prev: prevBanks * 0.02, products: {}, priority: true });
+    }
+    return rows;
+}
+/** Przepustowość importu kraju (0.17 S5: porty i magistrale kraju startowego; kraje obce 1). */
+function getChainImportCapacity(country) {
+    const home = typeof getStartCountry === 'function' ? getStartCountry() : 'PL', shock = getChainShocks();
+    const m = shock ? (shock[`import|${country}`] ?? shock['import|*'] ?? 1) : 1; // P4: blokada cieśniny, strajk portowy
+    if (country !== home || typeof getInfraCapacity !== 'function') return m;
+    return m * (getInfraCapacity('sea') + getInfraCapacity('land')) / 2;
+}
+/** Szoki zdolności ogniw: linia kryzysu `supply` (P4) i zdarzenia surowcowe 0.17 (strajk w kopalniach w kraju startowym, embargo na szlaku). */
+function getChainShocks() {
+    const home = typeof getStartCountry === 'function' ? getStartCountry() : 'PL', out = { ...(typeof getSupplyShockCapacity === 'function' ? getSupplyShockCapacity() || {} : {}) };
+    const mul = (k, m) => { out[k] = (out[k] ?? 1) * m; };
+    for (const ev of (typeof getActiveCommodityEvents === 'function' && commodityState ? getActiveCommodityEvents() : [])) {
+        if (ev.id === 'strike') mul(`Przemysł/Wydobycie|${home}`, 0.85);
+        if (ev.id === 'embargo') { mul('Energia/Rafinerie|*', 0.9); mul('import|*', 0.8); }
+    }
+    return Object.keys(out).length ? out : null;
+}
+function processChainsQuarterly() {
+    if (typeof stepChains !== 'function') return null;
+    const cls = typeof society === 'object' ? society?.classes : null, start = typeof SOCIETY_CLASSES === 'object' ? SOCIETY_CLASSES : [];
+    const upperNow = cls ? (cls.upperMid || 0) + (cls.rich || 0) + (cls.veryRich || 0) : 0, upper0 = start.filter(c => ['upperMid', 'rich', 'veryRich'].includes(c.id)).reduce((a, c) => a + c.start, 0);
+    const upper = upper0 > 0 && upperNow > 0 ? { [typeof getStartCountry === 'function' ? getStartCountry() : 'PL']: upperNow / upper0 } : null; // M2: luksus w kraju startowym rośnie z udziałem klas wyższych
+    return stepChains(collectChainRows(), { q: macro.quarter, capacity: getChainImportCapacity, shocks: getChainShocks(), upper });
+}
+/** 0.18.1 P3: czynnik łańcucha dla spółki: suma po segmentach (udział × odchylenie jednostki „podsektor × kraj”). Null w trybie cichym. */
+function getChainStockAdj(stock) {
+    if (typeof CHAINS_ACTIVE === 'undefined' || !CHAINS_ACTIVE || typeof getChainFactor !== 'function' || !stock || stock.assetType) return null;
+    const share = stock.kind === 'share', country = share ? stock.country : (typeof getStartCountry === 'function' ? getStartCountry() : 'PL');
+    const segs = share ? (stock.sectors || []).map(([sector, sh], n) => ({ sector, subsector: n === 0 ? stock.subsector : null, share: sh })) : getStockSegments(stock);
+    let rev = 0, margin = 0;
+    for (const seg of segs) { const f = getChainFactor(getChainUnitKey(seg.sector, seg.subsector), country); rev += seg.share * (f.revenueFactor - 1); margin += seg.share * f.marginAdj; }
+    return { revenueFactor: 1 + rev, marginAdj: margin };
 }

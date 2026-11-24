@@ -16,7 +16,7 @@
 
 const MAIL_LIMIT = 100;          // zapis gry: skrzynka ograniczona do 100 najnowszych (było 150)
 const MAIL_HARD_LIMIT = 150;     // także przypięte decyzje — zapis gry mieści się w localStorage
-const MAIL_FOLDERS = ['inbox', 'starred', 'corporation', 'PULS', 'FLESZ', 'OBSER', 'spam'];
+const MAIL_FOLDERS = ['inbox', 'important', 'starred', 'PULS', 'FLESZ', 'OBSER', 'spam']; // 0.16.5: sprawy korporacji są w TeamedUP!
 const CORPORATION_SENDER = 'corporation';
 
 const MAGAZINES = {
@@ -46,7 +46,8 @@ function createMailbox() {
         messages: [],
         subscriptions: { PULS: 'free', FLESZ: 'free', OBSER: 'free' },
         nextId: 1,
-        rumors: []   // plotki FLESZ czekające na sprostowanie lub potwierdzenie
+        rumors: [],  // plotki FLESZ czekające na sprostowanie lub potwierdzenie
+        tied: []     // 0.16.5: posty prezesów w Tied (internet.js)
     };
 }
 
@@ -196,6 +197,7 @@ function routeEventToMail(text, category) {
 
 function processMailWeekly() {
     if (!mailbox) return;
+    if (typeof releaseCorporateGoals === 'function') releaseCorporateGoals(); // 0.16.5: kolejne zadania od zarządu
     publishDigest();
     chargeMagazineSubscriptions();
     sendCompanyAdSpam();
@@ -217,7 +219,7 @@ function chargeMagazineSubscriptions() {
                 recordPayment('player-wallet', stock, def.premiumWeekly, `Prenumerata premium: ${def.label}`);
             } else {
                 mailbox.subscriptions[symbol] = 'free';
-                addMail({ sender: symbol, subject: 'Prenumerata premium wygasła — brak środków', body: `Nie udało się pobrać ${def.premiumWeekly} PLN z Twojego konta. Wracasz do wersji darmowej.`, importance: 2 });
+                addMail({ sender: symbol, subject: 'Prenumerata premium wygasła — brak środków', body: `Nie udało się pobrać ${formatZl(def.premiumWeekly, 0)} z Twojego konta. Wracasz do wersji darmowej.`, importance: 2 });
             }
         } else {
             // Darmowy czytelnik = przychód od reklamodawców (z zewnątrz modelu).
@@ -256,7 +258,7 @@ function sendMagazineSpam() {
         addMail({
             sender: symbol,
             subject: getRandomElement([`Przejdź na ${def.label} Premium — pierwszy tydzień taniej!`, `Nie przegap ważnych wiadomości — ${def.label} Premium`, `Ankieta czytelników ${def.label} (zajmie tylko 45 minut)`]),
-            body: `Wersja premium to tylko ważne wiadomości i zero spamu za ${def.premiumWeekly} PLN tygodniowo. Zarządzaj prenumeratą w zakładce „Subskrypcje”.`,
+            body: `Wersja premium to tylko ważne wiadomości i zero spamu za ${formatZl(def.premiumWeekly, 0)} tygodniowo. Zarządzaj prenumeratą w zakładce „Subskrypcje”.`,
             importance: 0, isSpam: true, spamKind: 'magazine'
         });
     }
@@ -316,7 +318,7 @@ function processBubbleNewsToMail() {
                 addMail({
                     sender: 'KNF',
                     subject: `[SMSR Lvl 2 - Radar] Potwierdzona bańka spekulacyjna: ${bubble.name}`,
-                    body: `System Monitoringu i Stabilizacji Rynku zidentyfikował w czasie rzeczywistym bańkę spekulacyjną w sektorze ${bubble.name}. Bieżąca premia wyceny wynosi +${(bubble.premium * 100).toFixed(0)}%, a model zaklasyfikował typ zjawiska jako: ${typeName}. Zalecana weryfikacja ekspozycji funduszu.`,
+                    body: `System Monitoringu i Stabilizacji Rynku zidentyfikował w czasie rzeczywistym bańkę spekulacyjną w sektorze ${bubble.name}. Bieżąca premia wyceny wynosi +${formatNumberPl((bubble.premium * 100), 0)}%, a model zaklasyfikował typ zjawiska jako: ${typeName}. Zalecana weryfikacja ekspozycji funduszu.`,
                     importance: 3
                 });
             }
@@ -336,7 +338,7 @@ function processBubbleNewsToMail() {
                 addMail({
                     sender: 'PULS',
                     subject: `Puls Rynku: Wyceny sektora ${bubble.name} szybują w górę`,
-                    body: `Premia wyceny w branży ${bubble.name} osiąga nie notowane od dawna poziomy (+${(bubble.premium * 100).toFixed(0)}%). Czy to początek trwałej hossy technologicznej, czy zbliża się przegrzanie?`,
+                    body: `Premia wyceny w branży ${bubble.name} osiąga nie notowane od dawna poziomy (+${formatNumberPl((bubble.premium * 100), 0)}%). Czy to początek trwałej hossy technologicznej, czy zbliża się przegrzanie?`,
                     importance: 2
                 });
             }
@@ -390,7 +392,7 @@ function processBubbleNewsToMail() {
 function setMagazineSubscription(symbol, level) {
     if (!MAGAZINES[symbol] || ![null, 'free', 'premium'].includes(level)) return false;
     if (level === 'premium' && playerWallet.cash < MAGAZINES[symbol].premiumWeekly) {
-        showToast(`Premium kosztuje ${MAGAZINES[symbol].premiumWeekly} PLN tygodniowo — za mało środków.`, 'error');
+        showToast(`Premium kosztuje ${formatZl(MAGAZINES[symbol].premiumWeekly, 0)} tygodniowo — za mało środków.`, 'error');
         return false;
     }
     mailbox.subscriptions[symbol] = level;
@@ -420,7 +422,8 @@ function markAllMailRead(folder) {
 
 function getMailInFolder(folder) {
     if (folder === 'starred') return mailbox.messages.filter(m => m.starred);
-    if (folder === 'inbox') return mailbox.messages.filter(m => getMailFolder(m) !== 'spam');
+    if (folder === 'important') return mailbox.messages.filter(m => !m.isSpam && m.importance >= 3); // 0.17.3: ze wszystkich kanałów
+    if (folder === 'inbox') return mailbox.messages.filter(m => getMailFolder(m) !== 'spam' && (typeof getMailChannel !== 'function' || getMailChannel(m) === 'poczta')); // 0.16.5: wiadomości od inwestorów i spółek czyta się w Tied
     return mailbox.messages.filter(m => getMailFolder(m) === folder);
 }
 
@@ -434,7 +437,7 @@ function getUnreadMailCount(folder = 'inbox') {
 
 // --- Zmienne i dane dla systemu zdarzeń ---
 const positiveTraits = ['wyjadacz', 'pewniak', 'prowiec', 'doswiadczony', 'filar_w_branzy', 'oddany', 'stoik', 'wizjoner', 'rekin', 'kapitalista', 'bogacz', 'legenda'];
-const negativeTraits = ['tyran', 'rozrzutny', 'glowa_w_chmurach', 'nieudacznik', 'skompromitowany'];
+const negativeTraits = ['tyran', 'rozrzutny', 'glowa_w_chmurach', 'nieudacznik', 'skompromitowany', 'cwaniak'];
 
 let eventLog = [];
 const MAX_LOG_ENTRIES = 15;
@@ -447,6 +450,7 @@ function logEvent(message, category = 'market') { // Domyślna kategoria to 'mar
         eventLog.pop();
     }
     if (typeof routeEventToMail === 'function') routeEventToMail(message, category); // skrzynka mailowa (mail.js)
+    if (typeof noteTiedEvent === 'function') noteTiedEvent(message, category); // 0.16.5: post prezesa w Tied
     if (typeof pushNews === 'function' && NEWS_CATEGORIES.includes(category) && !/^\[/.test(String(message))) pushNews(message); // 0.14.2 P7: pasek newsów
 }
 const NEWS_CATEGORIES = ['market', 'company', 'state', 'city', 'construction', 'success', 'warning'];
@@ -806,12 +810,12 @@ function triggerNationalizationEvent() {
     const buyoutPrice = target.price * 0.8;
     const totalCost = buyoutPrice * target.totalShares;
     if (centralBank.funds < totalCost) {
-        console.log(`[EVENT] Bank Centralny chciał znacjonalizować ${target.name}, ale zabrakło środków (${centralBank.funds.toFixed(0)} / ${totalCost.toFixed(0)} PLN).`);
+        console.log(`[EVENT] Bank Centralny chciał znacjonalizować ${target.name}, ale zabrakło środków (${centralBank.funds.toFixed(0)} / ${formatZl(totalCost, 0)}).`);
         return;
     }
     centralBank.funds -= totalCost;
-    logEvent(`🏛️ NACJONALIZACJA! Bank Centralny przejmuje kontrolę nad ${target.name} za ${totalCost.toFixed(0)} PLN w celu ochrony gospodarki!`, 'review');
-    if (playerPortfolio[target.symbol]) showToast(`Państwo przymusowo wykupiło Twoje akcje w ${target.name} po cenie ${buyoutPrice.toFixed(2)} PLN.`, 'warning', 7000);
+    logEvent(`🏛️ NACJONALIZACJA! Bank Centralny przejmuje kontrolę nad ${target.name} za ${formatZl(totalCost, 0)} w celu ochrony gospodarki!`, 'review');
+    if (playerPortfolio[target.symbol]) showToast(`Państwo przymusowo wykupiło Twoje akcje w ${target.name} po cenie ${formatZl(buyoutPrice, 2)}.`, 'warning', 7000);
     buyOutAllHolders(target, buyoutPrice); // wszyscy posiadacze, nie tylko gracz i boty (testy ogólne 0.11)
     target.isStateOwned = true;
     target.stateOwnershipPct = getRandomInRange(0.75, 0.90);
@@ -827,6 +831,7 @@ function triggerNationalizationEvent() {
     target.balanceSheet.liabilities = debt - repaid;
     target.financialHealth = 1;
     target.sharesHeld = 0; // inwestorzy wykupieni; pakiet państwa jest poza wolnym obrotem
+    if (typeof updateStateModalContent === 'function') updateStateModalContent(); // 0.18.0 R6 (Z9): okno Państwa także przy pauzie
     return;
 }
 
@@ -1091,7 +1096,7 @@ function triggerCeoEvent() {
     let eventTriggered = false;
 
     // Zdarzenia zależne od cech (przykłady)
-    if (ceo.traits.some(t => t.id === 'skompromitowany') && Math.random() < 0.2) {
+    if (ceo.traits.some(t => t.id === 'skompromitowany' || t.id === 'cwaniak') && Math.random() < 0.2) {
         // Skompromitowany prezes wywołuje skandal
         const magnitude = getRandomInRange(-0.05, -0.15);
         displayEventMessage(`🚨 Skandal wokół prezesa ${targetStock.name}! Jego przeszłość wraca jak bumerang.`, 45, magnitude, 'company');
@@ -1231,13 +1236,14 @@ function triggerTBillAuctionEvent() {
     }
     const quantity = getRandomIntInRange(50, 250);
     const auctionDurationMinutes = 2;
-    const auctionEndTime = Date.now() + (auctionDurationMinutes * 60 * 1000 / currentSpeedMultiplier);
+    const auctionEndTime = getAuctionNow() + auctionDurationMinutes * 60 * 1000;
     currentTBillAuction = {
         quantityAvailable: quantity,
         endTime: auctionEndTime,
         bids: []
     };
     logEvent(`🔔 Bank Centralny ogłasza aukcję ${quantity} bonów skarbowych! Aukcja trwa ${auctionDurationMinutes} min.`, 'market');
+    if (typeof autoBidTBills === 'function') autoBidTBills(); // 0.18.8 D4
     showToast(`🔔 Ogłoszono aukcję bonów skarbowych! Sprawdź Bank Centralny.`, 'default', 10000);
     
     // setTimeout(resolveTBillAuction, delay); // Usunięte - rozstrzygnięcie w pętli main.js
@@ -1269,7 +1275,7 @@ function triggerBankIPOEvent() {
 
     currentBankIPOOffer = {
         bank: bankToIPO,
-        symbol: `BK${bankToIPO.id.toUpperCase()}`,
+        symbol: getBankSymbol(bankToIPO),
         ipoSharePrice: ipoSharePrice,
         ipoTotalShares: ipoTotalShares,
         sharesOffered: sharesOfferedToPlayer,
@@ -1279,8 +1285,8 @@ function triggerBankIPOEvent() {
 
     const message = `Nowy bank "${bankToIPO.name}" (${bankToIPO.type}) wchodzi na giełdę!<br><br>
                      Oferujemy Ci możliwość zakupu <strong>${sharesOfferedToPlayer}</strong> akcji (5% udziałów)
-                     po preferencyjnej cenie <strong>${offerPrice.toFixed(2)} PLN</strong>
-                     (całkowity koszt: <strong>${offerCost.toFixed(2)} PLN</strong>) przed oficjalnym debiutem.<br><br>
+                     po preferencyjnej cenie <strong>${formatZl(offerPrice, 2)}</strong>
+                     (całkowity koszt: <strong>${formatZl(offerCost, 2)}</strong>) przed oficjalnym debiutem.<br><br>
                      Czy chcesz skorzystać z oferty?`;
     openBankIPOOfferModal(message);
 }
@@ -1332,7 +1338,6 @@ function resolveBankIPO(decision) {
         quarterlyEarnings: 0,
         bankAccountId: null,
         cash: bankToIPO.cash,
-        descriptionParts: null,
         ceo: null,
         isBankStock: true,
         bankData: { id: bankToIPO.id, type: bankToIPO.type }
@@ -1421,7 +1426,7 @@ const governmentInterventions = [
                     if(bank) bank.cash += spentAmount;
                 }
                 applyPriceEffect(target.symbol, 0.10, 'positive'); // Boost ceny
-                logEvent(`🆘 Rząd ratuje ${target.name} przed bankructwem kwotą ${spentAmount.toLocaleString()} PLN!`);
+                logEvent(`🆘 Rząd ratuje ${target.name} przed bankructwem kwotą ${formatZl(spentAmount, 0)}!`);
                 showToast(`Rządowa pomoc dla ${target.name}!`, 'success');
             } else {
                  logEvent(`ℹ️ Rząd planował koło ratunkowe, ale żadna spółka nie była na skraju upadku.`);
@@ -1439,7 +1444,7 @@ const governmentInterventions = [
             const change = -0.005 * getRandomInRange(0.5, 1.5); // Obniżka o 0.25-0.75 pp
             centralBank.baseInterestRate = Math.max(0.005, centralBank.baseInterestRate + change);
             updateInterestRates(); // Zastosuj zmianę
-            logEvent(`💰 Rząd w porozumieniu z Bankiem Centralnym obniża stopy procentowe, by pobudzić gospodarkę! Nowa stopa bazowa: ${(centralBank.baseInterestRate * 100).toFixed(1)}%.`);
+            logEvent(`💰 Rząd w porozumieniu z Bankiem Centralnym obniża stopy procentowe, by pobudzić gospodarkę! Nowa stopa bazowa: ${formatNumberPl((centralBank.baseInterestRate * 100), 1)}%.`);
         },
         message: () => `💰 Rząd decyduje się na stymulację gospodarki przez obniżkę stóp procentowych!`
     },

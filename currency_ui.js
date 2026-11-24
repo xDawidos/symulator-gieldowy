@@ -1,21 +1,60 @@
 // =================================================================================
-// 0.16.1 G4: INTERFEJS — okno kantoru (kursy, wykres, kupno i sprzedaż), zakładka „Obce” (GDR), okno „Gigant wkracza na scenę”,
+// 0.16.1 G4: INTERFEJS — okno kantoru (kursy, wykres, kupno i sprzedaż), okno „Gigant wkracza na scenę”,
 // hasła Akademii. Komponenty 0.14.5 (bank-card, bank-grid, asset-mini-table, tab-btn), ikony SVG ze sprite'a, bez emoji,
 // kolor nigdy jedynym nośnikiem (znak ▲▼ i słowa), jedyne nowe okna: kantor i wydarzenie z pauzą gry.
 // =================================================================================
 
 let kantorSelected = 'EUR';
 let kantorTab = 'rates';
-let obceFilter = { country: '', currency: '' };
 let kantorProviderId = 'std';
-let gdrBrokerId = 'std';
 
 const COUNTRY_NAMES = { PL: 'Polska', DE: 'Niemcy', US: 'USA', CZ: 'Czechy', SE: 'Szwecja', CH: 'Szwajcaria', JP: 'Japonia', CN: 'Chiny', IN: 'Indie', TW: 'Tajwan', FR: 'Francja' };
 
-/** Kraj i waluta spółki do karty (zaległość z planu: „kraj · waluta · cena”). Dziś wszystkie spółki są polskie, w złotych. */
+/** Kraj i waluta spółki do karty. Spółka uniwersalna (UNI) należy do rynku macierzystego: kraj startowy gracza i jego waluta bazowa (0.16.12 D4); obca — jej kraj i waluta. */
 function getCompanyCountryNote(stock) {
-    const country = getCompanyOrigin(stock) === 'PL' || !stock?.country ? 'PL' : stock.country;
-    return `${COUNTRY_NAMES[country] || country} · PLN`;
+    const origin = getCompanyOrigin(stock), start = getStartCountry(), country = stock?.country || (origin === 'UNI' ? start : origin);
+    const currency = country === start ? getBaseCurrency() : (COUNTRY_DEFS[country]?.currency || stock?.currency || 'PLN');
+    return `${COUNTRY_NAMES[country] || country} · ${currency}`;
+}
+
+const HOME_CITY = { PL: 'Warszawa', DE: 'Frankfurt', US: 'Nowy Jork', CZ: 'Praga' };
+/** Miasto i giełda macierzysta do karty lotu („Warszawa (GPW)”, „Frankfurt (DAX)”). */
+function getHomeCityLabel() { const c = getStartCountry(); return `${HOME_CITY[c] || COUNTRY_NAMES[c] || c} (${getMarketLabel('GPW')})`; }
+
+// 0.16.12 D4: jedno miejsce przepisywania tekstów z walutą PLN/zł na walutę bazową konta (playerProfile.baseCurrency). Przy PL tekst zostaje bez zmian.
+const CURRENCY_AMOUNT_RX = /(\d[\d\s ]*(?:[.,]\d+)?)\s?(?:PLN|zł)(?![A-Za-zĄ-ż])/g;
+const CURRENCY_WORD_RX = /(?<![A-Za-zĄ-ż])(?:PLN|zł)(?![A-Za-zĄ-ż])/g;
+/** Etykieta waluty bez przeliczania liczb (przykłady z Akademii: liczby są umowne); `scaleAmounts`: kwoty ze stałych tekstów (jednostki gry = PLN) przeliczane na walutę bazową. */
+function localizeCurrencyText(text, scaleAmounts = false) {
+    const code = getBaseCurrency(), home = getMarketLabel('GPW');
+    if ((code === 'PLN' && home === 'GPW') || typeof text !== 'string' || !/PLN|zł|GPW/.test(text)) return text;
+    let out = text.replace(/(?<![A-Za-zĄ-ż])GPW(?![A-Za-zĄ-ż])/g, home);
+    if (scaleAmounts) out = out.replace(CURRENCY_AMOUNT_RX, (m, num) => {
+        const clean = num.replace(/[\s ]/g, '').replace(',', '.'), decimals = (clean.split('.')[1] || '').length;
+        return Number.isFinite(Number(clean)) ? formatZl(Number(clean), Math.min(2, decimals)) : m;
+    });
+    return code === 'PLN' ? out : out.replace(CURRENCY_WORD_RX, code);
+}
+
+const staticCurrencyOriginals = new WeakMap(); // węzeł tekstowy / element → oryginalny tekst (powtórne przepisanie po zmianie kraju startowego)
+/** Statyczny HTML (index.html): etykiety i kwoty w złotych → waluta bazowa konta. Wołane po zmianie waluty bazowej (syncBaseCurrency). */
+function localizeStaticCurrency(root = typeof document === 'object' ? document.body : null) {
+    if (!root || typeof document !== 'object') return;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode: n => /SCRIPT|STYLE/.test(n.parentNode?.nodeName || '') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT });
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+        const orig = staticCurrencyOriginals.get(n) ?? n.nodeValue;
+        if (!/PLN|zł|GPW/.test(orig)) continue;
+        staticCurrencyOriginals.set(n, orig);
+        const next = localizeCurrencyText(orig, true);
+        if (n.nodeValue !== next) n.nodeValue = next;
+    }
+    for (const el of root.querySelectorAll('[placeholder],[aria-label],[title]')) for (const attr of ['placeholder', 'aria-label', 'title']) {
+        const v0 = el.getAttribute(attr); if (v0 === null) continue;
+        const store = staticCurrencyOriginals.get(el) || {}, orig = store[attr] ?? v0;
+        if (!/PLN|zł|GPW/.test(orig)) continue;
+        store[attr] = orig; staticCurrencyOriginals.set(el, store);
+        const next = localizeCurrencyText(orig, true); if (v0 !== next) el.setAttribute(attr, next);
+    }
 }
 
 function fmtRate(value, code) {
@@ -45,22 +84,14 @@ function renderFxChart(code) {
     const x = i => pad + i / (h.length - 1) * (W - 2 * pad);
     const points = h.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
     const band = (v, label) => `<line x1="${pad}" x2="${W - pad}" y1="${y(v)}" y2="${y(v)}" stroke="currentColor" stroke-opacity="0.25" stroke-dasharray="4 4"/><text x="${W - pad}" y="${y(v) + (v === def.min ? -3 : 11)}" text-anchor="end" font-size="10" fill="currentColor" fill-opacity="0.7">${label}</text>`;
-    return `<svg class="fx-chart" viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Wykres kursu ${code}: od ${fmtRate(h[0], code)} do ${fmtRate(h[h.length - 1], code)} zł">
+    return `<svg class="fx-chart" viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Wykres kursu ${code}: od ${fmtRate(h[0], code)} do ${fmtRate(h[h.length - 1], code)} PLN">
         ${band(def.max, 'góra widełek ' + fmtRate(def.max, code))}${band(def.min, 'dół widełek ' + fmtRate(def.min, code))}
         <polyline points="${points}" fill="none" stroke="var(--accent-info)" stroke-width="2"/></svg>`;
 }
 
-function openKantorModal() {
-    const modal = document.getElementById('kantor-modal');
-    if (!modal) return;
-    modal.hidden = false;
-    modal.style.display = 'block';
-    showKantorTab(kantorTab);
-}
-
 function showKantorTab(tab) {
     kantorTab = tab;
-    document.querySelectorAll('#kantor-modal .tab-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tab));
+    document.querySelectorAll('#net-page-kantory24 .tab-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tab));
     renderKantor();
 }
 
@@ -70,8 +101,8 @@ function renderKantor() {
     const body = document.getElementById('kantor-body');
     if (!body || !playerFund) { if (body) body.innerHTML = '<p class="text-muted">Kantor działa po założeniu funduszu.</p>'; return; }
     const ticker = document.getElementById('kantor-ticker');
-    if (ticker) ticker.textContent = `Gotówka funduszu: ${formatZl(playerCash, 0)} · waluty: ${formatZl(getForeignCashPln('player'), 0)} · kwity GDR: ${formatZl(getFundGdrValue(), 0)}`;
-    body.innerHTML = kantorTab === 'foreign' ? renderForeignTab() : renderRatesTab();
+    if (ticker) ticker.textContent = `Gotówka funduszu: ${formatZl(playerCash, 0)} · waluty: ${formatZl(getForeignCashPln('player'), 0)} · akcje zagraniczne: ${formatZl(getFundForeignSharesValue(), 0)}`;
+    body.innerHTML = (kantorTab === 'forex' && typeof renderForexTab === 'function') ? renderForexTab() : (kantorTab === 'markets' && typeof renderMarketsTab === 'function') ? renderMarketsTab() : (kantorTab === 'commodities' && typeof renderCommodityTab === 'function') ? renderCommodityTab() : renderRatesTab();
     if (kantorTab === 'rates') updateKantorQuote();
 }
 
@@ -80,23 +111,23 @@ function renderRatesTab() {
         const def = CURRENCIES[code], change = getFxChange(code), held = getCurrencyCash('player', code);
         return `<tr class="${code === kantorSelected ? 'row-selected' : ''}" onclick="selectKantorCurrency('${code}')" tabindex="0" onkeydown="if(event.key==='Enter')selectKantorCurrency('${code}')">
             <td>${currencyLabel(code)} <span class="text-muted">${escapeHtml(def.name)}</span></td>
-            <td class="text-right">${fmtRate(fxRates[code], code)} zł</td>
+            <td class="text-right">${fmtRate(getFxRate(code) / getBaseScale(), code)} ${getBaseCurrency()}</td>
             <td class="text-right">${fxArrow(change)} ${fxPct(change)}<span class="text-muted"> w ${getFxChangeWeeks(code)} tyg.</span></td>
             <td class="text-right">${held > 0 ? `${formatNumberPl(held, 2)} ${code} (${formatZl(toPln(held, code), 0)})` : '—'}</td></tr>`;
     }).join('');
     const code = kantorSelected, def = CURRENCIES[code];
     return `<table class="asset-mini-table w-full"><thead><tr><th>Waluta</th><th class="text-right">Kurs środkowy</th><th class="text-right">Zmiana</th><th class="text-right">Twoja pozycja</th></tr></thead><tbody>${rows}</tbody></table>
-        <h4 class="mt-3">${flagIcon(CURRENCY_FLAG[code], 14)} ${currencyIcon(code, 18)} ${code} — ${escapeHtml(def.name)}</h4>
+        <h4 class="mt-3">${currencyIcon(code, 18)} ${code} — ${escapeHtml(def.name)}</h4>
         ${renderFxChart(code)}
-        <p class="text-sm text-muted">Kurs porusza się w widełkach ${fmtRate(def.min, code)}–${fmtRate(def.max, code)} zł i wraca do wolno zmieniającej się średniej. ${def.safe ? 'Waluta „bezpiecznej przystani”: w kryzysie zwykle drożeje.' : 'W kryzysie zwykle słabnie wobec bezpiecznych przystani (USD, CHF, JPY).'}</p>
+        <p class="text-sm text-muted">Kurs porusza się w widełkach ${fmtRate(def.min, code)}–${fmtRate(def.max, code)} PLN i wraca do wolno zmieniającej się średniej. ${def.safe ? 'Waluta „bezpiecznej przystani”: w kryzysie zwykle drożeje.' : 'W kryzysie zwykle słabnie wobec bezpiecznych przystani (USD, CHF, JPY).'}</p>
         <div class="bank-card mt-3"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('moneta', 20)}</span><div><h4>Wymiana ${code}</h4><span class="bank-card-type">kupno i sprzedaż po kursie kantoru</span></div></header>
             <div class="kantor-form"><label for="kantor-provider" class="text-sm">Kantor <select id="kantor-provider" onchange="setKantorProvider(this.value)">${renderProviderOptions(kantorProviderId, code)}</select></label>
-            <label for="kantor-amount" class="text-sm">Kwota (złote przy kupnie, jednostki ${code} przy sprzedaży)</label>
+            <label for="kantor-amount" class="text-sm">Kwota (${getBaseCurrency()} przy kupnie, jednostki ${code} przy sprzedaży)</label>
             <input id="kantor-amount" type="number" min="1" step="any" value="${Math.max(1000, Math.round(Math.min(playerCash, 50000) / 1000) * 1000)}" oninput="updateKantorQuote()" aria-describedby="kantor-quote">
-            <div class="btn-row"><button class="btn-primary" onclick="kantorUiBuy()">Kup ${code} za PLN</button><button class="btn-ghost" onclick="kantorUiSell()">Sprzedaj ${code}</button></div></div>
+            <div class="btn-row"><button class="btn-primary" onclick="kantorUiBuy()">Kup ${code} za ${getBaseCurrency()}</button><button class="btn-ghost" onclick="kantorUiSell()">Sprzedaj ${code}</button></div></div>
             <p id="kantor-quote" class="text-sm" aria-live="polite"></p></div>
         <h4 class="mt-3">Porównanie kursów ${code}</h4><div id="kantor-compare"></div>
-        <p class="text-sm text-muted">Banki (e-bank, uniwersalny, międzynarodowy) i Kantor Miejski ustalają własne kursy i spready, odświeżane co kwartał. Bank międzynarodowy jest najtańszy przy dużych kwotach (od 100 tys. zł) i wymienia wszystkie waluty; e-bank ma limit transakcji, Kantor Miejski wymienia tylko EUR, USD i CZK do 30 tys. zł, a jego zysk zasila miasto.</p>`;
+        <p class="text-sm text-muted">Banki (e-bank, uniwersalny, międzynarodowy) i Kantor Miejski ustalają własne kursy i spready, odświeżane co kwartał. Bank międzynarodowy jest najtańszy przy dużych kwotach (od 100 tys. PLN) i wymienia wszystkie waluty; e-bank ma limit transakcji, Kantor Miejski wymienia tylko EUR, USD i CZK do 30 tys. PLN, a jego zysk zasila miasto.</p>`;
 }
 
 function providerLabel(p) { return `${p.name} (${p.tag})`; }
@@ -111,7 +142,7 @@ function renderKantorCompare(code, amount) {
     const okBuy = rows.filter(r => r.buy.ok).map(r => r.buy.rate), okSell = rows.filter(r => r.sell.ok).map(r => r.sell.rate);
     const bestBuy = Math.min(...okBuy), bestSell = Math.max(...okSell);
     const body = rows.map(r => r.buy.ok && r.sell.ok
-        ? `<tr><td>${escapeHtml(r.p.name)} <span class="text-muted text-xs">${escapeHtml(r.p.tag)}</span></td><td class="text-right">${fmtRate(r.buy.rate, code)} zł${r.buy.rate === bestBuy ? ' · najtaniej' : ''}</td><td class="text-right">${fmtRate(r.sell.rate, code)} zł${r.sell.rate === bestSell ? ' · najdrożej' : ''}</td><td class="text-right">${formatNumberPl(r.buy.spread * 100, 2)}%</td></tr>`
+        ? `<tr><td>${escapeHtml(r.p.name)} <span class="text-muted text-xs">${escapeHtml(r.p.tag)}</span></td><td class="text-right">${fmtRate(r.buy.rate, code)} PLN${r.buy.rate === bestBuy ? ' · najtaniej' : ''}</td><td class="text-right">${fmtRate(r.sell.rate, code)} PLN${r.sell.rate === bestSell ? ' · najdrożej' : ''}</td><td class="text-right">${formatNumberPl(r.buy.spread * 100, 2)}%</td></tr>`
         : `<tr class="text-muted"><td>${escapeHtml(r.p.name)} <span class="text-xs">${escapeHtml(r.p.tag)}</span></td><td colspan="3">${escapeHtml((r.buy.ok ? r.sell.reason : r.buy.reason) || 'niedostępny')}</td></tr>`).join('');
     return `<table class="asset-mini-table w-full"><thead><tr><th>Kantor</th><th class="text-right">Kupno ${code} (płacisz)</th><th class="text-right">Sprzedaż (dostajesz)</th><th class="text-right">Spread</th></tr></thead><tbody>${body}</tbody></table>`;
 }
@@ -119,18 +150,18 @@ function renderKantorCompare(code, amount) {
 function updateKantorQuote() {
     const el = document.getElementById('kantor-quote'), input = document.getElementById('kantor-amount');
     if (!el || !input) return;
-    const code = kantorSelected, amount = Number(input.value) || 0;
+    const code = kantorSelected, scale = getBaseScale(), baseCode = getBaseCurrency(), amount = (Number(input.value) || 0) * scale; // amount: jednostki gry
     const cmp = document.getElementById('kantor-compare');
     if (cmp) cmp.innerHTML = renderKantorCompare(code, amount);
     const buy = getProviderQuote(kantorProviderId, code, amount, 'buy'), sell = getProviderQuote(kantorProviderId, code, amount * getFxRate(code), 'sell');
     if (!buy.ok || !sell.ok) { el.textContent = (buy.ok ? sell.reason : buy.reason) || 'Ten kantor jest niedostępny.'; return; }
     const spread = buy.spread;
-    el.innerHTML = `Kupno: ${fmtRate(buy.rate, code)} zł za 1 ${code} (${formatNumberPl(amount / buy.rate, 2)} ${code} za ${formatZl(amount, 0)}). Sprzedaż: ${fmtRate(sell.rate, code)} zł. `
+    el.innerHTML = `Kupno: ${fmtRate(buy.rate / scale, code)} ${baseCode} za 1 ${code} (${formatNumberPl(amount / buy.rate, 2)} ${code} za ${formatZl(amount, 0)}). Sprzedaż: ${fmtRate(sell.rate / scale, code)} ${baseCode}. `
         + `Spread kantoru ${formatNumberPl(spread * 100, 1)}% — tyle tracisz na kupnie i sprzedaży razem, więc kurs musi się ruszyć o więcej, żeby to się opłaciło.`;
 }
 
 function kantorUiBuy() {
-    const amount = Number(document.getElementById('kantor-amount')?.value) || 0;
+    const amount = (Number(document.getElementById('kantor-amount')?.value) || 0) * getBaseScale(); // jednostki gry
     const r = kantorBuyCurrency(kantorSelected, amount, kantorProviderId);
     showToast(r.ok ? `Kupiono ${formatNumberPl(r.foreign, 2)} ${kantorSelected} za ${formatZl(amount, 0)} (spread ${formatZl(r.spreadCost, 0)}).` : r.reason, r.ok ? 'success' : 'warning');
     renderKantor();
@@ -148,73 +179,98 @@ function kantorUiSell() {
 
 // --- Zakładka „Obce”: kwity depozytowe ---
 
-function setObceFilter(key, value) { obceFilter[key] = value; renderKantor(); }
+// =================================================================================
+// 0.16.9 W1: okno „Gotówka funduszu” — salda walutowe i zmiana waluty (klik w gotówkę na pasku, Enter/Spacja z klawiatury)
+// =================================================================================
 
-function renderForeignTab() {
-    const issuers = getForeignIssuerList();
-    const countries = [...new Set(FOREIGN_GIANTS.map(g => g.country))], currencies = [...new Set(FOREIGN_GIANTS.map(g => g.currency))];
-    const opts = (list, current, label) => `<option value="">${label}</option>` + list.map(v => `<option value="${v}" ${v === current ? 'selected' : ''}>${escapeHtml(COUNTRY_NAMES[v] || v)}</option>`).join('');
-    const filtered = issuers.filter(i => (!obceFilter.country || i.country === obceFilter.country) && (!obceFilter.currency || i.currency === obceFilter.currency));
-    const rows = filtered.map(i => {
-        const held = getGdrHeld(i), h = i.history, change = h.length > 1 ? i.price / h[0] - 1 : 0;
-        return `<tr><td><strong>${getGdrSymbol(i)}</strong> <span class="text-muted">${escapeHtml(i.name)}</span></td>
-            <td>${flagIcon(i.country, 12)} ${escapeHtml(COUNTRY_NAMES[i.country] || i.country)} · ${currencyIcon(i.currency, 14)} ${i.currency}</td>
-            <td class="text-right">${formatNumberPl(i.price, 2)} ${i.currency}<br><span class="text-muted text-xs">${fxArrow(change)} ${fxPct(change)} w ${h.length - 1} tyg.</span></td>
-            <td class="text-right">${formatZl(getGdrMid(i), 2)}<br><span class="text-muted text-xs">kupno ${formatZl(getGdrQuote(i, 'buy'), 2)} · sprzedaż ${formatZl(getGdrQuote(i, 'sell'), 2)}</span></td>
-            <td class="text-right">${held > 0 ? `${formatNumberPl(held, 0)} (${formatZl(held * getGdrMid(i), 0)})` : '—'}</td>
-            <td class="text-right"><input type="number" min="1" step="1" value="100" id="gdr-qty-${i.id}" aria-label="Liczba kwitów ${escapeHtml(i.name)}" style="width:5.5em">
-                <button class="btn-primary btn-sm" onclick="gdrUiTrade('${i.id}','buy')">Kup</button> <button class="btn-ghost btn-sm" onclick="gdrUiTrade('${i.id}','sell')" ${held > 0 ? '' : 'disabled'}>Sprzedaj</button></td></tr>`;
+let cashWindowState = { from: 'PLN', to: 'EUR', providerId: 'std' }; // „PLN” = waluta bazowa tylko do czasu pierwszego renderu (renderCashWindow poprawia)
+
+function ensureCashModal() {
+    let modal = document.getElementById('cash-modal');
+    if (modal) return modal;
+    modal = document.createElement('div');
+    modal.id = 'cash-modal'; modal.className = 'modal modal-sm bank-window'; modal.setAttribute('role', 'dialog'); modal.setAttribute('aria-labelledby', 'cash-modal-title'); modal.style.display = 'none';
+    modal.innerHTML = '<button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button><h2 class="mt-0" id="cash-modal-title">Gotówka funduszu</h2><div id="cash-modal-body"></div>';
+    document.body.appendChild(modal);
+    return modal;
+}
+
+function openCashWindow() {
+    if (!playerFund) return;
+    ensureCashModal().style.display = 'block';
+    renderCashWindow();
+    document.getElementById('cash-amount')?.focus();
+}
+
+function renderCashWindow() {
+    const body = document.getElementById('cash-modal-body');
+    if (!body || !playerFund) return;
+    const base = getBaseCurrency(), rows = getCashBalances(), total = getFundCashTotalPln(), held = rows.filter(r => r.amount > 1e-9 || r.code === base), s = cashWindowState;
+    if (s.from === 'PLN' && base !== 'PLN' && !FOREIGN_CURRENCIES.includes('PLN')) s.from = base;
+    const trs = held.map(r => {
+        const gain = r.code === base ? null : r.rate / r.basis - 1;
+        return `<tr class="${r.code === s.from ? 'row-selected' : ''}" tabindex="0" onclick="cashPickFrom('${r.code}')" onkeydown="if(event.key==='Enter')cashPickFrom('${r.code}')" aria-label="Wybierz ${r.code} jako walutę do wymiany">
+            <td><strong>${r.code}</strong> <span class="text-muted text-xs">${escapeHtml(CURRENCIES[r.code].name)}</span></td>
+            <td class="text-right">${formatNumberPl(r.amount, 2)}${r.code === base ? '' : `<br><span class="text-muted text-xs">kurs ${fmtRate(r.rate, r.code)} ${base}</span>`}</td>
+            <td class="text-right">${formatZl(r.pln, 0)}<br><span class="text-muted text-xs">${formatNumberPl(r.share * 100, 0)}% gotówki</span></td>
+            <td class="text-right">${gain === null ? '—' : `${fxArrow(gain)} ${fxPct(gain)}<br><span class="text-muted text-xs">${r.gainPln >= 0 ? '+' : ''}${formatZl(r.gainPln, 0)} od zakupu (śr. ${fmtRate(r.basis, r.code)} ${base})</span>`}</td></tr>`;
     }).join('');
-    const brokers = getKantorProviders().filter(p => p.kind === 'international');
-    const brokerSel = `<label class="text-sm">Pośrednik <select onchange="gdrBrokerId = this.value">${`<option value="std">Depozytariusz (spread ${formatNumberPl(GDR_RULES.depositSpread * 100, 2)}%)</option>` + brokers.map(b => `<option value="${escapeHtml(b.id)}" ${b.id === gdrBrokerId ? 'selected' : ''}>${escapeHtml(b.name)} (połowa spreadu)</option>`).join('')}</select></label>`;
-    return `<div class="btn-row">${brokerSel}<label class="text-sm">Kraj <select onchange="setObceFilter('country', this.value)">${opts(countries, obceFilter.country, 'wszystkie')}</select></label>
-        <label class="text-sm">Waluta <select onchange="setObceFilter('currency', this.value)">${`<option value="">wszystkie</option>` + currencies.map(c => `<option value="${c}" ${c === obceFilter.currency ? 'selected' : ''}>${c}</option>`).join('')}</select></label></div>
-        ${issuers.length ? `<table class="asset-mini-table w-full mt-3"><thead><tr><th>Kwit</th><th>Kraj · waluta</th><th class="text-right">Cena obca</th><th class="text-right">Cena kwitu w PLN</th><th class="text-right">Twoje kwity</th><th class="text-right">Zlecenie</th></tr></thead><tbody>${rows || '<tr><td colspan="6" class="text-muted">Brak kwitów dla tego filtra.</td></tr>'}</tbody></table>`
-            : '<p class="text-muted mt-3">Żaden zagraniczny gigant nie jest jeszcze notowany. Pojawi się w wydarzeniu „Gigant wkracza na scenę” (średnio raz na 2 lata).</p>'}
-        <p class="text-sm text-muted">Kwit depozytowy (GDR) to notowany u nas w złotych papier oparty na akcji zagranicznej spółki. Jego cena to cena akcji × kurs waluty ± ${formatNumberPl(GDR_RULES.depositSpread * 100, 1)}% spreadu depozytowego, więc zysk z akcji może zjeść kurs waluty — i odwrotnie.</p>`;
+    const fromCodes = held.map(r => r.code);
+    if (!fromCodes.includes(s.from)) s.from = base;
+    if (s.to === base && s.from === base || s.to === s.from || ![base, ...FOREIGN_CURRENCIES].includes(s.to)) s.to = s.from === base ? FOREIGN_CURRENCIES[0] : base;
+    const opt = (list, sel) => list.map(c => `<option value="${c}" ${c === sel ? 'selected' : ''}>${c} — ${escapeHtml(CURRENCIES[c].name)}</option>`).join('');
+    const maxAmount = rows.find(r => r.code === s.from)?.amount || 0, whole = Math.floor(maxAmount * 100) / 100;
+    body.innerHTML = `<p class="text-sm" aria-live="polite">Razem gotówka: <strong>${formatZl(total, 0)}</strong> — gotówka bazowa ${formatZl(playerCash, 0)}, waluty ${formatZl(getForeignCashPln('player'), 0)} po kursie środkowym (wchodzą do NAV; kurs waluty zmienia wartość funduszu).</p>
+        <table class="asset-mini-table w-full"><thead><tr><th>Waluta</th><th class="text-right">Saldo</th><th class="text-right">Wartość w ${base}</th><th class="text-right">Wynik kursowy</th></tr></thead><tbody>${trs}</tbody></table>
+        <div class="bank-card mt-3"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('moneta', 20)}</span><div><h4>Zmień walutę</h4><span class="bank-card-type">po kursie wybranego kantoru, ze spreadem</span></div></header>
+            <div class="kantor-form"><label class="text-sm" for="cash-from">Z waluty <select id="cash-from" onchange="cashWindowState.from=this.value;renderCashWindow()">${opt([base, ...FOREIGN_CURRENCIES].filter(c => fromCodes.includes(c)), s.from)}</select></label>
+            <label class="text-sm" for="cash-to">Na walutę <select id="cash-to" onchange="cashWindowState.to=this.value;renderCashWindow()">${opt([base, ...FOREIGN_CURRENCIES].filter(c => c !== s.from), s.to)}</select></label>
+            <label class="text-sm" for="cash-provider">Kantor <select id="cash-provider" onchange="cashWindowState.providerId=this.value;updateCashQuote()">${renderProviderOptions(s.providerId, s.to === base ? s.from : s.to)}</select></label>
+            <label class="text-sm" for="cash-amount">Kwota w ${s.from} (masz ${formatNumberPl(maxAmount, 2)})</label>
+            <div class="btn-row"><input id="cash-amount" type="number" min="0" step="any" value="${whole > 0 ? (s.from === base ? Math.min(whole, 10000 / getBaseScale()) : whole) : ''}" oninput="updateCashQuote()" aria-describedby="cash-quote"><button type="button" class="btn-ghost btn-sm" onclick="document.getElementById('cash-amount').value=${whole};updateCashQuote()">Całe saldo</button></div>
+            <p id="cash-quote" class="text-sm" aria-live="polite"></p>
+            <div class="btn-row"><button type="button" class="btn-primary" onclick="cashUiConvert()">Przewalutuj</button></div></div></div>
+        <p class="text-sm text-muted mt-3">Zasady: akcje spółek zagranicznych kupujesz najpierw z salda w ich walucie, resztę wymienia kantor. Zakupy w złotych (akcje krajowe, inwestycje) odmawiają, gdy brakuje PLN — przewalutuj tu. Obowiązkowe płatności w złotych (umorzenia dla klientów, opłata za zarządzanie, spłata lombardu) przewalutowują same, z wpisem w dzienniku i kosztem spreadu. Waluta obca na obcą idzie przez złote, więc kosztuje dwa spready.</p>`;
+    updateCashQuote();
 }
 
-function gdrUiTrade(id, side) {
-    const qty = Number(document.getElementById(`gdr-qty-${id}`)?.value) || 0;
-    const r = side === 'buy' ? buyGdr(id, qty, gdrBrokerId) : sellGdr(id, qty, gdrBrokerId);
-    showToast(r.ok ? `${side === 'buy' ? 'Kupiono' : 'Sprzedano'} ${qty} kwitów ${id}.GDR za ${formatZl(r.cost ?? r.proceeds, 0)}.` : r.reason, r.ok ? 'success' : 'warning');
-    renderKantor();
+function cashPickFrom(code) { cashWindowState.from = code; renderCashWindow(); }
+
+function updateCashQuote() {
+    const el = document.getElementById('cash-quote'), amount = Number(document.getElementById('cash-amount')?.value) || 0, s = cashWindowState;
+    if (!el) return;
+    const base = getBaseCurrency(), scale = getBaseScale();
+    const p = previewConversion(s.from, s.to, amount * (s.from === base ? scale : 1), s.providerId); // waluta bazowa: wpisane jednostki → jednostki gry
+    el.textContent = p.ok ? `Dostaniesz ok. ${formatNumberPl(p.received / (s.to === base ? scale : 1), 2)} ${s.to}; koszt spreadu ok. ${formatZl(p.spreadCost, 0)}.` : (amount > 0 ? p.reason : 'Podaj kwotę do wymiany.');
+}
+
+function cashUiConvert() {
+    const s = cashWindowState, amount = Number(document.getElementById('cash-amount')?.value) || 0;
+    const base = getBaseCurrency(), scale = getBaseScale();
+    const r = convertCurrency(s.from, s.to, amount * (s.from === base ? scale : 1), s.providerId);
+    showToast(r.ok ? `Przewalutowano ${formatNumberPl(amount, 2)} ${s.from} na ${formatNumberPl(r.received / (s.to === base ? scale : 1), 2)} ${r.receivedCode} (spread ${formatZl(r.spreadCost, 0)}).` : r.reason, r.ok ? 'success' : 'warning');
+    renderCashWindow();
     if (typeof updateUI === 'function') updateUI();
+    if (typeof renderKantor === 'function') renderKantor();
 }
 
-// --- Okno wydarzenia „Gigant wkracza na scenę” (pauza gry; w przebiegach pauza jest blokowana przez narzędzia) ---
-
-function showGiantEventWindow(result) {
-    const modal = document.getElementById('giant-event-modal');
-    if (!modal || !result) return;
-    if (!isGamePaused && typeof togglePauseGame === 'function') togglePauseGame();
-    const body = document.getElementById('giant-event-body');
-    if (result.kind === 'gdr') {
-        body.innerHTML = `<p><strong>${escapeHtml(result.giantName)}</strong> (${flagIcon(result.country, 12)} ${escapeHtml(COUNTRY_NAMES[result.country] || result.country)}) wchodzi na naszą giełdę jako kwity depozytowe <strong>${escapeHtml(result.symbol)}</strong>.</p>
-            <dl class="bank-card-rates"><div><dt>Cena w ${result.currency}</dt><dd>${formatNumberPl(result.priceForeign, 2)}</dd></div><div><dt>Cena kwitu w PLN</dt><dd>${formatZl(result.pricePln, 2)}</dd></div><div><dt>Spread depozytowy</dt><dd>${formatNumberPl(GDR_RULES.depositSpread * 100, 1)}%</dd></div></dl>
-            <p class="text-sm">Kupisz je w oknie Kantor → Obce. Pamiętaj: wynik kwitu to zmiana ceny akcji <em>i</em> kursu ${result.currency}.</p>`;
-    } else {
-        body.innerHTML = `<p><strong>${escapeHtml(result.giantName)}</strong> przejmuje <strong>${escapeHtml(result.name)}</strong> (${escapeHtml(result.symbol)}).</p>
-            <dl class="bank-card-rates"><div><dt>Cena wykupu</dt><dd>${formatZl(result.offer, 2)}</dd></div><div><dt>Premia do kursu</dt><dd>${formatNumberPl(result.premium * 100, 0)}%</dd></div><div><dt>Wypłacono akcjonariuszom</dt><dd>${formatZl(result.paid, 0)}</dd></div></dl>
-            <p class="text-sm">${result.heldByPlayer ? 'Twoje akcje rozliczono gotówką po cenie wykupu.' : 'Nie miałeś akcji tej spółki.'} Spółka znika z giełdy.</p>`;
-    }
-    modal.hidden = false;
-    modal.style.display = 'block';
+/** Pasek gotówki funduszu jest przyciskiem: klik albo Enter/Spacja otwierają okno sald walutowych. */
+function initCashKpi() {
+    const val = document.getElementById('cash'), kpi = val?.closest('.topbar-kpi');
+    if (!kpi || kpi.dataset.cashWindow) return;
+    kpi.dataset.cashWindow = '1'; kpi.setAttribute('role', 'button'); kpi.setAttribute('tabindex', '0'); kpi.style.cursor = 'pointer';
+    kpi.setAttribute('aria-label', 'Gotówka funduszu — salda walutowe i zmiana waluty'); kpi.title = 'Salda walutowe i zmiana waluty';
+    kpi.addEventListener('click', openCashWindow);
+    kpi.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openCashWindow(); } });
 }
-
-function closeGiantEventWindow() {
-    const modal = document.getElementById('giant-event-modal');
-    if (modal) modal.style.display = 'none';
-    pendingGiantEvent = null;
-    if (isGamePaused && typeof togglePauseGame === 'function') togglePauseGame();
-}
+if (typeof document !== 'undefined') initCashKpi();
 
 // --- Akademia ---
 Object.assign(ACADEMY_ENTRIES, {
     ryzykoWalutowe: {
         title: 'Ryzyko walutowe', get icon() { return academyIcon('moneta'); },
         text: 'Gdy trzymasz papiery albo gotówkę w obcej walucie, Twój wynik w złotych zależy od dwóch rzeczy: od ceny papieru i od kursu. Zysk 10% na akcji w euro znika, jeśli euro w tym czasie potanieje o 10%. Kurs waluty rośnie i spada w widełkach, a w kryzysie „bezpieczne przystanie” (frank, jen, dolar) zwykle drożeją, a waluty rynków wschodzących tanieją.',
-        example: () => { const eur = fxRates.EUR; const held = getForeignCashPln('player'); return `Teraz 1 EUR kosztuje ${formatNumberPl(eur, 3)} zł; w walutach trzymasz ${formatZl(held, 0)}.`; },
+        example: () => { const eur = fxRates.EUR; const held = getForeignCashPln('player'); return `Teraz 1 EUR kosztuje ${formatNumberPl(eur, 3)} PLN; w walutach trzymasz ${formatZl(held, 0)}.`; },
         quiz: [
             { q: 'Akcja w euro zyskała 10%, a euro potaniało o 10%. Jaki jest Twój wynik w złotych?', a: ['ok. 1% straty', '+10%', '+20%'], c: 0 },
             { q: 'Która waluta zwykle drożeje w kryzysie?', a: ['frank szwajcarski', 'rupia indyjska', 'żadna'], c: 0 },
@@ -224,21 +280,31 @@ Object.assign(ACADEMY_ENTRIES, {
     spread: {
         title: 'Spread', get icon() { return academyIcon('moneta'); },
         text: 'Spread to różnica między ceną kupna a sprzedaży. Kantor kupuje walutę drożej, niż ją odkupuje, i to jest jego zarobek: u nas 1–2%, tym mniej, im większa kwota. Każda wymiana tam i z powrotem kosztuje cały spread, więc częste „kręcenie” walutą zjada zysk, a pewnego zysku z samego powrotu kursu do średniej nie ma.',
-        example: () => `Dla kwoty 100 tys. zł spread kantoru wynosi ${formatNumberPl(getKantorSpread(100000) * 100, 1)}%, dla 5 mln zł — ${formatNumberPl(getKantorSpread(5e6) * 100, 1)}%.`,
+        example: () => `Dla kwoty 100 tys. PLN spread kantoru wynosi ${formatNumberPl(getKantorSpread(100000) * 100, 1)}%, dla 5 mln PLN — ${formatNumberPl(getKantorSpread(5e6) * 100, 1)}%.`,
         quiz: [
             { q: 'Kupujesz walutę i od razu ją sprzedajesz. Co się dzieje z Twoimi pieniędzmi?', a: ['tracisz spread', 'zyskujesz spread', 'nic'], c: 0 },
             { q: 'Kiedy spread kantoru jest niższy?', a: ['przy większych kwotach', 'przy mniejszych kwotach', 'zawsze taki sam'], c: 0 },
             { q: 'Czy kupowanie waluty po niskim kursie zawsze daje zysk?', a: ['nie — spread i dryf średniej mogą go zjeść', 'tak', 'tylko w piątek'], c: 0 }
         ]
     },
-    adrGdr: {
-        title: 'ADR i GDR (kwity depozytowe)', get icon() { return academyIcon('samolot'); },
-        text: 'Kwit depozytowy (ADR w USA, GDR na innych giełdach) to papier notowany u nas, którego zabezpieczeniem są akcje zagranicznej spółki trzymane w depozycie. Kupujesz go w złotych, bez rachunku za granicą, ale płacisz spread depozytowy, a jego cena zależy od ceny akcji i kursu waluty. Kwit nie daje praw głosu w spółce.',
-        example: () => { const list = getForeignIssuerList(); return list.length ? `Notowane kwity: ${list.map(i => `${getGdrSymbol(i)} (${formatZl(getGdrMid(i), 2)})`).join(', ')}.` : 'Żaden kwit nie jest jeszcze notowany — pojawią się w wydarzeniu „Gigant wkracza na scenę”.'; },
+    dzwigniaMarginCall: {
+        title: 'Dźwignia i margin call', get icon() { return academyIcon('samolot'); },
+        text: 'Dźwignia 1:10 oznacza, że wkładasz 10% wartości pozycji (depozyt), a resztę „pożycza” rynek. Zysk i strata liczą się od całej wartości, więc ruch kursu o 5% daje ±50% depozytu. Gdy kapitał pozycji spadnie poniżej 70% depozytu, dostajesz ostrzeżenie (margin call), a poniżej 50% pozycja zamyka się automatycznie. Za utrzymanie pozycji płacisz koszt finansowania (swap), a przy otwarciu spread. Strata nie przekroczy depozytu.',
+        example: () => `Pozycja 100 000 PLN z dźwignią 1:10 ma depozyt 10 000 PLN. Kurs spada o 5% → strata 5 000 PLN, kapitał 50% depozytu — pozycja zostaje zamknięta.`,
         quiz: [
-            { q: 'Od czego zależy cena kwitu depozytowego?', a: ['od ceny akcji zagranicznej i kursu waluty', 'tylko od ceny akcji', 'tylko od kursu'], c: 0 },
-            { q: 'Czy kwit daje prawo głosu w zagranicznej spółce?', a: ['nie', 'tak, pełne', 'tak, połowę'], c: 0 },
-            { q: 'Po co istnieją kwity depozytowe?', a: ['by kupować zagraniczne spółki bez rachunku za granicą', 'by omijać podatki', 'by zastąpić akcje krajowe'], c: 0 }
+            { q: 'Ile wynosi depozyt pozycji 50 000 PLN przy dźwigni 1:10?', a: ['5 000 PLN', '50 000 PLN', '500 PLN'], c: 0 },
+            { q: 'Co się dzieje, gdy kapitał pozycji spada poniżej 50% depozytu?', a: ['pozycja zamyka się automatycznie', 'dopłacasz bez końca', 'nic'], c: 0 },
+            { q: 'Czym jest swap w tej grze?', a: ['kosztem finansowania pozycji z dźwignią', 'zyskiem z kursu', 'prowizją od akcji'], c: 0 }
+        ]
+    },
+    konsolidacjaGield: {
+        title: 'Konsolidacja giełd', get icon() { return academyIcon('samolot'); },
+        text: 'Giełdy łączą się, żeby obniżyć koszty i przyciągnąć więcej inwestorów. Gdy giełda przejmuje inną, jej spółki trafiają do wspólnego obrotu. Gdy przejmuje ją obca giełda, spółki płacą wyższe opłaty za notowanie, a kursy chwilowo spadają. Wspólny rynek zwykle zmniejsza spread i prowizje, ale zwiększa zarażanie kryzysami między krajami.',
+        example: () => (typeof getLinkedCountries === 'function' && getLinkedCountries().length) ? `Połączone kraje: ${getLinkedCountries().map(id => COUNTRY_DEFS[id].name).join(', ')}.` : 'Żadna giełda nie jest jeszcze połączona z naszą.',
+        quiz: [
+            { q: 'Co się dzieje z kursami, gdy obca giełda przejmuje naszą?', a: ['chwilowo spadają', 'rosną na stałe', 'nic'], c: 0 },
+            { q: 'Czy spółki połączonego kraju kupisz bez biletu?', a: ['tak, z prowizją krajową', 'nie, zawsze trzeba biletu', 'tylko za dolary'], c: 0 },
+            { q: 'Co zwykle daje wspólny rynek?', a: ['niższe koszty i szybsze zarażanie kryzysami', 'brak ryzyka', 'zamknięcie giełdy'], c: 0 }
         ]
     }
 });

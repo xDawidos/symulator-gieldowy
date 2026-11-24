@@ -2,7 +2,9 @@
 // 0.16.1 G2: WALUTY I KANTOR
 // Rejestr walut, kursy (powrót do średniej w twardych widełkach, średnia dryfuje wolno), gotówka w walutach
 // (gracz: `playerCashByCurrency`, boty: `entity.cashByCurrency`), kantor ze spreadem 1–2%.
-// Waluta bazowa to PLN: `toPln(kwota, waluta)` jest jedynym przelicznikiem wyceny (NAV, majątek, ranking, niezmienniki).
+// Waluta bazowa to waluta kraju startowego (0.16.11 K2; PL → PLN). Wewnątrz gry liczymy w „jednostkach gry” = waluta bazowa × BASE_SCALES (PLN 1, EUR 4, USD 4, CZK 0,2),
+// więc wszystkie stałe zbalansowane w złotych działają bez zmian, a UI dzieli przez skalę i podpisuje walutą bazową (formatZl).
+// `toPln(kwota, waluta)` (nazwa zostaje) jest jedynym przelicznikiem wyceny (NAV, majątek, ranking, niezmienniki): kurs względem waluty bazowej.
 // =================================================================================
 
 /** Widełki i kursy startowe (zł za 1 jednostkę) — załącznik F planu 0.16. `safe`: walutowa „bezpieczna przystań” w kryzysie. */
@@ -18,7 +20,23 @@ const CURRENCIES = {
     INR: { code: 'INR', name: 'rupia indyjska', region: 'AS', min: 0.040, max: 0.060, start: 0.050 },
     TWD: { code: 'TWD', name: 'dolar tajwański', region: 'AS', min: 0.10, max: 0.16, start: 0.13 }
 };
+const FX_CODES = Object.keys(CURRENCIES).filter(code => code !== 'PLN'); // waluty z własnym procesem kursu (kwotowane w PLN)
+/** Waluta bazowa konta wg kraju startowego i skala jednostek gry (kurs ≈ startowy kurs waluty, zaokrąglony). */
+const BASE_CURRENCY_BY_COUNTRY = { PL: 'PLN', DE: 'EUR', US: 'USD', CZ: 'CZK' };
+const BASE_SCALES = { PLN: 1, EUR: 4, USD: 4, CZK: 0.2 };
+/** Waluty inne niż bazowa (kantor, salda): przy PL dawne obce waluty, przy DE także złoty. Tablica zmienia się w miejscu (referencje). */
 const FOREIGN_CURRENCIES = Object.keys(CURRENCIES).filter(code => code !== 'PLN');
+function getBaseCurrency() {
+    const base = typeof playerProfile === 'object' && playerProfile ? playerProfile.baseCurrency : null; // zapis v21; starsze zapisy i PL: złoty
+    return BASE_SCALES[base] ? base : 'PLN';
+}
+function getBaseScale() { return BASE_SCALES[getBaseCurrency()] || 1; }
+/** Po zmianie kraju startowego i po wczytaniu zapisu: lista walut obcych bez bazowej. */
+function syncBaseCurrency() {
+    const base = getBaseCurrency();
+    FOREIGN_CURRENCIES.splice(0, FOREIGN_CURRENCIES.length, ...Object.keys(CURRENCIES).filter(code => code !== base));
+    if (typeof localizeStaticCurrency === 'function') localizeStaticCurrency(); // 0.16.12 D4: statyczne teksty z PLN/zł → waluta bazowa
+}
 
 /** Parametry procesu tygodniowego: powrót do średniej, szum, dryf średniej (±10%/rok), wpływ kryzysu. */
 const FX_RULES = {
@@ -38,12 +56,13 @@ let fxMeans = {};
 let fxHistory = {};
 let fxWeek = 0;
 let playerCashByCurrency = {};
+let playerFxBasis = {}; // 0.16.9 W1: średni kurs nabycia sald walutowych funduszu (zł za jednostkę; zapis v20)
 let kantorOffers = {}; // id dostawcy → { w, s: {waluta: spread}, b: {waluta: przesunięcie kursu} }
 let kantorLog = [];   // ostatnie transakcje gracza w kantorze (do podglądu)
 
 function initFxState() {
-    fxRates = {}; fxMeans = {}; fxHistory = {}; fxWeek = 0; playerCashByCurrency = {}; kantorLog = []; kantorOffers = {};
-    for (const code of FOREIGN_CURRENCIES) {
+    fxRates = {}; fxMeans = {}; fxHistory = {}; fxWeek = 0; playerCashByCurrency = {}; playerFxBasis = {}; kantorLog = []; kantorOffers = {};
+    for (const code of FX_CODES) {
         fxRates[code] = CURRENCIES[code].start;
         fxMeans[code] = CURRENCIES[code].start;
         fxHistory[code] = [CURRENCIES[code].start];
@@ -51,21 +70,28 @@ function initFxState() {
 }
 initFxState();
 
-function getFxRate(code) {
+/** Kurs „surowy”: PLN za 1 jednostkę (proces kursów jest kwotowany w złotych niezależnie od waluty bazowej). */
+function getRawFxRate(code) {
     if (!code || code === 'PLN') return 1;
     const rate = Number(fxRates[code]);
     return rate > 0 ? rate : (CURRENCIES[code]?.start || 1);
 }
-
-/** Wartość kwoty w złotych po kursie środkowym. Dla PLN zwraca dokładnie tę samą liczbę (tożsamość wyceny). */
-function toPln(amount, code = 'PLN') {
-    const value = Number(amount) || 0;
-    return !code || code === 'PLN' ? value : value * getFxRate(code);
+/** Jednostki gry za 1 jednostkę waluty (przy bazie PLN: zł za jednostkę, jak dotąd). Waluta bazowa = skala stała, więc jej saldo nie „pływa”. */
+function getFxRate(code) {
+    if (!code) return 1;
+    const base = getBaseCurrency();
+    return base === 'PLN' ? getRawFxRate(code) : getRawFxRate(code) / getRawFxRate(base) * BASE_SCALES[base];
 }
 
-function fromPln(amountPln, code = 'PLN') {
+/** Wartość kwoty w złotych po kursie środkowym. Dla PLN zwraca dokładnie tę samą liczbę (tożsamość wyceny). */
+function toPln(amount, code = null) { // bez kodu waluty: kwota już w jednostkach gry
+    const value = Number(amount) || 0;
+    return !code || (code === 'PLN' && getBaseCurrency() === 'PLN') ? value : value * getFxRate(code);
+}
+
+function fromPln(amountPln, code = null) {
     const value = Number(amountPln) || 0;
-    return !code || code === 'PLN' ? value : value / getFxRate(code);
+    return !code || (code === 'PLN' && getBaseCurrency() === 'PLN') ? value : value / getFxRate(code);
 }
 
 function normalFx() {
@@ -77,10 +103,10 @@ function normalFx() {
 /** Jeden krok tygodniowy kursów (wołany z `processFundWeekly`). Kurs zawsze w widełkach. */
 function stepFxRates() {
     fxWeek++;
-    const crisis = typeof isCrisisActive === 'function' && isCrisisActive();
+    const crisis = (typeof isCrisisActive === 'function' && isCrisisActive()) || Boolean(typeof crisisState === 'object' && crisisState?.pendingImport); // 0.16.2 G9: także kryzys zagraniczny w drodze
     const bear = !crisis && typeof getMarketRegime === 'function' && ['bear', 'capitulation'].includes(getMarketRegime('home')?.phase);
     const stress = crisis ? 1 : bear ? 0.5 : 0;
-    for (const code of FOREIGN_CURRENCIES) {
+    for (const code of FX_CODES) {
         const def = CURRENCIES[code];
         const lo = Math.log(def.min), hi = Math.log(def.max), width = hi - lo;
         // średnia dryfuje wolno i nie wychodzi poza widełki (miękko, z odbiciem od krawędzi)
@@ -101,6 +127,20 @@ function stepFxRates() {
     }
 }
 
+/** 0.16.6 S1: przepływ bota (Bayer) przesuwa kursy o kwota/głębokość rynku, najwyżej ±1% (widoczne w ostatnim punkcie historii). Zwraca skalę przesunięcia. */
+const FX_FLOW_DEPTH_PLN = 5_000_000, FX_FLOW_MAX = 0.01;
+function applyFxFlow(buyCode, sellCode, amountPln) {
+    const impact = Math.min(FX_FLOW_MAX, Math.max(0, amountPln) / FX_FLOW_DEPTH_PLN);
+    for (const [code, sign] of [[buyCode, 1], [sellCode, -1]]) {
+        const def = CURRENCIES[code];
+        if (!def || !fxRates[code]) continue;
+        fxRates[code] = Math.max(def.min, Math.min(def.max, fxRates[code] * (1 + sign * impact)));
+        const history = fxHistory[code];
+        if (history?.length) history[history.length - 1] = Math.round(fxRates[code] * 1e5) / 1e5;
+    }
+    return impact;
+}
+
 // ---------------------------------------------------------------------------------
 // Gotówka w walutach
 // ---------------------------------------------------------------------------------
@@ -118,9 +158,20 @@ function getForeignCashPln(entity = 'player') {
     return total;
 }
 
-function addCurrencyCash(entity, code, amount) {
-    if (code === 'PLN') return;
-    if (entity === 'player') { playerCashByCurrency[code] = (Number(playerCashByCurrency[code]) || 0) + amount; return; }
+/** `rate`: kurs nabycia partii (zł za jednostkę; domyślnie środkowy) — wchodzi do średniego kursu salda funduszu. */
+function addCurrencyCash(entity, code, amount, rate = getFxRate(code)) {
+    const base = getBaseCurrency();
+    if (code === base) { // waluta bazowa to zwykła gotówka (jednostki gry)
+        if (base === 'PLN') return;
+        if (entity === 'player') playerCash += amount * BASE_SCALES[base]; else entity.cash = (Number(entity.cash) || 0) + amount * BASE_SCALES[base];
+        return;
+    }
+    if (entity === 'player') {
+        const old = Number(playerCashByCurrency[code]) || 0;
+        if (amount > 0) playerFxBasis[code] = old > 1e-9 && playerFxBasis[code] > 0 ? (old * playerFxBasis[code] + amount * rate) / (old + amount) : rate;
+        playerCashByCurrency[code] = old + amount;
+        return;
+    }
     if (!entity.cashByCurrency) entity.cashByCurrency = {};
     entity.cashByCurrency[code] = (Number(entity.cashByCurrency[code]) || 0) + amount;
 }
@@ -152,10 +203,10 @@ function getKantorQuote(code, amountPln, side = 'buy') {
 const KANTOR_PROVIDER_RULES = {
     [BANK_TYPES.INTERNET]: { spread: [0.010, 0.016], maxPln: 300_000, currencies: ['EUR', 'USD', 'CHF', 'CZK', 'SEK'], tag: 'e-bank' },
     [BANK_TYPES.UNIVERSAL]: { spread: [0.017, 0.026], maxPln: Infinity, currencies: ['EUR', 'USD', 'CHF', 'CZK', 'SEK'], tag: 'bank uniwersalny' },
-    [BANK_TYPES.INTERNATIONAL]: { spread: [0.006, 0.011], minPln: 100_000, maxPln: Infinity, currencies: null, tag: 'bank międzynarodowy', gdrSpreadFactor: 0.5 }
+    [BANK_TYPES.INTERNATIONAL]: { spread: [0.006, 0.011], minPln: 100_000, maxPln: Infinity, currencies: null, tag: 'bank międzynarodowy' }
 };
 const MUNICIPAL_KANTOR_RULE = { spread: [0.012, 0.020], maxPln: 30_000, currencies: ['EUR', 'USD', 'CZK'], tag: 'spółka miejska' };
-const KANTOR_OFFER_WEEKS = 13; // oferty dostawców odświeżane co kwartał gry
+const KANTOR_OFFER_WEEKS = WEEKS_PER_QUARTER; // oferty dostawców odświeżane co kwartał gry
 
 function getMunicipalKantor() { return typeof municipalCompanies !== 'undefined' ? municipalCompanies.find(c => c.kantor) || null : null; }
 
@@ -194,7 +245,7 @@ function getProviderQuote(providerId, code, amountPln, side = 'buy') {
     if (!provider) return { ok: false, reason: 'Ten kantor nie działa.' };
     if (provider.kind === 'std') return { ok: true, ...getKantorQuote(code, amountPln, side), provider };
     if (provider.currencies && !provider.currencies.includes(code)) return { ok: false, reason: `${provider.name} nie wymienia ${code}.` };
-    if (Math.abs(amountPln) > provider.maxPln) return { ok: false, reason: `${provider.name}: limit jednej transakcji ${Math.round(provider.maxPln).toLocaleString('pl-PL')} zł.` };
+    if (Math.abs(amountPln) > provider.maxPln) return { ok: false, reason: `${provider.name}: limit jednej transakcji ${formatZl(provider.maxPln, 0)}.` };
     const offer = ensureKantorOffer(provider);
     const mid = getFxRate(code);
     let spread = offer.s[code];
@@ -232,7 +283,7 @@ function kantorBuyCurrency(code, amountPln, providerId = 'std') {
     const foreign = amountPln / quote.rate;
     const spreadCost = amountPln - foreign * quote.mid;
     playerCash -= amountPln;
-    addCurrencyCash('player', code, foreign);
+    addCurrencyCash('player', code, foreign, quote.rate);
     settleKantorIncome(quote.provider, spreadCost, 'Kantor: spread');
     if (typeof unlockAcademyEntry === 'function') { unlockAcademyEntry('ryzykoWalutowe'); unlockAcademyEntry('spread'); }
     kantorLog.push({ w: fxWeek, side: 'buy', code, pln: Math.round(amountPln), foreign: Math.round(foreign * 100) / 100, rate: Math.round(quote.rate * 1e5) / 1e5 });
@@ -264,18 +315,84 @@ function kantorSellCurrency(code, amountForeign, providerId = 'std') {
 }
 
 /** Przymusowa płynność: najpierw sprzedajemy obcą gotówkę (przed akcjami). Zwraca zdobyte złote. */
-function liquidateForeignCash(amountPln) {
-    let raised = 0;
-    for (const code of Object.keys(playerCashByCurrency)) {
+function liquidateForeignCash(amountPln, reason = 'brak złotych na obowiązkową płatność') {
+    let raised = 0, spread = 0;
+    const done = [];
+    for (const code of Object.keys(playerCashByCurrency).sort((a, b) => toPln(getCurrencyCash('player', b), b) - toPln(getCurrencyCash('player', a), a))) { // od największego salda: najmniej wymian
         if (raised >= amountPln) break;
         const have = getCurrencyCash('player', code);
         if (!(have > 0)) continue;
         const quote = getKantorQuote(code, amountPln - raised, 'sell');
         const need = Math.min(have, (amountPln - raised) / quote.rate);
         const result = kantorSellCurrency(code, need);
-        if (result.ok) raised += result.pln;
+        if (result.ok) { raised += result.pln; spread += result.spreadCost; done.push(`${formatNumberPl(need, 2)} ${code}`); }
     }
+    // 0.16.9 W1: automatyczne przewalutowanie nie dzieje się po cichu — dziennik mówi, co i za ile (z kosztem spreadu)
+    if (raised > 0 && typeof logEvent === 'function') logEvent(`💱 ${reason[0].toUpperCase() + reason.slice(1)}: fundusz przewalutował ${done.join(', ')} na ${formatZl(raised, 0)} (spread ${formatZl(spread, 0)}).`, 'warning');
     return raised;
+}
+
+/**
+ * 0.16.9 W1: obowiązkowe płatności w złotych (opłata za zarządzanie, umorzenia, gwarancje) płaci gotówka PLN; gdy jej brakuje,
+ * fundusz przewalutowuje sald walutowe z ostrzeżeniem w dzienniku (spread jest kosztem funduszu). Dobrowolne zakupy złotówkowe nie przewalutowują
+ * się same: kupno odmawia z podpowiedzią (zob. getForeignCashHint). Zwraca true, gdy po operacji PLN ≥ kwota.
+ */
+function ensurePlnCash(amountPln, reason, buffer = 1) { // buffer: przy cyklicznych opłatach przewalutowuje od razu kilka okresów (jeden wpis w dzienniku, jeden spread)
+    if (playerCash + 1e-9 >= amountPln) return true;
+    liquidateForeignCash(amountPln * buffer - playerCash, reason);
+    return playerCash + 1e-9 >= amountPln;
+}
+
+/** Podpowiedź do odmowy kupna za złote, gdy fundusz ma gotówkę w walutach (kupno nie przewalutowuje samo). */
+function getForeignCashHint() {
+    const held = getForeignCashPln('player');
+    return held >= 1 ? ` Masz ${formatZl(held, 0)} w walutach — przewalutuj je po kliknięciu w gotówkę funduszu.` : '';
+}
+
+/** Salda gotówki funduszu: PLN + waluty z wartością w złotych, udziałem i wynikiem kursowym względem średniego kursu nabycia. */
+function getCashBalances() {
+    const base = getBaseCurrency(), scale = getBaseScale();
+    const rows = [{ code: base, amount: playerCash / scale, rate: 1, pln: playerCash, basis: 1, gainPln: 0 }];
+    for (const code of FOREIGN_CURRENCIES) {
+        const amount = getCurrencyCash('player', code);
+        if (!(amount > 1e-9)) continue;
+        const rate = getFxRate(code), basis = playerFxBasis[code] > 0 ? playerFxBasis[code] : rate;
+        rows.push({ code, amount, rate: rate / scale, pln: amount * rate, basis: basis / scale, gainPln: amount * (rate - basis) }); // rate i basis w walucie bazowej za 1 jednostkę (UI)
+    }
+    const total = rows.reduce((s, r) => s + Math.max(0, r.pln), 0) || 1;
+    rows.forEach(r => { r.share = Math.max(0, r.pln) / total; });
+    return rows;
+}
+
+/** Całkowita gotówka funduszu w złotych (PLN + salda walutowe po kursie środkowym) — ta sama liczba wchodzi do NAV. */
+function getFundCashTotalPln() { return Math.max(0, Number(playerCash) || 0) + getForeignCashPln('player'); }
+
+/**
+ * Zmiana waluty: z `from` na `to` (PLN lub obca) przez kantor; waluta obca na obcą idzie przez złote (dwa spready — wynik w `spreadCost`).
+ * `amount` w jednostkach waluty `from`. Wszystko albo nic: kwoty i limity dostawcy sprawdzane przed ruchem sald.
+ */
+function convertCurrency(from, to, amount, providerId = 'std') {
+    amount = Number(amount);
+    if (!canUseKantor()) return { ok: false, reason: 'Kantor działa dla funduszu.' };
+    if (from === to || ![from, to].every(c => c === getBaseCurrency() || FOREIGN_CURRENCIES.includes(c))) return { ok: false, reason: 'Wybierz dwie różne waluty.' };
+    if (!(amount > 0)) return { ok: false, reason: 'Podaj kwotę.' };
+    if (typeof isMarketHalted === 'function' && isMarketHalted()) return { ok: false, reason: 'Handel wstrzymany — zadziałał bezpiecznik giełdowy.' };
+    const base = getBaseCurrency(), have = from === base ? playerCash : getCurrencyCash('player', from); // waluta bazowa: jednostki gry (UI przelicza przez skalę)
+    if (amount > have + 1e-9) return { ok: false, reason: `Za mało ${from} na koncie funduszu.` };
+    amount = Math.min(amount, have);
+    if (from === base) { const r = kantorBuyCurrency(to, amount, providerId); return r.ok ? { ...r, received: r.foreign, receivedCode: to, spreadCost: r.spreadCost } : r; }
+    if (to === base) { const r = kantorSellCurrency(from, amount, providerId); return r.ok ? { ...r, received: r.pln, receivedCode: base, spreadCost: r.spreadCost } : r; }
+    const sellQuote = getProviderQuote(providerId, from, amount * getFxRate(from), 'sell');
+    if (!sellQuote.ok) return { ok: false, reason: sellQuote.reason };
+    const pln = amount * sellQuote.rate, buyQuote = getProviderQuote(providerId, to, pln, 'buy');
+    if (!buyQuote.ok) return { ok: false, reason: buyQuote.reason };
+    const sold = kantorSellCurrency(from, amount, providerId);
+    if (!sold.ok) return sold;
+    const bought = kantorBuyCurrency(to, Math.min(sold.pln, playerCash), providerId);
+    if (!bought.ok) { // nie powinno się zdarzyć po sprawdzeniu wyżej; wycofanie tylko złotych byłoby gorsze niż zostawić je na koncie PLN
+        return { ok: false, reason: `Sprzedano ${from}, ale kupno ${to} się nie udało: ${bought.reason} Złote zostały na koncie PLN.` };
+    }
+    return { ok: true, received: bought.foreign, receivedCode: to, spreadCost: sold.spreadCost + bought.spreadCost, rate: bought.rate };
 }
 
 // ---------------------------------------------------------------------------------
@@ -284,11 +401,15 @@ function liquidateForeignCash(amountPln) {
 
 function checkCurrencyInvariants() {
     const problems = [];
-    for (const code of FOREIGN_CURRENCIES) {
+    for (const code of FX_CODES) {
         const rate = fxRates[code], def = CURRENCIES[code];
         if (!Number.isFinite(rate) || rate < def.min - 1e-9 || rate > def.max + 1e-9) problems.push(`kurs ${code} poza widełkami: ${rate}`);
     }
-    for (const [code, value] of Object.entries(playerCashByCurrency)) if (!Number.isFinite(value) || value < -1e-9) problems.push(`gotówka funduszu w ${code}: ${value}`);
+    for (const [code, value] of Object.entries(playerCashByCurrency)) {
+        if (!Number.isFinite(value) || value < -1e-9) problems.push(`gotówka funduszu w ${code}: ${value}`);
+        else if (code in playerFxBasis && !(playerFxBasis[code] > 0)) problems.push(`średni kurs nabycia ${code} nieprawidłowy: ${playerFxBasis[code]}`); // 0.16.9 W1 (v20); brak wpisu = kurs bieżący (getCashBalances)
+    }
+    if (typeof playerCash === 'number' && playerCash < -1e-6) problems.push(`ujemna gotówka PLN funduszu: ${playerCash}`);
     for (const ai of typeof aiCompetitors !== 'undefined' ? aiCompetitors : []) {
         for (const [code, value] of Object.entries(ai.cashByCurrency || {})) if (!Number.isFinite(value) || value < -1e-9) problems.push(`gotówka ${ai.name} w ${code}: ${value}`);
     }
@@ -296,14 +417,15 @@ function checkCurrencyInvariants() {
 }
 
 function getCurrencySnapshot() {
-    return { rates: fxRates, means: fxMeans, history: fxHistory, week: fxWeek, playerCash: playerCashByCurrency, log: kantorLog, offers: kantorOffers };
+    return { rates: fxRates, means: fxMeans, history: fxHistory, week: fxWeek, playerCash: playerCashByCurrency, basis: playerFxBasis, log: kantorLog, offers: kantorOffers };
 }
 
 function applyCurrencySnapshot(snapshot) {
     initFxState();
     if (!snapshot || typeof snapshot !== 'object') return; // zapis sprzed v16: kursy startowe, brak walut
-    for (const code of FOREIGN_CURRENCIES) {
+    for (const code of Object.keys(CURRENCIES)) {
         const def = CURRENCIES[code];
+        if (code === 'PLN') { const pc = Number(snapshot.playerCash?.PLN); if (pc > 0) { playerCashByCurrency.PLN = pc; playerFxBasis.PLN = Number(snapshot.basis?.PLN) > 0 ? Number(snapshot.basis.PLN) : 1; } continue; } // saldo PLN istnieje tylko przy bazie innej niż PLN
         const rate = Number(snapshot.rates?.[code]);
         if (rate >= def.min && rate <= def.max) fxRates[code] = rate;
         const mean = Number(snapshot.means?.[code]);
@@ -311,9 +433,27 @@ function applyCurrencySnapshot(snapshot) {
         if (Array.isArray(snapshot.history?.[code])) fxHistory[code] = snapshot.history[code].map(Number).filter(Number.isFinite).slice(-FX_RULES.historyWeeks);
         if (!fxHistory[code]?.length) fxHistory[code] = [fxRates[code]];
         const cash = Number(snapshot.playerCash?.[code]);
-        if (cash > 0) playerCashByCurrency[code] = cash;
+        if (cash > 0) {
+            playerCashByCurrency[code] = cash;
+            const basis = Number(snapshot.basis?.[code]);
+            playerFxBasis[code] = basis >= def.min * 0.5 && basis <= def.max * 2 ? basis : fxRates[code]; // v20: zapis v16–v19 nie ma kursu nabycia → bieżący kurs (wynik kursowy liczony od migracji)
+        }
     }
     fxWeek = Math.max(0, Number(snapshot.week) || 0);
     kantorLog = Array.isArray(snapshot.log) ? snapshot.log.slice(-20) : [];
     for (const [id, o] of Object.entries(snapshot.offers || {})) if (o && o.s && o.b && Number.isFinite(Number(o.w))) kantorOffers[id] = { w: Number(o.w), s: o.s, b: o.b };
+}
+
+/** Szacunek wymiany bez ruchu sald (okno sald walutowych): { ok, received, spreadCost } albo { ok: false, reason }. Te same notowania co convertCurrency. */
+function previewConversion(from, to, amount, providerId = 'std') {
+    amount = Number(amount);
+    if (!(amount > 0) || from === to) return { ok: false, reason: 'Wybierz dwie różne waluty i kwotę.' };
+    const base = getBaseCurrency();
+    if (from === base) { const q = getProviderQuote(providerId, to, amount, 'buy'); return q.ok ? { ok: true, received: amount / q.rate, spreadCost: amount - amount / q.rate * q.mid } : { ok: false, reason: q.reason }; }
+    const sell = getProviderQuote(providerId, from, amount * getFxRate(from), 'sell');
+    if (!sell.ok) return { ok: false, reason: sell.reason };
+    const pln = amount * sell.rate, sellCost = amount * sell.mid - pln;
+    if (to === base) return { ok: true, received: pln, spreadCost: sellCost };
+    const buy = getProviderQuote(providerId, to, pln, 'buy');
+    return buy.ok ? { ok: true, received: pln / buy.rate, spreadCost: sellCost + (pln - pln / buy.rate * buy.mid) } : { ok: false, reason: buy.reason };
 }

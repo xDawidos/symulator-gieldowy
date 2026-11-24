@@ -1,3 +1,6 @@
 .graphify_python
 .graphify_root
 .rebuild.lock
+20*-*-*/
+.graphify_labels.pending.json
+.graphify_labels.json.sig

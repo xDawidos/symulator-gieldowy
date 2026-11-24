@@ -84,6 +84,81 @@ const PRESETS = {
 PRESETS['fundusz-gig-zamkniety'] = PRESETS['fundusz-gig'] + 'setFundOpenSubscriptions(false);';
 // 0.14.2 krok 0 (atrybucja): wyłączenie pojedynczych części w ramce, bez cofania historii.
 // bez-p6: katalog inwestycji/technologii ze wszystkich sektorów spółki, bez wymagań pozycji.
+// 0.17 S7: exploit kontraktów — fundusz jak fundusz-gig, a obok dwie strategie: powrót do średniej (surowiec najdalej od Ś8) i stałe krótkie na gazie (koszt przechowania w cenie). Dźwignia 1:3, seria kolejna, wynik do pola s017.kontrakty.
+PRESETS['kontrakty'] = PRESETS['fundusz-gig'] + `(function () {
+    const err = e => (window.__presetErrors = window.__presetErrors || []).push(String(e));
+    skills.optionsMaster.unlockedLevel = 2;
+    const blank = () => ({ pnl: 0, cap: 0, not: 0, n: 0, win: 0, closed: 0, forced: 0 });
+    const T = window.__kontrakty = { rev: blank(), carry: blank(), rate: 0, q: 0 }, tag = {}, seen = new Set();
+    const open = (name, id, side) => {
+        const q = getContractSeries()[1], deposit = getFundAssets() * 0.05;
+        if (q == null || deposit * 3 < MARGIN_RULES.minNotional) { T.why = 'za mały depozyt ' + Math.round(deposit); return; }
+        const g = Number(marketIndexes.find(i => i.id === 'GIG')?.value) || 0, need = deposit * 1.02 - playerCash; // gotówka z pozycji indeksowej
+        if (need > 0 && g > 0) { window.__idx.units = Math.max(0, window.__idx.units - need / g); playerCash += need; }
+        const r = openCommodityContract(id, q, side, deposit * 3, 3);
+        if (r.ok) { tag[r.position.id] = name; T[name].n++; } else T.why = r.reason;
+    };
+    const orig = advanceMacroQuarter;
+    advanceMacroQuarter = function () {
+        try {
+            T.q++; T.rate += DEPOSIT_INTEREST_RATE; skills.optionsMaster.unlockedLevel = 2;
+            for (const l of marginClosedLog) if (tag[l.id] && !seen.has(l.id)) { seen.add(l.id); const s = T[tag[l.id]]; s.pnl += l.pnl; s.closed++; if (l.pnl > 0) s.win++; if (l.reason !== 'expiry') s.forced++; }
+            const live = getMarginPositions('commodities');
+            for (const p of live) if (tag[p.id]) { T[tag[p.id]].cap += p.deposit; T[tag[p.id]].not += p.notional; }
+            if (!live.some(p => tag[p.id] === 'rev')) {
+                const id = COMMODITY_IDS.reduce((a, b) => Math.abs(getCommodityTrendRatio(b) - 1) > Math.abs(getCommodityTrendRatio(a) - 1) ? b : a), dev = getCommodityTrendRatio(id) - 1;
+                if (Math.abs(dev) > 0.1) open('rev', id, dev > 0 ? -1 : 1);
+            }
+            if (!live.some(p => tag[p.id] === 'carry')) open('carry', 'gas', -1);
+        } catch (e) { err(e); }
+        return orig.apply(this, arguments);
+    };
+})();`;
+// 0.17.3: górny limit wpłat z próśb o zakup: wszyscy inwestorzy od +30, 64% udanych rozmów, każda oferta przyjęta, każdy cel spełniony po 2 kw. Wynik w s017.zachety.
+PRESETS['zachety'] = PRESETS['fundusz-gig'] + `(function () {
+    const T = window.__zachety = { offers: 0, paid: 0, assets: 0, q: 0 };
+    const quarter = advanceMacroQuarter;
+    advanceMacroQuarter = function () {
+        try {
+            if (playerFund && playerProfile) {
+                for (const person of getRelationPeople().filter(item => item.kind === 'investor')) {
+                    botRelations.values[person.id] = Math.max(getRelation(person.id), 30);
+                    if (!getPitchBlock(person.id) && Math.random() < 0.64 && createPromiseOffer(person.entity)) T.offers++;
+                }
+                for (const offer of [...ensurePromises().promiseOffers]) acceptPromiseOffer(offer.id);
+                for (const promise of getActivePromises()) if (macro.quarter - promise.offerQ >= 2) T.paid += fulfillPromise(promise);
+                T.q++; T.assets += getFundAssets();
+            }
+        } catch (e) { T.err = String(e); }
+        return quarter.apply(this, arguments);
+    };
+})();`;
+// 0.17.3 R6: czytelnik Tied, wirtualne pozycje po każdej zapowiedzi (kupno po poście, sprzedaż po 2 kw.), bez wpływu na rynek. Porównanie: ta sama spółka z losowego kwartału bez zapowiedzi. Wynik w s017.tiedReader.
+PRESETS['czytelnik-tied'] = PRESETS['fundusz-gig'] + `(function () {
+    const T = window.__tiedReader = { hint: [], base: [] }, open = [];
+    const gig = () => Number(marketIndexes.find(i => i.id === 'GIG')?.value) || 0;
+    const orig = addTiedPost;
+    addTiedPost = function (fields) {
+        const post = orig.apply(this, arguments), stock = post && fields.kind === 'hint' ? stocks.find(s => s.symbol === fields.symbol) : null;
+        if (stock) open.push({ list: T.hint, symbol: stock.symbol, q: macro.quarter, price: stock.price, gig: gig(), real: Boolean(stock.plannedMove?.real) });
+        return post;
+    };
+    const quarter = advanceMacroQuarter;
+    advanceMacroQuarter = function () {
+        try {
+            const pool = stocks.filter(s => !s.assetType && !s.isBankrupt && !s.plannedMove);
+            if (pool.length) { const s = pool[Math.floor(Math.random() * pool.length)]; open.push({ list: T.base, symbol: s.symbol, q: macro.quarter, price: s.price, gig: gig() }); }
+            for (let i = open.length - 1; i >= 0; i--) {
+                const p = open[i];
+                if (macro.quarter - p.q < 2) continue;
+                const s = stocks.find(x => x.symbol === p.symbol);
+                if (s && s.price > 0 && !s.isBankrupt && p.price > 0) p.list.push({ r: s.price / p.price - 1, m: gig() / p.gig - 1, real: p.real });
+                open.splice(i, 1);
+            }
+        } catch (e) { (window.__presetErrors = window.__presetErrors || []).push(String(e)); }
+        return quarter.apply(this, arguments);
+    };
+})();`;
 PRESETS['bez-p6'] = `getCatalogSectorsForCompany = c => (Array.isArray(c?.sector) ? c.sector : []); meetsCatalogRequirements = () => true;`;
 // bez-p9: stare kotwice (bank z zysku po 4 kw., typy specjalne bez kotwicy, strata = 0,7 × WK) i bez rewizji > 10×.
 PRESETS['bez-p9'] = `(function () {
@@ -163,6 +238,8 @@ PRESETS['kampanie'] = PRESETS['fundusz-gig'] + `(function () {
         try {
             if (macro.quarter % 4 === 3) {
                 const v = variants[(macro.quarter >> 2) % variants.length];
+                const gg = Number(marketIndexes.find(i => i.id === 'GIG')?.value) || 0, need = getFundNav() * getCampaignTargetUnits(0.15) * CAMPAIGN_COST_TARGET * 1.05 - playerCash; // 0.17.1: koszt kampanii z pozycji indeksowej
+                if (need > 0 && gg > 0 && window.__idx) { const take = Math.min(need, window.__idx.units * gg); window.__idx.units -= take / gg; playerCash += take; }
                 const r = startSubscriptionCampaign({ duration: 'quarter', targetPct: 0.15, ...v });
                 if (r.ok) window.__campStarted.push(JSON.stringify(v)); else window.__campBlocked[r.reason] = (window.__campBlocked[r.reason] || 0) + 1;
             }
@@ -176,7 +253,48 @@ PRESETS['kampanie'] = PRESETS['fundusz-gig'] + `(function () {
         locked: typeof getLockedFundUnits === 'function' ? Math.round(getLockedFundUnits()) : null, units: Math.round(playerFund.units), trust: Math.round(playerFund.trust) });
 })();`;
 // 0.15.3 W0/W7: wymuszona linia kryzysu (scenariusz startowy, start w kw. 5–16) — pomiar każdej linii osobno.
-for (const id of ['banking', 'dotcom', 'oil', 'black', 'pandemic']) PRESETS['kryzys-' + id] = PRESETS['fundusz-gig'] + `setCrisisScenario('${id}');`;
+for (const id of ['banking', 'dotcom', 'oil', 'black', 'pandemic', 'supply']) PRESETS['kryzys-' + id] = PRESETS['fundusz-gig'] + `setCrisisScenario('${id}');`;
+// 0.16.2: kraje DE, US, CZ otwarte od startu (lotnisko wymuszone, bez biletów gracza); kontrola rozmiaru zapisu, czasu kroku i korelacji.
+PRESETS['kraje'] = `(function () {
+        airportState.forced = true;
+        for (const id of ['DE', 'US', 'CZ']) { try { if (!isCountryJoined(id)) joinCountry(id, 'preset'); } catch (e) { (window.__presetErrors = window.__presetErrors || []).push('kraj ' + id + ': ' + e); } }
+    })();`;
+PRESETS['kraje-gig'] = PRESETS['fundusz-gig'] + PRESETS['kraje'];
+// 0.16.10 S0: kraj startowy innego niż PL (giełda kraju od pierwszego dnia, gracz bez biletu); fundusz-gig jak w serii bazowej.
+for (const id of ['DE', 'US', 'CZ']) PRESETS['start-' + id] = PRESETS['fundusz-gig'] + `setStartCountry('${id}');`;
+// 0.16.3: sześć krajów (DE, US, CZ, SE, CH, FR) od startu — kontrola obciążenia i zapisu
+PRESETS['kraje-eu'] = PRESETS['kraje'] + `(function () { for (const id of ['SE', 'CH', 'FR']) { try { if (!isCountryJoined(id)) joinCountry(id, 'preset'); } catch (e) { (window.__presetErrors = window.__presetErrors || []).push('kraj ' + id + ': ' + e); } } })();`;
+// 0.16.4: dziesięć krajów (+ JP, CN, IN, TW) i forex: co rok jedna pozycja 1:5 na 40% aktywów (na zmianę długa/krótka), poprzednia zamykana
+PRESETS['kraje-10'] = PRESETS['kraje-eu'] + `(function () {
+    const err = e => (window.__presetErrors = window.__presetErrors || []).push(String(e));
+    for (const id of ['JP', 'CN', 'IN', 'TW']) { try { if (!isCountryJoined(id)) joinCountry(id, 'preset'); } catch (e) { err('kraj ' + id + ': ' + e); } }
+    window.__forex = { opened: 0, refused: 0 };
+    const origQ = advanceMacroQuarter;
+    advanceMacroQuarter = function () {
+        const r = origQ.apply(this, arguments);
+        try {
+            if (macro.quarter % 4 === 0 && typeof openForexPosition === 'function') {
+                for (const p of getMarginPositions()) closeMarginPosition(p.id);
+                const pairs = ['EUR/USD', 'USD/JPY', 'CHF/PLN', 'EUR/PLN'], k = (macro.quarter / 4) | 0;
+                const res = openForexPosition(pairs[k % 4], k % 2 ? 1 : -1, getFundAssets() * 0.4, 5);
+                if (res.ok) window.__forex.opened++; else { window.__forex.refused++; (window.__forex.reasons = window.__forex.reasons || []).push(res.reason + ' [gotówka ' + Math.round(playerCash) + ', aktywa ' + Math.round(getFundAssets()) + ']'); }
+            }
+        } catch (e) { err('forex: ' + e); }
+        return r;
+    };
+})();`;
+// 0.16.4: izolacja spadku GIG z krajami: (1) bez przejęcia naszej giełdy przez obcą i bez wejścia Santosa, (2) kraje otwierane stopniowo (co 2 kw. od 2.) zamiast 10 od startu
+PRESETS['kraje-10-izol'] = `FOREIGN_BOTS.find(b => b.id === 'fb_santos').enterHome = false; LINK_RULES.weights = { merged: 0.5, intl: 0.5, taken: 0 };` + PRESETS['kraje-10'];
+PRESETS['kraje-10-bez-taken'] = `LINK_RULES.weights = { merged: 0.5, intl: 0.5, taken: 0 };` + PRESETS['kraje-10'];
+PRESETS['kraje-stopniowo'] = `(function () {
+    airportState.forced = true;
+    const order = ['DE', 'US', 'CZ', 'SE', 'CH', 'FR', 'JP', 'CN', 'IN', 'TW'];
+    const joinNext = () => { const id = order.find(c => !isCountryJoined(c)); if (id) { try { joinCountry(id, 'preset'); } catch (e) { (window.__presetErrors = window.__presetErrors || []).push('kraj ' + id + ': ' + e); } } };
+    const origJ = advanceMacroQuarter;
+    advanceMacroQuarter = function () { const r = origJ.apply(this, arguments); if (macro.quarter >= 2 && macro.quarter % 2 === 0) joinNext(); return r; };
+` + PRESETS['kraje-10'].slice(PRESETS['kraje-10'].indexOf('    window.__forex ='));
+// izolacja źródła różnicy GIG: kraje bez wejścia Santosa na rynek PL (jego zakupy podbijają kursy o ≤ 2% na transakcję)
+PRESETS['kraje-gig-bez-santosa'] = `FOREIGN_BOTS.find(b => b.id === 'fb_santos').enterHome = false;` + PRESETS['kraje-gig'];
 PRESETS['gracz-aktywny'] = PRESETS['fundusz-gig'] + `(function () {
     const w = window.__wallet = { byPos: {}, quartersAt: {}, excess: [] };
     const origPay = recordPayment;
@@ -265,6 +383,96 @@ PRESETS['gracz-akcje'] = PRESETS['fundusz-gig'] + `(function () {
         ir: playerFund.ir || null, vip: playerFund.vip ? { won: playerFund.vip.won, lost: playerFund.vip.lost } : null, units: Math.round(playerFund.units), trust: Math.round(playerFund.trust) });
 })();`;
 PRESETS['ceo'] = PRESETS['gracz-aktywny'] + 'playerProfile.positionId = "ceo";';
+// =================================================================================
+// 0.17.1 T0: presety wielkich testów. Każdy zapisuje wynik w window.__t171 (pole s017.t171).
+// =================================================================================
+PRESETS['automaty'] = PRESETS['gracz-aktywny'] + `(function () { if (!playerProfile) return; const m = getMentor(); m.certificates = { ...m.certificates, risk: 0, analyst: 0 }; const a = getAutomation(); a.deposits.on = a.tbills.on = a.sector.on = true; playerHasTBillAccess = true; })();`; // 0.18.8 D4: wszystkie automaty włączone
+PRESETS['esg5'] = `(function () { const orig = processEsgRegulationQuarterly; window.processEsgRegulationQuarterly = function () { oversight.energy.level = Math.max(5, Number(oversight.energy.level) || 0); return orig.apply(this, arguments); }; })();`; // 0.18.9 G9/G10: UEiE na poziomie 5 przez całą grę (kryterium ESG w elitarnych)
+const STRIP_ESG_TRAITS = `(function () { for (const id of ['etyk', 'ignorant', 'ekolog', 'konserwatysta']) if (ceoTraits[id]) ceoTraits[id].rarity = 'hidden'; for (const s of stocks) if (s.ceo?.traits) s.ceo.traits = s.ceo.traits.filter(t => !['etyk', 'ignorant', 'ekolog', 'konserwatysta'].includes(t.id)); })();`;
+const NO_ESG_QUARTER = `(function () { window.processEsgQuarterly = function () {}; })();`;
+PRESETS['med'] = `ESG_RULES.combine = 'median';`; PRESETS['esg5m'] = PRESETS['esg5'] + PRESETS['med']; // U14: ocena łączna jako mediana liter filarów
+PRESETS['abl-a'] = STRIP_ESG_TRAITS + NO_ESG_QUARTER; PRESETS['abl-b'] = STRIP_ESG_TRAITS; PRESETS['abl-c'] = NO_ESG_QUARTER; // 0.18.9 G11: ablacja marży
+PRESETS['bierny'] = ''; // gracz nic nie robi: baza GIG, liczby spółek i limitów
+PRESETS['wejscia'] = ''; // to samo co bierny; miary debiutów, limitu spółek i koncentracji są w sondzie P0156
+// Dźwignia: forex 1:10 do limitu 3 × aktywa i zastaw wszystkich akcji w lombardzie. Mierzy margin call, zamknięcia automatyczne,
+// najniższą gotówkę i upadek funduszu (aktywa ≤ 0).
+PRESETS['dzwignia'] = PRESETS['fundusz-gig'] + `(function () {
+    const err = e => (window.__presetErrors = window.__presetErrors || []).push('dzwignia: ' + e);
+    const T = window.__t171 = { opened: 0, refused: 0, reasons: {}, closedBy: {}, minCash: Infinity, minAssets: Infinity, pawned: 0, pawnFail: 0, bankrupt: false };
+    const pairs = ['EUR/PLN', 'USD/PLN', 'EUR/USD', 'CZK/PLN'], seen = new Set();
+    try { if (!isCountryJoined('DE')) joinCountry('DE', 'preset'); if (!isCountryJoined('US')) joinCountry('US', 'preset'); } catch (e) { err(e); }
+    const g = () => Number(marketIndexes.find(i => i.id === 'GIG')?.value) || 0;
+    const orig = advanceMacroQuarter;
+    advanceMacroQuarter = function () {
+        try {
+            for (const l of marginClosedLog) if (!seen.has(l.id)) { seen.add(l.id); T.closedBy[l.reason] = (T.closedBy[l.reason] || 0) + 1; }
+            const assets = getFundAssets();
+            T.minCash = Math.min(T.minCash, playerCash); T.minAssets = Math.min(T.minAssets, assets);
+            if (assets <= 0) T.bankrupt = true;
+            // akcje do zastawu: 30% aktywów w 5 największych spółkach, potem zastaw wszystkich wolnych
+            if (macro.quarter === 2 && window.__idx) {
+                const need = assets * 0.3, gg = g();
+                if (gg > 0) { window.__idx.units = Math.max(0, window.__idx.units - need / gg); playerCash += need; }
+                for (const s of stocks.filter(x => !x.assetType && !x.isBankrupt && x.price > 0 && getAvailableShares(x) > 10).sort((a, b) => getMarketCap(b) - getMarketCap(a)).slice(0, 5)) {
+                    const qty = Math.floor(need / 5 / s.price); if (qty > 0) buyStock(s.symbol, qty);
+                }
+            }
+            if (macro.quarter >= 3 && macro.quarter % 2 === 1) for (const sym of Object.keys(playerPortfolio)) {
+                const h = playerPortfolio[sym], free = (h?.shares || 0) - (h?.lockedShares || 0);
+                if (free > 0) { const r = pawnShares(getFundAccount(), sym, free); if (r) T.pawned++; else T.pawnFail++; }
+            }
+            const live = getMarginPositions('forex'), used = live.reduce((a, p) => a + p.notional, 0), room = getFundAssets() * MARGIN_RULES.fundLeverageCap - used;
+            if (room > MARGIN_RULES.minNotional) {
+                const gg = g(), lev = window.__lev || 10, deposit = Math.min(room / lev, getFundAssets() * 0.25), need = deposit * 1.05 - playerCash; // 0.17.1 S6: patch window.__lev=3; depozyt najwyżej 25% aktywów (przy 1:3 pełny limit wymagał depozytu = aktywa)
+                if (need > 0 && gg > 0 && window.__idx) { const take = Math.min(need, window.__idx.units * gg); window.__idx.units -= take / gg; playerCash += take; }
+                const r = openForexPosition(pairs[macro.quarter % pairs.length], macro.quarter % 2 ? 1 : -1, deposit * lev, lev);
+                if (r.ok) T.opened++; else { T.refused++; T.reasons[r.reason] = (T.reasons[r.reason] || 0) + 1; }
+            }
+        } catch (e) { err(e); }
+        return orig.apply(this, arguments);
+    };
+})();`;
+// Forex i towary: strategie mechaniczne 1:3 (momentum pary z 4 tygodni, powrót towaru do średniej, krótkie na gazie).
+// Wynik: zysk strategii na zaangażowany kapitał rocznie, porównany z lokatą (pewny zysk ≤ lokata + 4–6 pp).
+PRESETS['forex-towary'] = PRESETS['kontrakty'] + `(function () {
+    const err = e => (window.__presetErrors = window.__presetErrors || []).push('forex-towary: ' + e);
+    try { if (!isCountryJoined('DE')) joinCountry('DE', 'preset'); } catch (e) { err(e); }
+    const T = window.__t171 = { fx: { pnl: 0, cap: 0, n: 0, win: 0, closed: 0, forced: 0 }, q: 0, rate: 0 }, tag = new Set(), seen = new Set();
+    const hist = {}, pairs = ['EUR/PLN', 'EUR/USD', 'USD/PLN'];
+    const orig = advanceMacroQuarter;
+    advanceMacroQuarter = function () {
+        try {
+            T.q++; T.rate += DEPOSIT_INTEREST_RATE;
+            for (const l of marginClosedLog) if (tag.has(l.id) && !seen.has(l.id)) { seen.add(l.id); T.fx.pnl += l.pnl; T.fx.closed++; if (l.pnl > 0) T.fx.win++; if (l.reason !== 'manual') T.fx.forced++; }
+            for (const p of getMarginPositions('forex')) if (tag.has(p.id)) { T.fx.cap += p.deposit; closeMarginPosition(p.id, 'manual'); }
+            for (const pair of pairs) { const [a, b] = pair.split('/'); (hist[pair] = hist[pair] || []).push(getFxRate(a) / getFxRate(b)); }
+            const best = pairs.map(p => [p, hist[p].length > 1 ? hist[p].at(-1) / hist[p].at(-2) - 1 : 0]).sort((x, y) => Math.abs(y[1]) - Math.abs(x[1]))[0];
+            if (best && Math.abs(best[1]) > 0.002) {
+                const deposit = getFundAssets() * 0.05, gg = Number(marketIndexes.find(i => i.id === 'GIG')?.value) || 0, need = deposit * 1.02 - playerCash;
+                if (need > 0 && gg > 0 && window.__idx) { window.__idx.units = Math.max(0, window.__idx.units - need / gg); playerCash += need; }
+                const r = openForexPosition(best[0], best[1] > 0 ? 1 : -1, deposit * 3, 3);
+                if (r.ok) { tag.add(r.position.id); T.fx.n++; } else T.why = r.reason;
+            }
+        } catch (e) { err(e); }
+        return orig.apply(this, arguments);
+    };
+})();`;
+// Kryzys: kolejna linia kryzysu na grę (5 linii po kolei), 2 kraje do zarażania, szok podażowy (embargo) w 3. roku.
+PRESETS['kryzys'] = PRESETS['fundusz-gig'] + `(function () {
+    const err = e => (window.__presetErrors = window.__presetErrors || []).push('kryzys: ' + e);
+    const lines = ['banking', 'dotcom', 'oil', 'black', 'pandemic', 'supply'], line = lines[(parent.__kryzysRun = (parent.__kryzysRun || 0) + 1) % lines.length];
+    const T = window.__t171 = { line, embargo: false, gig: [] };
+    try { setCrisisScenario(line); for (const c of ['DE', 'CZ']) if (!isCountryJoined(c)) joinCountry(c, 'preset'); } catch (e) { err(e); }
+    const orig = advanceMacroQuarter;
+    advanceMacroQuarter = function () {
+        try {
+            if (macro.quarter === 10 && typeof startCommodityEvent === 'function') T.embargo = Boolean(startCommodityEvent('embargo'));
+            T.gig.push(Math.round(Number(marketIndexes.find(i => i.id === 'GIG')?.value) || 0));
+        } catch (e) { err(e); }
+        return orig.apply(this, arguments);
+    };
+})();`;
+
 // 0.14 T4 (diagnoza decyzji 13): wymuszone dodatkowe zapowiedzi wydzieleń i stan matki/córki na każdym etapie.
 PRESETS['wydzielenia'] = `(function () {
     const D = window.__spinDiag = { entries: [], errors: [] };
@@ -338,7 +546,9 @@ PRESETS['wiekszosciowiec'] = `(function () {
         };
     }
 })();`;
-const PATCH = (PRESETS[params.get('preset')] || '') + (params.get('patch') || ''); // kod wykonywany w ramce po starcie gry
+// ?noui=1: bez odświeżania interfejsu (renderer ok. 110 MB mniej, gra o 1/3 szybciej). Logika i wyniki bez zmian; pomiar czasu kroku rób bez tej opcji.
+const NOUI = `(function () { for (const name of ['displayStocks', 'displayStartups', 'displayEtfs', 'displayPortfolio', 'displayFundPanel', 'displayMarketIndexes', 'displayInvestmentPool', 'updateCityModalContent', 'updateConstructionSectorUI', 'updateMarketKPIs', 'updateTopbarKPIs', 'displayCash']) if (typeof window[name] === 'function') window[name] = function () {}; })();`;
+const PATCH = (params.get('noui') === '1' ? NOUI : '') + (PRESETS[params.get('preset')] || '') + (params.get('patch') || ''); // kod wykonywany w ramce po starcie gry
 const SAVE_KEY = 'gra_inwestycyjna_dawid_save_v4';
 const RESULT_KEY = `__sim_${LABEL}`;
 const statusEl = document.getElementById('status');
@@ -369,7 +579,7 @@ const STUB = `(function () {
             t = next.at;
             if (next.iv) next.at += next.iv; else timers.delete(next.id);
             try { typeof next.fn === 'function' ? next.fn(...next.args) : (0, eval)(next.fn); }
-            catch (e) { if (window.__vt.errors.length < 20) window.__vt.errors.push(String(e && e.stack || e).slice(0, 400)); }
+            catch (e) { window.__vt.errorCount = (window.__vt.errorCount || 0) + 1; if (window.__vt.errors.length < 20) window.__vt.errors.push(String(e && e.stack || e).slice(0, 400)); }
         }
         t = end;
     } };
@@ -705,7 +915,8 @@ const PROBE = `(function () {
 
         const soc = typeof society === 'object' && society ? society : null;
         const wfCompanies = companies.filter(c => c.workforce);
-        s.quarters.push({ q: macro.quarter, gig, margin: rev ? ebitda / rev : null, marginNoSub: revNoSub ? ebitdaNoSub / revNoSub : null, marginStd: revStd ? ebitdaStd / revStd : null,
+        const cx = typeof getJoinedCountries === 'function' ? Object.fromEntries(getJoinedCountries().map(id => { const defs = COUNTRY_DEFS[id].companies; const list = getCountryIssuers(id).filter(i => !i.state && !i.generated); const m = list.reduce((a, i) => a + Math.log(i.price / (defs.find(c => c.id === i.id)?.price || i.price)), 0) / Math.max(1, list.length); return [id, Math.round(Math.exp(m) * 1000) / 1000]; })) : null;
+        s.quarters.push({ q: macro.quarter, cx, gig, margin: rev ? ebitda / rev : null, marginNoSub: revNoSub ? ebitdaNoSub / revNoSub : null, marginStd: revStd ? ebitdaStd / revStd : null,
             gigCap10: s.gigCap10Val, buyHold: buyHoldVal, gigSurvivors: s.gigSurvivorsVal,
             epsMedian: h0Med(epsList), epsP10: h0Pct(epsList, 0.1), epsP90: h0Pct(epsList, 0.9),
             peMedian: h0Med(peList), marginMedian: h0Med(marginList),
@@ -756,7 +967,7 @@ const PROBE = `(function () {
         const inv = typeof checkWorldInvariants === 'function' ? checkWorldInvariants() : [];
         return { level: built.level, chars: built.json.length, utf8, gzBytes: gz.compressed, gzRatio: +(utf8 / gz.compressed).toFixed(1), lzChars: lz.compressed, lzRatio: +(built.json.length / lz.compressed).toFixed(1),
             buildMs: Math.round(buildMs), gzMs: Math.round(gzMs), gzDecodeMs: Math.round(gzDecodeMs), lzMs: Math.round(lzMs), lzDecodeMs: Math.round(lzDecodeMs),
-            lossless, loadOk: report.ok, loadErrors: report.errors.slice(0, 3), invAfterLoad: inv.slice(0, 5), localFits: JSON.stringify(lz).length <= SAVE_LOCAL_LIMIT };
+            lossless, loadOk: report.ok, loadErrors: report.errors.slice(0, 3), invAfterLoad: inv.slice(0, 5), localFits: JSON.stringify(lz).length <= SAVE_LOCAL_LIMIT, lzShare: +(JSON.stringify(lz).length / SAVE_LOCAL_LIMIT).toFixed(3) };
     };
     s.finish = function () {
         const soc = typeof society === 'object' && society ? society : null;
@@ -869,7 +1080,18 @@ const PROBE = `(function () {
         };
 
         const p0151 = P.finish(yearsTotal);
-        return { ...p0151, giant: typeof giantEventState !== 'undefined' ? { ...giantEventState, log: giantEventLog, gdrListed: Object.keys(foreignIssuers), fx: Object.fromEntries(Object.entries(fxRates).map(([k, v]) => [k, Math.round(v * 1e4) / 1e4])), fxProblems: checkCurrencyInvariants() } : null, ma: s.ma ? s.ma.finish() : null, h0, tsr, moneyWarn: s.moneyWarn || [], moneyWarnQuarters: s.moneyWarnQuarters || 0, poolStake: s.poolStake, wallet: window.__wallet || null, presetErrors: window.__presetErrors || [], camp: window.__campResult ? window.__campResult() : null, crises: typeof crisisSummary === 'function' ? crisisSummary() : null, sectorIssues, saveSizes, subStart: s.subStart, subEnd: s.subEnd, multiSegEnd: s.multiSeg, mechanics: s.mechanics || null, badPrice: s.badPrice, negCash: s.negCash, mailBy: s.mailBy, bailouts: s.bailouts, flowWarnings: s.flowWarnings, fund: s.fund, panelText: panel ? panel.textContent.split(/\\s+/).join(' ').slice(0, 600) : null, panelError: s.panelError || null, elections: (macro.election?.history || []).filter(e => e.quarter >= s.quarters[0].q),
+        const corrOf = id => { const rows = s.quarters.filter(x => x.cx && x.cx[id] > 0 && x.gig > 0); const a = [], b = []; for (let i = 1; i < rows.length; i++) { a.push(Math.log(rows[i].cx[id] / rows[i - 1].cx[id])); b.push(Math.log(rows[i].gig / rows[i - 1].gig)); } if (a.length < 6) return null; const m = v => v.reduce((x, y) => x + y, 0) / v.length, ma = m(a), mb = m(b); const c = m(a.map((v, i) => (v - ma) * (b[i] - mb))); return c / Math.sqrt(m(a.map(v => (v - ma) ** 2)) * m(b.map(v => (v - mb) ** 2))); };
+        const countriesOut = typeof getJoinedCountries === 'function' ? { joined: getJoinedCountries().map(id => ({ id, q: countryState[id].joinedQ, issuers: getCountryIssuers(id).length, index: s.quarters.at(-1)?.cx?.[id] ?? null, corrGig: corrOf(id), premium: marketRegimes[id]?.premium ?? null })), airport: isAirportBuilt(), tickets: foreignTickets, bytes: JSON.stringify(getCountriesSnapshot() || {}).length, botsPln: getForeignBots().map(b => ({ id: b.id, pln: Math.round(calculateNetWorth(b)), stakes: getForeignIssuerList().filter(i => i.holders[b.id]).length })), crisisOrigins: (crisisState.history || []).map(h => ({ id: h.id, origin: h.origin || 'PL', delayQ: h.delayQ ?? 0 })), links: typeof exchangeLinks === 'object' ? { history: exchangeLinks.history, community: exchangeLinks.community, takenBy: exchangeLinks.takenBy, linked: getLinkedCountries() } : null, asia: typeof getMarginPositions === 'function' ? { forex: Object.assign({}, window.__forex || {}, { open: getMarginPositions().length, closed: marginClosedLog.length, marginCalls: marginClosedLog.filter(c => c.reason === 'margin').length, problems: checkMarginInvariants() }), tiger: aiCompetitors.find(b => b.id === 'fb_tygrys') ? Math.round(calculateNetWorth(aiCompetitors.find(b => b.id === 'fb_tygrys'))) : null, konfucjusz: aiCompetitors.find(b => b.id === 'fb_konfucjusz') ? Math.round(calculateNetWorth(aiCompetitors.find(b => b.id === 'fb_konfucjusz'))) : null, panda: (() => { const pb = (scandals.parabanks || []).find(p => p.foreignId === 'PND'); const used = (scandals.usedScenarios || []).includes('panda'); return { started: used, phase: pb ? pb.phase : (used ? 'gone' : null), quarters: pb ? pb.quarters : null, listed: Boolean(foreignIssuers.PND) }; })(), kwsTensionQ: foreignIssuers.KWS?.leakQ ?? null, huieiSanctionQ: foreignIssuers.HUI?.leakQ ?? null } : null, graham: typeof getGraham === 'function' && getGraham() ? Math.round(calculateNetWorth(getGraham())) : null, wolf: typeof getWolf === 'function' && getWolf() ? Math.round(calculateNetWorth(getWolf())) : null, problems: checkCountryInvariants() } : null;
+        const s066 = { superSymbols: stocks.filter(x => x.superproject).map(x => ({ id: x.superproject, market: getStockMarket(x), state: x.isStateOwned, price: Math.round(x.price) })), stateOffGpw: stocks.filter(x => x.isStateOwned && !x.assetType && getStockMarket(x) !== 'GPW').map(x => x.symbol), hidden: typeof getHiddenBalance === 'function' ? getHiddenBalance() : null, goldenQ: typeof exchangeLinks === 'object' ? exchangeLinks.goldenQ : null, bayerFxQ: (aiCompetitors.find(b => b.id === 'fb_bayer')?.fx?.fxFlowQ) ?? null, foreignStrikes: typeof getTenderRecord === 'function' ? getTenderRecord().tenderStrikes : null, wolfLoans: (getWolf?.()?.loans || []).length };
+        // 0.16.9 W2: sonda spółek zagranicznych — częstość zdarzeń na grę (raporty, dywidendy, splity, upadłości), poziomy giełd, luka kursu do wartości godziwej
+        const foreignList = getForeignIssuerList().filter(i => i.kind === 'share'), tierCount = {};
+        for (const i of foreignList) { const t = getForeignTier(i); const k = (t.linked ? 'L' : 'N') + ':' + t.key; tierCount[k] = (tierCount[k] || 0) + 1; }
+        const domTiers = {}, qtl = (arr, ps) => { const v = [...arr].sort((x, y) => x - y); return ps.map(p => v.length ? Math.round(v[Math.min(v.length - 1, Math.floor(p * v.length))]) : null); }; // 0.18.0 R3: rozkład poziomów i cen (PLN) spółek krajowych i obcych
+        for (const x of stocks.filter(x => !x.assetType && !x.isBankrupt)) domTiers[x.exchange] = (domTiers[x.exchange] || 0) + 1;
+        const tiers018 = { dom: domTiers, domPrice: qtl(stocks.filter(x => !x.assetType && !x.isBankrupt).map(x => x.price), [0.1, 0.5, 0.9, 0.95]), fPrice: qtl(foreignList.map(i => toPln(i.price, i.currency)), [0.1, 0.5, 0.9, 0.95]), fLinked: foreignList.filter(i => getForeignTier(i).linked).length };
+        const gaps = foreignList.filter(i => i.fundamentals?.fairValue > 0).map(i => Math.log(i.fundamentals.fairValue / i.price)).sort((a, b) => a - b);
+        const foreignOut = typeof foreignStats === 'object' ? { stats: { ...foreignStats }, listed: foreignList.length, tiers: tierCount, tiers018, gapMedian: gaps.length ? gaps[gaps.length >> 1] : null, gapAbsMedian: gaps.length ? gaps.map(Math.abs).sort((a, b) => a - b)[gaps.length >> 1] : null, problems: checkForeignCompanyInvariants() } : null;
+        return { ...p0151, s066, foreign: foreignOut, countries: countriesOut, giant: typeof giantEventState !== 'undefined' ? { ...giantEventState, log: giantEventLog, issuersListed: Object.keys(foreignIssuers).length, fx: Object.fromEntries(Object.entries(fxRates).map(([k, v]) => [k, Math.round(v * 1e4) / 1e4])), fxProblems: checkCurrencyInvariants() } : null, ma: s.ma ? s.ma.finish() : null, h0, tsr, moneyWarn: s.moneyWarn || [], moneyWarnQuarters: s.moneyWarnQuarters || 0, poolStake: s.poolStake, wallet: window.__wallet || null, presetErrors: window.__presetErrors || [], camp: window.__campResult ? window.__campResult() : null, crises: typeof crisisSummary === 'function' ? crisisSummary() : null, sectorIssues, saveSizes, subStart: s.subStart, subEnd: s.subEnd, multiSegEnd: s.multiSeg, mechanics: s.mechanics || null, badPrice: s.badPrice, negCash: s.negCash, mailBy: s.mailBy, bailouts: s.bailouts, flowWarnings: s.flowWarnings, fund: s.fund, panelText: panel ? panel.textContent.split(/\\s+/).join(' ').slice(0, 600) : null, panelError: s.panelError || null, elections: (macro.election?.history || []).filter(e => e.quarter >= s.quarters[0].q),
             lawChanges: soc ? { ...soc.lawChanges } : null, laws: soc ? { ...soc.laws } : null,
             invariants: typeof checkWorldInvariants === 'function' ? checkWorldInvariants().slice(0, 5) : null, invLog: s.invLog, trimWarnings: s.trimWarnings,
             trims: typeof ghostTrimLog !== "undefined" ? ghostTrimLog.length : null, spinDiag: window.__spinDiag || null, diag: window.__haltDiag || null, offers: window.__offerLog || null,
@@ -1139,6 +1361,124 @@ const PROBE_0156 = `(function () {
     const origFinish = s.finish; s.finish = function () { const r = origFinish.apply(this, arguments); r.p0156 = T.finish(); return r; };
 })();`;
 
+// 0.18.1 P0/P2: PROBE_018 — profil wsadu podsektor × kraj (przychód, EBITDA, udział wsadu surowców) na koniec gry i bilans łańcuchów co kwartał (chains.js). Wynik: pole p018.
+const PROBE_018 = `(function () {
+    const s = window.__sim, T = s.p018 = { q: [], ms: [] };
+    const unitRows = () => {
+        const out = {};
+        const add = (key, c, rev, ebitda, inp) => { const k = key + '|' + c, u = out[k] || (out[k] = [0, 0, 0, 0]); u[0] += rev; u[1] += ebitda; u[2] += inp * rev; u[3]++; };
+        for (const st of stocks) {
+            if (st.assetType || st.isBankrupt) continue;
+            const h = st.fundamentals?.history?.at(-1); if (!h || !(h.revenue > 0)) continue;
+            const prof = typeof getStockCommodityProfile === 'function' ? getStockCommodityProfile(st) : { input: {} }, inp = Object.values(prof.input || {}).reduce((a, b) => a + b, 0);
+            for (const seg of (typeof getStockSegments === 'function' ? getStockSegments(st) : [])) add(seg.subsector ? seg.sector + '/' + seg.subsector : seg.sector, typeof getStartCountry === 'function' ? getStartCountry() : 'PL', h.revenue * seg.share, h.ebitda * seg.share, inp);
+        }
+        for (const i of (typeof getForeignIssuerList === 'function' ? getForeignIssuerList() : [])) {
+            const h = i.fundamentals?.history?.at(-1); if (i.kind !== 'share' || !h || !(h.revenue > 0)) continue;
+            const r = toPln(1, i.currency), prof = typeof getStockCommodityProfile === 'function' ? getStockCommodityProfile(i) : { input: {} }, inp = Object.values(prof.input || {}).reduce((a, b) => a + b, 0);
+            i.sectors.forEach(([sec, sh], n) => add(n === 0 && i.subsector ? sec + '/' + i.subsector : sec, i.country, h.revenue * r * sh, h.ebitda * r * sh, inp));
+        }
+        return Object.fromEntries(Object.entries(out).map(([k, u]) => [k, { rev: Math.round(u[0]), margin: u[0] > 0 ? +(u[1] / u[0]).toFixed(4) : null, input: u[0] > 0 ? +(u[2] / u[0]).toFixed(4) : 0, n: u[3] }]));
+    };
+    if (typeof stepChains === 'function') {
+        const o = stepChains;
+        stepChains = function () {
+            const r = o.apply(this, arguments), st = chainState;
+            if (st?.cal) {
+                const row = { q: macro.quarter, g: {} };
+                for (const [gid, g] of Object.entries(st.g)) row.g[gid] = { bw: +g.bw.toFixed(4), b: Array.from(g.b).map(v => +v.toFixed(3)), P: Array.from(g.P).map(v => +v.toFixed(3)) };
+                row.c = st.cal.countries; row.cl = typeof crisisLine === 'object' && crisisLine ? crisisLine.id + ':' + crisisLine.stage + (crisisLine.variant ? ':' + crisisLine.variant : '') : null; T.q.push(row); T.ms.push(+st.ms.toFixed(2)); { const tc = {}; let dia = null; for (const x of stocks) if (!x.assetType && !x.isBankrupt) { tc[x.exchange] = (tc[x.exchange] || 0) + 1; if (x.exchange === 'DIAMOND') dia = x.symbol; } let em = null, ru = null; if (typeof ELITE_RULES === 'object' && typeof getPlatinumCapThreshold === 'function') { const r = ELITE_RULES.EMERALD, plat = getPlatinumCapThreshold(), pool = stocks.filter(x => !x.assetType && !x.isBankrupt && !x.isSubsidiaryOf && (x.exchange === 'PLATINUM' || exchanges[x.exchange]?.rankBased)); const g = x => { const v = getValidRating(x); return v && ratingIndex(v.grade) >= ratingIndex(r.grade); }, d = x => (Number(x.dividendStreak) || 0) >= r.divQ, c = x => getMarketCap(x) >= plat * r.capMult; em = [pool.length, pool.filter(g).length, pool.filter(d).length, pool.filter(c).length, pool.filter(x => g(x) && d(x)).length, pool.filter(x => g(x) && c(x)).length, pool.filter(x => d(x) && c(x)).length, pool.filter(x => g(x) && d(x) && c(x)).length]; const R = ELITE_RULES.RUBY, rp = x => { const h = x.fundamentals?.history || []; return h.length >= R.profitQ && h.slice(-R.profitQ).every(y => (Number(y.netIncome) || 0) > 0); }, rc = x => getMarketCap(x) >= plat * R.capMult; ru = [pool.length, pool.filter(g).length, pool.filter(rp).length, pool.filter(rc).length, pool.filter(x => g(x) && rp(x) && rc(x)).length, pool.filter(x => eliteQualifies(x, 'EMERALD')).length]; } (T.tiers = T.tiers || []).push({ q: macro.quarter, c: tc, d: dia, em, ru }); } if (typeof getEsgTrue === 'function' && macro.quarter % 4 === 0) { const z = { n: 0, A: 0, B: 0, C: 0, D: 0, e: [0, 0, 0, 0], s: [0, 0, 0, 0], g: [0, 0, 0, 0], dPull: 0, emitHi: 0, grey: 0, sum: [0, 0, 0] }, gi = x => ESG_GRADE_ORDER.indexOf(x); for (const x of stocks) { if (!isCountedListedCompany(x) || (typeof isReitStock === 'function' && isReitStock(x))) continue; const v = getEsgTrue(x); if (!v) continue; z.n++; z[v.grade]++; z.e[gi(v.eg)]++; z.s[gi(v.sg)]++; z.g[gi(v.gg)]++; z.sum[0] += v.e; z.sum[1] += v.s; z.sum[2] += v.g; for (const [k, val] of [['hs', v.score], ['he', v.e], ['hS', v.s], ['hg', v.g]]) { (z[k] = z[k] || Array(20).fill(0))[Math.min(19, Math.floor(val / 5))]++; } if (gi(v.grade) > gi(esgGrade(v.score))) z.dPull++; if (typeof getEsgRating === 'function') { const pub = getEsgRating(x); if (pub) { z.pub = z.pub || [0, 0, 0, 0]; z.pub[gi(pub)]++; } if (x.esgProjectsDone) z.proj = (z.proj || 0) + 1; if (x.ecoUpgrades) z.ecoUp = (z.ecoUp || 0) + 1; if (x.ethicsClaim) { z.claim = (z.claim || 0) + 1; if (isEsgGreenwashing(x)) z.green = (z.green || 0) + 1; } } if (v.e < 60) z.emitHi++; if (typeof getGreyShare === 'function' && getGreyShare(x) > 0) z.grey++; } { const px = T.esgPx = T.esgPx || {}; z.ret = { A: [0, 0], B: [0, 0], C: [0, 0], D: [0, 0], none: [0, 0] }; for (const x of stocks) { if (!isCountedListedCompany(x) || !(x.price > 0)) continue; const g = typeof getEsgRating === 'function' ? getEsgRating(x) || 'none' : 'none'; if (px[x.symbol] > 0) { const r = z.ret[g]; r[0] += Math.log(x.price / px[x.symbol]); r[1]++; } px[x.symbol] = x.price; } } z.sum = z.sum.map(t => +(t / Math.max(1, z.n)).toFixed(1)); { const pl = typeof getPlatinumCapThreshold === 'function' ? getPlatinumCapThreshold() : 0, pool = stocks.filter(x => !x.assetType && !x.isBankrupt && !x.isSubsidiaryOf && (x.exchange === 'PLATINUM' || exchanges[x.exchange]?.rankBased) && !x.isBankStock && getMarketCap(x) >= pl * 1.6); const P = z.pool = { n: pool.length, tB: 0, pB: 0, pC: 0, none: 0, emit: 0, e: 0, s: 0, g: 0, sc: 0, cut: 0, bon: 0, proj: 0, path: 0, gap: 0, sec: {} }; for (const x of pool) { const v = getEsgTrue(x); if (!v) continue; const pub = getEsgRating(x); if (gi(v.grade) <= 1) { P.tB++; if (!pub || gi(pub) > 1) P.miss = (P.miss || 0) + 1; } if (pub && gi(pub) <= 1) P.pB++; if (pub === 'C') P.pC++; if (!pub) P.none++; const em = !(ESG_RULES.cleanBySector[getMainSector(x)] != null); if (em) P.emit++; P.e += v.e; P.s += v.s; P.g += v.g; P.sc += v.score; P.cut += getStockEcoCut(x); const bo = x.esgBonus || {}; P.bon += (bo.e || 0) + (bo.s || 0) + (bo.g || 0); if ((x.esgProjects || []).some(y => !y.done)) P.proj++; if (x.esg) P.path++; if (gi(v.grade) > 1) P.gap += Math.max(0, 62 - v.score); const k = getMainSector(x) + (gi(v.grade) <= 1 ? ':B' : ':C'); P.sec[k] = (P.sec[k] || 0) + 1; } } if (typeof getEsgRegState === 'function') { const rg = getEsgRegState(); z.crit = rg.criterion ? 1 : 0; z.regs = rg.log.length; z.fined = rg.log.reduce((t, x) => t + x.fined.length, 0); } (T.esg = T.esg || []).push({ q: macro.quarter, ...z }); } // 0.18.9 G0: rozkład oceny rzeczywistej ESG co rok // U11: [pula, ocena, dywidenda, wielkość, o+d, o+w, d+w, wszystkie] // 0.18.7 E0: rozkład poziomów co kwartał
+            }
+            return r;
+        };
+    }
+    // P4: zyskujące sektory linii kryzysu wobec GIG (od Wybuchu do końca linii): kapitalizacja spółek z segmentem głównym w sektorze/podsektorze
+    T.gainRes = [];
+    const gainSyms = id => stocks.filter(x => !x.assetType && !x.isBankrupt && (CRISIS_LINES[id]?.gain || []).some(it => getMainSector(x) === it.sector && (!it.subsector || getMainSubsector(x) === it.subsector))).map(x => x.symbol);
+    const capOf = syms => syms.reduce((a, sym) => { const x = stocks.find(y => y.symbol === sym); return a + (x && !x.isBankrupt ? x.price * x.totalShares : 0); }, 0); // te same spółki od Wybuchu (upadła = 0)
+    const snapGain = (id, syms) => ({ all: capOf(syms || gainSyms(id)) });
+    if (typeof enterCrisisStage === 'function') { const o = enterCrisisStage; enterCrisisStage = function (stage) { const r = o.apply(this, arguments); if (stage === 'burst' && crisisLine) { const syms = gainSyms(crisisLine.id); T.gain = { id: crisisLine.id, gig: getGigIndexValue(), syms, p: snapGain(crisisLine.id, syms) }; } return r; }; }
+    if (typeof enterCrisisStage === 'function') { const o2 = enterCrisisStage; enterCrisisStage = function (stage) { const id = crisisLine?.id, g = T.gain; if (stage === 'intervention' && g && g.id === id && !g.done) { g.done = true; T.gainRes.push({ id, at: 'intervention', gig: +(getGigIndexValue() / g.gig - 1).toFixed(4), sec: { all: g.p.all > 0 ? +(snapGain(id, g.syms).all / g.p.all - 1).toFixed(4) : null } }); } return o2.apply(this, arguments); }; }
+    if (typeof finishCrisisLine === 'function') { const o = finishCrisisLine; finishCrisisLine = function () { const id = crisisLine?.id, g = T.gain; const r = o.apply(this, arguments); if (false && g && g.id === id) { const now = snapGain(id, g.syms); T.gainRes.push({ id, gig: +(getGigIndexValue() / g.gig - 1).toFixed(4), sec: Object.fromEntries(Object.entries(now).map(([k, v]) => [k, g.p[k] > 0 ? +(v / g.p[k] - 1).toFixed(4) : null])) }); } return r; }; }
+    // 0.18.5 W0: profil kwartału — czas funkcji gry zegarem okna nadrzędnego (w ramce zegar jest wirtualny); funkcje zagnieżdżone liczą się też w rodzicu
+    const realNow = () => window.parent.performance.now(); T.prof = {};
+    for (const name of ['runStockTick', 'runWeeklyTick', 'runQuarterlyTick', 'runYearlyTick', 'runAllAi', 'updateStockPrices', 'processFundWeekly', 'displayStocks', 'processFinancialReports', 'processCountriesQuarterly', 'stepCountries', 'processCommoditiesQuarterly', 'stepCommodities', 'processChainsQuarterly', 'processCrisesQuarterly', 'processEnergyQuarterly', 'processRatingsQuarterly', 'reviewCompanyPlacements', 'processListingsQuarterly', 'processWorkforceQuarter']) {
+        if (typeof window[name] !== 'function') continue;
+        const o = window[name], rec = T.prof[name] = { ms: 0, n: 0 };
+        window[name] = function () { const t0 = realNow(); try { return o.apply(this, arguments); } finally { rec.ms += realNow() - t0; rec.n++; } };
+    }
+    let first = null;
+    // G6 (Z11): wynik REIT-ów (kurs × dywidenda kwartalna, indeks łańcuchowy) według typu portfela
+    T.reit = {}; let reitQ = -1;
+    const sampleReits = () => { if (macro.quarter === reitQ) return; reitQ = macro.quarter; for (const x of stocks.filter(y => y.assetType === 'REIT' && !y.isBankrupt)) { const e = T.reit[x.symbol] || (T.reit[x.symbol] = { type: x.reit?.type || '?', idx: 1, p: x.price, n: 0 }); if (e.p > 0 && x.price > 0) { e.idx *= x.price / e.p * (1 + (typeof getTrailingDividendYield === 'function' ? getTrailingDividendYield(x) : 0) / 4); e.n++; } e.p = x.price; } };
+    const origSample = s.sample; s.sample = function () { sampleReits(); const r = origSample.apply(this, arguments); if (!first && macro.quarter >= (s.startQ ?? 0) + 1) { const u = unitRows(); if (Object.keys(u).length) first = u; } return r; };
+    const origFinish = s.finish; s.finish = function () { const r = origFinish.apply(this, arguments); r.p018 = { tiers: T.tiers || [], esg: T.esg || [], rstat: typeof ratingState === 'object' ? ratingState.stats : null, qerr: typeof quarterStepErrors === 'object' ? quarterStepErrors : [], knf: typeof knfRules === 'object' ? knfRules.history : [], prof: Object.fromEntries(Object.entries(T.prof).map(([k, v]) => [k, [Math.round(v.ms), v.n]])), start: first, end: unitRows(), chains: T.q, chainMs: T.ms, gain: T.gainRes, reit: Object.fromEntries(Object.entries(T.reit).map(([k, e]) => [k, { type: e.type, cagr: e.n > 3 ? +(Math.pow(e.idx, 4 / e.n) - 1).toFixed(4) : null }])) }; return r; };
+})();`;
+
+// 0.17 S0b: łączna kapitalizacja rynku (PLN; GPW i spółki krajów dołączonych) i udział spółek krajowych w przejęciach D3. Wynik: pole s017.
+const PROBE_017 = `(function () {
+    const s = window.__sim, T = s.s017 = { d3: { n: 0, domAcq: 0, domTgt: 0 } };
+    // 0.17.1 T0: Tied i obietnice (liczniki), rozkład relacji na koniec
+    { const P = T.prom = { offers: 0, accepted: 0, fulfilled: 0, paid: 0, assetsSum: 0, knf: 0 };
+      if (typeof createPromiseOffer === 'function') { const o = createPromiseOffer; createPromiseOffer = function () { const r = o.apply(this, arguments); if (r) P.offers++; return r; }; }
+      if (typeof acceptPromiseOffer === 'function') { const o = acceptPromiseOffer; acceptPromiseOffer = function () { const r = o.apply(this, arguments); if (r) P.accepted++; return r; }; }
+      if (typeof fulfillPromise === 'function') { const o = fulfillPromise; fulfillPromise = function () { const r = o.apply(this, arguments); if (r > 0) { P.fulfilled++; P.paid += r; } return r; }; }
+      if (typeof recordPayment === 'function') { const o = recordPayment; recordPayment = function (from, to) { if (to === 'external:knf') P.knf++; return o.apply(this, arguments); }; }
+      T.tied171Finish = () => { const v = (typeof getRelationPeople === 'function' ? getRelationPeople().map(p => getRelation(p.id)) : []).filter(Number.isFinite).sort((a, b) => a - b); const q = p => v.length ? v[Math.min(v.length - 1, Math.floor(p * v.length))] : null;
+          return { rel: { n: v.length, p10: q(0.1), med: q(0.5), p90: q(0.9), friends: typeof ensureTiedState === 'function' && playerProfile ? ensureTiedState().friends.length : null }, prom: P, posts: typeof getTiedPosts === 'function' ? getTiedPosts().length : null }; }; }
+    T.frEv = {}; if (typeof startFreightEvent === 'function') { const o = startFreightEvent; startFreightEvent = function (k) { T.frEv[k] = (T.frEv[k] || 0) + 1; return o.apply(this, arguments); }; } // 0.17 S4: zakłócenia frachtu
+    // 0.17.3 R6: częstość zdarzeń spółek (ten sam licznik w bazie i w nowej wersji)
+    T.ev = { dividend: 0, buyback: 0, strategy: 0, takeover: 0 };
+    if (typeof logEvent === 'function') { const o = logEvent; logEvent = function (m) { const t = String(m); if (t.includes('zmienia strategię dywidendową')) T.ev.dividend++; else if (t.includes('skup akcji własnych')) T.ev.buyback++; return o.apply(this, arguments); }; }
+    if (typeof executeStrategy === 'function') { const o = executeStrategy; executeStrategy = function () { const r = o.apply(this, arguments); if (r) T.ev.strategy++; return r; }; }
+    if (typeof initiateMergerProcess === 'function') { const o = initiateMergerProcess; initiateMergerProcess = function () { const r = o.apply(this, arguments); if (r) T.ev.takeover++; return r; }; }
+    if (typeof executeIssuerTakeover === 'function') { const o = executeIssuerTakeover; executeIssuerTakeover = function (a, t) { const r = o.apply(this, arguments); if (r && r.ok) { T.d3.n++; if (!acqForeignOf(a)) T.d3.domAcq++; if (!acqForeignOf(t)) T.d3.domTgt++; } return r; }; }
+    // 0.17 S5: co kwartał — sloty Budowlanego zajęte przez infrastrukturę, saldo budżetu, poziom ustawy; zerwane budowy
+    T.inf = { q: [] };
+    const origSample = s.sample; s.sample = function () {
+        const r = origSample.apply(this, arguments);
+        if (typeof society === 'object' && society?.infra !== undefined || typeof ensureInfra === 'function') {
+            const bs = stocks.filter(x => !x.isBankrupt && x.constructionStats && isConstructionCompany(x));
+            const slots = bs.reduce((a, x) => a + (Number(x.constructionStats.maxProjects) || 0), 0);
+            const infraBusy = constructionProjects.filter(p => !p.settled && p.tender?.infra).length, busy = constructionProjects.filter(p => !p.settled).length;
+            T.inf.q.push({ law: society.laws.infrastructure, bal: Math.round(Number(society.budget.balance) || 0), rev: Math.round(Number(society.budget.revenue) || 0), infSp: Math.round(Number(society.budget.infrastructureSpending) || 0), def: society.budget.deficitQuarters || 0, slots, infraBusy, busy, cap: society.infra ? { ...society.infra.cap } : null,
+                // 0.17 S6: udział obronny, bezpieczeństwo, linia budżetu, indeks zbrojeń, przychód kwartału krajowej zbrojeniówki, CIT z deficytu
+                ...(typeof getDefenseShare === 'function' ? { dsh: getDefenseShare(), S: +getHomeSecurityLevel().toFixed(1), dsp: Math.round(Number(society.budget.defense) || 0), gidx: +getGlobalDefenseIndex().toFixed(3), boost: isDefenseBoosted() } : {}),
+                defRev: Math.round(stocks.filter(x => !x.isBankrupt && typeof isDefenseCompany === 'function' && isDefenseCompany(x)).reduce((a, x) => a + (Number(x.fundamentals?.history?.at(-1)?.revenue) || 0), 0)), cit: society.budget.citAdd || 0 });
+        }
+        // 0.17.2 E0: przychody kwartału Energii i odbiorców prądu, ceny, ludność, budynki energetyczne. Sonda tylko czyta.
+        if (typeof society === 'object' && society) {
+            const lastRev = x => Number(x.fundamentals?.history?.at(-1)?.revenue) || 0, on = stocks.filter(x => !x.isBankrupt && !x.assetType);
+            const seg = (x, sectors) => getStockSegments(x).filter(y => sectors.includes(y.sector)).reduce((a, y) => a + y.share, 0);
+            const big = ['Przemysł', 'Chemia', 'Motoryzacja', 'Budowlany'], plants = /Elektrowni|Farma Wiatrowa|Park Słoneczny|energy_plant|wind_farm|solar_park/;
+            (T.pow = T.pow || []).push({ en: Math.round(on.reduce((a, x) => a + lastRev(x) * seg(x, ['Energia']), 0)), use: Math.round(on.reduce((a, x) => a + lastRev(x) * seg(x, big), 0) + lastRev(on.find(x => x.symbol === 'PKC') || {})), all: Math.round(on.reduce((a, x) => a + lastRev(x), 0)), n: on.filter(x => seg(x, ['Energia']) > 0).length, pl: +society.priceLevel.toFixed(4), pop: Math.round(society.population), ...(society.energy ? { cap: Math.round(society.energy.capacity), dem: Math.round(society.energy.demand), pr: society.energy.price, b: society.energy.stats.blackouts, blk: society.energy.stats.blocks, mun: society.energy.stats.municipal, prj: society.energy.stats.projects, act: +society.energy.activity.toFixed(3), mix: Object.values(getEnergyMix(society.energy)).map(Math.round), P: society.energy.pollution, eP: society.energy.pressure, L: society.energy.life, Op: society.energy.opinion, lvl: oversight.energy?.level, fund: Math.round(society.energy.fund || 0), fee: society.energy.feeQuarter, greens: society.greens, rule: macro.election.ruling, law: [society.laws.energyPolicy, society.laws.energySuppliers, society.laws.climatePolicy], ev: society.energy.stats.events, fines: society.energy.stats.fines, esg: society.energy.stats.esg, atom: society.energy.stateAtom, oq: society.energy.ozeQuarters } : {}), bld: on.reduce((a, x) => a + (x.portfolio?.buildings || []).filter(b => plants.test(b.name + ' ' + b.type)).length, 0) });
+        }
+        return r;
+    };
+    const origFinish = s.finish; s.finish = function () {
+        const r = origFinish.apply(this, arguments);
+        if (typeof society === 'object' && society?.infra) { // 0.17 S5: projekty państwa na koniec gry
+            const inf = society.infra;
+            T.inf.stats = inf.stats; T.inf.cap = inf.cap;
+            T.inf.projects = inf.projects.map(p => ({ type: p.type, status: p.status, segs: p.segs.length, done: p.segs.filter(x => x.status === 'done').length, firms: new Set(p.segs.map(x => x.builder).filter(Boolean)).size, ppp: p.ppp }));
+        }
+        const capPl = stocks.filter(x => !x.isBankrupt && x.assetType !== 'Startup' && x.price > 0).reduce((a, x) => a + x.price * (x.totalShares || 0), 0);
+        const capForeign = typeof getForeignIssuerList === 'function' ? getForeignIssuerList().filter(i => i.kind === 'share').reduce((a, i) => a + toPln(i.price * i.shares, i.currency), 0) : 0;
+        const sec = {}; // 0.17 S2: marża sektora = EBITDA / przychód z 4 ostatnich kwartałów (spółki krajowe, sektor główny)
+        for (const x of stocks) {
+            if (x.isBankrupt || x.assetType || x.isBankStock || !x.fundamentals?.history?.length) continue;
+            const k = Array.isArray(x.sector) ? x.sector[0] : x.sector, h = x.fundamentals.history.slice(-4), a = sec[k] || (sec[k] = [0, 0, 0]);
+            a[0] += h.reduce((t, y) => t + (Number(y.ebitda) || 0), 0); a[1] += h.reduce((t, y) => t + (Number(y.revenue) || 0), 0); a[2]++;
+        }
+        const tiedStats = typeof getDeputies === 'function' ? { posts: getTiedPosts().length, plans: stocks.filter(x => x.plannedMove).length, deputies: stocks.reduce((a, x) => a + getDeputies(x).length, 0), withDeputies: stocks.filter(x => getDeputies(x).length).length } : null;
+        r.s017 = { ...T, t171: window.__t171, tied171: T.tied171Finish ? T.tied171Finish() : null, kontrakty: window.__kontrakty, tiedReader: window.__tiedReader, zachety: window.__zachety, tiedStats, capPl: Math.round(capPl), capForeign: Math.round(capForeign), secMargin: Object.fromEntries(Object.entries(sec).filter(([, a]) => a[1] > 0).map(([k, a]) => [k, [+(a[0] / a[1]).toFixed(4), a[2]]])),
+            // 0.17 S3: surowce na koniec (cena / średnia), wynik botów na kontraktach, otwarte pozycje gracza na towarach
+            com: typeof commodityState === 'object' && commodityState ? { px: Object.fromEntries(COMMODITY_IDS.map(id => [id, +(commodityState.prices[id] / COMMODITY_DEFS[id].mean).toFixed(3)])), bots: commodityState.bots?.stats || null, botOpen: commodityState.bots?.pos?.length || 0, ev: commodityState.events.map(e => e.id), playerPos: typeof getMarginPositions === 'function' ? getMarginPositions('commodities').length : null,
+                fr: commodityState.freight ? Object.fromEntries(Object.keys(commodityState.freight.idx).map(id => [id, +commodityState.freight.idx[id].toFixed(1)])) : null } : null }; // 0.17 S4: indeks frachtu na koniec
+        return r;
+    };
+})();`;
+
 const yieldNow = () => new Promise(resolve => { const ch = new MessageChannel(); ch.port1.onmessage = () => resolve(); ch.port2.postMessage(0); });
 
 // 0.15.4 P0: widok narzędzi deweloperskich — wykres liczby spółek w czasie (wg źródła), średni kurs wg branży (sortowanie po nagłówku),
@@ -1183,7 +1523,9 @@ function renderP0154(results) {
 }
 
 async function loadFrame() {
-    const html = await (await fetch(TARGET, { cache: 'no-store' })).text();
+    // 0.17 S0b: jedno ponowienie po „Failed to fetch” (jednowątkowy serwer plików przy wielu instancjach)
+    const get = () => fetch(TARGET, { cache: 'no-store' }).then(r => r.text());
+    const html = await get().catch(() => new Promise(r => setTimeout(r, 2000)).then(get));
     const baseHref = new URL(TARGET, location.href).href;
     const doc = html.replace(/<head>/i, `<head><base href="${baseHref}"><script>${STUB}<\/script>`);
     await new Promise(resolve => { frame.onload = resolve; frame.srcdoc = doc; });
@@ -1192,6 +1534,25 @@ async function loadFrame() {
     w.__vt.advance(100); // DOMContentLoaded i timery startowe
     return w;
 }
+
+// 0.18.8 D0: PROBE_LONG — co 5 lat (20 kw.): bajty zapisu według sekcji, pola spółek w pamięci, sterta JS; fundusz wobec rynku (aktywa / kapitalizacja, największy udział w free floacie, czynnik pojemności). Wynik: pole plong.
+const PROBE_LONG = `(function () {
+    const s = window.__sim, L = s.plong = { samples: [] }; let lastQ = null;
+    const len = v => { try { return JSON.stringify(v ?? null).length; } catch (e) { return -1; } };
+    const take = () => {
+        const q = macro.quarter; if (lastQ !== null && q - lastQ < 20) return; lastQ = q;
+        const snap = typeof buildSaveSnapshot === 'function' ? buildSaveSnapshot({ compact: 0 }) : {};
+        const sec = {}; for (const k of Object.keys(snap)) sec[k] = len(snap[k]);
+        const mem = {}; for (const x of stocks) for (const k of Object.keys(x)) { const v = x[k]; if (v && typeof v === 'object') mem[k] = (mem[k] || 0) + len(v); }
+        const caps = stocks.filter(x => !x.assetType && !x.isBankrupt).reduce((a, x) => a + x.price * (x.totalShares || 0), 0);
+        let maxFf = 0, maxFfSym = null; for (const [sym, p] of Object.entries(typeof playerPortfolio === 'object' ? playerPortfolio : {})) { const st = stocks.find(x => x.symbol === sym); if (!st || !(p?.shares > 0)) continue; const ff = Math.max(1, typeof getFreeFloatShares === 'function' ? getFreeFloatShares(st) : st.totalShares); if (p.shares / ff > maxFf) { maxFf = p.shares / ff; maxFfSym = sym; } }
+        const assets = typeof getFundAssets === 'function' ? getFundAssets() : 0;
+        L.samples.push({ q, save: len(snap), sec, mem: Object.entries(mem).sort((a, b) => b[1] - a[1]).slice(0, 15), heap: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e6) : null, stocks: stocks.length,
+            fund: { assets: Math.round(assets), caps: Math.round(caps), share: caps > 0 ? +(assets / caps).toFixed(5) : null, maxFf: +maxFf.toFixed(4), maxFfSym, capacity: typeof getFundCapacityFactor === 'function' ? +getFundCapacityFactor(assets).toFixed(3) : null, positions: Object.keys(typeof playerPortfolio === 'object' ? playerPortfolio : {}).length } });
+    };
+    const origSample = s.sample; s.sample = function () { const r = origSample.apply(this, arguments); try { take(); } catch (e) { L.err = String(e).slice(0, 200); } return r; };
+    const origFinish = s.finish; s.finish = function () { lastQ = null; try { take(); } catch (e) {} const r = origFinish.apply(this, arguments); r.plong = L; return r; };
+})();`;
 
 async function oneRun(index) {
     localStorage.setItem('gra_inwestycyjna_debug_mode', '1');
@@ -1203,6 +1564,9 @@ async function oneRun(index) {
     w.eval(PROBE_0154);
     w.eval(PROBE_0155);
     w.eval(PROBE_0156);
+    w.eval(PROBE_017);
+    w.eval(PROBE_018);
+    w.eval(PROBE_LONG);
     const quarterMs = 300000 / SPEED;
     const startQ = w.eval('macro.quarter');
     w.eval('__sim.sample()');
@@ -1211,7 +1575,13 @@ async function oneRun(index) {
     let q = startQ;
     while (q < startQ + QUARTERS) {
         const t0 = performance.now();
-        while (w.eval('macro.quarter') === q) { w.__vt.advance(quarterMs / 10); await yieldNow(); }
+        let stuck = 0;
+        while (w.eval('macro.quarter') === q) {
+            // 0.16.4: okno wydarzenia (np. połączenie giełd) pauzuje grę — w przebiegu nikt go nie zamknie, więc wznawiamy; brak postępu = błąd, nie wieczne czekanie
+            if (w.eval('isGamePaused')) w.eval('togglePauseGame()');
+            w.__vt.advance(quarterMs / 10); await yieldNow();
+            if (++stuck > 5000) throw new Error('przebieg stoi w kwartale ' + (q - startQ) + ' (pauza: ' + w.eval('isGamePaused') + ') · ostatnie błędy: ' + (w.__vt.errors || []).slice(-3).join(' | '));
+        }
         msPerQuarter.push(performance.now() - t0);
         q = w.eval('macro.quarter');
         w.eval('__sim.sample()');
@@ -1221,7 +1591,7 @@ async function oneRun(index) {
     const saveCheck = await w.eval('typeof __sim.saveCheckAsync === "function" ? __sim.saveCheckAsync() : null').catch(e => ({ error: String(e) }));
     const result = { run: index, quarters: w.eval('__sim.quarters'), ...JSON.parse(JSON.stringify(finish)),
         msPerQuarter: msPerQuarter.slice(2).reduce((a, b) => a + b, 0) / Math.max(1, msPerQuarter.length - 2),
-        realMs: performance.now() - realStart, errors: w.__vt.errors.slice(0, 5), saveCheck };
+        realMs: performance.now() - realStart, errors: w.__vt.errors.slice(0, 5), errorCount: w.__vt.errorCount || 0, saveCheck };
     return JSON.parse(JSON.stringify(result));
 }
 

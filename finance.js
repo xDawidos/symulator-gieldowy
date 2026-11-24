@@ -111,7 +111,7 @@ function processCompanyBanking() {
                 stock.balanceSheet.assets += loanAmount;
                 bank.loanPortfolio[symbol] = (bank.loanPortfolio[symbol] || 0) + loanAmount;
                 bank.cash -= loanAmount;
-                logEvent(`🏦 Kredyt korporacyjny: ${stock.name} zaciąga ${loanAmount.toFixed(0)} PLN w ${bank.name}.`, 'market');
+                logEvent(`🏦 Kredyt korporacyjny: ${stock.name} zaciąga ${formatZl(loanAmount, 0)} w ${bank.name}.`, 'market');
             }
         }
 
@@ -138,7 +138,7 @@ function processCompanyBanking() {
                     ledger.writeOffs += writeOff;
                     adjustBalanceSheet(stock, { liabilities: -writeOff, retainedEarnings: writeOff });
                     stock.loanMissedPayments = 0;
-                    logEvent(`🏦 ${bank.name} odpisuje ${writeOff.toFixed(0)} PLN kredytu ${stock.name} — restrukturyzacja długu.`, 'market');
+                    logEvent(`🏦 ${bank.name} odpisuje ${formatZl(writeOff, 0)} kredytu ${stock.name} — restrukturyzacja długu.`, 'market');
                 }
             }
         }
@@ -299,7 +299,7 @@ function openFundDeposit(bankId, amount, weeks) {
     const bank = commercialBanks.find(item => item.id === bankId);
     amount = Math.floor(Number(amount) * 100) / 100;
     if (!canBankTakeFundDeposits(bank)) { showToast('Ten bank nie przyjmuje lokat funduszy.', 'error'); return null; }
-    if (!(amount >= FUND_DEPOSIT_MIN)) { showToast(`Minimalna lokata: ${FUND_DEPOSIT_MIN} PLN.`, 'error'); return null; }
+    if (!(amount >= FUND_DEPOSIT_MIN)) { showToast(`Minimalna lokata: ${formatZl(FUND_DEPOSIT_MIN, 0)}.`, 'error'); return null; }
     if (amount > playerCash) { showToast('Za mało wolnej gotówki funduszu.', 'error'); return null; }
 
     const deposit = {
@@ -316,7 +316,7 @@ function openFundDeposit(bankId, amount, weeks) {
     bank.cash += amount;
     getFundDeposits().push(deposit);
     recordPayment('player-fund', bank, amount, `Lokata ${weeks} tyg.`);
-    logEvent(`🏦 Fundusz zakłada lokatę w ${bank.name}: ${amount.toFixed(2)} PLN na ${weeks} tyg. (${(deposit.rate * 100).toFixed(2)}% rocznie).`, 'review');
+    logEvent(`🏦 Fundusz zakłada lokatę w ${bank.name}: ${formatZl(amount, 2)} na ${weeks} tyg. (${formatNumberPl((deposit.rate * 100), 2)}% rocznie).`, 'review');
     if (typeof refreshFundViews === 'function') refreshFundViews();
     return deposit;
 }
@@ -343,7 +343,7 @@ function breakFundDeposit(depositId) {
     const deposit = getFundDeposits().find(item => item.id === depositId);
     if (!deposit) return false;
     const payout = settleFundDeposit(deposit, true);
-    logEvent(`🏦 Fundusz zrywa lokatę w ${deposit.bankName}: wypłata ${payout.toFixed(2)} PLN (utrata odsetek i kara ${(FUND_DEPOSIT_BREAK_PENALTY * 100).toFixed(0)}%).`, 'review');
+    logEvent(`🏦 Fundusz zrywa lokatę w ${deposit.bankName}: wypłata ${formatZl(payout, 2)} (utrata odsetek i kara ${formatNumberPl((FUND_DEPOSIT_BREAK_PENALTY * 100), 0)}%).`, 'review');
     if (typeof refreshFundViews === 'function') refreshFundViews();
     return true;
 }
@@ -365,7 +365,8 @@ function processFundDepositsWeekly() {
         deposit.weeksLeft--;
         if (deposit.weeksLeft <= 0) {
             const payout = settleFundDeposit(deposit);
-            logEvent(`🏦 Lokata w ${deposit.bankName} zapada: fundusz otrzymuje ${payout.toFixed(2)} PLN (odsetki ${deposit.accrued.toFixed(2)} PLN).`, 'review');
+            logEvent(`🏦 Lokata w ${deposit.bankName} zapada: fundusz otrzymuje ${formatZl(payout, 2)} (odsetki ${formatZl(deposit.accrued, 2)}).`, 'review');
+            if (typeof autoRollDeposit === 'function') autoRollDeposit(deposit, payout); // 0.18.8 D4
         }
     }
 }
@@ -438,7 +439,7 @@ function pawnShares(account, symbol, quantity) {
     if (!(quantity > 0) || quantity > free) return fail(`Możesz zastawić najwyżej ${free} wolnych akcji.`);
 
     const principal = Math.min(quantity * stock.price * PAWN_LOAN_TO_VALUE, getPawnCapacity(account), pawnShop.cash * 0.5);
-    if (!(principal >= 1)) return fail(`Limit zastawów: ${(PAWN_MAX_SHARE_OF_ASSETS * 100).toFixed(0)}% aktywów funduszu.`);
+    if (!(principal >= 1)) return fail(`Limit zastawów: ${formatNumberPl((PAWN_MAX_SHARE_OF_ASSETS * 100), 0)}% aktywów funduszu.`);
 
     const loan = {
         id: nextSimulationId('pawn'),
@@ -457,7 +458,7 @@ function pawnShares(account, symbol, quantity) {
     if (account.isPlayer) {
         playerFund.trust = Math.max(0, playerFund.trust - PAWN_TRUST_PENALTY);
         playerWallet.complianceRisk = (playerWallet.complianceRisk || 0) + 1;
-        logEvent(`🏦 Fundusz zastawia ${quantity} akcji ${stock.name} w lombardzie ${pawnShop.name}: ${principal.toFixed(2)} PLN na ${PAWN_WEEKS} tygodni. Klienci patrzą na to nieufnie.`, 'review');
+        logEvent(`🏦 Fundusz zastawia ${quantity} akcji ${stock.name} w lombardzie ${pawnShop.name}: ${formatZl(principal, 2)} na ${PAWN_WEEKS} tygodni. Klienci patrzą na to nieufnie.`, 'review');
     }
     return loan;
 }
@@ -480,7 +481,7 @@ function repayPawnLoan(account, loanId) {
     account.cash -= loan.principal;
     if (pawnShop) adjustCompanyCash(pawnShop, loan.principal);
     releasePawnCollateral(account, loan);
-    if (account.isPlayer) logEvent(`🏦 Fundusz spłaca pożyczkę lombardową (${loan.principal.toFixed(2)} PLN) i odzyskuje ${loan.shares} akcji ${loan.symbol}.`, 'review');
+    if (account.isPlayer) logEvent(`🏦 Fundusz spłaca pożyczkę lombardową (${formatZl(loan.principal, 2)}) i odzyskuje ${loan.shares} akcji ${loan.symbol}.`, 'review');
     return true;
 }
 
@@ -561,7 +562,7 @@ function collectPawnDebt(account, loan) {
     adjustCompanyCash(collector, -payout);
     if (pawnShop) adjustCompanyCash(pawnShop, payout);
 
-    notifyDebtAction(account, `⚖️ Windykator ${collector.name} zajmuje akcje ${account.name} o wartości ${seizedValue.toFixed(0)} PLN za niespłaconą pożyczkę lombardową.`);
+    notifyDebtAction(account, `⚖️ Windykator ${collector.name} zajmuje akcje ${account.name} o wartości ${formatZl(seizedValue, 0)} za niespłaconą pożyczkę lombardową.`);
     return seizedValue;
 }
 
@@ -696,12 +697,14 @@ function maybeBotPawn(manager) {
 function pawnFundShares(symbol, quantity) {
     const loan = pawnShares(getFundAccount(), symbol, quantity);
     if (typeof refreshFundViews === 'function') refreshFundViews();
+    if (typeof renderLombardPage === 'function') renderLombardPage();
     return loan;
 }
 
 function repayFundPawn(loanId) {
     const ok = repayPawnLoan(getFundAccount(), loanId);
     if (typeof refreshFundViews === 'function') refreshFundViews();
+    if (typeof renderLombardPage === 'function') renderLombardPage();
     return ok;
 }
 
@@ -810,7 +813,7 @@ function issueNewBondOffer() {
         remainingOfferMs: BOND_OFFER_LIFETIME_MS
     };
     activeBonds.push(offer);
-    logEvent(`📰 Nowa emisja obligacji (${type}) od ${issuer.name}: ${(annual * 100).toFixed(1)}% rocznie, ${duration} min.`, 'market');
+    logEvent(`📰 Nowa emisja obligacji (${type}) od ${issuer.name}: ${formatNumberPl((annual * 100), 1)}% rocznie, ${duration} min.`, 'market');
 }
 
 function payForBonds(buyer, totalCost) {
@@ -843,7 +846,7 @@ function buyStateBond(buyer, type, quantity) {
     for (let i = 0; i < quantity; i++) allBonds.push(createBondRecord(ownerId, template, duration, annual));
 
     if (ownerId === 'player') {
-        logEvent(`Fundusz kupuje ${quantity} szt. obligacji skarbowych (${(annual * 100).toFixed(1)}% rocznie).`, 'review');
+        logEvent(`Fundusz kupuje ${quantity} szt. obligacji skarbowych (${formatNumberPl((annual * 100), 1)}% rocznie).`, 'review');
         if (typeof displayCash === 'function') displayCash();
         if (typeof openBankModal === 'function' && document.getElementById('bank-modal')?.style.display === 'block') openBankModal();
     }
@@ -874,7 +877,7 @@ function buyOtherBond(buyer, bondId, quantity) {
     for (let i = 0; i < quantity; i++) allBonds.push(createBondRecord(ownerId, offer, offer.durationMinutes, offer.interestRate));
 
     if (ownerId === 'player') {
-        logEvent(`Fundusz kupuje ${quantity} szt. obligacji ${offer.issuerName} (${(offer.interestRate * 100).toFixed(1)}% rocznie).`, 'review');
+        logEvent(`Fundusz kupuje ${quantity} szt. obligacji ${offer.issuerName} (${formatNumberPl((offer.interestRate * 100), 1)}% rocznie).`, 'review');
         if (typeof displayCash === 'function') displayCash();
         if (typeof renderBondMarketInBank === 'function') renderBondMarketInBank();
     }
@@ -936,8 +939,8 @@ function checkBondMaturities(deltaGameMs = 5000) {
         }
         if (bond.ownerId === 'player') {
             logEvent(bond.defaulted
-                ? `💥 Obligacja ${bond.issuerName} zapada po niewypłacalności — odzysk ${payout.toFixed(2)} PLN.`
-                : `💰 Obligacja ${bond.issuerName} zapada: fundusz otrzymuje nominał ${payout.toFixed(2)} PLN.`, 'review');
+                ? `💥 Obligacja ${bond.issuerName} zapada po niewypłacalności — odzysk ${formatZl(payout, 2)}.`
+                : `💰 Obligacja ${bond.issuerName} zapada: fundusz otrzymuje nominał ${formatZl(payout, 2)}.`, 'review');
         }
         allBonds.splice(i, 1);
     }
@@ -966,34 +969,71 @@ function getGameClockMs() {
     return playerFund?.clockMs ?? 0;
 }
 
-/** Ranking kapitalizacji spółek z Platynowej i wyżej → przydział do giełd elitarnych. */
-function assignEliteExchanges() {
+// 0.18.7 E0b: elitarne z warunków i progów względnych (wielokrotności progu Platynowej) zamiast minCap 1,5 / 2,5 mld.
+// Rubinowa (≤ 6): ocena ≥ A+, zysk 8 kw. z rzędu, kapitalizacja ≥ 2 × próg Platynowej; Szmaragdowa (≤ 3): ocena ≥ AA, dywidenda
+// ≥ 4 kw. z rzędu (dividendStreak), ≥ 4 × próg; Diamentowa (1): najlepszy wynik (kapitalizacja 50%, zysk 4 kw. 25%, ocena 25%)
+// spośród spełniających Szmaragdową (gdy brak — Rubinową). Zmiana poziomu po 2 kw.; Diamentowa zmienia się po 2 kw. przewagi innej spółki.
+const ELITE_RULES = { RUBY: { capMult: 1.6, grade: 'A+', profitQ: 8 }, // 0.18.9 G10: Rubinowa 2 → 1,6 × progu Platynowej (seria g9: Rubinowa 73%)
+    EMERALD: { capMult: 2.5, grade: 'A+', divQ: 2 }, /* 0.18.9 G10: 3 → 2,5 × progu (k9: Szmaragdowa 83%) */ confirmQ: 2, diamondLeadQ: 4, diamondMargin: 0.15 }; // U11 (2026-11-21): Szmaragdowa od A+, seria em: dywidenda wąskim gardłem → 2 kw.; kalibracja e0f → e0g: Szmaragdowa 4 → 3 × próg, Diamentowa 4 kw. przewagi o ≥ 15%
+let eliteState = { challenger: null, n: 0 };
+function getPlatinumCapThreshold() { return (typeof getTierMedianCap === 'function' ? getTierMedianCap('home') : 0) * (typeof TIER_RULES === 'object' ? TIER_RULES.PLATINUM : 5); }
+function eliteQualifies(stock, tier) {
+    const r = ELITE_RULES[tier], rating = typeof getValidRating === 'function' ? getValidRating(stock) : null, plat = getPlatinumCapThreshold();
+    if (!r || !rating || !(plat > 0) || ratingIndex(rating.grade) < ratingIndex(r.grade) || getMarketCap(stock) < plat * r.capMult) return false;
+    if (r.profitQ) { const h = stock.fundamentals?.history || []; if (h.length < r.profitQ || !h.slice(-r.profitQ).every(x => (Number(x.netIncome) || 0) > 0)) return false; }
+    if (r.divQ && !((Number(stock.dividendStreak) || 0) >= r.divQ)) return false;
+    if (typeof meetsEsgGate === 'function' && !meetsEsgGate(stock, tier)) return false; // 0.18.9 G9: kryterium ESG UEiE
+    return true;
+}
+function getDiamondScore(stock, pool) {
+    const maxCap = Math.max(1, ...pool.map(getMarketCap)), maxNi = Math.max(1, ...pool.map(s => Math.max(0, getNetIncome4q(s) || 0)));
+    const vr = getValidRating(stock), ri = vr ? ratingIndex(vr.grade) / (RATING_GRADES.length - 1) : 0; // 0.18.7 E5: ocena wiążąca
+    return 0.5 * getMarketCap(stock) / maxCap + 0.25 * Math.max(0, getNetIncome4q(stock) || 0) / maxNi + 0.25 * ri;
+}
+/** Przydział do elitarnych. `immediate` (start gry, wczytanie): bez okresu potwierdzenia; na starcie pula dostaje audyt. */
+function assignEliteExchanges(immediate = false) {
     const pool = stocks
         .filter(s => !s.assetType && !s.isBankStock && !s.isBankrupt && !s.isSubsidiaryOf &&
             (s.exchange === 'PLATINUM' || isEliteExchange(s.exchange)))
         .sort((a, b) => getMarketCap(b) - getMarketCap(a));
+    if (immediate && typeof auditStock === 'function') for (const s of pool) if (!getValidRating(s)) auditStock(s, true);
 
     const target = {};
-    let index = 0;
-    if (getGameClockMs() >= ELITE_EXCHANGES.DIAMOND.minGameMs && pool[0]) target[pool[index++].symbol] = 'DIAMOND';
-    let emeralds = 0;
-    while (index < pool.length && emeralds < ELITE_EXCHANGES.EMERALD.limit && getMarketCap(pool[index]) >= ELITE_EXCHANGES.EMERALD.minCap) {
-        target[pool[index++].symbol] = 'EMERALD';
-        emeralds++;
+    if (getGameClockMs() >= ELITE_EXCHANGES.DIAMOND.minGameMs) {
+        let cands = pool.filter(s => eliteQualifies(s, 'EMERALD'));
+        if (!cands.length) cands = pool.filter(s => eliteQualifies(s, 'RUBY'));
+        const best = cands.sort((a, b) => getDiamondScore(b, pool) - getDiamondScore(a, pool))[0];
+        const holder = pool.find(s => s.exchange === 'DIAMOND' && eliteQualifies(s, 'RUBY')); // posiadacz traci miejsce od razu dopiero bez warunków Rubinowej
+        let diamond = best;
+        if (holder && best && holder !== best && !immediate) { // zmiana dopiero po 4 kw. wyraźnej przewagi innej spółki
+            if (getDiamondScore(best, pool) < getDiamondScore(holder, pool) * (1 + ELITE_RULES.diamondMargin)) { eliteState = { challenger: null, n: 0 }; }
+            else eliteState = eliteState.challenger === best.symbol ? { challenger: best.symbol, n: eliteState.n + 1 } : { challenger: best.symbol, n: 1 };
+            diamond = eliteState.n >= ELITE_RULES.diamondLeadQ ? best : holder;
+        } else eliteState = { challenger: null, n: 0 };
+        if (diamond) target[diamond.symbol] = 'DIAMOND';
     }
-    for (let rubies = 0; index < pool.length && rubies < ELITE_EXCHANGES.RUBY.limit && getMarketCap(pool[index]) >= ELITE_EXCHANGES.RUBY.minCap; rubies++) target[pool[index++].symbol] = 'RUBY';
+    // 0.18.9 G10: najpierw 1 Szmaragdowa, potem Rubinowa do limitu, potem reszta Szmaragdowej (wcześniej Szmaragdowa brała do 3 i Rubinowej brakowało spółek)
+    const used = { EMERALD: 0, RUBY: 0 };
+    for (const [tier, cap] of [['EMERALD', 1], ['RUBY', ELITE_EXCHANGES.RUBY.limit], ['EMERALD', ELITE_EXCHANGES.EMERALD.limit]]) {
+        for (const s of pool) if (!target[s.symbol] && used[tier] < cap && eliteQualifies(s, tier)) { target[s.symbol] = tier; used[tier]++; }
+    }
 
     const changes = [];
     for (const stock of pool) {
-        const next = target[stock.symbol] || 'PLATINUM';
-        if (next === stock.exchange) { applyEliteBonuses(stock); continue; }
-        const up = exchanges[next].level > exchanges[stock.exchange].level;
+        let next = target[stock.symbol] || 'PLATINUM';
+        if (next !== stock.exchange && next !== 'DIAMOND' && stock.exchange !== 'DIAMOND' && !immediate) { // potwierdzenie przez 2 kw. (poza Diamentową)
+            stock.elitePending = stock.elitePending?.target === next ? { target: next, n: stock.elitePending.n + 1 } : { target: next, n: 1 };
+            if (stock.elitePending.n < ELITE_RULES.confirmQ) next = stock.exchange;
+        }
+        if (next === stock.exchange) { if (target[stock.symbol] === stock.exchange || (!target[stock.symbol] && stock.exchange === 'PLATINUM')) delete stock.elitePending; applyEliteBonuses(stock); continue; }
+        delete stock.elitePending;
+        const from = stock.exchange;
         stock.exchange = next;
         applyEliteBonuses(stock);
-        applyPriceEffect(stock.symbol, up ? 0.03 : -0.03, up ? 'positive' : 'negative', 'review');
-        logEvent(`${up ? '📈 AWANS' : '📉 SPADEK'}: ${stock.name} ${up ? 'wchodzi na' : 'spada na'} ${exchanges[next].name} (kapitalizacja ${(getMarketCap(stock) / 1e6).toFixed(1)} mln PLN).`, 'market');
+        noteTierChange(stock, from, next); // 0.18.7 E0c: wydarzenie, kurs, Tied, poczta
         changes.push([stock.symbol, next]);
     }
+    flushTierEvents();
     return changes;
 }
 
@@ -1030,10 +1070,12 @@ function pickSubsidiaryName(parent, sector) {
     const first = String(parent.name).split(/[\s-]+/)[0] || parent.name;
     const candidates = [];
     for (const word of words) {
-        candidates.push(`${parent.name} ${word}`, `${first} ${word}`, `${first.slice(0, Math.min(5, Math.max(3, first.length - 2)))}${word.toLowerCase()}`, `${first.slice(0, 4)}${word.toLowerCase()}`);
+        candidates.push(`${parent.name} ${word}`, `${first} ${word}`);
+        if (first.length > 6 && /^[A-Za-z]{3}/.test(first)) candidates.push(`${first.slice(0, 3)}${word.toLowerCase()}`); // długi człon skraca się do 3 liter („Polskie” → „Polenergy”), o ile bez polskich znaków („Pań” odpada)
+        if (first.length <= 6) candidates.push(`${first.slice(0, Math.min(5, Math.max(3, first.length - 2)))}${word.toLowerCase()}`, `${first.slice(0, 4)}${word.toLowerCase()}`); // zlepek tylko z krótkiego członu; z długiego wychodzi „Pańsenergy” z „Państwowy”
     }
     if (sector === getMainSector(parent)) for (const extra of SUBSIDIARY_EXTRA_WORDS) candidates.push(`${parent.name} ${extra}`, `${first} ${extra}`);
-    const taken = new Set(stocks.map(s => String(s.name).toLowerCase()));
+    const taken = new Set([...stocks, ...(typeof foreignIssuers === 'object' ? Object.values(foreignIssuers) : [])].map(s => String(s.name).toLowerCase()));
     const free = [...new Set(candidates)].filter(name => !taken.has(name.toLowerCase()));
     if (free.length) return getRandomElement(free);
     let n = 2;
@@ -1054,7 +1096,7 @@ function foundSubsidiary(parent, options = {}) {
 
     const totalShares = 10000;
     const price = Math.round(capital / totalShares * 1.5 * 100) / 100;
-    const exchangeKey = options.exchange && exchanges[options.exchange] ? options.exchange : Object.keys(exchanges).find(key => !isEliteExchange(key) && exchanges[key].minPrice <= price && price < exchanges[key].maxPrice) || 'SILVER';
+    const exchangeKey = options.exchange && exchanges[options.exchange] ? options.exchange : getPriceTierKey(price);
     const parentStake = options.stake || 0.6; // T6: córka koncernu 70–80% (20–30% w ofercie publicznej)
 
     const segment = pickSubsidiarySegment(parent);
@@ -1100,7 +1142,7 @@ function foundSubsidiary(parent, options = {}) {
     if (typeof initializeFundamentals === 'function') initializeFundamentals(child, true);
     if (typeof initializeDescriptionParts === 'function') initializeDescriptionParts(child);
 
-    logEvent(`🆕 IPO: ${parent.name} zakłada spółkę zależną ${child.name} (${symbol}) na ${exchanges[exchangeKey].name} — ${Math.round((1 - parentStake) * 100)}% akcji w ofercie publicznej.`, 'market');
+    logEvent(`🆕 IPO: ${parent.name} zakłada spółkę zależną ${child.name} (${symbol}) na ${getExchangeAcc(exchangeKey)} — ${Math.round((1 - parentStake) * 100)}% akcji w ofercie publicznej.`, 'market');
     return child;
 }
 
@@ -1139,7 +1181,7 @@ function runDiamondStrategy() {
         const fine = Math.round(Math.max(0, diamond.cash) * 0.01);
         adjustCompanyCash(diamond, -fine);
         governmentTreasury += fine;
-        logEvent(`⚖️ Urząd antymonopolowy blokuje skup akcji ${target.name} przez ${diamond.name} i nakłada karę ${fine.toLocaleString('pl-PL')} PLN.`, 'state');
+        logEvent(`⚖️ Urząd antymonopolowy blokuje skup akcji ${target.name} przez ${diamond.name} i nakłada karę ${formatZl(fine, 0)}.`, 'state');
         return null;
     }
 
@@ -1153,7 +1195,7 @@ function runDiamondStrategy() {
     diamond.equityStakes[target.symbol] = (diamond.equityStakes[target.symbol] || 0) + quantity;
 
     const stake = diamond.equityStakes[target.symbol] / target.totalShares;
-    logEvent(`💎 ${diamond.name} skupuje ${quantity} akcji ${target.name} (udział ${(stake * 100).toFixed(1)}%).`, 'market');
+    logEvent(`💎 ${diamond.name} skupuje ${quantity} akcji ${target.name} (udział ${formatNumberPl((stake * 100), 1)}%).`, 'market');
     if (stake > 0.5 && !target.isSubsidiaryOf) {
         target.parentStakePct = stake;
         if (typeof makeSubsidiary === 'function') makeSubsidiary(diamond, target);
@@ -1164,7 +1206,7 @@ function runDiamondStrategy() {
 
 /** Co kwartał: przydział giełd elitarnych, zależne, Diament. */
 function processEliteExchangesQuarterly() {
-    assignEliteExchanges();
+    assignEliteExchanges(); // kwartalnie: z okresem potwierdzenia (0.18.7 E0b)
     for (const stock of stocks.filter(s => isEliteExchange(s.exchange) && !s.isBankrupt)) {
         const def = ELITE_EXCHANGES[stock.exchange];
         const count = (stock.subsidiaries || []).length;
@@ -1243,7 +1285,7 @@ function generateBridgeLoanOffers() {
         weeksLeft: 3
     };
     bridgeLoanOffers.push(offer);
-    logEvent(`🏗️ ${company.name} szuka finansowania pomostowego na „${offer.project}”: ${offer.amount.toLocaleString('pl-PL')} PLN, ${(offer.rate * 100).toFixed(1)}% rocznie.`, 'construction');
+    logEvent(`🏗️ ${company.name} szuka finansowania pomostowego na „${offer.project}”: ${formatZl(offer.amount, 0)}, ${formatNumberPl((offer.rate * 100), 1)}% rocznie.`, 'construction');
     return offer;
 }
 
@@ -1252,7 +1294,7 @@ function fundBridgeLoan(offerId) {
     const company = offer && stocks.find(s => s.symbol === offer.symbol);
     if (!offer || !company || company.isBankrupt) { showToast('Oferta nieaktualna.', 'error'); return null; }
     if (offer.amount > playerCash) { showToast('Za mało gotówki funduszu.', 'error'); return null; }
-    if (offer.amount > getFundBridgeCapacity() + 1e-6) { showToast(`Limit finansowania pomostowego: ${(BRIDGE_FUND_LIMIT * 100).toFixed(0)}% aktywów.`, 'error'); return null; }
+    if (offer.amount > getFundBridgeCapacity() + 1e-6) { showToast(`Limit finansowania pomostowego: ${formatNumberPl((BRIDGE_FUND_LIMIT * 100), 0)}% aktywów.`, 'error'); return null; }
 
     playerCash -= offer.amount;
     adjustCompanyCash(company, offer.amount);
@@ -1261,7 +1303,7 @@ function fundBridgeLoan(offerId) {
     const loan = { id: offer.id, symbol: company.symbol, name: company.name, project: offer.project, principal: offer.amount, rate: offer.rate, accrued: 0, weeksLeft: offer.weeks, termWeeks: offer.weeks, extended: false };
     getFundBridgeLoans().push(loan);
     bridgeLoanOffers = bridgeLoanOffers.filter(item => item !== offer);
-    logEvent(`🏗️ Fundusz udziela ${company.name} pożyczki pomostowej ${offer.amount.toLocaleString('pl-PL')} PLN (${(offer.rate * 100).toFixed(1)}%, ${offer.weeks} tyg.).`, 'review');
+    logEvent(`🏗️ Fundusz udziela ${company.name} pożyczki pomostowej ${formatZl(offer.amount, 0)} (${formatNumberPl((offer.rate * 100), 1)}%, ${offer.weeks} tyg.).`, 'review');
     if (typeof refreshFundViews === 'function') refreshFundViews();
     return loan;
 }
@@ -1279,7 +1321,7 @@ function processBridgeLoansWeekly() {
         const company = stocks.find(s => s.symbol === loan.symbol);
         if (!company || company.isBankrupt) {
             const recovery = loan.principal * BRIDGE_RECOVERY;
-            closeBridgeLoan(loan, recovery, `💥 ${loan.name} upada — fundusz odzyskuje ${recovery.toFixed(0)} z ${loan.principal.toFixed(0)} PLN pożyczki pomostowej.`);
+            closeBridgeLoan(loan, recovery, `💥 ${loan.name} upada — fundusz odzyskuje ${formatNumberPl(recovery, 0)} z ${formatZl(loan.principal, 0)} pożyczki pomostowej.`);
             continue;
         }
         loan.accrued += loan.principal * loan.rate / FUND_WEEKS_PER_YEAR;
@@ -1290,7 +1332,7 @@ function processBridgeLoansWeekly() {
         if (company.cash >= due) {
             adjustCompanyCash(company, -due);
             adjustBalanceSheet(company, { assets: -due, liabilities: -loan.principal, retainedEarnings: -loan.accrued });
-            closeBridgeLoan(loan, due, `🏗️ ${company.name} spłaca pożyczkę pomostową: ${due.toFixed(0)} PLN (odsetki ${loan.accrued.toFixed(0)} PLN).`);
+            closeBridgeLoan(loan, due, `🏗️ ${company.name} spłaca pożyczkę pomostową: ${formatZl(due, 0)} (odsetki ${formatZl(loan.accrued, 0)}).`);
         } else if (!loan.extended) {
             loan.extended = true;
             loan.weeksLeft = 4;
@@ -1299,7 +1341,7 @@ function processBridgeLoansWeekly() {
             const paid = Math.max(0, company.cash * 0.5);
             adjustCompanyCash(company, -paid);
             adjustBalanceSheet(company, { assets: -paid, liabilities: -Math.min(paid, loan.principal) });
-            closeBridgeLoan(loan, paid, `💥 ${company.name} spłaca tylko ${paid.toFixed(0)} z ${due.toFixed(0)} PLN pożyczki pomostowej.`);
+            closeBridgeLoan(loan, paid, `💥 ${company.name} spłaca tylko ${formatNumberPl(paid, 0)} z ${formatZl(due, 0)} pożyczki pomostowej.`);
         }
     }
 }
@@ -1371,7 +1413,7 @@ function describeEtfRules(etf) {
     if (r.aristocratsOnly) parts.push('tylko arystokraci');
     if (r.stateOnly) parts.push('tylko spółki państwowe');
     if (r.minExchangeLevel) parts.push(`giełda: ${Object.values(exchanges).find(e => e.level === r.minExchangeLevel)?.name || r.minExchangeLevel}+`);
-    parts.push(`maks. ${(r.maxWeight * 100).toFixed(0)}% na spółkę`);
+    parts.push(`maks. ${formatNumberPl((r.maxWeight * 100), 0)}% na spółkę`);
     parts.push(ETF_WEIGHTINGS[etf.weighting]);
     return parts.join(' · ');
 }
@@ -1568,7 +1610,7 @@ function reviewEtfYear(etf) {
         etf.weighting = getRandomElement(Object.keys(ETF_WEIGHTINGS).filter(w => w !== previous));
         if (Math.random() < 0.3) etf.rules.maxWeight = Math.max(0.08, Math.min(0.35, etf.rules.maxWeight + getRandomInRange(-0.05, 0.05)));
         etf.description = `Emitent: ${etf.issuerName}. Zasady: ${describeEtfRules(etf)}.`;
-        logEvent(`📊 ${etf.name} nie osiągnął celu (${(result * 100).toFixed(1)}% vs ${(etf.yearTarget * 100).toFixed(1)}%) — zmienia strategię na „${ETF_WEIGHTINGS[etf.weighting]}”.`, 'market');
+        logEvent(`📊 ${etf.name} nie osiągnął celu (${formatNumberPl((result * 100), 1)}% vs ${formatNumberPl((etf.yearTarget * 100), 1)}%) — zmienia strategię na „${ETF_WEIGHTINGS[etf.weighting]}”.`, 'market');
     }
     etf.yearTarget = getRandomInRange(0.05, 0.12);
     etf.yearStartPrice = etf.price;
@@ -1681,7 +1723,7 @@ function sellEtf(symbol, quantity) {
     playerCash += proceeds;
     holding.shares -= quantity;
     if (holding.shares <= 0) delete playerPortfolio[symbol];
-    logEvent(`Fundusz umarza ${quantity} jedn. ${etf.name} (wynik ${profit >= 0 ? '+' : ''}${profit.toFixed(2)} PLN).`, 'review');
+    logEvent(`Fundusz umarza ${quantity} jedn. ${etf.name} (wynik ${profit >= 0 ? '+' : ''}${formatZl(profit, 2)}).`, 'review');
     displayCash();
     displayPortfolio();
     if (typeof checkPlayerTierUpgrade === 'function') checkPlayerTierUpgrade();
@@ -1730,16 +1772,16 @@ const MARKET_OPERATOR_DEFS = {
     XTD:      { name: 'XTD Markets', short: 'XTD', commission: 0.002, color: '#8957e5' },
     PLU5:     { name: 'PLU5 Exchange', short: 'PLU5', commission: 0.0015, color: '#d29922' },
     EURONEXT: { name: 'Euronext', short: 'Euronext', commission: 0.0025, color: '#3fb950', dormantForever: true },
-    // 0.15.6: rynki wejścia bez spółki-operatora (listings.js): NewHorizons (państwowy operator, młode i ryzykowne spółki) i giełda prywatna
+    // 0.15.6: rynki wejścia bez spółki-operatora (listings.js): NewHorizons (państwowy operator, młode i ryzykowne spółki) i Włoska Giełda
     NH:       { name: 'NewHorizons', short: 'NH', commission: 0, color: '#2dd4bf', entry: true },
-    PRV:      { name: 'Giełda prywatna', short: 'PRV', commission: 0, color: '#94a3b8', entry: true }
+    PRV:      { name: 'Włoska Giełda', short: 'PRV', commission: 0, color: '#94a3b8', entry: true }
 };
 const OPERATOR_STARTUP_GOAL = [300000, 600000];  // bardzo drogie startupy
 const OPERATOR_STARTUP_SLOWDOWN = 0.25;         // rozwój 4× wolniej niż zwykły startup
 const OPERATOR_SPONSOR_CHANCE = 0.12;           // co kwartał w fazie startupu
 const OPERATOR_SPAWN_CHANCE = 0.1;              // co kwartał, od 4. kwartału gry
 const OPERATOR_LISTING_FEE = 0.0002;            // opłata za notowanie: % kapitalizacji członka na kwartał
-const OPERATOR_EXCLUSIVITY_CHANCE = 0.1;
+const OPERATOR_EXCLUSIVITY_CHANCE = 0.15;       // 0.16.2: było 0,1 — rynki internetowe podpisywały za mało spółek
 const LISTING_FEE_FACTOR = { GPW: 1, XTD: 0.7, PLU5: 0.5, EURONEXT: 1 }; // B4: tańsze rynki alternatywne
 const LISTING_MOVE_PRICE_EFFECT = { GPW: 0.02, XTD: -0.03, PLU5: -0.03 };  // mniej inwestorów = niższa wycena
 
@@ -1766,11 +1808,11 @@ function getMarketLabel(id) {
 // =================================================================================
 // 0.13.1 (D1): RYNKI INTERNETOWE — XTD, PLU5 i nowe rynki powstające w trakcie gry
 // Startup operatora ma gwarancję debiutu; po debiucie operator nie upada, dopóki ma ≥ 3 spółki.
-// Każdy rynek ma limit 8 spółek członkowskich (nie liczą się do limitu spółek krajowych).
+// Każdy rynek ma limit 12 spółek członkowskich (nie liczą się do limitu spółek krajowych).
 // Gracz może kupić jednorazową koncesję na rynek: handel jego spółkami bez prowizji.
 // =================================================================================
 
-const INTERNET_MEMBER_LIMIT = 8;
+const INTERNET_MEMBER_LIMIT = 12;
 const INTERNET_PROTECTION_MEMBERS = 3;
 const MAX_INTERNET_MARKETS = 4;
 const NEW_INTERNET_MARKET_CHANCE = 0.04;   // co kwartał, od 8. kwartału, gdy rynków < MAX_INTERNET_MARKETS
@@ -1781,7 +1823,14 @@ const INTERNET_MARKET_POOL = [
 ];
 
 /** Definicja rynku: stała (GPW, XTD, PLU5, Euronext) albo zapisana przy rynku powstałym w trakcie gry. */
+/** 0.16.12 D4: giełda macierzysta (wewnętrzny klucz 'GPW') pod nazwą z danych kraju startowego: DAX/WSE/PX…; przy PL bez zmian. */
+function getHomeMarketDef() {
+    const base = MARKET_OPERATOR_DEFS.GPW, country = typeof getStartCountry === 'function' ? getStartCountry() : 'PL', op = typeof COUNTRY_DEFS === 'object' ? COUNTRY_DEFS[country]?.operator : null;
+    return country === 'PL' || !op ? base : { ...base, name: op.name.replace(/\s*\([^)]*\)\s*$/, ''), short: op.id };
+}
+
 function getMarketDef(id) {
+    if (id === 'GPW') return getHomeMarketDef();
     return MARKET_OPERATOR_DEFS[id] || (typeof marketOperators === 'object' && marketOperators ? marketOperators[id]?.def : null) || null;
 }
 
@@ -1790,7 +1839,7 @@ function isInternetMarket(id) {
     return Boolean(def && !def.main && !def.dormantForever && !def.entry);
 }
 
-/** 0.15.6: rynek wejścia (NH, giełda prywatna) — bez operatora, poza limitem spółek krajowych. */
+/** 0.15.6: rynek wejścia (NH, Włoska Giełda) — bez operatora, poza limitem spółek krajowych. */
 function isEntryMarket(id) {
     return Boolean(getMarketDef(id)?.entry);
 }
@@ -1933,6 +1982,7 @@ function createListedCompany({ name, symbol, sector, price, totalShares, exchang
         sector: sector || base.sector,
         exchange,
         market,
+        country: 'PL', // 0.16.4 E6: kraj pochodzenia (filtry giełd)
         price,
         totalShares,
         maxShares: totalShares,
@@ -1962,14 +2012,18 @@ function createListedCompany({ name, symbol, sector, price, totalShares, exchang
 
 function spawnMarketMember(operatorId, reason) {
     if (isInternetMarket(operatorId) ? !(hasInternetMemberSlot(operatorId) && hasFreeTotalListingSlot()) : !hasFreeListingSlot()) return null; // D1: limit spółek na rynek; P1: sufit krajowy i łączny
-    const sectors = SECTOR_NAMES.filter(s => s !== 'Bankowość');
-    const sector = [getRandomElement(sectors)];
+    const profile = typeof getMarketProfile === 'function' ? getMarketProfile(operatorId) : null; // 0.16.4 E6: giełda z profilem tworzy tylko pasujące spółki
+    const sectors = SECTOR_NAMES.filter(s => s !== 'Bankowość' && (!profile?.sectors || profile.sectors.includes(s)));
+    const sector = [getRandomElement(sectors.length ? sectors : SECTOR_NAMES.filter(s => s !== 'Bankowość'))];
     const name = generateCompanyName(sector[0]); // 0.14.2 P4: człony nazw dla każdego sektora
     const symbol = uniqueSymbol((name.normalize('NFD').replace(/[^A-Za-z ]/g, '').split(' ').map(w => w.slice(0, 2)).join('').toUpperCase() || 'NEW').slice(0, 4));
     const stock = createListedCompany({
         name, symbol, sector,
         price: getRandomInRange(25, 70), totalShares: getRandomIntInRange(20, 80) * 1000, exchange: 'BRONZE', market: operatorId
     });
+    if (profile?.minCap && getMarketCapValue(stock) < profile.minCap * 1.2) { // kapitalizacja z zapasem ponad próg profilu
+        stock.totalShares = stock.maxShares = Math.ceil(profile.minCap * 1.2 / stock.price / 1000) * 1000;
+    }
     stocks.push(stock);
     logEvent(`🏛️ ${stock.name} (${stock.symbol}) wchodzi na giełdę jako członek rynku ${getMarketLabel(operatorId)}${reason ? ` — ${reason}` : ''}.`, 'market');
     return stock;
@@ -1992,7 +2046,7 @@ function spawnOperatorStartup(operator) {
     stocks.push(startup);
     operator.status = 'startup';
     operator.startupSymbol = startup.symbol;
-    logEvent(`🚀 W inkubatorze pojawia się ${def.name} — przyszły operator rynku (cel finansowania ${startup.fundingGoal.toLocaleString('pl-PL')} PLN).`, 'market');
+    logEvent(`🚀 W inkubatorze pojawia się ${def.name} — przyszły operator rynku (cel finansowania ${formatZl(startup.fundingGoal, 0)}).`, 'market');
     return startup;
 }
 
@@ -2002,6 +2056,7 @@ function activateMarketOperator(startup) {
     if (!operator) return;
     operator.status = 'active';
     operator.symbol = startup.symbol;
+    if (operator.profile === undefined && typeof pickMarketProfileId === 'function') operator.profile = pickMarketProfileId(); // 0.16.4 E6: losowy profil (albo brak)
     startup.marketOperator = operator.id;
     startup.market = operator.id;
     // D1: rynek internetowy ma własny limit (INTERNET_MEMBER_LIMIT) — wliczają się sponsorzy z fazy startupu.
@@ -2009,7 +2064,7 @@ function activateMarketOperator(startup) {
     const fresh = Math.max(Math.min(1, count), Math.round(count * 0.7));
     for (let i = 0; i < fresh; i++) spawnMarketMember(operator.id, 'otwarcie nowego rynku');
     for (let i = fresh; i < count; i++) signExclusivity(operator, startup);
-    logEvent(`🏛️ ${getMarketDef(operator.id).name} debiutuje i otwiera własny rynek internetowy: ${fresh} nowych spółek${count > fresh ? `, ${count - fresh} przechodzi z GPW` : ''}!`, 'market');
+    logEvent(`🏛️ ${getMarketDef(operator.id).name} debiutuje i otwiera własny rynek internetowy: ${fresh} nowych spółek${count > fresh ? `, ${count - fresh} przechodzi z ${getMarketLabel('GPW')}` : ''}!`, 'market');
 }
 
 /** Upadek startupu-operatora (wołane z removeStartup). */
@@ -2143,7 +2198,9 @@ function processMarketsQuarterly() {
 
 function collectListingFees(operator, operatorStock) {
     for (const stock of stocks.filter(s => getStockMarket(s) === operator.id && s !== operatorStock && !s.assetType && !s.isBankrupt)) {
-        const fee = Math.min(Math.max(0, stock.cash) * 0.05, getMarketCapValue(stock) * OPERATOR_LISTING_FEE * (LISTING_FEE_FACTOR[operator.id] ?? 1));
+        const boost = operator.id === 'GPW' && typeof getListingFeeBoost === 'function' ? getListingFeeBoost() : 1;
+        const pct = Math.min(Math.max(0, stock.cash) * 0.05, getMarketCapValue(stock) * OPERATOR_LISTING_FEE * (LISTING_FEE_FACTOR[operator.id] ?? 1) * boost);
+        const fee = Math.max(pct, Math.min(typeof getMarketMinFee === 'function' ? getMarketMinFee(operator.id) * boost : 0, Math.max(0, stock.cash))); // 0.16.4 E6: minimum rynku, płacone najwyżej do wysokości gotówki spółki
         if (!(fee > 0)) continue;
         adjustCompanyCash(stock, -fee);
         adjustBalanceSheet(stock, { assets: -fee, retainedEarnings: -fee });
@@ -2172,7 +2229,7 @@ function investInMembers(operator, operatorStock) {
 function signExclusivity(operator, operatorStock) {
     if (isInternetMarket(operator.id) && !hasInternetMemberSlot(operator.id)) return null; // D1: limit spółek rynku
     const candidates = stocks.filter(s => getStockMarket(s) === 'GPW' && !s.marketOperator && !s.assetType && !s.isBankrupt && !s.isStateOwned
-        && ['BRONZE', 'SILVER'].includes(s.exchange));
+        && ['BRONZE', 'SILVER'].includes(s.exchange) && (typeof marketAccepts !== 'function' || marketAccepts(operator.id, s)));
     if (!candidates.length) return null;
     const stock = getRandomElement(candidates);
     const bonus = Math.min(operatorStock.cash * 0.1, getMarketCapValue(stock) * 0.005);
@@ -2195,7 +2252,7 @@ function getListingMoveTargets(stock) {
     if (!stock || stock.assetType || stock.marketOperator || stock.isStateOwned || getFundStakePct(stock) <= 0.5) return [];
     ensureMarketOperators();
     const fromInternet = isInternetMarketStock(stock);
-    return Object.keys(marketOperators).filter(id => id !== getStockMarket(stock) && marketOperators[id]?.status === 'active' && (id in LISTING_MOVE_PRICE_EFFECT || isInternetMarket(id))
+    return Object.keys(marketOperators).filter(id => id !== getStockMarket(stock) && marketOperators[id]?.status === 'active' && (id in LISTING_MOVE_PRICE_EFFECT || isInternetMarket(id)) && (typeof marketAccepts !== 'function' || marketAccepts(id, stock))
         && (isInternetMarket(id) ? hasInternetMemberSlot(id) : (!fromInternet || hasFreeListingSlot()))); // P2: także nowe rynki internetowe; P1: limity rynków
 }
 
@@ -2206,7 +2263,7 @@ function getListingMovePriceEffect(marketId) {
 
 function moveListing(symbol, marketId) {
     const stock = stocks.find(s => s.symbol === symbol);
-    if (!getListingMoveTargets(stock).includes(marketId)) { showToast('Przeniesienie notowań niemożliwe (wymaga większości i aktywnego rynku).', 'warning'); return false; }
+    if (!getListingMoveTargets(stock).includes(marketId) || (typeof isStateGpwOnly === 'function' && isStateGpwOnly(stock))) { showToast('Przeniesienie notowań niemożliwe (wymaga większości i aktywnego rynku).', 'warning'); return false; }
     const quarter = typeof macro === 'object' ? macro.quarter : 0;
     if (stock.listingMovedQuarter !== undefined && quarter - stock.listingMovedQuarter < 4) { showToast('Notowania można przenieść raz na rok gry.', 'warning'); return false; }
     const cost = Math.round(getMarketCapValue(stock) * 0.003);
@@ -2218,7 +2275,7 @@ function moveListing(symbol, marketId) {
     stock.listingMovedQuarter = quarter;
     const effect = getListingMovePriceEffect(marketId);
     applyPriceEffect(symbol, effect, effect >= 0 ? 'positive' : 'negative', 'company');
-    logEvent(`🔀 ${stock.name} przenosi notowania z ${getMarketLabel(from)} na ${getMarketLabel(marketId)} (prowizja ${((getMarketDef(marketId)?.commission || 0) * 100).toFixed(2)}%, opłata za notowanie ×${LISTING_FEE_FACTOR[marketId] ?? 1}).`, 'market');
+    logEvent(`🔀 ${stock.name} przenosi notowania z ${getMarketLabel(from)} na ${getMarketLabel(marketId)} (prowizja ${formatNumberPl(((getMarketDef(marketId)?.commission || 0) * 100), 2)}%, opłata za notowanie ×${LISTING_FEE_FACTOR[marketId] ?? 1}).`, 'market');
     return true;
 }
 
@@ -2247,9 +2304,11 @@ function renderMarketsPanel() {
         return `<article class="bank-card market-card" style="border-top: 3px solid ${def.color}">
             <header class="bank-card-head"><span class="bank-card-icon">🏛️</span><div><h4>${escapeHtml(def.name)} (${escapeHtml(def.short || operator.id)})</h4><span class="bank-card-type">${statusLabel[operator.status] || operator.status}</span></div></header>
             <dl class="bank-card-rates">
-                <div><dt>Prowizja</dt><dd>${(def.commission * 100).toFixed(2)}%</dd></div>
+                <div><dt>Prowizja</dt><dd>${formatNumberPl((def.commission * 100), 2)}%</dd></div>
                 <div><dt>Spółki</dt><dd>${operator.members}</dd></div>
-                <div><dt>Kurs operatora</dt><dd>${stock ? formatZl(stock.price) : (def.entry ? 'bez operatora' : operator.status === 'active' ? 'GPW (rynek gł.)' : '—')}</dd></div>
+                ${typeof getMarketMinFee === 'function' ? `<div><dt>Opłata minimalna</dt><dd>${getMarketMinFee(operator.id) > 0 ? `${formatZl(getMarketMinFee(operator.id), 0)} / kw.` : operator.id === 'PRV' ? 'brak (nie ma operatora; ryzyko oszustw ×5 już ją obciąża)' : 'brak'}</dd></div>` : ''}
+                ${typeof describeMarketProfile === 'function' && isInternetMarket(operator.id) ? `<div><dt>Profil giełdy</dt><dd>${escapeHtml(describeMarketProfile(operator.id))}</dd></div>` : ''}
+                <div><dt>Kurs operatora</dt><dd>${stock ? formatZl(stock.price) : (def.entry ? 'bez operatora' : operator.status === 'active' ? `${getMarketLabel('GPW')} (rynek gł.)` : '—')}</dd></div>
             </dl>
             ${startup ? `<p class="text-sm">Finansowanie startupu: ${formatZl(startup.currentFunding, 0)} / ${formatZl(startup.fundingGoal, 0)} · sponsorzy: ${operator.sponsors.length}</p>` : ''}
             ${operator.commissionsTotal > 0 ? `<p class="text-xs text-muted">Prowizje łącznie: ${formatZl(operator.commissionsTotal, 0)}</p>` : ''}
@@ -2273,4 +2332,34 @@ function renderMarketsPanel() {
 function toggleMarketStocksList(marketId) {
     selectedMarketPreview = selectedMarketPreview === marketId ? null : marketId;
     if (typeof updateStateModalContent === 'function') updateStateModalContent();
+}
+
+
+// =================================================================================
+// 0.18.4 A1 (Z12): FILIE BANKÓW ZAGRANICZNYCH — gdy liczba aktywnych banków spadnie poniżej startowej − 1, bank z kraju w grze otwiera filię
+// (zwykły bank komercyjny, notowany na Srebrnej, poza sufitem spółek). Liczba startowa zapisuje się w `macro.bankStartCount`.
+// =================================================================================
+const BANK_BRANCH_RULES = { chance: 0.25, capital: [4_000_000, 8_000_000], maxBranches: 6 };
+function countActiveBanks() { return commercialBanks.filter(b => b.isActive && !b.isParabank).length; }
+function processBankBranchesQuarterly() {
+    if (typeof macro !== 'object' || !macro) return null;
+    if (!(macro.bankStartCount > 0)) { macro.bankStartCount = countActiveBanks(); return null; }
+    const branches = commercialBanks.filter(b => b.isBranch).length;
+    if (countActiveBanks() >= macro.bankStartCount - 1 || branches >= BANK_BRANCH_RULES.maxBranches || Math.random() >= BANK_BRANCH_RULES.chance) return null;
+    const home = typeof getStartCountry === 'function' ? getStartCountry() : 'PL';
+    const pool = (typeof getJoinedCountries === 'function' ? getJoinedCountries() : []).filter(c => c !== home && COUNTRY_DEFS[c]);
+    const country = pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
+    const parent = country ? COUNTRY_DEFS[country].companies.find(c => [].concat(c.sector)[0] === 'Bankowość' && !commercialBanks.some(b => b.parentId === c.id)) : null;
+    const n = branches + 1;
+    const def = { id: `branch${n}`, symbol: typeof uniqueSymbol === 'function' ? uniqueSymbol(`FB${n}`) : `FB${n}`, name: parent ? `${parent.name} Polska` : `Bank Zagraniczny ${n} Polska`, type: BANK_TYPES.UNIVERSAL,
+        initialCapital: Math.round(getRandomInRange(...BANK_BRANCH_RULES.capital)), reserveRatio: 0.12, baseInterestRateMargin: 0.019, isBranch: true, parentId: parent?.id || null, parentCountry: country };
+    const bank = createBankFromDef(def, true);
+    commercialBanks.push(bank);
+    const stock = createBankStockObject(bank, 'SILVER');
+    if (stock && !stocks.some(s => s.symbol === stock.symbol)) stocks.push(stock);
+    if (typeof updateInterestRates === 'function') updateInterestRates();
+    const text = `Nowy bank na rynku: ${def.name} (filia${country ? ` banku z kraju: ${COUNTRY_DEFS[country].name}` : ' banku zagranicznego'}) zaczyna działać i wchodzi na giełdę.`;
+    logEvent(text, 'market');
+    if (typeof pushNews === 'function') pushNews(text, null);
+    return bank;
 }

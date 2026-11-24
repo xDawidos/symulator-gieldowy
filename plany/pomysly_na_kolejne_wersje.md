@@ -44,7 +44,7 @@ Notatki z planowania, jeszcze bez planu. Każdy punkt przed budową dostaje wła
 
 ---
 
-> **Stan (2026-10-25), punkty 3–7:** zaplanowane w `raporty/audyt_planow_0.16.x.md`: punkty 3 i 4 → **0.17 Surowce i transport** (`plan_0.17_surowce_transport.md`); punkt 5 → **0.18 Łańcuchy produkcyjne** (pełny graf, dwustopniowo); punkt 6 → **0.19 Handel światowy** (szkic w mapie); punkt 7 → **0.21 Rynek pracy 2**. Podwójne notowanie, córki zagraniczne i przejęcia od strony kupującego → **0.20 Globalne korporacje**.
+> **Stan (2026-10-25), punkty 3–7:** zaplanowane w `raporty/audyt_planow_0.16.x.md`: punkty 3 i 4 → **0.17 Surowce i transport** (`plan_0.17_surowce_transport.md`); punkt 5 → **0.18 Łańcuchy produkcyjne** (pełny graf, dwustopniowo); punkt 6 → **0.19.4 Handel światowy** (`plan_0.19.md`; wcześniej „0.19”); punkt 7 → **0.21 Rynek pracy 2**. Podwójne notowanie, córki zagraniczne i przejęcia od strony kupującego → **0.20 Globalne korporacje**.
 
 ## 3. Giełda towarowa (Commodities) i rynki surowcowe (→ 0.17)
 - **Rynek kontraktów terminowych na surowce (duże ryzyko i zmienność):**

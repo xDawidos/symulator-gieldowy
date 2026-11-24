@@ -20,13 +20,14 @@ function createCrisisState() {
 }
 
 function resetCrises() {
+    if (typeof createBlackSwanState === 'function') blackSwanState = createBlackSwanState(); // 0.18.8 D5
     sectorShocks = [];
     crisisLine = null;
     crisisState = createCrisisState();
 }
 
 function crisisSnapshot() {
-    return { sectorShocks, crisisLine, crisisState, nextSectorShockId };
+    return { sectorShocks, crisisLine, crisisState, nextSectorShockId, blackSwans: typeof blackSwanState === 'object' ? blackSwanState : undefined }; // 0.18.8 D5
 }
 
 function applyCrisisSnapshot(snapshot) {
@@ -34,6 +35,7 @@ function applyCrisisSnapshot(snapshot) {
     crisisLine = snapshot?.crisisLine || null;
     crisisState = { ...createCrisisState(), ...(snapshot?.crisisState || {}) };
     nextSectorShockId = Number(snapshot?.nextSectorShockId) || 1;
+    if (typeof applyBlackSwanSnapshot === 'function') applyBlackSwanSnapshot(snapshot?.blackSwans); // 0.18.8 D5
 }
 
 function crisisQuarter() { return Number(macro?.quarter) || 0; }
@@ -64,7 +66,7 @@ function addSectorShock(sector, target, options = {}) {
     const shock = {
         id: nextSectorShockId++, sector, subsector: options.subsector || null, target,
         rampQ: Math.max(0, options.rampQ ?? 0), holdQ: Math.max(0, options.holdQ ?? 2), fadeQ: Math.max(0.01, options.fadeQ ?? 1),
-        startQ: options.startQ ?? crisisTime(), lineId: options.lineId || null, revenue: options.revenue || 0
+        startQ: options.startQ ?? crisisTime(), lineId: options.lineId || null, revenue: options.revenue || 0, country: options.country || null // 0.16.2 G9: premia sektora per kraj (null = Polska)
     };
     sectorShocks.push(shock);
     updateAllSectorPremiums();
@@ -82,6 +84,7 @@ function getSectorShockPremium(stock) {
     const time = crisisTime();
     let total = 0;
     for (const shock of sectorShocks) {
+        if (shock.country) continue; // szok obcego kraju nie dotyka spółek krajowych
         const share = getCompanyBubbleShare(stock, { sector: shock.sector, subsector: shock.subsector });
         if (share > 0) total += share * getSectorShockValue(shock, time);
     }
@@ -94,7 +97,7 @@ function getCrisisRevenueFactor(stock) {
     const time = crisisTime();
     let effect = 0;
     for (const shock of sectorShocks) {
-        if (!shock.revenue || !shock.target) continue;
+        if (!shock.revenue || !shock.target || shock.country) continue;
         const share = getCompanyBubbleShare(stock, { sector: shock.sector, subsector: shock.subsector });
         if (share > 0) effect += share * shock.revenue * Math.max(0, getSectorShockValue(shock, time) / shock.target);
     }
@@ -116,14 +119,14 @@ function pruneSectorShocks() {
 const CRISIS_STAGES = ['spark', 'burst', 'spread', 'intervention', 'bottom', 'recovery'];
 const CRISIS_STAGE_NAMES = { spark: 'Zapowiedź', burst: 'Wybuch', spread: 'Zarażanie', intervention: 'Interwencja', bottom: 'Dno', recovery: 'Odbicie' };
 const CRISIS_STAGE_LENGTHS = { spark: [1, 2], burst: [1, 1], spread: [1, 3], intervention: [1, 2], bottom: [1, 2] };
-const CRISIS_BASE_CHANCE = 0.01;      // pokrętło 0,5–2% na kwartał
-const CRISIS_QUIET_QUARTERS = 12;     // linia najwcześniej po tylu kwartałach bez krachu i linii
-const CRISIS_REPLACES_CRASH = 0.40;   // szansa, że wylosowany krach jest linią
+const CRISIS_BASE_CHANCE = 0.025;     // pokrętło na kwartał (0.16.2: 1% → 1,5%; 0.18.6 O4: 1,5% → 2,5% — przy spokoju 10 kw. ścieżka losowa była otwarta ok. 37 kw. na 20 lat, czyli 0,5 linii)
+const CRISIS_QUIET_QUARTERS = 10;     // linia najwcześniej po tylu kwartałach bez krachu i linii (0.18.6 O4, U2: 12 → 10)
+const CRISIS_REPLACES_CRASH = 0.60;   // szansa, że wylosowany krach jest linią (0.18.6 O4: 40% → 60%; krachy to główna droga do linii, 1,35 na 20 lat)
 const CRISIS_MAX_VICTIMS = 3;
 
 const CRISIS_LINES = {
     banking: {
-        id: 'banking', name: 'Kryzys bankowy', icon: '🏦', year: 2008, recoveryQ: [6, 10], shape: 'U',
+        id: 'banking', name: 'Kryzys bankowy', icon: '🏦', svg: 'kryzys-bank', year: 2008, recoveryQ: [6, 10], shape: 'U',
         spark: { macro: 'housing', news: 'Analitycy ostrzegają: kredyty hipoteczne rosną szybciej niż zarobki, a banki oddają je coraz słabszym klientom.' },
         lose: [
             { sector: 'Bankowość', premium: -0.35, revenue: -0.12 }, { sector: 'Finanse', premium: -0.40, revenue: -0.15 },
@@ -138,7 +141,7 @@ const CRISIS_LINES = {
         eligible: regime => ['bull', 'euphoria', 'distribution'].includes(regime.phase)
     },
     dotcom: {
-        id: 'dotcom', name: 'Bańka internetowa', icon: '💻', year: 2000, recoveryQ: [8, 12], shape: 'U',
+        id: 'dotcom', name: 'Bańka internetowa', icon: '💻', svg: 'kryzys-internet', year: 2000, recoveryQ: [8, 12], shape: 'U',
         spark: { macro: 'techboom', news: 'Spółki technologiczne wyceniane są na wielokrotności przychodów, których jeszcze nie mają. Ostrożni analitycy mówią o bańce.' },
         lose: [
             { sector: 'Technologia', premium: -0.45, revenue: -0.10 }, { sector: 'Technologia', subsector: 'Sztuczna inteligencja', premium: -0.10 },
@@ -150,10 +153,10 @@ const CRISIS_LINES = {
         rate: { kind: 'cut', total: [-0.005, -0.01], quarters: 2 }, state: null,
         victims: { sectors: ['Technologia', 'Gaming', 'Media'], subsectors: [['Finanse', 'Fintech']], banks: false },
         news: { burst: 'Indeks spółek technologicznych traci w tydzień kilkanaście procent. Inwestorzy wycofują się z firm bez zysków.', spread: 'Pękająca bańka zaraża Gaming i Media; startupom brakuje gotówki, a fundusze venture zamykają kurek.', intervention: 'Bank centralny obniża stopy, by złagodzić wyprzedaż akcji.', bottom: 'Technologia znalazła dno: przeżyją spółki z zyskami i gotówką.', recovery: 'Rynek wraca do wartości; technologia odbija wolniej niż reszta.' },
-        eligible: regime => ['bull', 'euphoria', 'distribution'].includes(regime.phase) && (activeSectorBubble ? ['Technologia', 'Gaming', 'Finanse'].includes(activeSectorBubble.sector) : regime.premium > 0.1)
+        eligible: regime => ['bull', 'euphoria', 'distribution'].includes(regime.phase) && (activeSectorBubble ? ['Technologia', 'Gaming', 'Finanse'].includes(activeSectorBubble.sector) : regime.premium > 0.05) // 0.18.6 O4: premia 0,10 → 0,05
     },
     oil: {
-        id: 'oil', name: 'Szok naftowy', icon: '🛢️', year: 1973, recoveryQ: [4, 8], shape: 'U',
+        id: 'oil', name: 'Szok naftowy', icon: '🛢️', svg: 'kryzys-ropa', year: 1973, recoveryQ: [4, 8], shape: 'U',
         spark: { macro: 'oil', news: 'Napięcie na Bliskim Wschodzie: ropa drożeje, a odbiorcy paliw szykują się na wyższe rachunki.' },
         lose: [
             { sector: 'Transport i logistyka', premium: -0.30, revenue: -0.10 }, { sector: 'Transport i logistyka', subsector: 'Lotnictwo', premium: -0.15, revenue: -0.08 },
@@ -164,10 +167,10 @@ const CRISIS_LINES = {
         rate: { kind: 'hike', total: [0.01, 0.02], quarters: 2 }, state: 'fuelSubsidy',
         victims: { sectors: ['Transport i logistyka', 'Turystyka'], banks: false },
         news: { burst: 'Embargo naftowe: ropa drożeje o połowę, paliwa i bilety lotnicze drożeją z dnia na dzień.', spread: 'Drogie paliwo uderza w przewoźników, turystykę i przemysł. Inflacja przyspiesza mimo osłabienia gospodarki.', intervention: 'Bank centralny podnosi stopy, by walczyć z inflacją, choć gospodarka jest w recesji. Rząd dopłaca do paliw dla transportu.', bottom: 'Ceny ropy przestają rosnąć; firmy dostosowują się do droższej energii.', recovery: 'Gospodarka uczy się żyć z droższą energią; inflacja powoli słabnie.' },
-        eligible: regime => !['bear', 'capitulation'].includes(regime.phase)
+        eligible: regime => regime.phase !== 'capitulation' // 0.18.6 O4: szoki zewnętrzne także w bessie
     },
     black: {
-        id: 'black', name: 'Czarny czwartek', icon: '🖤', year: 1929, recoveryQ: [10, 16], shape: 'L',
+        id: 'black', name: 'Czarny czwartek', icon: '🖤', svg: 'kryzys-czwartek', year: 1929, recoveryQ: [10, 16], shape: 'L',
         spark: { macro: null, news: 'Komisja nadzoru ostrzega: dźwignia funduszy i pożyczki na zakup akcji sięgają rekordów, a wyceny odleciały od zysków.' },
         lose: [
             { sector: 'Bankowość', premium: -0.30, revenue: -0.10 }, { sector: 'Finanse', premium: -0.25, revenue: -0.10 }, { sector: 'Przemysł', premium: -0.20, revenue: -0.10 },
@@ -178,10 +181,10 @@ const CRISIS_LINES = {
         rate: { kind: 'cut', total: [-0.015, -0.025], quarters: 3, delay: 2 }, state: 'publicWorks',
         victims: { sectors: ['Bankowość', 'Finanse', 'Przemysł', 'Budowlany'], banks: true, extra: 1 },
         news: { burst: 'Czarny czwartek na giełdzie: indeks traci w kilka dni więcej niż przez ostatnie lata. Inwestorzy sprzedają wszystko.', spread: 'Panika po krachu wycofuje depozyty z banków; spółki tracą zamówienia, a kredyt wysycha.', intervention: 'Bank centralny zwlekał z reakcją — dopiero teraz tnie stopy. Rząd ogłasza program robót publicznych.', bottom: 'Gospodarka jest na dnie. Giełda wciąż nie dowierza, że zaczyna się odbicie.', recovery: 'Powolne odbicie: na odbudowę po krachu potrzeba lat, nie kwartałów.' },
-        eligible: regime => regime.phase === 'euphoria' && regime.premium > 0.25
+        eligible: regime => ['euphoria', 'distribution'].includes(regime.phase) && regime.premium > 0.15 // 0.18.6 O4: także dystrybucja, premia 0,25 → 0,15
     },
     pandemic: {
-        id: 'pandemic', name: 'Pandemia', icon: '🦠', year: 2020, recoveryQ: [2, 4], shape: 'V',
+        id: 'pandemic', name: 'Pandemia', icon: '🦠', svg: 'kryzys-pandemia', year: 2020, recoveryQ: [2, 4], shape: 'V',
         spark: { macro: 'pandemic', news: 'Nowy wirus w wielu krajach naraz: epidemiolodzy ostrzegają przed szybkim rozprzestrzenianiem.' },
         lose: [
             { sector: 'Turystyka', premium: -0.50, revenue: -0.30 }, { sector: 'Usługi', premium: -0.25, revenue: -0.20 },
@@ -197,11 +200,50 @@ const CRISIS_LINES = {
         rate: { kind: 'cut', total: [-0.02, -0.03], quarters: 1, floor: 0.005 }, state: 'relief',
         victims: { sectors: ['Turystyka', 'Usługi'], banks: false },
         news: { burst: 'Lockdown w wielu krajach: turystyka i usługi stają z dnia na dzień, a giełda gwałtownie traci.', spread: 'Restauracje, hotele i linie lotnicze liczą straty; rośnie popyt na leki, internet i gry.', intervention: 'Bank centralny tnie stopy do minimum, rząd ogłasza programy pomocowe dla turystyki i usług.', bottom: 'Obostrzenia powoli znikają; rynek patrzy już poza epidemię.', recovery: 'Szybkie odbicie w kształcie litery V — poza turystyką, która wraca wolniej.' },
-        eligible: regime => !['bear', 'capitulation'].includes(regime.phase)
+        eligible: regime => regime.phase !== 'capitulation' // 0.18.6 O4: szoki zewnętrzne także w bessie
+    },
+    supply: { // 0.18.1 P4: szósta linia — szok podażowy w łańcuchach (wariant losowany przy starcie; zdolność ogniw: getSupplyShockCapacity)
+        id: 'supply', name: 'Szok podażowy', icon: '', svg: 'szok', year: 2021, recoveryQ: [4, 8], shape: 'U',
+        spark: { macro: null, news: 'Dostawcy ostrzegają: terminy dostaw się wydłużają, a magazyny surowców topnieją.' },
+        variants: {
+            strait: { name: 'Blokada cieśniny', spark: 'Napięcie na głównym szlaku morskim: armatorzy omijają cieśninę, fracht drożeje.', burst: 'Cieśnina zablokowana: statki z rudą, ropą i półproduktami stoją w kolejce, import gwałtownie spada.', commodity: 'embargo', imports: 0.75 },
+            port: { name: 'Strajk portowy', spark: 'Związki w portach zapowiadają strajk generalny, jeśli nie dostaną podwyżek.', burst: 'Strajk w portach: kontenery utknęły na nabrzeżach, fabryki czekają na dostawy z importu.', imports: 0.6, homeOnly: true },
+            mine: { name: 'Strajk w kopalni', spark: 'Górnicy grożą strajkiem: rozmowy o płacach utknęły.', burst: 'Strajk w kopalniach: wydobycie rudy i węgla stoi, huty ograniczają produkcję.', commodity: 'strike', units: { 'Przemysł/Wydobycie': 0.4, 'Przemysł/Hutnictwo': 0.7 } }
+        },
+        lose: [
+            { sector: 'Motoryzacja', premium: -0.20, revenue: -0.05 }, { sector: 'Przemysł', premium: -0.15, revenue: -0.04 },
+            { sector: 'Budowlany', premium: -0.10, revenue: -0.03 }, { sector: 'Transport i logistyka', subsector: 'Morski', premium: -0.15, revenue: -0.06 }
+        ],
+        gain: [{ sector: 'Nieruchomości', subsector: 'Magazyny', premium: 0.20 }, { sector: 'Transport i logistyka', subsector: 'Lądowy', premium: 0.12 }, { sector: 'Przemysł', subsector: 'Wydobycie', premium: 0.15 }],
+        crash: { drop: [-0.04, -0.08], weeks: 2 }, recession: false, inflation: [0.01, 0.02],
+        rate: { kind: 'hike', total: [0.0025, 0.005], quarters: 1 }, state: null,
+        victims: { sectors: ['Motoryzacja', 'Przemysł'], banks: false },
+        news: { burst: 'Łańcuch dostaw pęka: brakuje części i surowców, a ceny półproduktów rosną.', spread: 'Braki idą w dół łańcucha: huty, fabryki maszyn i motoryzacja tną produkcję, kupują drożej z zagranicy.', intervention: 'Rząd uruchamia rezerwy strategiczne i pomaga firmom przestawić dostawy na inne kraje.', bottom: 'Najgorsze za nami: dostawy z innych krajów domykają luki, ale zapasy są puste.', recovery: 'Szlaki i kopalnie wracają do pracy, a firmy odbudowują zapasy.' },
+        eligible: regime => regime.phase !== 'capitulation' // 0.18.6 O4: szoki zewnętrzne także w bessie
     }
 };
 
-const CRISIS_LINE_ORDER = ['banking', 'dotcom', 'oil', 'black', 'pandemic'];
+const CRISIS_LINE_ORDER = ['banking', 'dotcom', 'oil', 'black', 'pandemic', 'supply']; // 0.18.1 P4: szósta linia, wspólny budżet częstości (CRISIS_BASE_CHANCE bez zmian)
+const SUPPLY_STAGE_CAPACITY = { spark: 1, burst: 0.75, spread: 0.6, intervention: 0.7, bottom: 0.85, recovery: 1 }; // mnożnik zdolności dotkniętych ogniw (wariant mnoży głębokość)
+
+/** Kraj z największą podażą dobra w łańcuchach (bez stanu: kraj startowy). */
+function getTopChainProducer(gid) {
+    const s = typeof chainState === 'object' ? chainState?.g?.[gid] : null, cs = chainState?.cal?.countries;
+    if (!s || !cs) return typeof getStartCountry === 'function' ? getStartCountry() : 'PL';
+    let best = 0; for (let i = 1; i < cs.length; i++) if (s.S[i] > s.S[best]) best = i;
+    return cs[best];
+}
+/** 0.18.1 P4: zdolność ogniw w linii `supply`: { „klucz|kraj”: mnożnik } i import (`import|kraj`); null poza linią. */
+function getSupplyShockCapacity() {
+    const line = crisisLine;
+    if (!line || line.id !== 'supply') return null;
+    const v = CRISIS_LINES.supply.variants[line.variant] || CRISIS_LINES.supply.variants.port, k = SUPPLY_STAGE_CAPACITY[line.stage] ?? 1;
+    const depth = m => 1 - (1 - m) * (1 - k) / (1 - SUPPLY_STAGE_CAPACITY.spread); // w Zarażaniu pełna głębokość wariantu
+    const home = typeof getStartCountry === 'function' ? getStartCountry() : 'PL', out = {};
+    for (const [key, m] of Object.entries(v.units || {})) out[`${key}|${line.country || home}`] = depth(m);
+    if (v.imports) out[`import|${v.homeOnly ? home : '*'}`] = depth(v.imports);
+    return out;
+}
 
 // ---------------------------------------------------------------------------------
 // W1. Silnik linii
@@ -230,18 +272,25 @@ function getEligibleCrisisLines(regime = getMarketRegime('home')) {
 /** Rozpoczyna linię: Zapowiedź (z sygnałem) albo od razu Wybuch (zamiast krachu). */
 function startCrisisLine(id, options = {}) {
     const def = CRISIS_LINES[id];
-    if (!def || crisisLine) return null;
+    if (!def || crisisLine || crisisState.pendingImport) return null;
+    if (!options.arrived && !options.forced && typeof startForeignOriginCrisis === 'function') { // 0.16.2 G9: ok. 25% linii zaczyna się za granicą
+        const pending = startForeignOriginCrisis(id, options);
+        if (pending) return pending;
+    }
     const lens = {
         spark: options.skipSpark ? 0 : rangeInt(CRISIS_STAGE_LENGTHS.spark), burst: 1, spread: rangeInt(CRISIS_STAGE_LENGTHS.spread),
         intervention: rangeInt(CRISIS_STAGE_LENGTHS.intervention), bottom: rangeInt(CRISIS_STAGE_LENGTHS.bottom), recovery: rangeInt(def.recoveryQ)
     };
     crisisLine = {
-        id, stage: 'spark', qInStage: 0, startQuarter: crisisQuarter(), lens, victims: [], bankrupted: [], rescued: [], forced: Boolean(options.forced),
+        id, stage: 'spark', qInStage: 0, startQuarter: crisisQuarter(), origin: options.origin || 'PL', lens, victims: [], bankrupted: [], rescued: [], forced: Boolean(options.forced),
         gigStart: getGigIndexValue(), gigMin: getGigIndexValue(), fundStart: playerFund ? getFundNav() : 0, trustStart: playerFund?.trust ?? 0,
         positionStart: playerProfile?.positionId || null, techShare: 0, rateStart: Number(centralBank?.baseInterestRate) || 0, fundMin: playerFund ? getFundNav() : 0, positiveStages: 0, stagesSeen: 0
     };
+    if (def.variants) { const keys = Object.keys(def.variants); crisisLine.variant = options.variant && def.variants[options.variant] ? options.variant : keys[Math.floor(Math.random() * keys.length)]; } // 0.18.1 P4
+    if (crisisLine.variant === 'mine') crisisLine.country = getTopChainProducer('iron_ore'); // strajk w kraju z największym wydobyciem rudy
     crisisState.lastEventQ = crisisQuarter();
     if (!crisisState.used.includes(id)) crisisState.used.push(id);
+    if (typeof noteCrisisForCommodities === 'function') noteCrisisForCommodities(id); // 0.17 S1: ucieczka do złota
     if (options.skipSpark) enterCrisisStage('burst'); else enterCrisisStage('spark');
     return crisisLine;
 }
@@ -250,10 +299,12 @@ function crisisHeadline(stage) {
     const def = CRISIS_LINES[crisisLine.id];
     const victim = crisisLine.victims.map(symbol => stocks.find(s => s.symbol === symbol)).find(s => s && s.isBankStock)?.name
         || stocks.find(s => s.symbol === crisisLine.victims[0])?.name || 'jeden z dużych banków';
-    const text = (stage === 'spark' ? def.spark.news : def.news[stage])?.replace('{victim}', victim);
+    const variant = def.variants?.[crisisLine.variant]; // 0.18.1 P4: wariant linii `supply` ma własne teksty Zapowiedzi i Wybuchu
+    const text = (stage === 'spark' ? variant?.spark || def.spark.news : variant?.[stage] || def.news[stage])?.replace('{victim}', victim);
     if (!text) return;
-    logEvent(`${def.icon} ${CRISIS_STAGE_NAMES[stage]}: ${text}`, 'macro');
-    if (typeof pushNews === 'function') pushNews(`${def.icon} ${def.name} — ${CRISIS_STAGE_NAMES[stage]}: ${text}`);
+    const icon = def.icon ? `${def.icon} ` : '', name = variant ? `${def.name} (${variant.name.toLowerCase()})` : def.name;
+    logEvent(`${icon}${CRISIS_STAGE_NAMES[stage]}: ${text}`, 'macro');
+    if (typeof pushNews === 'function') pushNews(`${icon}${name} — ${CRISIS_STAGE_NAMES[stage]}: ${text}`);
 }
 
 function enterCrisisStage(stage) {
@@ -282,6 +333,8 @@ function enterCrisisStage(stage) {
                 else marketCrash.theme = def.id;
             }
             if (def.recession) crisisState.recession = line.lens.spread + line.lens.intervention + 1;
+            const variant = def.variants?.[line.variant]; // 0.18.1 P4: szok surowcowy wariantu (embargo albo strajk w kopalniach)
+            if (variant?.commodity && typeof startCommodityEvent === 'function' && !getActiveCommodityEvents().some(ev => ev.id === variant.commodity)) startCommodityEvent(variant.commodity, { silent: true });
             if (def.inflation) macro.shocks.inflation += Array.isArray(def.inflation) ? rangeFloat(def.inflation) : def.inflation;
             pickCrisisVictims(line, def);
             break;
@@ -303,6 +356,7 @@ function enterCrisisStage(stage) {
             break;
     }
     crisisHeadline(stage);
+    if (typeof showCrisisBanner === 'function') showCrisisBanner(line, stage); // 0.18.1 P4 (Z10): niemodalny baner przy starcie i każdym etapie
 }
 
 function createLineShocks(line, def) {
@@ -407,6 +461,7 @@ function tryRescueBank(stock, def) {
 function fireMacroShockById(id, asSignal) {
     const event = MACRO_SHOCK_EVENTS.find(e => e.id === id);
     if (!event) return null;
+    if (typeof applyCommodityMacroShock === 'function') applyCommodityMacroShock(event.id); // 0.17 S1: iskra linii 1973 rusza ceną ropy
     if (event.inflation) macro.shocks.inflation += event.inflation;
     for (const stock of stocks) {
         if (stock.assetType || stock.isBankrupt) continue;
@@ -425,7 +480,7 @@ function noteMacroShockForCrises(event) {
 
 /** Podsumowanie do przebiegów symulacyjnych (tests/przebiegi.html). */
 function crisisSummary() {
-    return { history: crisisState.history, used: crisisState.used, signals: crisisState.signals, spurious: crisisState.spurious, active: crisisLine ? { id: crisisLine.id, stage: crisisLine.stage } : null, shocks: sectorShocks.length };
+    return { history: crisisState.history, used: crisisState.used, signals: crisisState.signals, spurious: crisisState.spurious, active: crisisLine ? { id: crisisLine.id, stage: crisisLine.stage } : null, shocks: sectorShocks.length, swans: typeof blackSwanState === 'object' ? blackSwanState.history : [] }; // 0.18.8 D5: łabędzie w przebiegach
 }
 
 // --- reakcje banku centralnego i państwa (W3) ---
@@ -436,11 +491,11 @@ function startCrisisReactions(line, def) {
         const total = rangeFloat(rate.total);
         crisisState.rate = { lineId: def.id, perQuarter: total / rate.quarters, quartersLeft: rate.quarters, delay: rate.delay || 0, floor: rate.floor ?? 0.005, total: 0, kind: rate.kind };
     }
-    const handlers = { fuelSubsidy: () => crisisSubsidy(['Transport i logistyka'], 0.03, 'Dopłaty do paliw'), publicWorks: () => crisisSubsidy(['Budowlany'], 0.03, 'Program robót publicznych'),
+    const handlers = { fuelSubsidy: () => crisisSubsidy(['Transport i logistyka'], 0.03, 'Dopłaty do paliw'), publicWorks: () => typeof orderPublicWorksProject === 'function' ? orderPublicWorksProject() : crisisSubsidy(['Budowlany'], 0.03, 'Program robót publicznych'), // 0.17 S5: projekt infrastruktury (odstępstwo 6)
         relief: () => crisisSubsidy(['Turystyka', 'Usługi'], 0.03, 'Program pomocowy'), bankRescue: () => rescueDistressedBanks() };
     if (def.state && handlers[def.state]) handlers[def.state]();
     if (typeof addMail === 'function') addMail({
-        sender: 'NBP', subject: `${def.icon} ${def.name}: reakcja państwa i banku centralnego`,
+        sender: 'NBP', subject: `${def.icon ? def.icon + " " : ""}${def.name}: reakcja państwa i banku centralnego`,
         body: `Etap „Interwencja”. Bank centralny ${rate ? (rate.kind === 'hike' ? 'podnosi stopy mimo recesji (walka z inflacją)' : rate.delay ? `po zwłoce ${rate.delay} kw. obniża stopy` : 'obniża stopy') : 'utrzymuje stopy'}; państwo uruchamia pomoc dla dotkniętych sektorów.`,
         importance: 2
     });
@@ -532,6 +587,7 @@ function processCrisesWeekly() {
 /** Co kwartał: przejścia etapów, nowa linia (po spokoju), scenariusz startowy. */
 function processCrisesQuarterly() {
     const q = crisisQuarter();
+    if (typeof processImportedCrisis === 'function' && processImportedCrisis()) return; // 0.16.2 G9: linia z zagranicy dociera do Polski
     if (crisisLine) {
         const line = crisisLine;
         line.qInStage++;
@@ -557,7 +613,7 @@ function processCrisesQuarterly() {
 
 /** Z checkMarketCrashQuarterly: 40% wylosowanych krachów jest linią (bez Zapowiedzi). Zwraca true, gdy linia zastąpiła krach. */
 function maybeReplaceCrashWithCrisisLine() {
-    if (crisisLine || Math.random() >= CRISIS_REPLACES_CRASH) return false;
+    if (crisisLine || crisisState.pendingImport || Math.random() >= CRISIS_REPLACES_CRASH) return false;
     const eligible = getEligibleCrisisLines();
     if (!eligible.length) return false;
     return Boolean(startCrisisLine(getRandomElement(eligible), { skipSpark: true }));
@@ -570,18 +626,18 @@ function finishCrisisLine() {
     const gigDrop = line.gigStart > 0 ? line.gigMin / line.gigStart - 1 : 0;
     const gigChange = line.gigStart > 0 ? gigNow / line.gigStart - 1 : 0;
     const fundChange = line.fundStart > 0 ? fundNow / line.fundStart - 1 : 0;
-    const result = { id: line.id, startQ: line.startQuarter, endQ: crisisQuarter(), burstQ: line.burstQ, gigDrop, gigChange, fundChange, bankrupted: [...line.bankrupted], rescued: [...line.rescued], techShare: line.techShare, trust: playerFund?.trust ?? 0, forced: line.forced, quartersToRecover: line.recoverQ ?? null };
+    const result = { id: line.id, origin: line.origin || 'PL', delayQ: line.delayQ ?? 0, startQ: line.startQuarter, endQ: crisisQuarter(), burstQ: line.burstQ, gigDrop, gigChange, fundChange, bankrupted: [...line.bankrupted], rescued: [...line.rescued], techShare: line.techShare, trust: playerFund?.trust ?? 0, forced: line.forced, quartersToRecover: line.recoverQ ?? null };
     crisisState.history.push(result);
     crisisState.lastEventQ = crisisQuarter();
     if (typeof addMail === 'function') {
         const names = [...line.bankrupted, ...line.rescued].map(symbol => symbol).join(', ');
         addMail({
-            sender: 'Redakcja PULS', subject: `${def.icon} Retrospektywa: ${def.name}`,
-            body: `${def.name} dobiegła końca (${formatQuarterDate(line.startQuarter)} – ${formatQuarterDate(crisisQuarter())}). GIG spadł od szczytu o ${(Math.abs(gigDrop) * 100).toFixed(0)}%, a w całej linii zmienił się o ${(gigChange * 100).toFixed(0)}%. Twój fundusz: ${(fundChange * 100).toFixed(0)}% (zaufanie ${Math.round(playerFund?.trust ?? 0)}). Upadłości: ${line.bankrupted.length}${line.rescued.length ? `, ratunki państwa: ${line.rescued.length}` : ''}${names ? ` (${names})` : ''}. Wzór historyczny: ${def.year}. Zobacz hasło Akademii „${def.name}”.`,
+            sender: 'Redakcja PULS', subject: `${def.icon ? def.icon + " " : ""}Retrospektywa: ${def.name}`,
+            body: `${def.name} dobiegła końca (${formatQuarterDate(line.startQuarter)} – ${formatQuarterDate(crisisQuarter())}). GIG spadł od szczytu o ${formatNumberPl((Math.abs(gigDrop) * 100), 0)}%, a w całej linii zmienił się o ${formatNumberPl((gigChange * 100), 0)}%. Twój fundusz: ${formatNumberPl((fundChange * 100), 0)}% (zaufanie ${Math.round(playerFund?.trust ?? 0)}). Upadłości: ${line.bankrupted.length}${line.rescued.length ? `, ratunki państwa: ${line.rescued.length}` : ''}${names ? ` (${names})` : ''}. Wzór historyczny: ${def.year}. Zobacz hasło Akademii „${def.name}”.`,
             importance: 2
         });
     }
-    logEvent(`${def.icon} ${def.name} dobiegła końca. Rynek wraca do normy.`, 'macro');
+    logEvent(`${def.icon ? def.icon + " " : ""}${def.name} dobiegła końca. Rynek wraca do normy.`, 'macro');
     if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry(`kryzys_${def.id}`);
     checkCrisisAchievements(result, line);
     crisisLine = null;
@@ -648,17 +704,99 @@ if (typeof ACHIEVEMENTS === 'object') {
 // W5. Interfejs: sekcja „Kryzys” w oknie „Rynek”
 // ---------------------------------------------------------------------------------
 
-function renderCrisisSection() {
-    const stateRows = (items, sign) => items.filter(i => i.premium).map(i => `<li>${escapeHtml(i.subsector ? `${i.sector} / ${i.subsector}` : i.sector)} <strong class="${sign < 0 ? 'text-down' : 'text-up'}">${i.premium > 0 ? '+' : ''}${Math.round(i.premium * 100)}%</strong> <span class="text-muted">${sign < 0 ? 'traci' : 'zyskuje'}</span></li>`).join('');
+function renderCrisisCountries() {
+    if (typeof getContagionSummary !== 'function') return '';
+    const sum = getContagionSummary();
+    if (!sum.countries.length && !sum.pending) return '';
+    const pending = sum.pending ? `<p class="alert alert--warn" role="status">${typeof uiIcon === 'function' ? uiIcon('alert', 16) : ''}<span><strong>${escapeHtml(sum.pending.line)}</strong> wybuchła w kraju ${escapeHtml(sum.pending.countryName || sum.pending.origin)} i dotrze do Polski ${sum.pending.delayLeft ? `za ${sum.pending.delayLeft} kw` : 'w tym kwartale'}.</span></p>` : '';
+    const origin = sum.origin && sum.origin !== 'PL' ? `<p class="text-sm">Linia przyszła z kraju ${escapeHtml(COUNTRY_DEFS[sum.origin]?.name || sum.origin)}${sum.delayQ ? ` z opóźnieniem ${sum.delayQ} kw.` : ' bez opóźnienia'}.</p>` : '';
+    const rows = sum.countries.map(c => `<tr><td>${escapeHtml(c.name)}</td><td class="text-right">${formatNumberPl(c.link * 100, 0)}%</td><td class="text-right">${c.premium > 0 ? '▲ +' : c.premium < 0 ? '▼ ' : '■ '}${formatNumberPl(c.premium * 100, 0)}%</td><td>${c.cap === null ? 'brak ograniczenia' : `cel premii ≤ ${formatNumberPl(c.cap * 100, 0)}%`}</td></tr>`).join('');
+    return `<div class="crisis-section"><h4 class="bank-section-title">Zarażanie między krajami</h4>${pending}${origin}${rows ? `<table class="asset-mini-table w-full"><thead><tr><th>Kraj</th><th class="text-right">Powiązanie</th><th class="text-right">Premia rynku</th><th>Stan</th></tr></thead><tbody>${rows}</tbody></table>` : ''}<p class="text-sm text-muted">Kryzys z jednego kraju dochodzi do innych z opóźnieniem 0–2 kw. Siła zależy od powiązania krajów i od tego, czy dany sektor jest w linii.</p></div>`;
+}
+
+function renderCrisisSectionBase() {
+    const icon = (name, size = 16) => (typeof uiIcon === 'function' ? uiIcon(name, size) : '');
+    // Premia sektora: znak, liczba z % i słowo (kolor tylko wzmacnia).
+    const strength = p => (Math.abs(p) >= 0.3 ? 'mocno' : Math.abs(p) >= 0.15 ? 'wyraźnie' : 'lekko');
+    const column = (items, sign) => {
+        const rows = items.filter(i => i.premium).map(i => `<li><span class="crisis-sector">${escapeHtml(i.subsector ? `${i.sector} / ${i.subsector}` : i.sector)}</span><span class="crisis-premium ${sign < 0 ? 'text-down' : 'text-up'}"><strong>${i.premium > 0 ? '+' : '−'}${Math.abs(Math.round(i.premium * 100))}%</strong> ${sign < 0 ? 'traci' : 'zyskuje'} ${strength(i.premium)}</span></li>`).join('');
+        return `<section class="crisis-col"><h5>${icon(sign < 0 ? 'spadek' : 'wzrost')} ${sign < 0 ? 'Tracą' : 'Zyskują'}</h5>${rows ? `<ul class="list-plain">${rows}</ul>` : '<p class="text-sm text-muted">Brak sektorów w tej linii.</p>'}</section>`;
+    };
     if (!crisisLine) {
         const last = crisisState.history[crisisState.history.length - 1];
-        return `<div><h4 class="bank-section-title">Kryzys</h4><p class="text-muted">${last ? `Ostatnia linia: ${CRISIS_LINES[last.id].icon} ${CRISIS_LINES[last.id].name} (${formatQuarterDate(last.startQ)}). ` : ''}Rynek jest w normalnym cyklu — kryzys nie trwa.${crisisState.scenario ? ` Scenariusz: ${CRISIS_LINES[crisisState.scenario].name} (start w ${formatQuarterDate(crisisState.scenarioStartQ)}).` : ''}</p></div>`;
+        return `<div class="crisis-section"><h4 class="bank-section-title">Kryzys</h4><p class="alert crisis-calm">${icon('ok', 18)}<span>Rynek jest w normalnym cyklu — kryzys nie trwa.${last ? ` Ostatnia linia: ${escapeHtml(CRISIS_LINES[last.id].name)} (${formatQuarterDate(last.startQ)}).` : ''}${crisisState.scenario ? ` Scenariusz: ${escapeHtml(CRISIS_LINES[crisisState.scenario].name)} (start w ${formatQuarterDate(crisisState.scenarioStartQ)}).` : ''}</span></p></div>`;
     }
     const def = CRISIS_LINES[crisisLine.id];
-    const axis = CRISIS_STAGES.map(stage => `<li class="${stage === crisisLine.stage ? 'current' : ''}" ${stage === crisisLine.stage ? 'aria-current="step"' : ''}>${CRISIS_STAGE_NAMES[stage]}${stage === crisisLine.stage ? ' (teraz)' : ''}</li>`).join('');
-    const reaction = crisisState.rate ? `Bank centralny: ${crisisState.rate.kind === 'hike' ? 'podwyżki' : 'cięcia'} stóp w toku.` : (crisisState.lastRate ? `Bank centralny zmienił stopy łącznie o ${(crisisState.lastRate.total * 100).toFixed(1)} pp.` : 'Reakcja banku centralnego jeszcze nie ruszyła.');
-    return `<div><h4 class="bank-section-title">Kryzys: ${def.icon} ${escapeHtml(def.name)}</h4>
-        <ol class="phase-history" aria-label="Etapy kryzysu">${axis}</ol>
-        <div class="market-grid"><ul class="list-plain">${stateRows(def.lose, -1)}</ul><ul class="list-plain">${stateRows(def.gain, 1)}</ul></div>
-        <p class="text-sm">${escapeHtml(reaction)} Upadłości: ${crisisLine.bankrupted.length}, ratunki państwa: ${crisisLine.rescued.length}.</p></div>`;
+    const currentIdx = CRISIS_STAGES.indexOf(crisisLine.stage);
+    const axis = CRISIS_STAGES.map((stage, n) => {
+        const now = stage === crisisLine.stage;
+        return `<li class="${now ? 'current' : n < currentIdx ? 'done' : ''}" ${now ? 'aria-current="step"' : ''}><span class="crisis-step-no">${n < currentIdx ? '✓' : n + 1}</span>${CRISIS_STAGE_NAMES[stage]}${now ? ' <em>(teraz)</em>' : ''}</li>`;
+    }).join('');
+    const reaction = crisisState.rate ? `Bank centralny: ${crisisState.rate.kind === 'hike' ? 'podwyżki' : 'cięcia'} stóp w toku.` : (crisisState.lastRate ? `Bank centralny zmienił stopy łącznie o ${formatNumberPl((crisisState.lastRate.total * 100), 1)} pp.` : 'Reakcja banku centralnego jeszcze nie ruszyła.');
+    return `<div class="crisis-section"><h4 class="bank-section-title crisis-title">${icon(def.svg, 20)} Kryzys: ${escapeHtml(def.name)}</h4>
+        <ol class="crisis-axis" aria-label="Etapy kryzysu">${axis}</ol>
+        <div class="crisis-cols">${column(def.lose, -1)}${column(def.gain, 1)}</div>
+        <div class="crisis-foot"><p class="text-sm">${icon('bank', 16)} ${escapeHtml(reaction)}</p><p class="text-sm"><strong>Upadłości:</strong> ${crisisLine.bankrupted.length} · <strong>ratunki państwa:</strong> ${crisisLine.rescued.length}</p></div></div>`;
 }
+
+function renderCrisisSection() { return renderCrisisSectionBase() + renderCrisisCountries(); } // 0.16.2 G9: sekcja „Kryzys” z krajami i opóźnieniem zarażenia
+
+// =================================================================================
+// 0.18.8 D5: CZARNE ŁABĘDZIE — rzadkie zdarzenia ponad liniami i poza ich budżetem: 1 na 15–25 lat (losowy odstęp),
+// pierwszy najwcześniej po 10. roku. Każdy uruchamia 1–2 linie z CRISIS_LINES (pierwszą wolną; nie zużywa ich budżetu),
+// rusza kilka krajów naraz (fazy rynków, szoki sektorów z `country`) i tymczasowo zmienia stopy, zaufanie klientów i sektory.
+// =================================================================================
+const BLACK_SWAN_RULES = { firstQ: 40, gapQ: [60, 100], countries: 3, holdQ: 3 };
+const BLACK_SWANS = {
+    pandemic: { name: 'Pandemia globalna', lines: ['pandemic'], rate: { kind: 'cut', total: [-0.015, -0.025], quarters: 2 }, trust: -8, regime: 'capitulation',
+        sectors: [['Turystyka', -0.35], ['Lotnictwo', -0.30], ['Medycyna', 0.15], ['Magazyny', 0.10]], news: 'Nowy wirus rozlewa się po świecie. Granice się zamykają, linie lotnicze uziemiają samoloty.' },
+    war: { name: 'Wojna regionalna', lines: ['oil', 'supply'], rate: { kind: 'hike', total: [0.01, 0.02], quarters: 2 }, trust: -6, regime: 'capitulation',
+        sectors: [['Obronność', 0.25], ['Energia', 0.15], ['Transport i logistyka', -0.20], ['Turystyka', -0.20]], news: 'Wybucha wojna w regionie. Ropa drożeje skokowo, szlaki handlowe są zablokowane.' },
+    currency: { name: 'Upadek waluty', lines: ['banking'], rate: { kind: 'hike', total: [0.02, 0.04], quarters: 2 }, trust: -10, regime: 'capitulation',
+        sectors: [['Finanse', -0.25], ['Bankowość', -0.20], ['Wydobycie', 0.10]], news: 'Waluta sąsiedniego kraju traci połowę wartości w tydzień. Kapitał ucieka z całego regionu.' },
+    techRevolution: { name: 'Rewolucja technologiczna', positive: true, lines: [], rate: null, trust: 6, regime: 'euphoria',
+        sectors: [['Technologia', 0.35], ['Sztuczna inteligencja', 0.40], ['Półprzewodniki', 0.30], ['Media', -0.10]], news: 'Przełom technologiczny zmienia gospodarkę. Firmy wydają rekordowe kwoty na nowe narzędzia.' },
+    bankSystem: { name: 'Krach systemu bankowego', lines: ['banking', 'black'], rate: { kind: 'cut', total: [-0.02, -0.03], quarters: 3 }, trust: -12, regime: 'capitulation',
+        sectors: [['Bankowość', -0.40], ['Finanse', -0.35], ['Nieruchomości', -0.25]], news: 'Kilka największych banków świata wstrzymuje wypłaty jednego dnia. Rynki międzybankowe zamarzają.' }
+};
+function createBlackSwanState() { return { nextQ: null, active: null, history: [] }; }
+let blackSwanState = createBlackSwanState();
+const swanGap = () => getRandomIntInRange(...BLACK_SWAN_RULES.gapQ);
+
+/** Uruchamia łabędzia `id` (wymuszenie w testach i w debug). Zwraca wpis historii. */
+function startBlackSwan(id = getRandomElement(Object.keys(BLACK_SWANS))) {
+    const def = BLACK_SWANS[id]; if (!def) return null;
+    const q = crisisQuarter(), countries = (typeof getJoinedCountries === 'function' ? getJoinedCountries() : []).sort(() => Math.random() - 0.5).slice(0, BLACK_SWAN_RULES.countries);
+    // linie: pierwsza wolna; poza budżetem częstości (used i lastEventQ wracają do stanu sprzed łabędzia)
+    const before = { used: [...crisisState.used], last: crisisState.lastEventQ };
+    const lineId = !crisisLine && !crisisState.pendingImport ? def.lines.find(l => CRISIS_LINES[l]) : null;
+    if (lineId) { startCrisisLine(lineId, { forced: true, skipSpark: true, arrived: true }); crisisState.used = before.used; crisisState.lastEventQ = before.last; if (crisisLine) crisisLine.swan = id; }
+    if (def.rate && !crisisState.rate) { const total = rangeFloat(def.rate.total); crisisState.rate = { kind: def.rate.kind, total: 0, perQuarter: total / def.rate.quarters, quartersLeft: def.rate.quarters, delay: 0, floor: 0.0025 }; }
+    if (playerFund && def.trust) playerFund.trust = Math.max(0, Math.min(100, (Number(playerFund.trust) || 50) + def.trust));
+    for (const [sector, premium] of def.sectors) {
+        addSectorShock(sector, premium, { rampQ: 1, holdQ: BLACK_SWAN_RULES.holdQ, fadeQ: 4, lineId: `swan:${id}`, startQ: crisisTime() });
+        for (const c of countries) addSectorShock(sector, premium, { rampQ: 1, holdQ: BLACK_SWAN_RULES.holdQ, fadeQ: 4, lineId: `swan:${id}`, country: c, startQ: crisisTime() });
+    }
+    for (const c of countries) { const r = typeof marketRegimes === 'object' ? marketRegimes[c] : null; if (r) { r.phase = def.regime; r.quartersInPhase = 1; r.phaseLength = 2; } }
+    const entry = { id, name: def.name, q, line: lineId, countries, positive: Boolean(def.positive) };
+    blackSwanState.active = { ...entry, untilQ: q + BLACK_SWAN_RULES.holdQ + 1 };
+    blackSwanState.history = [...blackSwanState.history, entry].slice(-10);
+    const where = countries.length ? ` Dotyka też: ${countries.map(c => COUNTRY_DEFS?.[c]?.name || c).join(', ')}.` : '';
+    if (typeof logEvent === 'function') logEvent(`Czarny łabędź: ${def.name}. ${def.news}${where}`, 'macro');
+    if (typeof pushNews === 'function') pushNews(`Czarny łabędź: ${def.name}. ${def.news}`);
+    if (typeof addMail === 'function') addMail({ sender: 'OBSER', subject: `Czarny łabędź: ${def.name}`, body: `${def.news}${where}${lineId ? ` Rusza linia kryzysu: ${CRISIS_LINES[lineId].name}.` : ''}`, importance: 3 });
+    if (typeof showBlackSwanBanner === 'function') showBlackSwanBanner(blackSwanState.active);
+    return entry;
+}
+/** Co kwartał: harmonogram (pierwszy po 10. roku, potem co 15–25 lat) i wygaszenie banera. */
+function processBlackSwansQuarterly() {
+    const q = crisisQuarter();
+    if (blackSwanState.nextQ === null) blackSwanState.nextQ = Math.max(BLACK_SWAN_RULES.firstQ, q + swanGap());
+    if (blackSwanState.active && q >= blackSwanState.active.untilQ) blackSwanState.active = null;
+    if (typeof updateSwanChip === 'function') updateSwanChip(); // makieta 29: plakietka do końca łabędzia
+    if (q < blackSwanState.nextQ) return null;
+    blackSwanState.nextQ = q + swanGap();
+    return startBlackSwan();
+}
+function getBlackSwanSnapshot() { return blackSwanState; }
+function applyBlackSwanSnapshot(snap) { blackSwanState = { ...createBlackSwanState(), ...(snap && typeof snap === 'object' ? snap : {}) }; if (!Array.isArray(blackSwanState.history)) blackSwanState.history = []; }

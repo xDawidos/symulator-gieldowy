@@ -137,7 +137,7 @@ const skills = {
         name: 'Analityk Finansowy 🧐',
         unlockedLevel: 0,
         levels: [
-            { level: 1, cost: 500, description: 'Skaner spółek (filtry: C/Z względem sektora, C/WK, dywidenda, zadłużenie, kondycja), wycena porównawcza z C/Z sektora i fazy cyklu spółek w tabeli rynku.' },
+            { level: 1, cost: 500, description: 'Skaner spółek (filtry: C/Z względem sektora, C/WK, dywidenda, zadłużenie, kondycja), wycena porównawcza z C/Z sektora fazy cyklu spółek w tabeli rynku i cykle sektorów w zakładce Makro.' },
             { level: 2, cost: 1500, description: 'Skaner: ROE, marża i wzrost zysku rok do roku. Wycena trzema metodami: C/Z sektora, wartość księgowa (C/WK sektora) i model dywidend Gordona.' },
             { level: 3, cost: 3000, description: 'Konsensus analityków: prognoza zysku przed raportem i wynik vs konsensus po raporcie. Skaner pokazuje potencjał do wartości godziwej.' }
         ]
@@ -149,6 +149,14 @@ const skills = {
             { level: 1, cost: 300, description: 'Odblokowuje dostęp do handlu funduszami ETF.' },
             { level: 2, cost: 1000, description: 'Jeszcze nie dodano' },// dodaje etf top 5 i 15 i 10 oprócz 5 pierwszych, największych spółek
             { level: 3, cost: 1800, description: 'jeszcze nie dodano' } //dodaj możliwość tworzenia własnego etf
+        ]
+    },
+    'optionsMaster': { // 0.17 S7
+        name: 'Mistrz Opcji',
+        unlockedLevel: 0,
+        levels: [
+            { level: 1, cost: 1500, description: 'Kontrakty terminowe na surowce: tylko pozycje długie, dźwignia do 1:3 (lub niższa wg surowca).' },
+            { level: 2, cost: 5000, description: 'Pozycje krótkie i pełna dźwignia wg surowca (złoto do 1:10).' }
         ]
     },
     'insiderAccess': {
@@ -296,7 +304,7 @@ function buyStock(symbol, quantity) {
     }
     if (typeof isTradingBlocked === 'function' && isTradingBlocked('player')) { showToast('Blokada handlu nałożona przez organy ścigania.', 'error'); return; }
     if (!canAccessExchange(stockToBuy.exchange, stockToBuy)) {
-        showToast(`Twoje stanowisko nie daje dostępu do ${typeof isEntryMarketStock === 'function' && isEntryMarketStock(stockToBuy) ? `rynku ${getMarketLabel(getStockMarket(stockToBuy))}` : `giełdy ${exchanges[stockToBuy.exchange]?.name || stockToBuy.exchange}`}. Awans otworzy kolejne giełdy.`, 'warning');
+        showToast(`Twoje stanowisko nie daje dostępu do ${typeof isEntryMarketStock === 'function' && isEntryMarketStock(stockToBuy) ? `rynku ${getMarketDef(getStockMarket(stockToBuy))?.name || getMarketLabel(getStockMarket(stockToBuy))}` : `giełdy ${exchanges[stockToBuy.exchange]?.name || stockToBuy.exchange}`}. Awans otworzy kolejne giełdy.`, 'warning');
         return;
     }
     if (stockToBuy.isTradeLocked) {
@@ -319,7 +327,7 @@ function buyStock(symbol, quantity) {
     const privateLimit = typeof checkPrivateMarketLimit === 'function' ? checkPrivateMarketLimit(stockToBuy, stockToBuy.price * quantity) : null; // 0.15.6 E3
     if (privateLimit) { showToast(privateLimit, 'warning'); return; }
     if (playerCash < quote.total) {
-        showToast(`Nie masz wystarczająco gotówki: ${formatZl(quote.total)} z prowizją, maksymalnie ${getMaxBuyQuantity(stockToBuy, 'fund')} akcji.`);
+        showToast(`Nie masz wystarczająco gotówki: ${formatZl(quote.total)} z prowizją, maksymalnie ${getMaxBuyQuantity(stockToBuy, 'fund')} akcji.${typeof getForeignCashHint === 'function' ? getForeignCashHint() : ''}`);
         return;
     }
     const tradeValue = stockToBuy.price * quantity; // podstawa prowizji: cena przed wpływem zlecenia
@@ -328,11 +336,13 @@ function buyStock(symbol, quantity) {
     playerCash -= totalCost;
     stockToBuy.sharesHeld += quantity;
 
-    // Minimalny wpływ na cenę (udział w wolnym obrocie) i log transakcji funduszu (compliance)
-    applyTradeImpact(stockToBuy, quantity, 1);
+    // Wpływ na cenę (poślizg gracza, 0.18.8 U13) i log transakcji funduszu (compliance)
+    applyTradeImpact(stockToBuy, quantity, 1, true);
     logFundTrade(symbol, 'buy');
 
     // Logika transakcji
+    if (typeof noteCeoContact === 'function') noteCeoContact(stockToBuy); // 0.17.3 R0
+    if (typeof noteTiedTip === 'function') noteTiedTip(stockToBuy); // 0.17.3 R2: kontrola KNF
     if (!stockToBuy.playerTransactions) stockToBuy.playerTransactions = [];
     stockToBuy.playerTransactions.push({
         type: 'buy',
@@ -398,7 +408,8 @@ function sellStock(symbol, quantity) {
         return;
     }
 
-    let totalGain = stockToSell.price * quantity;
+    const stakeBeforeSale = typeof getPlayerStakePct === 'function' ? getPlayerStakePct(stockToSell) : 0; // 0.18.8 U13: wyjście większościowca
+    let totalGain = stockToSell.price * quantity * (1 - getTradeSlippage(stockToSell, quantity) / 2); // 0.18.8 U13: średnia cena wykonania z poślizgiem
     const charismaLevel = getSkillLevel('sharkCharisma');
     if (charismaLevel > 0) {
         let charismaBonus = 0;
@@ -444,7 +455,8 @@ function sellStock(symbol, quantity) {
     playerCash += totalGainNet; // Gracz otrzymuje kwotę netto
     holding.shares -= quantity;
     stockToSell.sharesHeld -= quantity;
-    applyTradeImpact(stockToSell, quantity, -1);
+    applyTradeImpact(stockToSell, quantity, -1, true);
+    if (typeof noteMajorityExit === 'function') noteMajorityExit(stockToSell, quantity, stakeBeforeSale);
     logFundTrade(symbol, 'sell');
     if (typeof onFundTrade === 'function') onFundTrade(stockToSell, quantity, 'sell'); // relacje z botami (relations.js)
     if (typeof chargeMarketCommission === 'function') chargeMarketCommission(stockToSell, quantity * stockToSell.price, 'player'); // prowizja operatora rynku
@@ -452,7 +464,7 @@ function sellStock(symbol, quantity) {
     if (typeof noteMentorEvent === 'function') noteMentorEvent('sell', stockToSell); // N4: zadanie „ucieczka przed korektą”
 
     // Logowanie z informacją o podatku
-    logEvent(`Sprzedano ${quantity} szt. ${symbol}. Zysk brutto: ${profit.toFixed(2)} PLN, Podatek: ${taxToPay.toFixed(2)} PLN.`);
+    logEvent(`Sprzedano ${quantity} szt. ${symbol}. Zysk brutto: ${formatZl(profit, 2)}, Podatek: ${formatZl(taxToPay, 2)}.`);
 
     if (holding.shares === 0) {
         stockToSell.playerTransactions = [];
@@ -578,7 +590,7 @@ function sellIndex(indexId, quantity) {
     playerCash += totalGainNet; // Gracz otrzymuje kwotę netto
     holding.shares -= quantity;
 
-    logEvent(`Sprzedano ${quantity} jedn. indeksu ${indexId}. Zysk brutto: ${profit.toFixed(2)} PLN, Podatek: ${taxToPay.toFixed(2)} PLN.`);
+    logEvent(`Sprzedano ${quantity} jedn. indeksu ${indexId}. Zysk brutto: ${formatZl(profit, 2)}, Podatek: ${formatZl(taxToPay, 2)}.`);
 
     if (holding.shares <= 0.001) { // Użyj progu dla bezpieczeństwa
         delete playerPortfolio[indexId];
@@ -621,7 +633,11 @@ function contributeToInvestmentPool(contributorId, amount) {
     investmentPool.contributors[contributorId] = (investmentPool.contributors[contributorId] || 0) + amount;
     notePoolLedger(contributorId, 'deposited', amount); // 0.14.1 R0: księga puli
     recomputePoolStakes(); // 0.14.1 R1: wkład w pulę = fakty
-    console.log(`[PULA] ${contributorId} wpłacił(a) ${amount.toFixed(2)} PLN do puli inwestycyjnej.`, 'market');
+    console.log(`[PULA] ${contributorId} wpłacił(a) ${formatZl(amount, 2)} do puli inwestycyjnej.`, 'market');
+    if (contributorId === 'player') { // odświeżenie jak po wycofaniu: panel puli i widoki funduszu
+        if (typeof displayInvestmentPool === 'function') displayInvestmentPool();
+        if (typeof refreshFundViews === 'function') refreshFundViews();
+    }
 }
 
 // 0.14.1 R0: księga puli per uczestnik — wpłaty, wypłaty, zamiana na akcje, zwroty do puli, straty, opłaty.
@@ -657,10 +673,10 @@ function checkPoolInvariants(tolerance = 1) {
     for (const [id, entry] of Object.entries(investmentPool.ledger || {})) {
         const left = entry.deposited - entry.withdrawn - entry.feesPaid + entry.feesReceived;
         const right = (Number(investmentPool.contributors?.[id]) || 0) + getPoolInvestedInStartups(id) + entry.toShares + entry.lost;
-        if (Math.abs(left - right) > tolerance) issues.push(`pula ${id}: wpłaty−wypłaty ${left.toFixed(0)} ≠ niezainwestowane+startupy+akcje+straty ${right.toFixed(0)}`);
+        if (Math.abs(left - right) > tolerance) issues.push(`pula ${id}: wpłaty−wypłaty ${formatNumberPl(left, 0)} ≠ niezainwestowane+startupy+akcje+straty ${formatNumberPl(right, 0)}`);
     }
     const contributorsSum = Object.values(investmentPool.contributors || {}).reduce((a, b) => a + (Number(b) || 0), 0);
-    if (Math.abs(contributorsSum - (Number(investmentPool.totalFunds) || 0)) > tolerance) issues.push(`pula: suma wkładów ${contributorsSum.toFixed(0)} ≠ środki puli ${Number(investmentPool.totalFunds || 0).toFixed(0)}`);
+    if (Math.abs(contributorsSum - (Number(investmentPool.totalFunds) || 0)) > tolerance) issues.push(`pula: suma wkładów ${formatNumberPl(contributorsSum, 0)} ≠ środki puli ${formatNumberPl(Number(investmentPool.totalFunds || 0), 0)}`);
     return issues;
 }
 
@@ -676,7 +692,7 @@ function checkIncubatorInvariants(tolerance = 1) {
         const expected = (Number(startup.currentFunding) || 0) - (Number(startup.unclaimedFunding) || 0) + (Number(startup.ipoPriceBonus) || 0)
             + (Number(startup.rescueCurrent) || 0) + (Number(startup.privatizationPremium) || 0);
         const claims = getStartupClaimsTotal(startup);
-        if (Math.abs(claims - expected) > Math.max(tolerance, expected * 1e-6)) issues.push(`startup ${startup.symbol}: roszczenia ${claims.toFixed(0)} ≠ zebrane ${expected.toFixed(0)}`);
+        if (Math.abs(claims - expected) > Math.max(tolerance, expected * 1e-6)) issues.push(`startup ${startup.symbol}: roszczenia ${formatNumberPl(claims, 0)} ≠ zebrane ${formatNumberPl(expected, 0)}`);
     }
     return issues;
 }
@@ -718,7 +734,7 @@ function withdrawFromPool(amount) {
     notePoolLedger('player', 'feesPaid', fee);
     recomputePoolStakes();
     if (typeof displayCash === 'function') displayCash();
-    logEvent(`🏊 Fundusz wycofuje ${paid.toFixed(0)} PLN z puli inwestycyjnej (opłata ${fee.toFixed(0)} PLN${othersTotal > 0 ? ' dla pozostałych uczestników' : ' dla zarządcy inkubatora'}).`, 'review');
+    logEvent(`🏊 Fundusz wycofuje ${formatZl(paid, 0)} z puli inwestycyjnej (opłata ${formatZl(fee, 0)}${othersTotal > 0 ? ' dla pozostałych uczestników' : ' dla zarządcy inkubatora'}).`, 'review');
     if (typeof displayInvestmentPool === 'function') displayInvestmentPool();
     if (typeof refreshFundViews === 'function') refreshFundViews();
     return paid;
@@ -726,7 +742,7 @@ function withdrawFromPool(amount) {
 
 /** Status puli dla panelu: dlaczego pieniądze czekają. */
 function getPoolStatus() {
-    if ((Number(investmentPool.totalFunds) || 0) < 1000) return { code: 'low', text: 'Za mało środków (min. 1000 PLN) — pula czeka na wpłaty.' };
+    if ((Number(investmentPool.totalFunds) || 0) < 1000) return { code: 'low', text: `Za mało środków (min. ${formatZl(1000, 0)}) — pula czeka na wpłaty.` };
     const open = stocks.some(s => s.assetType === 'Startup' && s.stage === 'funding' && getStartupFundingGap(s) >= 1);
     if (!open) return { code: 'noTargets', text: 'Pula czeka: brak startupów w fazie zbiórki.' };
     return { code: 'ready', text: `Następna inwestycja za ${Math.max(0, Math.ceil((Number(investmentPool.investmentTimer) || 0) / 1000))} s gry.` };
@@ -760,7 +776,7 @@ function processPoolInvestments() {
         contributors: invested // wkłady użyte w tej rundzie
     });
 
-    logEvent(`[PULA] 💰 Pula inwestycyjna zainwestowała ${investmentAmount.toFixed(2)} PLN w ${targetStartup.name}${investedShare < 1 ? ` (brakowało tyle do celu; w puli zostaje ${(investmentPool.totalFunds - investmentAmount).toFixed(2)} PLN)` : ''}!`);
+    logEvent(`[PULA] 💰 Pula inwestycyjna zainwestowała ${formatZl(investmentAmount, 2)} w ${targetStartup.name}${investedShare < 1 ? ` (brakowało tyle do celu; w puli zostaje ${formatZl((investmentPool.totalFunds - investmentAmount), 2)})` : ''}!`);
 
     // Pomniejszamy pulę o zainwestowaną część.
     investmentPool.totalFunds -= investmentAmount;
@@ -802,7 +818,7 @@ function updateAutoInvestTimer(deltaTime) {
         // Czas minął, próbujemy zainwestować.
         if (playerCash >= playerAutoInvest.amount) {
             contributeToInvestmentPool('player', playerAutoInvest.amount);
-            logEvent(`[AUTO-INWESTOWANIE] Automatycznie wpłacono ${playerAutoInvest.amount.toFixed(2)} PLN do puli.`);
+            logEvent(`[AUTO-INWESTOWANIE] Automatycznie wpłacono ${formatZl(playerAutoInvest.amount, 2)} do puli.`);
         } else {
             // Gracz nie ma wystarczająco środków, wyłączamy auto-inwestowanie.
             playerAutoInvest.isEnabled = false;
@@ -867,7 +883,7 @@ function chargeAccountingFee(paymentAmount, entityId) {
 
     // 3. Loguj tylko dla gracza (aby nie spamować konsoli botami)
     if (entityId === 'player' && totalFee > 0.01) {
-        logEvent(`🧾 Zapłacono ${totalFee.toFixed(2)} PLN prowizji księgowej za automatyczną spłatę raty.`, 'review');
+        logEvent(`🧾 Zapłacono ${formatZl(totalFee, 2)} prowizji księgowej za automatyczną spłatę raty.`, 'review');
     }
 }
 
@@ -1131,7 +1147,7 @@ function endFestival() {
 function playerJoinFestival(promotionTarget) {
     // Stoisko i promocje opłaca gracz prywatnie (portfel), nie fundusz klientów.
     if (!cityInvestment.playerHasUnlocked) {
-        showToast(`Najpierw odblokuj inwestycje miejskie (darowizna ${CITY_UNLOCK_DONATION} PLN z portfela prywatnego).`, 'warning');
+        showToast(`Najpierw odblokuj inwestycje miejskie (darowizna ${formatZl(CITY_UNLOCK_DONATION, 0)} z portfela prywatnego).`, 'warning');
         return; // Zakończ funkcję, jeśli miasto nie jest odblokowane dla gracza
     }
     if (!festival || !festival.isActive || playerWallet.cash < FESTIVAL_STALL_LEVELS[0].cost) return;
@@ -1241,7 +1257,7 @@ function applyFestivalBonus(participant, multiplier) {
         case 'city':
             const budgetBoost = 1000 * multiplier; // Bonus do budżetu jest natychmiastowy
             city.budget += budgetBoost;
-            logEvent(`🏆 Stoisko miasta przynosi ${budgetBoost.toFixed(0)} PLN do budżetu.`, 'review');
+            logEvent(`🏆 Stoisko miasta przynosi ${formatZl(budgetBoost, 0)} do budżetu.`, 'review');
             break;
     }
 }
@@ -1287,7 +1303,7 @@ function donateToCompany(symbol, amount, donorId = 'player') {
     changeReputation(donorId, symbol, totalRepGain);
     if (donorId === 'player' && typeof onPlayerDonation === 'function') onPlayerDonation(stock, amount);
 
-    logEvent(`🤝 ${entity.name} przekazał datek w wysokości ${amount.toFixed(2)} PLN na rzecz ${stock.name}, poprawiając relacje.`);
+    logEvent(`🤝 ${entity.name} przekazał datek w wysokości ${formatZl(amount, 2)} na rzecz ${stock.name}, poprawiając relacje.`);
     if (donorId === 'player') {
         displayCash();
         openManagementModal(symbol); // Odśwież widok
@@ -1337,7 +1353,7 @@ function makeOfferToState() {
     const totalCost = offerPrice * quantity;
 
     if (playerCash < totalCost) {
-        showToast(`Nie masz wystarczająco gotówki! Potrzebujesz ${totalCost.toFixed(2)} PLN.`);
+        showToast(`Nie masz wystarczająco gotówki! Potrzebujesz ${formatZl(totalCost, 2)}.`);
         return;
     }
 
@@ -1399,7 +1415,7 @@ function fundDepartmentUpgrade(symbol, deptType) {
     const cost = 50000 * Math.pow(2, currentLevel);
     
     if (playerCash < cost) {
-        showToast(`Brak środków! Koszt ulepszenia: ${cost} PLN.`);
+        showToast(`Brak środków! Koszt ulepszenia: ${formatZl(cost, 0)}.`);
         return;
     }
 
@@ -1446,7 +1462,7 @@ function playerBailsOutCompany(symbol, amount) {
     playerCash -= amount;
     stock.balanceSheet.liabilities -= amount;
     
-    logEvent(`💸 Ze środków funduszu spłacono ${amount.toFixed(2)} PLN długu spółki ${stock.name}.`, 'company');
+    logEvent(`💸 Ze środków funduszu spłacono ${formatZl(amount, 2)} długu spółki ${stock.name}.`, 'company');
     displayCash(); // Odśwież licznik gotówki na górze ekranu
     
     // Odśwież panel zarządzania na bieżąco
@@ -1476,7 +1492,8 @@ const FUND_PERIOD_MS = BASE_DELAYS.quarterly * 3;      // okres oceny = 3 kwarta
 const FUND_PERIODS_SHOWN = 4;                          // wykres: 4 okresy = 1 godzina gry
 const FUND_START_CASH = 10000;
 const FUND_START_UNITS = 1000;
-const GRANDMA_POCKET_MONEY = 100;
+const GRANDMA_POCKET_MONEY = 50;
+const PRIVATE_INCOME_FACTOR = 0.5;   // 0.16.3: konto prywatne dostaje połowę dotychczasowych wpływów (premie, udział w opłacie); handel nim jest zablokowany
 // Rok gry trwa 20 minut, więc „roczna” opłata 2% zabierałaby 1,5% na każdy 15-minutowy okres.
 // 0,8% rocznie ≈ 0,6% na okres.
 const MANAGEMENT_FEE_ANNUAL = 0.008;
@@ -1508,7 +1525,9 @@ const START_COUNTRIES = [
     { id: 'US', name: 'USA', flag: '🇺🇸', available: false, passCost: 150000 },
     { id: 'JP', name: 'Japonia', flag: '🇯🇵', available: false, passCost: 100000 },
     { id: 'CN', name: 'Chiny', flag: '🇨🇳', available: false, passCost: 100000 },
-    { id: 'IN', name: 'Indie', flag: '🇮🇳', available: false, passCost: 80000 }
+    { id: 'IN', name: 'Indie', flag: '🇮🇳', available: false, passCost: 80000 },
+    { id: 'FR', name: 'Francja', flag: '🇫🇷', available: false, passCost: 50000 },    // 0.16.3 G11
+    { id: 'TW', name: 'Tajwan', flag: '🇹🇼', available: false, passCost: 80000 }     // 0.16.3 G11 (dane krajowe w 0.16.4)
 ];
 
 // Charaktery klientów (etap F1, logika w clients.js): cierpliwość, awersja do zmienności, pogoń za wynikiem,
@@ -1661,7 +1680,7 @@ function getFundAssets() {
     const ppp = typeof getFundPppValue === 'function' ? getFundPppValue() : 0;                 // projekty miejskie (city.js)
     const bridge = typeof getFundBridgeLoansValue === 'function' ? getFundBridgeLoansValue() : 0; // pożyczki pomostowe (finance.js)
     const projectBonds = typeof getFundProjectBondsValue === 'function' ? getFundProjectBondsValue() : 0; // obligacje projektowe (projects.js)
-    return Math.max(0, Number(playerCash) || 0) + getFundPortfolioValue() + getFundBondsValue() + deposits + ppp + bridge + projectBonds + getFundPoolValue() + (typeof getForeignCashPln === 'function' ? getForeignCashPln('player') : 0) + (typeof getFundGdrValue === 'function' ? getFundGdrValue() : 0); // 0.16.1 G2b/G3: gotówka w walutach po kursie i kwity GDR
+    return Math.max(0, Number(playerCash) || 0) + getFundPortfolioValue() + getFundBondsValue() + deposits + ppp + bridge + projectBonds + getFundPoolValue() + (typeof getForeignCashPln === 'function' ? getForeignCashPln('player') : 0) + (typeof getFundForeignSharesValue === 'function' ? getFundForeignSharesValue() : 0) + (typeof getFundMarginValue === 'function' ? getFundMarginValue() : 0) + (typeof getFundCommodityValue === 'function' ? getFundCommodityValue() : 0) + (typeof getFundIpoLockedValue === 'function' ? getFundIpoLockedValue() : 0) + (typeof getHiddenBalance === 'function' ? getHiddenBalance() : 0); // 0.16.6 S1: rachunek w Waschmabanku liczy się do majątku; 0.16.1 G2b/G3: gotówka w walutach po kursie i akcje zagraniczne; 0.16.4 G21: kapitał pozycji forex
 }
 
 /** 0.14.1 R2 (błąd B): pula w NAV — niezainwestowana część gracza (nominalnie) + jego wkłady przez pulę w żyjące startupy (po koszcie). */
@@ -1685,13 +1704,16 @@ function getSig20Value() {
  */
 const CLIENT_BENCHMARK = { senior: 'abs', careful: 'abs', fearful: 'abs', miser: 'abs', officer: 'abs', institution: 'sig20', investor: 'sig20', rich: 'sig20' };
 const CLIENT_ABS_HURDLE = 0.015; // „ma zysk”: wynik okresu ponad ok. 1,5% (inflacja i lokata w skali okresu)
+// 0.17.1 S1: wynik ≈ indeks ma być neutralny. Fundusz jak GIG zostaje za nim o opłatę i gotówkę płynności (ok. 1,4 pp na okres),
+// a przy pogoni za wynikiem 1,5 taka luka spychała zadowolenie pod próg 0,35, więc klienci odchodzili od funduszu równego GIG.
+const CLIENT_EXCESS_TOLERANCE = 0.015;
 
 /** Nadwyżka wyniku funduszu nad punktem odniesienia danego typu klienta (do `performance` w zadowoleniu). */
 function getClientExcess(def, ctx) {
     const bench = CLIENT_BENCHMARK[def.key] || 'gig';
     if (bench === 'abs' && Number.isFinite(ctx.recentReturn)) return ctx.recentReturn - CLIENT_ABS_HURDLE;
-    if (bench === 'sig20' && Number.isFinite(ctx.excessSig)) return ctx.excessSig;
-    return ctx.excess;
+    if (bench === 'sig20' && Number.isFinite(ctx.excessSig)) return ctx.excessSig + CLIENT_EXCESS_TOLERANCE;
+    return ctx.excess + CLIENT_EXCESS_TOLERANCE;
 }
 
 function getBenchmarkValue() {
@@ -1767,20 +1789,33 @@ function startNewCareer(profile = {}) {
         corporation: profile.corporation || 'Korporacja Inwestycyjna',
         fundName: profile.fundName || 'Fundusz Start',
         country: profile.country || 'PL',
+        baseCurrency: 'PLN', // 0.16.11 K2: zmienia się przy wyborze kraju startowego (setStartCountry)
         positionId: 'junior',
         startedAt: Date.now(),
+        contacts: [], follows: [], // 0.17.3 R0: osoby z Tied (kontakty zostają po sprzedaży akcji), obserwowani
         cv: [{ type: 'start', text: `Zatrudnienie w ${profile.corporation || 'korporacji'} jako Młodszy zarządca.` }]
     };
 
+    if (typeof syncBaseCurrency === 'function') syncBaseCurrency();
     playerCash = FUND_START_CASH;
     if (typeof centralBank === 'object') { centralBank.indexes = {}; if (typeof ensureLaunchedIndexes === 'function') ensureLaunchedIndexes(); } // 0.16.1: nowa gra — tylko GIG i SIG20
     if (typeof initFxState === 'function') initFxState(); // 0.16.1: nowe kursy i pusta gotówka walutowa
-    if (typeof resetGdrState === 'function') resetGdrState();
+    if (typeof resetMarginState === 'function') resetMarginState(); // 0.16.4 G21: bez pozycji forex
+    if (typeof initCommodityState === 'function') initCommodityState(); // 0.17 S1: surowce od cen średnich
+    if (typeof resetForeignIssuers === 'function') resetForeignIssuers();
+    if (typeof resetChainState === 'function') resetChainState();
+    if (typeof resetRatings === 'function') resetRatings(); // 0.18.4
+    if (typeof createKnfRules === 'function') knfRules = createKnfRules(); // 0.18.7 E0d
+    if (typeof createDecadeState === 'function') decadeState = createDecadeState(); // 0.18.8 D6
+    if (typeof listingHistory === 'object') { listingHistory = []; ipoStats = { ipos: 0, withdrawn: 0, fees: 0 }; } // 0.18.1 P2: bilans łańcuchów od nowa (kalibruje pierwszy kwartał)
+    if (typeof resetForeignBots === 'function') resetForeignBots(); // 0.16.2 G8: nowa gra bez botów zagranicznych
     for (const symbol of Object.keys(playerPortfolio)) delete playerPortfolio[symbol];
     playerWallet = createPlayerWallet(GRANDMA_POCKET_MONEY);
     activeTradingAccount = 'fund';
 
     playerFund = createPlayerFund();
+    playerFund.startGig = getBenchmarkValue(); // makieta 18 (R7): wynik „wobec GIG” od startu gry
+    if (typeof createTaskState === 'function') playerProfile.tasks = createTaskState(true); // 0.18.7 E2: Pierwsze kroki przypięte
     const nav = FUND_START_CASH / FUND_START_UNITS;
 
     // Kilkunastu startowych klientów; JU rozdzielone wg typowej wpłaty.
@@ -1812,7 +1847,7 @@ function startNewCareer(profile = {}) {
         addMail({ sender: 'corporation', subject: `Witamy w ${playerProfile.corporation}!`, body: `Od dziś zarządzasz funduszem „${playerProfile.fundName}”. Wyniki oceniamy co 4 okresy. Wiadomości z rynku przysyłają czasopisma — prenumeraty ustawisz w zakładce Subskrypcje.`, importance: 2 });
     }
 
-    logEvent(`💼 ${playerProfile.name} zostaje młodszym zarządcą funduszu „${playerProfile.fundName}” (${FUND_START_CASH.toLocaleString('pl-PL')} PLN, ${FUND_START_UNITS} udziałów, ${playerFund.clients.length} klientów).`, 'review');
+    logEvent(`💼 ${playerProfile.name} zostaje młodszym zarządcą funduszu „${playerProfile.fundName}” (${formatZl(FUND_START_CASH, 0)}, ${FUND_START_UNITS} udziałów, ${playerFund.clients.length} klientów).`, 'review');
 }
 
 // =================================================================================
@@ -1863,6 +1898,19 @@ function updateFund(deltaMs) {
     if (current.elapsedMs >= FUND_PERIOD_MS) closeFundPeriod();
 }
 
+/** 0.17.1 S1: GIG ma wartość dopiero po pierwszym przeliczeniu indeksów. Okres zaczęty przy GIG = 0 bierze start z pierwszego poziomu, a NAV z tej samej chwili
+ * (wcześniej cały pierwszy okres porównywał wynik funduszu z zerem: nadwyżka ±20% i ucieczka klientów przez bramkę). */
+function fillMissingPeriodStart(period, nav) {
+    if (!period || period.startBenchmark > 0) return false;
+    const gig = getBenchmarkValue();
+    if (!(gig > 0)) return false;
+    period.startBenchmark = gig;
+    if ('peakBenchmark' in period) period.peakBenchmark = gig;
+    if ('startSig20' in period && !(period.startSig20 > 0)) period.startSig20 = getSig20Value();
+    period.startNav = period.peakNav = nav;
+    return true;
+}
+
 function getPeriodReturn(startValue, endValue) {
     return startValue > 0 ? endValue / startValue - 1 : 0;
 }
@@ -1883,9 +1931,9 @@ function getTrustDropReasons() {
     const hurdle = Math.max(getDepositRate(), macro?.inflation || 0) * years;
     const cashShare = Math.max(0, playerCash) / Math.max(1, getFundAssets());
     const reasons = [];
-    if (years > 0.1 && fundReturn < benchmark - 0.005) reasons.push(`wynik ${(fundReturn * 100).toFixed(1)}% przegrywa z GIG (${(benchmark * 100).toFixed(1)}%)`);
-    if (years > 0.1 && fundReturn < hurdle) reasons.push(`wynik poniżej lokaty i inflacji (${(hurdle * 100).toFixed(1)}%) — klienci pytają, za co płacą opłatę`);
-    if (cashShare > 0.6) reasons.push(`${(cashShare * 100).toFixed(0)}% aktywów leży w gotówce — fundusz nie inwestuje pieniędzy klientów`);
+    if (years > 0.1 && fundReturn < benchmark - 0.005) reasons.push(`wynik ${formatNumberPl((fundReturn * 100), 1)}% przegrywa z GIG (${formatNumberPl((benchmark * 100), 1)}%)`);
+    if (years > 0.1 && fundReturn < hurdle) reasons.push(`wynik poniżej lokaty i inflacji (${formatNumberPl((hurdle * 100), 1)}%) — klienci pytają, za co płacą opłatę`);
+    if (cashShare > 0.6) reasons.push(`${formatNumberPl((cashShare * 100), 0)}% aktywów leży w gotówce — fundusz nie inwestuje pieniędzy klientów`);
     return reasons;
 }
 
@@ -1933,16 +1981,16 @@ function closeFundPeriod() {
     playerFund.periods.push(period);
     if (playerFund.periods.length > 12) playerFund.periods.shift();
     if (reasons.length && playerFund.trust < trustBefore - 2 && typeof addMail === 'function') {
-        addMail({ sender: CORPORATION_SENDER, subject: '📉 Klienci tracą zaufanie do funduszu', body: `Zaufanie spadło z ${trustBefore.toFixed(0)} do ${playerFund.trust.toFixed(0)}. Klienci odchodzą, bo: ${reasons.join('; ')}. Zarząd oczekuje aktywnego zarządzania.`, importance: 2 });
+        addMail({ sender: CORPORATION_SENDER, subject: '📉 Klienci tracą zaufanie do funduszu', body: `Zaufanie spadło z ${formatNumberPl(trustBefore, 0)} do ${formatNumberPl(playerFund.trust, 0)}. Klienci odchodzą, bo: ${reasons.join('; ')}. Zarząd oczekuje aktywnego zarządzania.`, importance: 2 });
     }
 
     const excess = (period.fundReturn - period.benchmarkReturn) * 100;
     logEvent(
-        `📊 Koniec okresu ${period.number}: fundusz ${(period.fundReturn * 100).toFixed(2)}% vs GIG ${(period.benchmarkReturn * 100).toFixed(2)}% ` +
-        `(${excess >= 0 ? '+' : ''}${excess.toFixed(2)} pp), miejsce ${period.rank}/${period.rankOf}, premia ${period.bonus.toFixed(2)} PLN.`,
+        `📊 Koniec okresu ${period.number}: fundusz ${formatNumberPl((period.fundReturn * 100), 2)}% vs GIG ${formatNumberPl((period.benchmarkReturn * 100), 2)}% ` +
+        `(${excess >= 0 ? '+' : ''}${formatNumberPl(excess, 2)} pp), miejsce ${period.rank}/${period.rankOf}, premia ${formatZl(period.bonus, 2)}.`,
         'review'
     );
-    if (typeof showToast === 'function') showToast(`Koniec okresu ${period.number}: premia ${period.bonus.toFixed(2)} PLN`, period.bonus > 0 ? 'success' : 'default', 5000);
+    if (typeof showToast === 'function') showToast(`Koniec okresu ${period.number}: premia ${formatZl(period.bonus, 2)}`, period.bonus > 0 ? 'success' : 'default', 5000);
 
     playerFund.periodNumber++;
     beginFundPeriod();
@@ -1962,7 +2010,7 @@ function computePerformanceBonus(period, position = getPlayerPosition()) {
 function payPerformanceBonus(period) {
     // Po drugiej słabej ocenie zarządu na najniższym stanowisku premia jest wstrzymana.
     if (playerFund.bonusSuspendedUntilPeriod > period.number) return 0;
-    const bonus = computePerformanceBonus(period);
+    const bonus = computePerformanceBonus(period) * PRIVATE_INCOME_FACTOR;
     if (bonus > 0) {
         playerWallet.cash += bonus;
         recordPayment('external:korporacja', 'player-wallet', bonus, 'Premia za wyniki');
@@ -2030,8 +2078,12 @@ function processFundWeekly() {
 
     chargeManagementFee();
     if (typeof stepFxRates === 'function') stepFxRates(); // 0.16.1 G2a: kursy walut co tydzień gry
-    if (typeof stepForeignIssuers === 'function') stepForeignIssuers(); // 0.16.1 G3: ceny obcych gigantów (GDR)
+    if (typeof stepCommodities === 'function') stepCommodities(); // 0.17 S1: ceny surowców co tydzień (przed depozytami)
+    if (typeof stepCommodityMarket === 'function') stepCommodityMarket(); // 0.17 S3: opłaty ETC/ETF, kontrakty botów
+    if (typeof stepMarginPositions === 'function') stepMarginPositions(); // 0.16.4 G21: koszt utrzymania i margin call
+    if (typeof stepCountries === 'function') stepCountries(); // 0.16.2 G5: rynki zagraniczne (countries.js)
 
+    fillMissingPeriodStart(playerFund.current, getFundNav());
     // Zaufanie zmienia się stopniowo (25% drogi do celu na tydzień).
     const target = computeTrustTarget();
     playerFund.trust += (target - playerFund.trust) * 0.25;
@@ -2076,21 +2128,23 @@ function setPlayerFeeRate(percent) {
     const previous = getPlayerFeeRate();
     playerFund.feeRate = rate;
     playerFund.feeChangedQuarter = quarter;
-    logEvent(`💼 Fundusz zmienia opłatę za zarządzanie: ${(previous * 100).toFixed(2)}% → ${(rate * 100).toFixed(2)}% rocznie.`, 'review');
+    logEvent(`💼 Fundusz zmienia opłatę za zarządzanie: ${formatNumberPl((previous * 100), 2)}% → ${formatNumberPl((rate * 100), 2)}% rocznie.`, 'review');
     showToast(rate < previous ? 'Niższa opłata przyciągnie klientów, ale budżet korporacji będzie mniejszy.' : 'Wyższa opłata zasili budżet, ale odstraszy klientów wrażliwych na koszty.', 'default', 6000);
     return true;
 }
 
 function chargeManagementFee() {
     const assets = getFundAssets();
-    const fee = Math.min(Math.max(0, playerCash), assets * getPlayerFeeRate() / FUND_WEEKS_PER_YEAR);
+    const due = assets * getPlayerFeeRate() / FUND_WEEKS_PER_YEAR;
+    if (typeof ensurePlnCash === 'function' && due > 0) ensurePlnCash(due, 'brak złotych na opłatę za zarządzanie', 8); // 0.16.9 W1: opłata nie jest „pomijana” tylko dlatego, że gotówka jest w walucie
+    const fee = Math.min(Math.max(0, playerCash), due);
     if (!(fee > 0)) return 0;
 
     playerCash -= fee;
     playerFund.feesPaidTotal += fee;
     recordPayment('player-fund', 'external:korporacja', fee, 'Opłata za zarządzanie');
 
-    const share = fee * getPlayerPosition().feeShare;
+    const share = fee * getPlayerPosition().feeShare * PRIVATE_INCOME_FACTOR;
     playerWallet.cash += share;
     recordPayment('external:korporacja', 'player-wallet', share, 'Udział w opłacie za zarządzanie');
     if (typeof corporation !== 'undefined' && corporation) corporation.budget += fee - share;
@@ -2123,11 +2177,11 @@ function redeemClientUnits(client, units) {
     const gain = Math.max(0, (nav - client.avgCost) * paidUnits);
     const tax = gain * CLIENT_GAINS_TAX;
 
-    if (client.units < 0.5) {
+    if (client.units < 1e-6) { // 0.17.1: przy częściowej wypłacie (brak gotówki) klient zostaje z resztką; wcześniej znikał razem z nią i JU klientów ≠ JU funduszu
         playerFund.clients = playerFund.clients.filter(item => item.id !== client.id);
-        logEvent(`👋 ${client.name} (${(CLIENT_TYPES[client.type] || CLIENT_TYPES.careful).label}) wycofuje wszystkie środki: ${paid.toFixed(2)} PLN (podatek klienta ${tax.toFixed(2)} PLN).`, 'review');
+        logEvent(`👋 ${client.name} (${(CLIENT_TYPES[client.type] || CLIENT_TYPES.careful).label}) wycofuje wszystkie środki: ${formatZl(paid, 2)} (podatek klienta ${formatZl(tax, 2)}).`, 'review');
     } else {
-        logEvent(`📤 ${client.name} umarza ${paidUnits.toFixed(1)} udziałów (${paid.toFixed(2)} PLN).`, 'review');
+        logEvent(`📤 ${client.name} umarza ${formatNumberPl(paidUnits, 1)} udziałów (${formatZl(paid, 2)}).`, 'review');
     }
     return paid;
 }
@@ -2143,7 +2197,7 @@ function notePlayerPositionLoss(symbol, quantity, reason, value = null) {
         playerFund.positionLog.unshift({ symbol, quantity: Math.round(quantity), reason, value, quarter: typeof macro === 'object' ? macro.quarter : 0 });
         if (playerFund.positionLog.length > 30) playerFund.positionLog.length = 30;
     }
-    const text = `📉 Twoje akcje ${symbol}: −${Math.round(quantity).toLocaleString('pl-PL')} szt. bez Twojej decyzji — ${reason}${value ? ` (${formatZl(value, 0)})` : ''}.`;
+    const text = `📉 Twoje akcje ${symbol}: −${formatInt(Math.round(quantity))} szt. bez Twojej decyzji — ${reason}${value ? ` (${formatZl(value, 0)})` : ''}.`;
     logEvent(text, 'warning');
     if (typeof pushNotification === 'function') pushNotification(text, null);
 }
@@ -2173,7 +2227,7 @@ const FORCED_SALE_REASONS = {
 /** Przymusowa sprzedaż wolnych akcji funduszu; zwraca listę sprzedanych pozycji. */
 function forceLiquidation(amountNeeded, reason = 'redemption') {
     let needed = amountNeeded;
-    if (needed > 0 && typeof liquidateForeignCash === 'function') { needed -= liquidateForeignCash(needed); if (needed > 0 && typeof liquidateGdr === 'function') needed -= liquidateGdr(needed); } // 0.16.1: najpierw obca gotówka, potem kwity GDR
+    if (needed > 0 && typeof liquidateForeignCash === 'function') { needed -= liquidateForeignCash(needed, reason === 'margin' ? 'brak złotych na spłatę pożyczki lombardowej' : 'brak złotych na wypłaty dla klientów'); if (needed > 0 && typeof liquidateForeignShares === 'function') needed -= liquidateForeignShares(needed); if (needed > 0 && typeof liquidateHiddenCash === 'function') needed -= liquidateHiddenCash(needed); } // 0.16.1: najpierw obca gotówka, potem kwity GDR
     const sold = [];
     const positions = Object.entries(playerPortfolio)
         .filter(([, holding]) => holding.assetType === 'stock' || !holding.assetType)
@@ -2304,7 +2358,7 @@ function issueFundUnits(requestedUnits, options = {}) {
     recordPayment('external:klienci', 'player-fund', raised, 'Emisja udziałów');
     if (typeof noteFundFlow === 'function') noteFundFlow('in', 'emission', raised, raised / nav); // B5: panel przyczyn
 
-    logEvent(`📥 Emisja: sprzedano ${(raised / nav).toFixed(1)} z ${requested} udziałów po ${nav.toFixed(2)} PLN (${raised.toFixed(2)} PLN, nowych klientów: ${newClients.length}).`, 'review');
+    logEvent(`📥 Emisja: sprzedano ${formatNumberPl((raised / nav), 1)} z ${requested} udziałów po ${formatZl(nav, 2)} (${formatZl(raised, 2)}, nowych klientów: ${newClients.length}).`, 'review');
     return { issued: raised / nav, raised, newClients: newClients.length };
 }
 
@@ -2318,7 +2372,7 @@ function maybeTriggerForcedEmission() {
     const names = ['Fundusz Emerytalny Północ', 'Skarbiec Rodziny Kowalskich', 'Holding Zachodni', 'Kasa Oszczędnościowa Delta'];
     const name = names[Math.floor(Math.random() * names.length)];
     playerFund.emissionOffer = { name, units: Math.max(1, Math.ceil(value / nav)), expiresQ: (typeof macro === 'object' ? macro.quarter : 0) + 4 };
-    const text = `🏛️ ${name} chce zainwestować ok. ${value.toFixed(0)} PLN. Rozpocznij kampanię emisyjną (Klienci i udziały), by przyjąć ofertę.`;
+    const text = `🏛️ ${name} chce zainwestować ok. ${formatZl(value, 0)}. Rozpocznij kampanię emisyjną (O funduszu → Kampanie), by przyjąć ofertę.`;
     logEvent(text, 'review');
     if (typeof pushNotification === 'function') pushNotification(text, () => { if (typeof openJuMarket === 'function') openJuMarket(); });
 }
@@ -2328,9 +2382,14 @@ function maybeTriggerForcedEmission() {
 // =================================================================================
 
 /** Minimalny wpływ transakcji na cenę: 0,5 × udział w wolnym obrocie, maks. 2%. */
-function applyTradeImpact(stock, quantity, direction) {
-    const freeFloat = Math.max(1, typeof getFreeFloatShares === 'function' ? getFreeFloatShares(stock) : stock.totalShares);
-    const pct = Math.min(0.02, 0.5 * Math.abs(quantity) / freeFloat);
+// 0.18.8 U13 b (2026-11-21): zlecenie gracza ma poślizg rosnący z udziałem w free floacie (0,5 × udział, do 15%), wliczony w cenę
+// wykonania (połowa ruchu kursu) i w ruch kursu po transakcji. Boty i spółki zostają przy pułapie 2%.
+const TRADE_SLIP_RULES = { k: 0.5, max: 0.15, otherCap: 0.02 };
+function getTradeFreeFloat(stock) { return Math.max(1, typeof getFreeFloatShares === 'function' ? getFreeFloatShares(stock) : stock.totalShares); }
+/** Ruch kursu po zleceniu gracza (ułamek ceny). */
+function getTradeSlippage(stock, quantity) { return stock ? Math.min(TRADE_SLIP_RULES.max, TRADE_SLIP_RULES.k * Math.abs(quantity) / getTradeFreeFloat(stock)) : 0; }
+function applyTradeImpact(stock, quantity, direction, player = false) {
+    const pct = player ? getTradeSlippage(stock, quantity) : Math.min(TRADE_SLIP_RULES.otherCap, TRADE_SLIP_RULES.k * Math.abs(quantity) / getTradeFreeFloat(stock));
     stock.price = Math.max(0.01, stock.price * (1 + Math.sign(direction) * pct));
 }
 
@@ -2375,8 +2434,8 @@ function checkCompliance(symbol) {
         playerWallet.fines += paid;
         playerWallet.complianceRisk = 0;
         playerFund.trust = Math.max(0, playerFund.trust - 5);
-        playerProfile?.cv.push({ type: 'compliance', text: `Kontrola compliance: front-running na ${symbol}, kara ${paid.toFixed(2)} PLN.` });
-        logEvent(`🚨 COMPLIANCE: wykryto prywatne transakcje przed transakcjami funduszu (${symbol}). Kara ${paid.toFixed(2)} PLN, wpis w CV.`, 'error');
+        playerProfile?.cv.push({ type: 'compliance', text: `Kontrola compliance: front-running na ${symbol}, kara ${formatZl(paid, 2)}.` });
+        logEvent(`🚨 COMPLIANCE: wykryto prywatne transakcje przed transakcjami funduszu (${symbol}). Kara ${formatZl(paid, 2)}, wpis w CV.`, 'error');
         if (typeof showToast === 'function') showToast('Kontrola compliance! Kara i wpis w CV.', 'error', 6000);
     }
 }
@@ -2398,7 +2457,7 @@ function getBuyCommissionRate(stock) {
 
 /** 0.13.1 (B1/B2): pełny koszt zakupu — cena (z rabatem), prowizja, razem. */
 function getBuyQuote(stock, quantity, account = activeTradingAccount) {
-    const value = (Number(stock?.price) || 0) * Math.max(0, quantity);
+    const value = (Number(stock?.price) || 0) * Math.max(0, quantity) * (1 + getTradeSlippage(stock, quantity) / 2); // 0.18.8 U13: średnia cena wykonania z poślizgiem
     if (account === 'private') return { cost: value, fee: 0, total: value };
     const cost = value * (1 - getCharismaDiscount());
     const fee = value * getBuyCommissionRate(stock);
@@ -2417,27 +2476,8 @@ function getMaxBuyQuantity(stock, account = activeTradingAccount) {
 }
 
 function buyStockPrivate(symbol, quantity) {
-    if (typeof isMarketHalted === 'function' && isMarketHalted()) { showToast('Handel wstrzymany — zadziałał bezpiecznik giełdowy!', 'error'); return false; }
-    const stock = stocks.find(s => s.symbol === symbol);
-    if (!stock || stock.isTradeLocked) { showToast('Handel tą akcją jest niedostępny.', 'warning'); return false; }
-    if (!canAccessExchange(stock.exchange, stock)) { showToast('Twoje stanowisko nie daje dostępu do tej giełdy.', 'warning'); return false; }
-    if (quantity > getAvailableShares(stock)) { showToast(`Za mało akcji na rynku (dostępne: ${getAvailableShares(stock)}).`, 'warning'); return false; }
-
-    const cost = stock.price * quantity;
-    if (playerWallet.cash < cost) { showToast('Za mało prywatnych pieniędzy.', 'error'); return false; }
-
-    playerWallet.cash -= cost;
-    stock.sharesHeld += quantity;
-    const holding = playerWallet.portfolio[symbol] || { shares: 0, avgPrice: 0, assetType: 'stock' };
-    holding.avgPrice = (holding.avgPrice * holding.shares + cost) / (holding.shares + quantity);
-    holding.shares += quantity;
-    playerWallet.portfolio[symbol] = holding;
-    applyTradeImpact(stock, quantity, 1);
-
-    checkCompliance(symbol);
-    logEvent(`🧍 Prywatnie kupiono ${quantity} szt. ${symbol} za ${cost.toFixed(2)} PLN.`, 'review');
-    refreshFundViews();
-    return true;
+    showToast('Konta prywatnego nie wolno używać do handlu akcjami — służy tylko do wydatków osobistych. Kupuj z funduszu.', 'warning');
+    return false;
 }
 
 function sellStockPrivate(symbol, quantity) {
@@ -2447,7 +2487,7 @@ function sellStockPrivate(symbol, quantity) {
     if (!stock || !holding || holding.shares < quantity) { alert('Nie masz tylu akcji na koncie prywatnym.'); return false; }
     if (stock.isTradeLocked) { alert('Handel tą akcją jest wstrzymany.'); return false; }
 
-    const proceeds = stock.price * quantity;
+    const proceeds = stock.price * quantity * (1 - getTradeSlippage(stock, quantity) / 2); // 0.18.8 U13: poślizg
     const profit = proceeds - holding.avgPrice * quantity;
     const tax = profit > 0 ? profit * PRIVATE_GAINS_TAX * getPrivateTaxModifier() : 0;
     governmentTreasury += tax;
@@ -2455,29 +2495,18 @@ function sellStockPrivate(symbol, quantity) {
     playerWallet.cash += proceeds - tax;
     holding.shares -= quantity;
     stock.sharesHeld -= quantity;
-    applyTradeImpact(stock, quantity, -1);
+    applyTradeImpact(stock, quantity, -1, true); // 0.18.8 U13
     if (holding.shares <= 0) delete playerWallet.portfolio[symbol];
 
-    logEvent(`🧍 Prywatnie sprzedano ${quantity} szt. ${symbol}: ${proceeds.toFixed(2)} PLN (podatek ${tax.toFixed(2)} PLN).`, 'review');
+    logEvent(`🧍 Prywatnie sprzedano ${quantity} szt. ${symbol}: ${formatZl(proceeds, 2)} (podatek ${formatZl(tax, 2)}).`, 'review');
     refreshFundViews();
     return true;
 }
 
 /** Gracz prywatnie kupuje JU własnego funduszu po NAV (bez wpływu na limit emisji). */
 function buyOwnFundUnits(amount) {
-    const value = Math.min(Number(amount) || 0, playerWallet.cash);
-    const nav = getFundNav();
-    if (!playerFund || !(value > 0) || !(nav > 0)) return 0;
-
-    const units = value / nav;
-    playerWallet.cash -= value;
-    playerWallet.fundUnits += units;
-    playerWallet.fundUnitsCost += value;
-    playerCash += value;
-    playerFund.units += units;
-    recordPayment('player-wallet', 'player-fund', value, 'Zakup udziałów własnego funduszu');
-    refreshFundViews();
-    return units;
+    showToast('Konto prywatne nie służy do inwestowania — nie kupisz za nie udziałów funduszu.', 'warning');
+    return 0;
 }
 
 function sellOwnFundUnits(units) {
@@ -2534,7 +2563,7 @@ function buyTraining(skillId) {
 
     const cost = getTrainingCost(skillId);
     if (playerWallet.cash < cost) {
-        showToast(`Szkolenie kosztuje ${cost} PLN — masz ${playerWallet.cash.toFixed(2)} PLN.`, 'error');
+        showToast(`Szkolenie kosztuje ${formatZl(cost, 0)} — masz ${formatZl(playerWallet.cash, 2)}.`, 'error');
         return false;
     }
 
@@ -2819,7 +2848,7 @@ function processCorporationWeekly() {
             corporation.budget += fee - share;
             if (corporation.supervisedManagerId === manager.id) {
                 // Nadzór kierownika projektu: gracz dostaje udział także z nadzorowanego funduszu.
-                const playerShare = fee * getPlayerPosition().feeShare * 0.5;
+                const playerShare = fee * getPlayerPosition().feeShare * 0.5 * PRIVATE_INCOME_FACTOR;
                 corporation.budget -= playerShare;
                 playerWallet.cash += playerShare;
                 recordPayment('external:korporacja', 'player-wallet', playerShare, 'Udział w opłacie nadzorowanego funduszu');
@@ -2830,6 +2859,7 @@ function processCorporationWeekly() {
 
         // Zaufanie i przepływy klientów (uproszczony model klientów botów).
         const nav = getBotFundNav(fund);
+        fillMissingPeriodStart(fund.current, nav);
         const excess = getPeriodReturn(fund.current.startNav, nav) - getPeriodReturn(fund.current.startBenchmark, getBenchmarkValue());
         fund.trust = Math.max(0, Math.min(100, fund.trust + (50 + excess * 400 - fund.trust) * 0.25));
         const flow = getBotFundAssets(fund) * (fund.trust - 50) / 50 * 0.01;
@@ -2932,7 +2962,7 @@ function getFundEthicsIssue() {
     const caught = big.find(s => Number.isFinite(s.workforce.greyCaughtQuarter) && (macro?.quarter ?? 0) - s.workforce.greyCaughtQuarter <= 4);
     if (caught) return `w portfelu jest ${caught.name}, złapana na szarej strefie`;
     if (big.length && typeof getAverageSatisfaction === 'function' && getAverageSatisfaction(big) < 45) return 'spółki z dużym udziałem funduszu źle traktują pracowników';
-    return null;
+    return typeof getFundEsgIssue === 'function' ? getFundEsgIssue() : null; // 0.18.9 G6a: udział C i D
 }
 
 /** Średnie zadowolenie pracowników w spółkach portfela (ważone wartością pozycji). */
@@ -2976,13 +3006,13 @@ const CORPORATE_GOAL_POOL = {
     },
     hurdle: {
         label: 'Wynik cyklu powyżej lokaty i inflacji',
-        value: goals => `${(getGoalCycleReturn(goals) * 100).toFixed(1)}% vs ${(getGoalCycleHurdle(goals) * 100).toFixed(1)}%`,
+        value: goals => `${formatNumberPl((getGoalCycleReturn(goals) * 100), 1)}% vs ${formatNumberPl((getGoalCycleHurdle(goals) * 100), 1)}%`,
         progress: goals => { const h = getGoalCycleHurdle(goals); return h > 0 ? Math.max(0, Math.min(1, getGoalCycleReturn(goals) / h)) : 1; },
         check: goals => getGoalCycleReturn(goals) >= getGoalCycleHurdle(goals)
     },
     diversify: {
         label: 'Dywersyfikacja: ≥ 6 spółek, żadna > 25% aktywów',
-        value: () => { const d = getDiversificationStats(); return `${d.count} spółek, max ${(d.maxShare * 100).toFixed(0)}%`; },
+        value: () => { const d = getDiversificationStats(); return `${d.count} spółek, max ${formatNumberPl((d.maxShare * 100), 0)}%`; },
         progress: () => { const d = getDiversificationStats(); return Math.min(1, d.count / 6) * (d.maxShare > 0.25 ? 0.5 : 1); },
         check: () => { const d = getDiversificationStats(); return d.count >= 6 && d.maxShare <= 0.25; }
     },
@@ -2995,7 +3025,7 @@ const CORPORATE_GOAL_POOL = {
     satisfaction: {
         label: 'Średnie zadowolenie pracowników w portfelu ≥ 55',
         available: () => (playerFund?.clients || []).some(client => client.type === 'ethical'),
-        value: () => { const v = getPortfolioSatisfaction(); return v === null ? 'brak spółek' : `${v.toFixed(0)}/100`; },
+        value: () => { const v = getPortfolioSatisfaction(); return v === null ? 'brak spółek' : `${formatNumberPl(v, 0)}/100`; },
         progress: () => { const v = getPortfolioSatisfaction(); return v === null ? 0 : Math.min(1, v / 55); },
         check: () => (getPortfolioSatisfaction() ?? 0) >= 55
     },
@@ -3007,17 +3037,105 @@ const CORPORATE_GOAL_POOL = {
     }
 };
 
-/** Zarząd przydziela 2 losowe cele na cykl oceny. */
+/** 0.16.5: dodatkowe cele z TeamedUP!. `promotion` = cel awansowy (podwójna premia punktowa), `minPos` = od jakiego stanowiska. */
+Object.assign(CORPORATE_GOAL_POOL, {
+    nav10: {
+        label: 'Wzrost NAV o 10% w cyklu (cel awansowy)', promotion: true,
+        value: goals => `${formatNumberPl((getGoalCycleReturn(goals) * 100), 1)}% / 10%`,
+        progress: goals => Math.max(0, Math.min(1, getGoalCycleReturn(goals) / 0.10)),
+        check: goals => getGoalCycleReturn(goals) >= 0.10
+    },
+    nav25: {
+        label: 'Wzrost NAV o 25% w cyklu (cel awansowy)', promotion: true, minPos: 1,
+        value: goals => `${formatNumberPl((getGoalCycleReturn(goals) * 100), 1)}% / 25%`,
+        progress: goals => Math.max(0, Math.min(1, getGoalCycleReturn(goals) / 0.25)),
+        check: goals => getGoalCycleReturn(goals) >= 0.25
+    },
+    beatGig: {
+        label: 'Pobij GIG w cyklu (cel awansowy)', promotion: true,
+        value: goals => `${formatNumberPl((getGoalCycleReturn(goals) * 100), 1)}% vs GIG ${formatNumberPl((getGoalBenchReturn(goals) * 100), 1)}%`,
+        progress: goals => Math.max(0, Math.min(1, 0.5 + (getGoalCycleReturn(goals) - getGoalBenchReturn(goals)) * 5)),
+        check: goals => getGoalCycleReturn(goals) > getGoalBenchReturn(goals)
+    },
+    trust70: {
+        label: 'Zaufanie klientów ≥ 70',
+        value: () => `${formatNumberPl((playerFund?.trust ?? 0), 0)}/100`,
+        progress: () => Math.min(1, (playerFund?.trust ?? 0) / 70),
+        check: () => (playerFund?.trust ?? 0) >= 70
+    },
+    abroad: {
+        label: 'Wejdź na rynek zagraniczny (kup bilet w Ferie i wakacje)',
+        available: () => typeof isAirportBuilt === 'function' && isAirportBuilt(),
+        value: () => (foreignTickets?.player?.length || 0) ? 'tak' : 'nie',
+        progress: () => (foreignTickets?.player?.length || 0) ? 1 : 0,
+        check: () => (foreignTickets?.player?.length || 0) > 0
+    },
+    analyst: {
+        label: 'Zatrudnij analityka (TeamedUP!)',
+        available: () => canHireAnalysts(),
+        value: () => `${corporation?.analysts?.length || 0}/1`,
+        progress: () => (corporation?.analysts?.length || 0) ? 1 : 0,
+        check: () => (corporation?.analysts?.length || 0) >= 1
+    },
+    cashBuffer: {
+        label: 'Bufor gotówki ≥ 10% aktywów',
+        value: () => `${formatNumberPl((playerCash / Math.max(1, getFundAssets()) * 100), 0)}%`,
+        progress: () => Math.min(1, playerCash / Math.max(1, getFundAssets()) / 0.1),
+        check: () => playerCash / Math.max(1, getFundAssets()) >= 0.1
+    }
+});
+
+function getGoalBenchReturn(goals) {
+    return goals.startBench > 0 && typeof getBenchmarkValue === 'function' ? getBenchmarkValue() / goals.startBench - 1 : 0;
+}
+
+const GOAL_ACTIVE_AT_START = 2;     // tyle zadań zarząd daje od razu
+const GOAL_QUEUE_MAX = 3;           // kolejne odsłaniają się w trakcie cyklu
+const GOAL_RELEASE_EVERY_Q = 4;     // co 4 kwartały (rok) jedno nowe zadanie
+const GOAL_PROMOTION_MULT = 2;      // cel awansowy: podwójne punkty oceny za spełnienie
+
+function isGoalEligible(id) {
+    const def = CORPORATE_GOAL_POOL[id];
+    return def && (!def.available || def.available()) && getPositionIndex(playerProfile?.positionId) >= (def.minPos || 0);
+}
+
+/** Zarząd przydziela 2 cele od razu (jeden zawsze awansowy, gdy jest dostępny); do 3 kolejnych odsłania się co rok cyklu. */
 function assignCorporateGoals() {
-    const ids = Object.keys(CORPORATE_GOAL_POOL).filter(id => !CORPORATE_GOAL_POOL[id].available || CORPORATE_GOAL_POOL[id].available()).sort(() => Math.random() - 0.5).slice(0, 2);
-    corporation.goals = { ids, quarter: macro?.quarter || 0, startNav: playerFund ? getFundNav() : 0, progress: { project: false, dividends: 0 } };
+    const eligible = Object.keys(CORPORATE_GOAL_POOL).filter(isGoalEligible).sort(() => Math.random() - 0.5);
+    const promo = eligible.filter(id => CORPORATE_GOAL_POOL[id].promotion), rest = eligible.filter(id => !CORPORATE_GOAL_POOL[id].promotion);
+    const ordered = [...promo.slice(0, 1), ...rest, ...promo.slice(1)];
+    const q = macro?.quarter || 0;
+    corporation.goals = {
+        ids: ordered.slice(0, GOAL_ACTIVE_AT_START), quarter: q, startNav: playerFund ? getFundNav() : 0,
+        startBench: typeof getBenchmarkValue === 'function' ? getBenchmarkValue() : 0,
+        queue: ordered.slice(GOAL_ACTIVE_AT_START, GOAL_ACTIVE_AT_START + GOAL_QUEUE_MAX).map((id, i) => ({ id, at: q + GOAL_RELEASE_EVERY_Q * (i + 1) })),
+        progress: { project: false, dividends: 0 }
+    };
     return corporation.goals;
+}
+
+/** Odsłania zadania z kolejki, których termin nadszedł (wołane co tydzień i przy odczycie). Zwraca liczbę nowych. */
+function releaseCorporateGoals() {
+    const goals = corporation?.goals;
+    if (!goals || !Array.isArray(goals.queue)) return 0;
+    const q = macro?.quarter || 0;
+    let released = 0;
+    for (const item of [...goals.queue]) {
+        if (item.at > q) continue;
+        goals.queue = goals.queue.filter(x => x !== item);
+        if (!isGoalEligible(item.id) || goals.ids.includes(item.id)) continue;
+        goals.ids.push(item.id); released++;
+        if (typeof addMail === 'function') addMail({ sender: CORPORATION_SENDER, subject: 'Nowe zadanie od zarządu', body: CORPORATE_GOAL_POOL[item.id].label, importance: 2 });
+    }
+    return released;
 }
 
 function ensureCorporateGoals() {
     if (!corporation) return null;
     if (!corporation.goals || !Array.isArray(corporation.goals.ids)) assignCorporateGoals();
     if (!(corporation.goals.startNav > 0) && playerFund) corporation.goals.startNav = getFundNav();
+    if (!(corporation.goals.startBench > 0) && typeof getBenchmarkValue === 'function') corporation.goals.startBench = getBenchmarkValue();
+    releaseCorporateGoals();
     return corporation.goals;
 }
 
@@ -3034,7 +3152,7 @@ function getCorporateGoalsView() {
     if (!goals) return [];
     return goals.ids.filter(id => CORPORATE_GOAL_POOL[id]).map(id => {
         const goal = CORPORATE_GOAL_POOL[id];
-        return { id, label: goal.label, value: goal.value(goals), progress: goal.progress(goals), done: goal.check(goals) };
+        return { id, label: goal.label, value: goal.value(goals), progress: goal.progress(goals), done: goal.check(goals), promotion: Boolean(goal.promotion) };
     });
 }
 
@@ -3050,9 +3168,9 @@ function settleCorporateGoals() {
     const view = getCorporateGoalsView();
     let delta = 0, bonus = 0;
     for (const goal of view) {
-        delta += goal.done ? GOAL_MET_BONUS : -GOAL_MISSED_PENALTY;
+        delta += goal.done ? GOAL_MET_BONUS * (goal.promotion ? GOAL_PROMOTION_MULT : 1) : -GOAL_MISSED_PENALTY;
         if (goal.done) {
-            const pay = getCorporateGoalPay();
+            const pay = getCorporateGoalPay() * PRIVATE_INCOME_FACTOR;
             if (pay > 0) {
                 corporation.budget -= pay;
                 playerWallet.cash += pay;
@@ -3242,7 +3360,7 @@ function hireAnalyst(type) {
     if (!corporation || !def) return false;
     if (!canHireAnalysts()) { showToast('Analityków zatrudnia się od stanowiska Starszy zarządca.', 'warning'); return false; }
     if (corporation.analysts.some(analyst => analyst.type === type)) { showToast('Masz już takiego analityka.', 'default'); return false; }
-    if (playerWallet.cash < def.hireCost) { showToast(`Zatrudnienie kosztuje ${def.hireCost} PLN.`, 'error'); return false; }
+    if (playerWallet.cash < def.hireCost) { showToast(`Zatrudnienie kosztuje ${formatZl(def.hireCost, 0)}.`, 'error'); return false; }
 
     playerWallet.cash -= def.hireCost;
     const stars = getRandomIntInRange(1, 5);
@@ -3277,18 +3395,18 @@ function getAnalystInsights(stock) {
     if (company && (f || stock.assetType)) {
         const fair = typeof getDisplayedFairValue === 'function' ? getDisplayedFairValue(stock) : f?.fairValue;
         const method = f?.fairValue > 0 ? '' : stock.assetType === 'Holding' ? ' (NAV portfela)' : stock.assetType === 'REIT' ? ' (NAV / dywidenda)' : ' (wartość księgowa)';
-        insights.push(`Analityk spółki (${'★'.repeat(company.stars)}): wartość godziwa ${fair > 0 ? `≈ ${(fair * noise(company.stars)).toFixed(2)} PLN${method}` : 'brak wyceny (brak zysku i majątku netto)'}${f?.expectedEps ? `, prognoza EPS na kwartał ≈ ${(f.expectedEps * noise(company.stars)).toFixed(3)} PLN` : ''}.`);
+        insights.push(`Analityk spółki (${'★'.repeat(company.stars)}): wartość godziwa ${fair > 0 ? `≈ ${formatZl((fair * noise(company.stars)), 2)}${method}` : 'brak wyceny (brak zysku i majątku netto)'}${f?.expectedEps ? `, prognoza EPS na kwartał ≈ ${formatZl((f.expectedEps * noise(company.stars)), 3)}` : ''}.`);
     }
     const sector = getAnalyst('sector');
     if (sector) {
         const profile = getSectorProfile(stock);
-        insights.push(`Analityk sektora (${'★'.repeat(sector.stars)}): wrażliwość na cykl ${profile.beta.toFixed(1)}, typowe C/Z ${profile.pe.toFixed(0)}, faza: ${getEconomyPhaseInfo().name}.`);
+        insights.push(`Analityk sektora (${'★'.repeat(sector.stars)}): wrażliwość na cykl ${formatNumberPl(profile.beta, 1)}, typowe C/Z ${formatNumberPl(profile.pe, 0)}, faza: ${getEconomyPhaseInfo().name}.`);
     }
     const earnings = getAnalyst('earnings');
     if (earnings && f) {
         const trend = (Number(stock.financialHealth) || 0) * 0.08 + getSectorProfile(stock).beta * getGdpDriver() * 20;
         const chance = Math.max(0.05, Math.min(0.95, 0.5 + trend + gaussianRandom() * (6 - earnings.stars) * 0.03));
-        insights.push(`Analityk wyników (${'★'.repeat(earnings.stars)}): szansa pozytywnej niespodzianki ≈ ${(chance * 100).toFixed(0)}%.`);
+        insights.push(`Analityk wyników (${'★'.repeat(earnings.stars)}): szansa pozytywnej niespodzianki ≈ ${formatNumberPl((chance * 100), 0)}%.`);
     }
     return insights;
 }
@@ -3337,6 +3455,11 @@ function consolidateSupervisedFund(forceApproval = null) {
         target.shares += holding.shares; // sharesHeld bez zmian — akcje tylko zmieniają fundusz
         playerPortfolio[symbol] = target;
     }
+    for (const [symbol, amount] of Object.entries(fund.startups || {})) { // 0.17 S0b: udziały w startupach (w wycenie po koszcie) przechodzą na fundusz gracza
+        const target = playerPortfolio[symbol] || { investedAmount: 0, assetType: 'Startup', isInsured: false };
+        target.investedAmount += Number(amount) || 0;
+        playerPortfolio[symbol] = target;
+    }
 
     const units = value / nav;
     playerFund.units += units;
@@ -3346,8 +3469,8 @@ function consolidateSupervisedFund(forceApproval = null) {
     onColleagueEvent(manager.id, 'consolidate');
     corporation.managers = corporation.managers.filter(item => item !== manager);
     corporation.supervisedManagerId = null;
-    playerProfile.cv.push({ type: 'milestone', text: `Konsolidacja funduszu ${manager.name} (${value.toFixed(0)} PLN).` });
-    logEvent(`🔗 Zarząd zatwierdza konsolidację: fundusz ${manager.name} (${value.toFixed(0)} PLN) dołącza do Twojego.`, 'review');
+    playerProfile.cv.push({ type: 'milestone', text: `Konsolidacja funduszu ${manager.name} (${formatZl(value, 0)}).` });
+    logEvent(`🔗 Zarząd zatwierdza konsolidację: fundusz ${manager.name} (${formatZl(value, 0)}) dołącza do Twojego.`, 'review');
     return true;
 }
 
@@ -3383,7 +3506,7 @@ function meetInvestor(investorId, forceSuccess = null) {
     if (!investor || !playerFund || !corporation) return false;
     const period = playerFund.current.number;
     if (corporation.lastMeetings[investorId] === period) { showToast('W tym okresie już spotkałeś się z tym inwestorem.', 'default'); return false; }
-    if (playerWallet.cash < MEETING_COST) { showToast(`Spotkanie kosztuje ${MEETING_COST} PLN.`, 'error'); return false; }
+    if (playerWallet.cash < MEETING_COST) { showToast(`Spotkanie kosztuje ${formatZl(MEETING_COST, 0)}.`, 'error'); return false; }
 
     playerWallet.cash -= MEETING_COST;
     corporation.lastMeetings[investorId] = period;
@@ -3401,7 +3524,7 @@ function meetInvestor(investorId, forceSuccess = null) {
     if (!(amount > 1)) return false;
     investor.cash -= amount;
     addOutsideSubscription('investor', investor.name, amount);
-    logEvent(`🤝 ${investor.name} kupuje udziały Twojego funduszu za ${amount.toFixed(0)} PLN!`, 'review');
+    logEvent(`🤝 ${investor.name} kupuje udziały Twojego funduszu za ${formatZl(amount, 0)}!`, 'review');
     return true;
 }
 
@@ -3410,7 +3533,7 @@ function lunchWithCeo(symbol) {
     if (!stock || !corporation) return false;
     const period = playerFund.current.number;
     if (corporation.lastMeetings[symbol] === period) { showToast('Z tym prezesem spotkałeś się już w tym okresie.', 'default'); return false; }
-    if (playerWallet.cash < CEO_LUNCH_COST) { showToast(`Lunch kosztuje ${CEO_LUNCH_COST} PLN.`, 'error'); return false; }
+    if (playerWallet.cash < CEO_LUNCH_COST) { showToast(`Lunch kosztuje ${formatZl(CEO_LUNCH_COST, 0)}.`, 'error'); return false; }
 
     playerWallet.cash -= CEO_LUNCH_COST;
     corporation.lastMeetings[symbol] = period;
@@ -3427,7 +3550,7 @@ function processInvestorInterest() {
         const amount = investor.cash * 0.05;
         investor.cash -= amount;
         addOutsideSubscription('investor', investor.name, amount);
-        logEvent(`📈 ${investor.name} sam zgłasza się i kupuje udziały za ${amount.toFixed(0)} PLN.`, 'review');
+        logEvent(`📈 ${investor.name} sam zgłasza się i kupuje udziały za ${formatZl(amount, 0)}.`, 'review');
     }
 }
 
@@ -3458,7 +3581,7 @@ function processCorporateSubscriptions() {
         const fundShare = (playerPortfolio[stock.symbol]?.shares || 0) / Math.max(1, stock.totalShares);
         if (fundShare > 0.05) playerWallet.complianceRisk++;
 
-        logEvent(`🏢 ${stock.name} lokuje ${amount.toFixed(0)} PLN w udziałach Twojego funduszu (dobre relacje z prezesem).`, 'review');
+        logEvent(`🏢 ${stock.name} lokuje ${formatZl(amount, 0)} w udziałach Twojego funduszu (dobre relacje z prezesem).`, 'review');
     }
 }
 
@@ -3482,7 +3605,7 @@ function proposeFundTakeover(symbol, forceApproval = null) {
 
     const price = getExternalFirmValuation(stock);
     if (corporation.budget < price) {
-        logEvent(`🗳️ Zarząd odrzuca przejęcie ${getExternalFirmName(stock)}: budżet ${corporation.budget.toFixed(0)} PLN < cena ${price} PLN.`, 'review');
+        logEvent(`🗳️ Zarząd odrzuca przejęcie ${getExternalFirmName(stock)}: budżet ${formatZl(corporation.budget, 0)} < cena ${formatZl(price, 0)}.`, 'review');
         showToast('Za mały budżet korporacji na to przejęcie.', 'error');
         return false;
     }
@@ -3506,7 +3629,7 @@ function proposeFundTakeover(symbol, forceApproval = null) {
         costs: 0,
         reservedBudget: price
     };
-    logEvent(`🗳️ Zarząd zatwierdza przejęcie ${getExternalFirmName(stock)} za ${price} PLN. Rozpoczyna się proces (7 etapów).`, 'review');
+    logEvent(`🗳️ Zarząd zatwierdza przejęcie ${getExternalFirmName(stock)} za ${formatZl(price, 0)}. Rozpoczyna się proces (7 etapów).`, 'review');
     return true;
 }
 
@@ -3522,7 +3645,7 @@ function advanceFundTakeover(stock) {
         const cost = Math.round(process.reservedBudget * 0.05);
         corporation.budget -= cost;
         process.costs += cost;
-        logEvent(`⚖️ Komplikacja przy przejęciu ${stock.name}: dodatkowe koszty prawne ${cost} PLN.`, 'review');
+        logEvent(`⚖️ Komplikacja przy przejęciu ${stock.name}: dodatkowe koszty prawne ${formatZl(cost, 0)}.`, 'review');
     } else if (roll < 0.11) {
         corporation.budget += process.reservedBudget;
         stock.mergerProcess = null;
@@ -3552,8 +3675,8 @@ function checkMilestones(period) {
     const m = corporation.milestones;
     if (!m.fund100k && getFundAssets() >= 100000) {
         m.fund100k = Date.now();
-        playerProfile.cv.push({ type: 'milestone', text: 'Fundusz przekroczył 100 000 PLN aktywów.' });
-        logEvent('🏅 Kamień milowy: fundusz powyżej 100 000 PLN!', 'review');
+        playerProfile.cv.push({ type: 'milestone', text: `Fundusz przekroczył ${formatZl(100000, 0)} aktywów.` });
+        logEvent(`🏅 Kamień milowy: fundusz powyżej ${formatZl(100000, 0)}!`, 'review');
     }
     const last4 = playerFund.periods.slice(-4);
     if (!m.beatGig4 && last4.length === 4 && last4.every(p => p.fundReturn > p.benchmarkReturn)) {
@@ -3606,6 +3729,37 @@ const LEGACY_CLIENT_TYPES = { retiree: 'careful', saver: 'miser', speculator: 's
 
 const JU_MARKET_MAX_PREMIUM = 0.10;
 const JU_SELL_ORDER_PATIENCE = 2;          // tygodni bez kupca → umorzenie
+/** 0.18.8 D1: CV — szczegół 40 ostatnich wpisów, starsze jako liczniki według typu (`cvCounts`); podsumowania dekad są w history.js. */
+const CV_RULES = { keep: 40 };
+function trimPlayerCv(profile = playerProfile) {
+    if (!profile || !Array.isArray(profile.cv) || profile.cv.length <= CV_RULES.keep) return 0;
+    const old = profile.cv.splice(0, profile.cv.length - CV_RULES.keep);
+    profile.cvCounts = profile.cvCounts || {};
+    for (const e of old) profile.cvCounts[e.type || 'inne'] = (profile.cvCounts[e.type || 'inne'] || 0) + 1;
+    return old.length;
+}
+// 0.18.8 U13 (dopisek użytkownika): fundusz-większościowiec (> 50%) sprzedaje pakiet ≥ 5% akcji → kurs spada przez 4–6 tygodni
+// (1,5 × sprzedany udział łącznie, do 25%), mniejszościowi panikują. Kolejna sprzedaż w trakcie dokłada spadek.
+const MAJORITY_EXIT_RULES = { minStake: 0.5, minSold: 0.05, dropPerShare: 1.5, maxDrop: 0.25, weeks: [4, 6] };
+function noteMajorityExit(stock, quantity, stakeBefore) {
+    const sold = quantity / Math.max(1, stock.totalShares);
+    if (!(stakeBefore > MAJORITY_EXIT_RULES.minStake) || sold < MAJORITY_EXIT_RULES.minSold) return null;
+    const weeks = getRandomIntInRange(...MAJORITY_EXIT_RULES.weeks), prev = stock.majorityExit;
+    const total = Math.min(MAJORITY_EXIT_RULES.maxDrop, MAJORITY_EXIT_RULES.dropPerShare * sold + (prev ? prev.perWeek * prev.weeksLeft : 0));
+    stock.majorityExit = { weeksLeft: weeks, perWeek: total / weeks };
+    const text = `Większościowy akcjonariusz ${stock.name} sprzedaje ${formatNumberPl(sold * 100, 1)}% akcji. Mniejszościowi akcjonariusze panikują, kurs jest niestabilny.`;
+    if (typeof logEvent === 'function') logEvent(text, 'market');
+    if (typeof pushNews === 'function') pushNews(text, stock.symbol);
+    return stock.majorityExit;
+}
+/** Co tydzień: rozłożony spadek kursu po wyjściu większościowca. */
+function processMajorityExitsWeekly() {
+    for (const s of stocks) {
+        const e = s.majorityExit; if (!e) continue;
+        if (!s.isBankrupt && typeof applyPriceEffect === 'function') applyPriceEffect(s.symbol, -e.perWeek, 'negative', 'market');
+        if (--e.weeksLeft <= 0) delete s.majorityExit;
+    }
+}
 const JU_TAPE_LIMIT = 40;
 const JU_HISTORY_WEEKS = 8;
 const CLIENT_HISTORY_LIMIT = 10;
@@ -3649,7 +3803,7 @@ function getClientCharacter(client) {
 
 function randomCharacter(trust = 50) {
     const isPoliceProgram = typeof oversight === 'object' && (oversight?.police?.level >= 5);
-    const weights = { sly: 1.2, careful: 1.4, fearful: 1, brave: 0.8 + trust / 100, rich: 0.3 + trust / 200, miser: 1, ethical: 0.6, senior: 0.8, modern: 0.9, officer: isPoliceProgram ? 0.9 : 0 };
+    const weights = { sly: 1.2, careful: 1.4, fearful: 1, brave: 0.8 + trust / 100, rich: 0.3 + trust / 200, miser: 1, ethical: 0.6 * (typeof isFundEthical === 'function' && isFundEthical() ? ESG_FUND_RULES.clientWeight : 1), senior: 0.8, modern: 0.9, officer: isPoliceProgram ? 0.9 : 0 };
     const total = Object.values(weights).reduce((sum, w) => sum + w, 0);
     let roll = Math.random() * total;
     for (const [key, weight] of Object.entries(weights)) {
@@ -3745,8 +3899,8 @@ function noteFundFlow(direction, reason, value, units) {
         quarter.warned = true;
         const inflow = quarter.inUnits > base * FUND_FLOW_WARN_SHARE;
         const text = inflow
-            ? `📥 Duży napływ do funduszu: +${(quarter.inUnits / base * 100).toFixed(0)}% udziałów w tym kwartale. Emisję ciągłą możesz zamknąć w panelu funduszu.`
-            : `📤 Duży odpływ z funduszu: −${(quarter.outUnits / base * 100).toFixed(0)}% udziałów w tym kwartale. Zobacz „Dlaczego klienci odchodzą” w panelu funduszu.`;
+            ? `📥 Duży napływ do funduszu: +${formatNumberPl((quarter.inUnits / base * 100), 0)}% udziałów w tym kwartale. Emisję ciągłą możesz zamknąć w panelu funduszu.`
+            : `📤 Duży odpływ z funduszu: −${formatNumberPl((quarter.outUnits / base * 100), 0)}% udziałów w tym kwartale. Zobacz „Dlaczego klienci odchodzą” w panelu funduszu.`;
         logEvent(text, 'review');
         if (typeof pushNotification === 'function') pushNotification(text, () => { if (typeof showFundFlowPanel === 'function') showFundFlowPanel(); });
     }
@@ -3767,7 +3921,7 @@ function passRedemptionGate(client, units) {
     const queued = Math.min(units, client.units) - allowed;
     if (queued > 0.01) {
         client.queuedRedemption = (Number(client.queuedRedemption) || 0) + queued;
-        noteClientHistory(client, `Bramka umorzeń: ${queued.toFixed(1)} udziałów czeka w kolejce na następny kwartał.`);
+        noteClientHistory(client, `Bramka umorzeń: ${formatNumberPl(queued, 1)} udziałów czeka w kolejce na następny kwartał.`);
         if (!quarter.gateTriggered) announceRedemptionGate(quarter);
     }
     return allowed;
@@ -3787,7 +3941,7 @@ function announceRedemptionGate(quarter) {
     if (typeof addMail === 'function') addMail({
         sender: 'Dział obsługi klienta',
         subject: 'Bramka umorzeń uruchomiona',
-        body: `${text}. W tym kwartale umorzenia sięgnęły ${(REDEMPTION_GATE_SHARE * 100).toFixed(0)}% udziałów z jego początku. Pozostałe zlecenia zostaną zrealizowane jako pierwsze w następnym kwartale (klient może zrezygnować, gdy odzyska zadowolenie). Klienci widzą ograniczenie wypłat — zaufanie −2.`,
+        body: `${text}. W tym kwartale umorzenia sięgnęły ${formatNumberPl((REDEMPTION_GATE_SHARE * 100), 0)}% udziałów z jego początku. Pozostałe zlecenia zostaną zrealizowane jako pierwsze w następnym kwartale (klient może zrezygnować, gdy odzyska zadowolenie). Klienci widzą ograniczenie wypłat — zaufanie −2.`,
         importance: 2
     });
     if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('bramka_umorzen');
@@ -3806,7 +3960,7 @@ function processRedemptionQueue(budget) {
         const paid = redeemClientUnits(client, units);
         used += units;
         noteFundFlow('out', 'gate', paid, units);
-        noteClientHistory(client, `Umorzenie z kolejki: ${units.toFixed(1)} udziałów (${paid.toFixed(0)} PLN).`);
+        noteClientHistory(client, `Umorzenie z kolejki: ${formatNumberPl(units, 1)} udziałów (${formatZl(paid, 0)}).`);
     }
     return used;
 }
@@ -3823,7 +3977,7 @@ function getClientSatisfactionDrift(client, def, ctx) {
         bearMarket: -DRAWDOWN_ABSOLUTE_SHARE * Math.max(0, (ctx.benchmarkDrawdown || 0) - 0.10) * def.volAversion * 0.3,
         // Opłata standardowa jest neutralna: kara dopiero powyżej MANAGEMENT_FEE_ANNUAL, niższa — mała premia.
         fees: -(def.feeSensitivity || 0) * 0.01 * Math.max(0, fee / MANAGEMENT_FEE_ANNUAL - 1) - (fee - MANAGEMENT_FEE_ANNUAL) * 0.4,
-        ethics: def.ethical && ctx.ethicsIssue ? -0.08 : 0
+        ethics: (def.ethical && ctx.ethicsIssue ? -0.08 : 0) + (def.ethical && typeof isFundEthical === 'function' && isFundEthical() ? ESG_FUND_RULES.satQ / 13 : 0) // 0.18.9 G6b: fundusz etyczny
     };
     return parts;
 }
@@ -3855,18 +4009,31 @@ function getRecentExcessAnnual() {
  * Pomiar (g0_diag20, fundusz-gig, 20 lat): bez pułapu udziały rosły średnio +3%/rok, ale 6,2% i −2% w skrajnych grach.
  */
 const FUND_CAPACITY_REF = 60_000;
+// 0.18.8 U13 d: próg rośnie razem z kapitalizacją rynku krajowego (start ok. 20 mld PLN), więc w długiej grze nie hamuje coraz mocniej.
+const FUND_CAPACITY_CAP0 = 20e9;
+let fundCapacityCapCache = { q: null, mult: 1 };
+function getFundCapacityRef() {
+    const q = typeof macro === 'object' ? macro.quarter : 0;
+    if (fundCapacityCapCache.q !== q && typeof stocks === 'object') {
+        const cap = stocks.filter(s => !s.assetType && !s.isBankrupt).reduce((a, s) => a + (Number(s.price) || 0) * (Number(s.totalShares) || 0), 0);
+        fundCapacityCapCache = { q, mult: Math.max(1, cap / FUND_CAPACITY_CAP0) };
+    }
+    return FUND_CAPACITY_REF * fundCapacityCapCache.mult;
+}
 const FUND_CAPACITY_EXPONENT = 0.6;
 const FUND_CAPACITY_FLOOR = 0.2;
 function getFundCapacityFactor(assets = getFundAssets()) {
-    if (!(assets > FUND_CAPACITY_REF)) return 1;
-    return Math.max(FUND_CAPACITY_FLOOR, Math.pow(FUND_CAPACITY_REF / assets, FUND_CAPACITY_EXPONENT));
+    const ref = getFundCapacityRef();
+    if (!(assets > ref)) return 1;
+    return Math.max(FUND_CAPACITY_FLOOR, Math.pow(ref / assets, FUND_CAPACITY_EXPONENT));
 }
 
 /** Roczna stopa napływu nowych klientów (przy otwartej emisji): zaufanie, reputacja, wynik vs GIG. */
 function getOrganicInflowRate(trust = playerFund?.trust ?? 50) {
     const reputation = getPlayerReputationFactor();
     const trustGate = Math.max(0, Math.min(1, (trust - 25) / 25)); // 0.14.2 P12: 0 poniżej 25, liniowo do 50, potem bez zmian
-    return getFundCapacityFactor() * trustGate * Math.max(0, Math.min(0.5, ORGANIC_INFLOW_BASE + (trust - 50) / 50 * 0.04 + getRecentExcessAnnual() * 1.2 + reputation * 0.03));
+    const ethical = typeof isFundEthical === 'function' && isFundEthical() ? 1 + ESG_FUND_RULES.inflow : 1; // 0.18.9 G6b: fundusz etyczny +15%
+    return ethical * getFundCapacityFactor() * trustGate * Math.max(0, Math.min(0.5, ORGANIC_INFLOW_BASE + (trust - 50) / 50 * 0.04 + getRecentExcessAnnual() * 1.2 + reputation * 0.03));
 }
 
 /** Roczna stopa dopłat obecnych klientów (zadowoleni z zaufaniem): rośnie z wynikiem vs GIG. */
@@ -3922,7 +4089,7 @@ function processClientsWeekly() {
         // Klient w kolejce bramki czeka na następny kwartał; rezygnuje, gdy odzyska zadowolenie.
         if (client.queuedRedemption > 0) {
             if (!unhappy && (def.key !== 'sly' || fundPeriodReturn > -0.05)) {
-                noteClientHistory(client, `Rezygnuje z kolejki umorzeń (${client.queuedRedemption.toFixed(1)} udziałów) — znów jest zadowolony.`);
+                noteClientHistory(client, `Rezygnuje z kolejki umorzeń (${formatNumberPl(client.queuedRedemption, 1)} udziałów) — znów jest zadowolony.`);
                 client.queuedRedemption = 0;
             }
             continue;
@@ -3933,7 +4100,7 @@ function processClientsWeekly() {
             client.pendingSellWeeks++;
             if (client.pendingSellWeeks >= JU_SELL_ORDER_PATIENCE) {
                 if (!unhappy) {
-                    noteClientHistory(client, `Brak kupca na rynku wtórnym — wycofuje ofertę ${client.pendingSellUnits.toFixed(1)} udziałów i zostaje w funduszu.`);
+                    noteClientHistory(client, `Brak kupca na rynku wtórnym — wycofuje ofertę ${formatNumberPl(client.pendingSellUnits, 1)} udziałów i zostaje w funduszu.`);
                     client.pendingSellUnits = 0;
                     client.pendingSellWeeks = 0;
                 } else if (redemptionBudget > 0) {
@@ -3943,7 +4110,7 @@ function processClientsWeekly() {
                     client.pendingSellUnits = 0;
                     client.pendingSellWeeks = 0;
                     noteFundFlow('out', 'noBuyer', paid, units);
-                    noteClientHistory(client, `Brak kupca na rynku wtórnym — umorzenie ${units.toFixed(1)} udziałów (${paid.toFixed(0)} PLN).`);
+                    noteClientHistory(client, `Brak kupca na rynku wtórnym — umorzenie ${formatNumberPl(units, 1)} udziałów (${formatZl(paid, 0)}).`);
                 }
             }
             continue;
@@ -3976,7 +4143,7 @@ function processClientsWeekly() {
                 const paid = redeemClientUnits(client, units);
                 redemptionBudget -= units;
                 noteFundFlow('out', 'performance', paid, units);
-                noteClientHistory(client, `Spryciarz ucieka przed stratami (wynik kwartału ${(periodReturn * 100).toFixed(1)}%) — umarza ${units.toFixed(1)} udziałów.`);
+                noteClientHistory(client, `Spryciarz ucieka przed stratami (wynik kwartału ${formatNumberPl((periodReturn * 100), 1)}%) — umarza ${formatNumberPl(units, 1)} udziałów.`);
                 continue;
             }
         }
@@ -4011,7 +4178,7 @@ function processClientsWeekly() {
             redemptionBudget -= units;
             const outflowReason = isPanic ? 'panic' : getDominantOutflowReason(parts, def, fraction);
             noteFundFlow('out', outflowReason, paid, units);
-            noteClientHistory(client, `Niezadowolony — umarza ${units.toFixed(1)} udziałów (${paid.toFixed(0)} PLN).`);
+            noteClientHistory(client, `Niezadowolony — umarza ${formatNumberPl(units, 1)} udziałów (${formatZl(paid, 0)}).`);
         } else if (satisfied && highTrust) {
             // Emeryt kupuje tylko, gdy portfel w większości defensywny; Nowoczesny na odwrót
             if (!meetsPreference && (def.key === 'senior' || def.key === 'modern')) continue;
@@ -4021,13 +4188,13 @@ function processClientsWeekly() {
             const units = subscribeClient(client, value);
             newMoneyBudget -= value;
             noteFundFlow('in', 'topup', value, units);
-            noteClientHistory(client, `Dokupuje ${units.toFixed(1)} udziałów za ${value.toFixed(0)} PLN.`);
-            pushTape('topup', `${def.icon} ${client.name} dokupuje ${units.toFixed(1)} udziałów funduszu ${playerProfile.fundName} (${formatPlnShort(value)}).`);
+            noteClientHistory(client, `Dokupuje ${formatNumberPl(units, 1)} udziałów za ${formatZl(value, 0)}.`);
+            pushTape('topup', `${def.icon} ${client.name} dokupuje ${formatNumberPl(units, 1)} udziałów funduszu ${playerProfile.fundName} (${formatPlnShort(value)}).`);
         } else if (satisfied && !highTrust) {
             if (Math.random() >= def.secondaryBias * 0.15) continue;
             client.pendingSellUnits = client.units * getRandomInRange(0.2, def.key === 'sly' ? 0.6 : 0.45);
             client.pendingSellWeeks = 0;
-            noteClientHistory(client, `Zadowolony z wyników, ale nie ufa funduszowi — wystawia ${client.pendingSellUnits.toFixed(1)} udziałów na rynku wtórnym.`);
+            noteClientHistory(client, `Zadowolony z wyników, ale nie ufa funduszowi — wystawia ${formatNumberPl(client.pendingSellUnits, 1)} udziałów na rynku wtórnym.`);
         } else if (def.key === 'sly' && (juMarket.stats.player?.history[0]?.premium || 0) > 0.03 && Math.random() < 0.3) {
             client.pendingSellUnits = client.units * getRandomInRange(0.2, 0.5);
             client.pendingSellWeeks = 0;
@@ -4037,7 +4204,7 @@ function processClientsWeekly() {
 }
 
 function formatPlnShort(value) {
-    return `${Math.round(value).toLocaleString('pl-PL')} PLN`;
+    return `${formatInt(Math.round(value / getBaseScale()))} ${getBaseCurrency()}`;
 }
 
 // =================================================================================
@@ -4139,13 +4306,13 @@ function runPlayerJuMarket(fund) {
                 ensureClientProfile(client);
                 buyer.client = client;
                 newClients++;
-                noteClientHistory(client, `Dołącza, kupując udziały na rynku wtórnym po ${formatNumberPl(price, 2)} PLN.`);
+                noteClientHistory(client, `Dołącza, kupując udziały na rynku wtórnym po ${formatZl(price, 2)}.`);
             }
             client.avgCost = (client.avgCost * client.units + units * price) / (client.units + units);
             client.units += units;
             const sellerDef = getClientCharacter(seller);
-            noteClientHistory(seller, `Sprzedaje ${formatNumberPl(units, 1)} udziałów na rynku wtórnym po ${formatNumberPl(price, 2)} PLN (${formatNumberPl((premium * 100), 1)}% do NAV).`);
-            pushTape('trade', `${sellerDef.icon} ${seller.name} → ${buyer.def.icon} ${client.name}: ${formatNumberPl(units, 1)} udziałów funduszu ${fund.name} po ${formatNumberPl(price, 2)} PLN (${premium >= 0 ? '+' : ''}${formatNumberPl((premium * 100), 1)}%).`);
+            noteClientHistory(seller, `Sprzedaje ${formatNumberPl(units, 1)} udziałów na rynku wtórnym po ${formatZl(price, 2)} (${formatNumberPl((premium * 100), 1)}% do NAV).`);
+            pushTape('trade', `${sellerDef.icon} ${seller.name} → ${buyer.def.icon} ${client.name}: ${formatNumberPl(units, 1)} udziałów funduszu ${fund.name} po ${formatZl(price, 2)} (${premium >= 0 ? '+' : ''}${formatNumberPl((premium * 100), 1)}%).`);
             if (buyer.value < price) buyers.shift();
         }
         if (seller.pendingSellUnits <= 0.01) { seller.pendingSellUnits = 0; seller.pendingSellWeeks = 0; }
@@ -4170,7 +4337,7 @@ function runPlayerJuMarket(fund) {
         const units = subscribeClient(client, value);
         const inflowReason = (typeof getMarketRegime === 'function' && getMarketRegime('home')?.sentiment > 75) ? 'fashion' : 'newClients';
         noteFundFlow('in', inflowReason, value, units);
-        noteClientHistory(client, `Wpłaca ${value.toFixed(0)} PLN (${units.toFixed(1)} udziałów po NAV).`);
+        noteClientHistory(client, `Wpłaca ${formatZl(value, 0)} (${formatNumberPl(units, 1)} udziałów po NAV).`);
         inflow += value;
         budget -= value;
     }
@@ -4247,7 +4414,7 @@ function runSyntheticJuMarket(fund) {
         const seller = CLIENT_TYPES[randomCharacter(100 - fund.trust)];
         const buyer = CLIENT_TYPES[randomCharacter(fund.trust)];
         const units = Math.max(1, Math.round(volume * getRandomInRange(0.05, 0.3)));
-        pushTape('trade', `${seller.icon} ${randomClientPersonName()} → ${buyer.icon} ${randomClientPersonName()}: ${units} udziałów funduszu ${fund.name} (${premium >= 0 ? '+' : ''}${(premium * 100).toFixed(1)}%).`);
+        pushTape('trade', `${seller.icon} ${randomClientPersonName()} → ${buyer.icon} ${randomClientPersonName()}: ${units} udziałów funduszu ${fund.name} (${premium >= 0 ? '+' : ''}${formatNumberPl((premium * 100), 1)}%).`);
     }
 }
 

@@ -27,7 +27,7 @@ for n in nodes:
 for v in per_file.values():
     v.sort(key=lambda x: x[0])
 
-existing = {(e['source'], e['target']) for e in d[links_key]}
+existing = {(e['source'], e['target']) for e in d[links_key] if e.get('_origin') != 'ast-cross-file'}  # wlasne krawedzie z poprzedniego uruchomienia liczymy od nowa
 call_re = re.compile(r'(?<![\w.$])([A-Za-z_$][\w$]*)\s*\(')
 new = {}
 for sf, fl in per_file.items():
