@@ -650,7 +650,7 @@ function renderStockDrawer(symbol) {
       const blocked = foreignIssuer.tradeHalted ? 'Handel wstrzymany' : tier.level > playerAccessLevel ? `Brak dostępu do poziomu: ${tier.label}` : ''; // 0.18.0 R1 (Z3): wykres i akcjonariat zawsze, handel tylko z dostępem
       const dis = blocked ? ` disabled title="${escapeHtml(blocked)}"` : '';
       td.innerHTML = `<div class="stock-drawer-inner"><div class="stock-drawer-actions">
-        <div class="stock-drawer-actions-row"><div class="qty-input-wrapper"><input type="number" min="1" step="1" id="mkt-qty-${fid}" value="100" aria-label="Liczba akcji ${escapeHtml(foreignIssuer.name)}" data-linked-qty></div></div>
+        <div class="stock-drawer-actions-row"><div class="qty-input-wrapper"><input type="number" min="1" step="1" id="mkt-qty-${fid}" value="100" aria-label="Liczba akcji ${escapeHtml(foreignIssuer.name)}" data-linked-qty oninput="updateForeignDrawerImpact('${fid}')"></div></div>
         <div class="stock-drawer-actions-row">
           <button class="btn-buy" onclick="marketsUiTrade('${fid}','buy')"${dis}>Kup</button>
           <button class="btn-sell" onclick="marketsUiTrade('${fid}','sell')"${foreignIssuer.tradeHalted ? dis : ''}>Sprzedaj</button>
@@ -659,9 +659,10 @@ function renderStockDrawer(symbol) {
             <button class="drawer-tool" title="Akcjonariat — kto ma jaki % akcji" onclick="openCompanyReport('${symbol}')">${uiIcon('akcjonariat', 16)}<span>Akcjonariat</span></button>
           </span>
         </div>
-        <div class="stock-drawer-impact text-xs">${blocked ? `<strong>${escapeHtml(blocked)}.</strong> ` : ''}Kupno: najpierw gotówka w ${foreignIssuer.currency}, reszta przez kantor; prowizja ${formatNumberPl(getCountryCommission(foreignIssuer.country) * 100, 2)}%. Kurs ${formatNumberPl(foreignIssuer.price, 2)} ${foreignIssuer.currency}.</div>
+        <div class="stock-drawer-impact text-xs" id="fimpact-${fid}" data-blocked="${escapeHtml(blocked)}" aria-live="polite"></div>
       </div></div>`;
       dr.appendChild(td); row.after(dr);
+      updateForeignDrawerImpact(fid);
       return;
     }
     td.innerHTML = `<div class="stock-drawer-inner">
@@ -2556,41 +2557,72 @@ function displayPortfolio() {
     const isPrivate = typeof activeTradingAccount !== 'undefined' && activeTradingAccount === 'private';
     const portfolio = isPrivate ? (playerWallet?.portfolio || {}) : playerPortfolio;
     const fmt = value => formatZl(value, 0);
-    const rows = [];
-    let totalPL = 0, positionsValue = 0;
+    const groups = [];
+    let current = null, totalPL = 0, positionsValue = 0;
 
-    const section = title => rows.push(`<tr class="portfolio-group-row"><td colspan="4">${title}</td></tr>`);
-    const row = (name, share, cost, result, cls = '', title = '') =>
-        rows.push(`<tr class="${cls}"${title ? ` title="${escapeHtml(title)}"` : ''}><td>${name}</td><td class="cell-number">${share}</td><td class="cell-number">${cost}</td><td class="cell-number">${result}</td></tr>`);
+    // Kategorie są zwijane: nagłówek pokazuje liczbę pozycji, wartość i wynik; po rozwinięciu — lista spółek (stan w portfolioGroupsOpen).
+    const section = (title, key = title) => { current = { key, title, rows: [], value: 0, pl: 0, hasValue: false, hasPl: false }; groups.push(current); };
+    const row = (name, share, cost, result, cls = '', title = '', meta = {}) => {
+        if (!current) section('Pozycje', 'other');
+        current.rows.push(`<tr class="portfolio-pos-row${cls ? ' ' + cls : ''}"${title ? ` title="${escapeHtml(title)}"` : ''}><td>${name}</td><td class="cell-number">${share}</td><td class="cell-number">${cost}</td><td class="cell-number">${result}</td></tr>`);
+        if (Number.isFinite(meta.value)) { current.value += meta.value; current.hasValue = true; }
+        if (Number.isFinite(meta.pl)) { current.pl += meta.pl; current.hasPl = true; }
+    };
+    const plSpan = pl => `<span class="${pl > 0 ? 'profit' : pl < 0 ? 'loss' : ''}">${pl >= 0 ? '+' : ''}${fmt(pl)}</span>`;
+    const closeBtn = (kind, id, label) => `<button type="button" class="btn-ghost btn-xs pos-close-btn" onclick="event.stopPropagation(); closePositionUi('${kind}', '${escapeHtml(id)}')" aria-label="Zamknij pozycję ${escapeHtml(label)}" title="Sprzedaj całą pozycję">Zamknij</button>`;
 
-    // Akcje, ETF-y, indeksy, startupy
+    // Akcje krajowe, akcje zagraniczne, ETF-y i indeksy, startupy
     const equity = Object.entries(portfolio).filter(([, h]) => h && (h.assetType === 'Startup' ? h.investedAmount > 0 : h.shares > 0));
-    if (equity.length) section('Akcje i fundusze');
-    for (const [symbol, holding] of equity) {
-        if (holding.assetType === 'Startup') {
-            const startup = stocks.find(s => s.symbol === symbol);
-            positionsValue += holding.investedAmount;
-            row(`${uiIcon('rakieta', 14)} ${escapeHtml(startup?.name || symbol)}`, 'startup', fmt(holding.investedAmount), holding.isInsured ? `${uiIcon('tarcza', 14)} ubezp.` : '—');
-            continue;
-        }
-        let market, price = 0, name = symbol, pct = '';
-        if (holding.assetType === 'etf') { market = etfs.find(e => e.symbol === symbol); price = market?.price || 0; name = market?.name || symbol; }
-        else if (holding.assetType === 'index') { market = marketIndexes.find(i => i.id === symbol); price = market?.value || 0; name = market?.name || symbol; }
-        else {
-            market = stocks.find(s => s.symbol === symbol);
-            price = market?.price || 0; name = market?.name || symbol;
-            if (market?.totalShares > 0) pct = `${formatNumberPl((holding.shares / market.totalShares * 100), 2)}%`;
-        }
+    const stocksHeld = equity.filter(([, h]) => !h.assetType || !['Startup', 'etf', 'index'].includes(h.assetType));
+    const fundsHeld = equity.filter(([, h]) => h.assetType === 'etf' || h.assetType === 'index');
+    const startupsHeld = equity.filter(([, h]) => h.assetType === 'Startup');
+    const foreignHeld = !isPrivate && typeof foreignIssuers === 'object' ? Object.values(foreignIssuers).filter(i => i.kind === 'share' && (Number(i.holders?.player) || 0) > 0) : [];
+
+    if (stocksHeld.length) section('Akcje krajowe', 'domestic');
+    for (const [symbol, holding] of stocksHeld) {
+        const market = stocks.find(s => s.symbol === symbol);
         if (!market) continue;
-        const value = price * holding.shares;
-        const pl = value - holding.avgPrice * holding.shares;
-        positionsValue += value;
-        totalPL += pl;
+        const price = market.price || 0, name = market.name || symbol;
+        const pct = market.totalShares > 0 ? `${formatNumberPl((holding.shares / market.totalShares * 100), 2)}%` : '—';
+        const value = price * holding.shares, pl = value - holding.avgPrice * holding.shares;
+        positionsValue += value; totalPL += pl;
         const locked = holding.lockedShares > 0 ? ` ${uiIcon('klodka', 12)}${holding.lockedShares}` : '';
+        const free = holding.shares - (holding.lockedShares || 0);
         row(`${escapeHtml(name)} <span class="text-xs text-muted">${escapeHtml(symbol)} · ${formatInt(holding.shares)} szt.${locked}</span>`,
-            pct || '—', formatNumberPl(holding.avgPrice, 2),
-            `<span class="${pl > 0 ? 'profit' : pl < 0 ? 'loss' : ''}">${pl >= 0 ? '+' : ''}${fmt(pl)}</span><span class="text-xs text-muted d-block">${fmt(value)}</span>`,
-            holding.lockedShares > 0 ? 'dimmed' : '', holding.lockedShares > 0 ? `${holding.lockedShares} akcji zablokowanych (zastaw)` : '');
+            pct, formatNumberPl(holding.avgPrice, 2),
+            `${plSpan(pl)}<span class="text-xs text-muted d-block">${fmt(value)}</span>${free > 0 ? closeBtn('stock', symbol, name) : ''}`,
+            holding.lockedShares > 0 ? 'dimmed' : '', holding.lockedShares > 0 ? `${holding.lockedShares} akcji zablokowanych (zastaw)` : `Wynik ${formatPct(pl / Math.max(1e-9, holding.avgPrice * holding.shares))} od ceny zakupu`, { value, pl });
+    }
+
+    if (foreignHeld.length) section('Akcje zagraniczne', 'foreign');
+    for (const i of foreignHeld) {
+        const held = Number(i.holders.player) || 0, sym = getShareSymbol(i), cur = i.currency;
+        const value = held * toPln(i.price, cur), cost = i.playerAvgPln > 0 ? i.playerAvgPln * held : null, pl = cost === null ? null : value - cost;
+        positionsValue += value; if (pl !== null) totalPL += pl;
+        row(`${escapeHtml(i.name)} <span class="text-xs text-muted">${escapeHtml(sym)} · ${escapeHtml(COUNTRY_DEFS?.[i.country]?.name || i.country)} · ${formatInt(held)} szt.</span>`,
+            i.shares > 0 ? `${formatNumberPl(held / i.shares * 100, 2)}%` : '—',
+            i.playerAvg > 0 ? `${formatNumberPl(i.playerAvg, 2)} ${cur}` : '—',
+            `${pl === null ? '<span class="text-muted">—</span>' : plSpan(pl)}<span class="text-xs text-muted d-block">${fmt(value)}</span>${i.tradeHalted ? '' : closeBtn('foreign', i.id, i.name)}`,
+            '', pl === null ? 'Koszt zakupu nieznany (pozycja sprzed tej wersji) — wynik pokaże się po kolejnym zakupie.' : 'Wynik w PLN: zmiana ceny akcji i kursu waluty, z prowizją i spreadem zakupu.', { value, pl: pl ?? undefined });
+    }
+
+    if (fundsHeld.length) section('ETF-y i indeksy', 'funds');
+    for (const [symbol, holding] of fundsHeld) {
+        const isEtf = holding.assetType === 'etf';
+        const market = isEtf ? etfs.find(e => e.symbol === symbol) : marketIndexes.find(i => i.id === symbol);
+        if (!market) continue;
+        const price = (isEtf ? market.price : market.value) || 0, name = market.name || symbol;
+        const value = price * holding.shares, pl = value - holding.avgPrice * holding.shares;
+        positionsValue += value; totalPL += pl;
+        row(`${escapeHtml(name)} <span class="text-xs text-muted">${escapeHtml(symbol)} · ${formatInt(holding.shares)} szt.</span>`, isEtf ? 'ETF' : 'indeks', formatNumberPl(holding.avgPrice, 2),
+            `${plSpan(pl)}<span class="text-xs text-muted d-block">${fmt(value)}</span>${isPrivate ? '' : closeBtn(isEtf ? 'etf' : 'index', symbol, name)}`, '', '', { value, pl });
+    }
+
+    if (startupsHeld.length) section('Startupy', 'startups');
+    for (const [symbol, holding] of startupsHeld) {
+        const startup = stocks.find(s => s.symbol === symbol);
+        positionsValue += holding.investedAmount;
+        row(`${uiIcon('rakieta', 14)} ${escapeHtml(startup?.name || symbol)}`, 'startup', fmt(holding.investedAmount), holding.isInsured ? `${uiIcon('tarcza', 14)} ubezp.` : '—', '', '', { value: holding.investedAmount });
     }
 
     if (!isPrivate) {
@@ -2598,16 +2630,16 @@ function displayPortfolio() {
         const deposits = typeof getFundDeposits === 'function' ? getFundDeposits() : [];
         const ppp = playerFund?.ppp || [];
         const projectBonds = typeof getProjectBonds === 'function' && typeof specialProjects === 'object' && specialProjects ? getProjectBonds() : [];
-        if (deposits.length || ppp.length || projectBonds.length) section('Lokaty i finansowanie projektów');
-        for (const d of deposits) row(`${uiIcon('bank', 14)} Lokata · ${escapeHtml(d.bankName)}`, `${formatNumberPl((d.rate * 100), 1)}%/r`, fmt(d.principal), `<span class="profit">+${fmt(d.accrued)}</span><span class="text-xs text-muted d-block">${d.weeksLeft} tyg.</span>`);
-        for (const st of ppp) row(`${st.icon || '🏙️'} PPP · ${escapeHtml(st.name)}`, `${formatNumberPl((st.rate * 100), 1)}%/r`, fmt(st.principal), `${st.unpaid > 0 ? '<span class="loss">zaległe odsetki</span>' : '—'}<span class="text-xs text-muted d-block">${st.weeksLeft} tyg.</span>`);
-        for (const b of projectBonds) row(`${uiIcon('raport', 14)} Obligacje projektu · ${escapeHtml(b.name)}`, `${formatNumberPl((PROJECT_BOND_RATE * 100), 0)}%/r`, fmt(b.principal), `<span class="profit">+${fmt(b.interestPaid || 0)}</span>`);
+        if (deposits.length || ppp.length || projectBonds.length) section('Lokaty i finansowanie projektów', 'deposits');
+        for (const d of deposits) row(`${uiIcon('bank', 14)} Lokata · ${escapeHtml(d.bankName)}`, `${formatNumberPl((d.rate * 100), 1)}%/r`, fmt(d.principal), `<span class="profit">+${fmt(d.accrued)}</span><span class="text-xs text-muted d-block">${d.weeksLeft} tyg.</span>`, '', '', { value: d.principal + d.accrued, pl: d.accrued });
+        for (const st of ppp) row(`${st.icon || '🏙️'} PPP · ${escapeHtml(st.name)}`, `${formatNumberPl((st.rate * 100), 1)}%/r`, fmt(st.principal), `${st.unpaid > 0 ? '<span class="loss">zaległe odsetki</span>' : '—'}<span class="text-xs text-muted d-block">${st.weeksLeft} tyg.</span>`, '', '', { value: st.principal });
+        for (const b of projectBonds) row(`${uiIcon('raport', 14)} Obligacje projektu · ${escapeHtml(b.name)}`, `${formatNumberPl((PROJECT_BOND_RATE * 100), 0)}%/r`, fmt(b.principal), `<span class="profit">+${fmt(b.interestPaid || 0)}</span>`, '', '', { value: b.principal, pl: b.interestPaid || 0 });
         positionsValue += deposits.reduce((sum, d) => sum + d.principal + d.accrued, 0) + ppp.reduce((sum, st) => sum + st.principal, 0) + projectBonds.reduce((sum, b) => sum + b.principal, 0);
 
         // Obligacje i bony
         const bonds = allBonds.filter(b => b.ownerId === 'player' && !b.isTBill);
         if (bonds.length) {
-            section('Obligacje');
+            section('Obligacje', 'bonds');
             const groups = {};
             for (const bond of bonds) {
                 const key = `${bond.issuerName}_${bond.type}`;
@@ -2619,22 +2651,29 @@ function displayPortfolio() {
             for (const g of Object.values(groups)) {
                 positionsValue += g.value;
                 row(`${uiIcon('raport', 14)} ${escapeHtml(g.name)} <span class="text-xs text-muted">${escapeHtml(g.type)} · ${g.count} szt.</span>`, `${formatNumberPl((g.rate * 100), 1)}%/r`, fmt(g.cost),
-                    `${g.defaulted ? `<span class="loss">${uiIcon('alert', 14)} niewypłacalny</span>` : fmt(g.value)}<span class="text-xs text-muted d-block">zapada za ~${Math.ceil(g.next / 60000)} min gry</span>`);
+                    `${g.defaulted ? `<span class="loss">${uiIcon('alert', 14)} niewypłacalny</span>` : fmt(g.value)}<span class="text-xs text-muted d-block">zapada za ~${Math.ceil(g.next / 60000)} min gry</span>`, '', '', { value: g.value, pl: g.value - g.cost });
             }
         }
         const tBills = allBonds.filter(b => b.ownerId === 'player' && b.isTBill);
-        if (tBills.length) { section('Bony skarbowe'); row(`${uiIcon('raport', 14)} Bony skarbowe · ${tBills.length} szt.`, '—', '—', '—'); }
+        if (tBills.length) { section('Bony skarbowe', 'tbills'); row(`${uiIcon('raport', 14)} Bony skarbowe · ${tBills.length} szt.`, '—', '—', '—'); }
         // 0.14.1 R4: dwie pozycje puli, zgodne z NAV (niezainwestowane nominalnie, wkłady w żyjące startupy po koszcie)
         const poolFree = Number(investmentPool?.contributors?.player) || 0;
         const poolInvested = getPoolInvestedInStartups('player');
         if (poolFree + poolInvested > 0) {
-            section('Pula inwestycyjna');
-            if (poolFree > 0) row(`${uiIcon('pula', 14)} Pula — niezainwestowane`, '—', fmt(poolFree), `${fmt(poolFree)}<span class="text-xs text-muted d-block">do wycofania (opłata 2%)</span>`);
-            if (poolInvested > 0) row(`${uiIcon('pula', 14)} Pula — w startupach`, '—', fmt(poolInvested), `${fmt(poolInvested)}<span class="text-xs text-muted d-block">po koszcie, do debiutu lub końca startupu</span>`);
+            section('Pula inwestycyjna', 'pool');
+            if (poolFree > 0) row(`${uiIcon('pula', 14)} Pula — niezainwestowane`, '—', fmt(poolFree), `${fmt(poolFree)}<span class="text-xs text-muted d-block">do wycofania (opłata 2%)</span>`, '', '', { value: poolFree });
+            if (poolInvested > 0) row(`${uiIcon('pula', 14)} Pula — w startupach`, '—', fmt(poolInvested), `${fmt(poolInvested)}<span class="text-xs text-muted d-block">po koszcie, do debiutu lub końca startupu</span>`, '', '', { value: poolInvested });
             positionsValue += poolFree + poolInvested;
         }
     }
 
+    const rows = groups.filter(g => g.rows.length).flatMap(g => {
+        const open = Boolean(portfolioGroupsOpen[g.key]), n = g.rows.length;
+        const summary = `${g.hasValue ? fmt(g.value) : ''}${g.hasPl ? `<span class="d-block">${plSpan(g.pl)}</span>` : ''}`;
+        const head = `<tr class="portfolio-group-row is-toggle${open ? ' is-open' : ''}" tabindex="0" role="button" aria-expanded="${open}" onclick="togglePortfolioGroup('${g.key}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();togglePortfolioGroup('${g.key}')}">
+            <td colspan="3">${uiIcon(open ? 'chevron-down' : 'chevron-right', 12)} ${escapeHtml(g.title)} <span class="portfolio-group-count">(${n})</span></td><td class="cell-number portfolio-group-sum">${summary}</td></tr>`;
+        return open ? [head, ...g.rows] : [head];
+    });
     body.innerHTML = rows.length ? rows.join('') : renderEmptyState({ icon: 'teczka', colspan: 4, title: `Nie masz jeszcze pozycji${isPrivate ? ' na koncie prywatnym' : ''}.`, text: `Wybierz spółkę z listy i kliknij przycisk handlu.${isPrivate ? '' : ' Zaufanie klientów spada, gdy cały fundusz leży w gotówce.'}`, action: { label: 'Pokaż rynek', onclick: "window.scrollTo({ top: 0, behavior: 'smooth' })" } }); // 0.18.6 O2
 
     // Pasywa
@@ -2665,6 +2704,61 @@ function displayPortfolio() {
     updateSectorDonut(portfolio);
 }
 
+/** Zwinięte/rozwinięte kategorie w Pozycjach (domyślnie zwinięte; nagłówek ma liczbę pozycji, wartość i wynik). */
+const portfolioGroupsOpen = {};
+function togglePortfolioGroup(key) { portfolioGroupsOpen[key] = !portfolioGroupsOpen[key]; displayPortfolio(); }
+
+/** Zamknięcie pozycji z wiersza „Wynik”: sprzedaż całości wolnych akcji (bez zastawu) po potwierdzeniu z wynikiem. */
+function getClosePositionInfo(kind, id) {
+    const isPrivate = typeof activeTradingAccount !== 'undefined' && activeTradingAccount === 'private';
+    if (kind === 'foreign') {
+        const i = foreignIssuers?.[id]; const qty = Number(i?.holders?.player) || 0;
+        if (!i || !qty) return null;
+        const value = qty * toPln(i.price, i.currency);
+        return { name: i.name, qty, value, pl: i.playerAvgPln > 0 ? value - i.playerAvgPln * qty : null, note: `Wpływ trafi na saldo ${i.currency} (złote dostaniesz w kantorze).` };
+    }
+    const portfolio = isPrivate && kind === 'stock' ? (playerWallet?.portfolio || {}) : playerPortfolio, h = portfolio[id];
+    if (!h) return null;
+    const qty = Math.max(0, (h.shares || 0) - (h.lockedShares || 0));
+    const market = kind === 'etf' ? etfs.find(e => e.symbol === id) : kind === 'index' ? marketIndexes.find(x => x.id === id) : stocks.find(s => s.symbol === id);
+    if (!market || !qty) return null;
+    const price = (kind === 'index' ? market.value : market.price) || 0;
+    return { name: market.name || id, qty, value: qty * price, pl: qty * (price - (h.avgPrice || 0)), note: h.lockedShares > 0 ? `${formatShares(h.lockedShares)} w zastawie zostaje.` : '' };
+}
+function closePosition(kind, id) {
+    const info = getClosePositionInfo(kind, id);
+    if (!info) return { ok: false, reason: 'Brak wolnych akcji do sprzedaży.' };
+    if (kind === 'foreign') { const r = sellForeignShares(id, info.qty); return r.ok ? { ...r, qty: info.qty } : r; }
+    const before = getClosePositionInfo(kind, id)?.qty || 0;
+    const r = kind === 'etf' ? sellEtf(id, info.qty) : kind === 'index' ? sellIndex(id, info.qty) : sellStock(id, info.qty);
+    const after = getClosePositionInfo(kind, id)?.qty || 0;
+    return after < before ? { ok: true, qty: before - after } : { ok: false, reason: r && r.reason || '' };
+}
+function closePositionUi(kind, id) {
+    const info = getClosePositionInfo(kind, id);
+    if (!info) { showToast('Brak wolnych akcji do sprzedaży.', 'warning'); return; }
+    const plText = info.pl === null ? 'wynik nieznany' : `wynik ${info.pl >= 0 ? '+' : ''}${formatZl(info.pl, 0)}`;
+    const run = () => {
+        const r = closePosition(kind, id);
+        if (r.ok && kind === 'foreign') showToast(`Zamknięto pozycję ${info.name}: ${formatShares(r.qty)}, wpływ ${formatNumberPl(r.proceeds, 2)} ${r.currency}.`, 'success');
+        else if (r.ok) showToast(`Zamknięto pozycję ${info.name}: ${formatShares(r.qty)} (${plText}).`, 'success');
+        else if (r.reason) showToast(r.reason, 'warning');
+        if (typeof updateUI === 'function') updateUI(); else displayPortfolio();
+        displayPortfolio();
+    };
+    const msg = `Sprzedać całą pozycję ${info.name}: ${formatShares(info.qty)} za ok. ${formatZl(info.value, 0)} (${plText})? ${info.note}`.trim();
+    if (typeof gameConfirm === 'function') gameConfirm(msg, run, { title: 'Zamknij pozycję', confirmLabel: 'Sprzedaj wszystko' });
+    else run();
+}
+
+/** Donut: rozwinięty sektor pokazuje spółki (stan przeżywa odświeżenie co tick). */
+const sectorDonutOpen = {};
+function getDonutHoldingName(symbol, holding) {
+    if (holding.assetType === 'etf') return (typeof etfs !== 'undefined' && etfs.find(e => e.symbol === symbol)?.name) || symbol;
+    if (holding.assetType === 'index') return (typeof marketIndexes !== 'undefined' && marketIndexes.find(i => i.id === symbol)?.name) || symbol;
+    return (typeof stocks !== 'undefined' && stocks.find(s => s.symbol === symbol)?.name) || symbol;
+}
+
 function updateSectorDonut(portfolio) {
     const donutArea = document.getElementById('sector-donut-area');
     if (!donutArea) return;
@@ -2678,7 +2772,7 @@ function updateSectorDonut(portfolio) {
     const equity = Object.entries(portfolio).filter(([, h]) => h && (h.assetType === 'Startup' ? h.investedAmount > 0 : h.shares > 0));
 
     // Oblicz wartość per sektor
-    const sectorValues = {};
+    const sectorValues = {}, sectorCompanies = {};
     let totalValue = 0;
 
     for (const [symbol, holding] of equity) {
@@ -2706,6 +2800,7 @@ function updateSectorDonut(portfolio) {
         if (val > 0) {
             sectorValues[sector] = (sectorValues[sector] || 0) + val;
             totalValue += val;
+            (sectorCompanies[sector] = sectorCompanies[sector] || []).push({ name: getDonutHoldingName(symbol, holding), val });
         }
     }
 
@@ -2777,8 +2872,10 @@ function updateSectorDonut(portfolio) {
         const pctFormatted = typeof formatNumberPl === 'function' ? formatNumberPl(item.pct, 1) : item.pct.toFixed(1);
         const valFormatted = typeof formatZl === 'function' ? formatZl(item.val, 0) : `${formatZl(item.val, 0)}`;
         const nameEsc = typeof escapeHtml === 'function' ? escapeHtml(item.sector) : item.sector;
-        return `
-            <div class="sector-donut-item" title="${nameEsc}: ${valFormatted} (${pctFormatted}%)">
+        const companies = (sectorCompanies[item.sector] || []).sort((x, y) => y.val - x.val);
+        const list = companies.map(c => `<li><span>${escapeHtml(c.name)}</span><span class="sector-donut-val">${formatZl(c.val, 0)} · ${formatNumberPl(c.val / item.val * 100, 0)}%</span></li>`).join('');
+        return `<details class="sector-donut-details"${sectorDonutOpen[item.sector] ? ' open' : ''} ontoggle="sectorDonutOpen[${escapeHtml(JSON.stringify(item.sector))}] = this.open">
+            <summary class="sector-donut-item" title="${nameEsc}: ${valFormatted} (${pctFormatted}%) — kliknij, aby zobaczyć spółki">
                 <div class="sector-donut-item-left">
                     <span class="sector-donut-swatch" style="background-color: ${item.color};"></span>
                     ${icon ? `<span class="sector-donut-icon">${icon}</span>` : ''}
@@ -2788,8 +2885,9 @@ function updateSectorDonut(portfolio) {
                     <span class="sector-donut-pct">${pctFormatted}%</span>
                     <span class="sector-donut-val">${valFormatted}</span>
                 </div>
-            </div>
-        `;
+            </summary>
+            <ul class="sector-donut-companies">${list}</ul>
+        </details>`;
     }).join('');
 
     donutArea.className = 'sector-donut-card';
@@ -7168,7 +7266,7 @@ function renderFundFlowReasons() {
             .map(([key, value]) => `<li>${names[key] || key}: <strong class="${sign > 0 ? 'text-up' : 'text-down'}">${sign > 0 ? '+' : '−'}${formatZl(value, 0)}</strong></li>`).join('');
         const base = Math.max(1, quarter.startUnits);
         const net = (quarter.inUnits - quarter.outUnits) / base * 100;
-        return `<div class="text-sm"><strong>${label}</strong> (kw. ${quarter.quarter}): napływ ${formatNumberPl(quarter.inUnits / base * 100, 1)}% udziałów, odpływ ${formatNumberPl(quarter.outUnits / base * 100, 1)}% udziałów, netto ${net >= 0 ? '+' : ''}${formatNumberPl(net, 1)}%
+        return `<div class="text-sm"><strong>${label}</strong> (${formatQuarterDate(quarter.quarter)}): napływ ${formatNumberPl(quarter.inUnits / base * 100, 1)}% udziałów, odpływ ${formatNumberPl(quarter.outUnits / base * 100, 1)}% udziałów, netto ${net >= 0 ? '+' : ''}${formatNumberPl(net, 1)}%
             <div class="d-flex gap-2 flex-wrap"><div><em>Odchodzą, bo:</em><ul>${rows(quarter.out, FUND_FLOW_OUT_REASONS, -1) || '<li>nikt nie odszedł</li>'}</ul></div>
             <div><em>Przychodzą:</em><ul>${rows(quarter.in, FUND_FLOW_IN_REASONS, 1) || '<li>brak wpłat</li>'}</ul></div></div></div>`;
     };
@@ -7251,12 +7349,27 @@ function renderFundLedger(nav) {
         : `<span>od startu ${sign(r.fund)}</span>${r.gig == null ? '' : `<span>GIG ${sign(r.gig)}</span><span>wobec GIG <b class="num ${r.vs > 0 ? 'is-up' : r.vs < 0 ? 'is-down' : ''}">${r.vs > 0 ? '+' : ''}${formatNumberPl(r.vs, 1)} pp</b></span>`}`;
     return `<div class="ms-nav-big"><span>NAV / udział</span><b>${formatNav(nav)}</b><div class="ms-vs">${vs}</div></div>
         <dl class="ms-ledger">
-            <dt>Gotówka funduszu</dt><dd class="is-mine">${formatZl(cash)}<small>${assets > 0 ? Math.round(cash / assets * 100) : 100}% aktywów</small></dd>
+            ${renderLedgerCashRows(cash, assets)}
             <dt>Akcje</dt><dd>${formatZl(shares)}<small>${held} ${held === 1 ? 'spółka' : held % 10 >= 2 && held % 10 <= 4 && (held % 100 < 12 || held % 100 > 14) ? 'spółki' : 'spółek'}</small></dd>
             <dt>Klienci</dt><dd>${playerFund.clients.length}<small>${formatNumberPl(playerFund.units, 0)} udziałów</small></dd>
             <dt>Konto prywatne</dt><dd class="is-mine">${formatZl(playerWallet?.cash || 0)}<small>na szkolenia i udziały</small></dd>
         </dl>`;
 }
+
+/** Księga: „Gotówka funduszu” = złote + salda walutowe; klik rozwija rozbicie na PLN i każdą walutę (z wartością w PLN). */
+let ledgerCashOpen = false;
+function toggleLedgerCash() { ledgerCashOpen = !ledgerCashOpen; if (typeof renderFundSummary === 'function' && playerFund) renderFundSummary(); }
+function renderLedgerCashRows(cash, assets) {
+    const balances = typeof getCashBalances === 'function' ? getCashBalances() : [{ code: getBaseCurrency(), amount: cash / getBaseScale(), pln: cash }];
+    const total = balances.reduce((sum, b) => sum + Math.max(0, b.pln), 0), foreign = balances.filter(b => b.code !== getBaseCurrency());
+    const pct = assets > 0 ? Math.round(total / assets * 100) : 100;
+    const head = `<dt><button type="button" class="ledger-toggle" aria-expanded="${ledgerCashOpen}" onclick="toggleLedgerCash()">${uiIcon(ledgerCashOpen ? 'chevron-down' : 'chevron-right', 14)} Gotówka funduszu</button></dt>
+        <dd class="is-mine">${formatZl(total)}<small>${pct}% aktywów${foreign.length ? ` · ${foreign.length + 1} waluty` : ''}</small></dd>`;
+    if (!ledgerCashOpen) return head;
+    return head + balances.map(b => `<dt class="ledger-sub">${currencyIconSafe(b.code)} ${b.code}</dt><dd class="ledger-sub">${formatNumberPl(b.amount, 2)} ${b.code}${b.code === getBaseCurrency() ? '' : `<small>≈ ${formatZl(b.pln, 0)} · kurs ${formatNumberPl(b.rate, b.rate < 1 ? 4 : 3)}</small>`}</dd>`).join('')
+        + `<dd class="ledger-sub ledger-sub-action" style="grid-column: 1 / -1"><button type="button" class="btn-ghost btn-sm" onclick="if (typeof openCashWindow === 'function') openCashWindow()">Przewalutuj…</button></dd>`;
+}
+function currencyIconSafe(code) { return typeof currencyIcon === 'function' ? currencyIcon(code, 14) : ''; }
 
 /** 0.14.2 P12: przycisk emisji — próg zaufania, licznik X/2, maksymalna wielkość. */
 function updateEmissionControls() {
@@ -9660,7 +9773,7 @@ function renderCompanyCardWorkforce(stock) {
                 <p class="m-0">Polityka kadrowa: <strong>${dataIcon(policy.icon)} ${policy.name}</strong> <span class="text-xs text-muted">(${{ owner: 'decyzja funduszu', bot: 'decyzja większościowca', ceo: 'decyzja prezesa' }[wf.policySetBy] || 'decyzja prezesa'})</span></p>
                 ${policyButtons}
                 <p class="m-0 mt-2">Związek: <strong>${{ none: 'brak', company: `${uiIcon('piesc', 14)} zakładowy`, sector: `${uiIcon('piesc', 14)} sektorowy` }[status]}</strong>${union?.agreementUntil >= getWorkforceQuarter() ? ` · ${uiIcon('raport', 14)} układ zbiorowy do kw. ${union.agreementUntil}` : ''}${wf.strike ? ` · <strong class="text-down">STRAJK (−${formatNumberPl((wf.strike.pct * 100), 0)}% przychodów, ${wf.strike.quarters}. kw.)</strong>` : ''}</p>
-                <p class="text-xs text-muted">Ryzyko strajku: ${escapeHtml(getStrikeRisk(stock) || '—')}${wf.greyCaughtQuarter !== null && wf.greyCaughtQuarter !== undefined ? ` · ${uiIcon('alert', 14)} kara Inspekcji Pracy w kw. ${wf.greyCaughtQuarter}` : ''}</p>
+                <p class="text-xs text-muted">Ryzyko strajku: ${escapeHtml(getStrikeRisk(stock) || '—')}${wf.greyCaughtQuarter !== null && wf.greyCaughtQuarter !== undefined ? ` · ${uiIcon('alert', 14)} kara Inspekcji Pracy (${formatQuarterDate(wf.greyCaughtQuarter)})` : ''}</p>
                 ${decision}
             </section>
         </div>
@@ -9869,12 +9982,12 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
 // Animacja spadającego wykresu tylko bez prefers-reduced-motion (CSS). Czeka na zgodność z makietą (ekran 22 listy designu).
 // =================================================================================
 const CRISIS_BANNER_HINTS = {
-    banking: 'Banki, finanse i nieruchomości tanieją, a kredyt drożeje. Bronią się Żywność i Medycyna.',
-    dotcom: 'Technologia, Gaming i Media tracą najmocniej. Energia, Żywność i dobra konsumpcyjne trzymają się lepiej.',
-    oil: 'Drogie paliwo uderza w transport, turystykę i chemię. Zyskuje Energia, rośnie inflacja.',
-    black: 'Cały rynek gwałtownie spada i długo się podnosi. Gotówka daje czas na zakupy po dnie.',
-    pandemic: 'Turystyka, usługi i lotnictwo stoją. Zyskują Medycyna, Technologia, Gaming i magazyny.',
-    supply: 'Fabryki zależne od dostaw tracą (motoryzacja, przemysł), drożeją półprodukty. Zyskują magazyny i dostawcy z innych krajów.'
+    banking: 'Przez kryzys bankowy tracą banki, finanse i nieruchomości, kredyt drożeje. Żywność i Medycyna trzymają się.',
+    dotcom: 'Przez pęknięcie bańki tracą Technologia, Gaming i Media. Energia, Żywność i dobra konsumpcyjne trzymają się.',
+    oil: 'Przez drogie paliwo tracą transport, turystyka i chemia. Energia rośnie, inflacja rośnie.',
+    black: 'Cały rynek gwałtownie spada i długo się podnosi.',
+    pandemic: 'Przez pandemię stoją turystyka, usługi i lotnictwo. Rosną Medycyna, Technologia, Gaming i magazyny.',
+    supply: 'Przez brak dostaw tracą fabryki (motoryzacja, przemysł), półprodukty drożeją. Rosną magazyny i dostawcy z innych krajów.'
 };
 function showCrisisBanner(line, stage) {
     if (typeof document === 'undefined' || !line || !CRISIS_LINES[line.id]) return null;
@@ -9887,7 +10000,7 @@ function showCrisisBanner(line, stage) {
     el.innerHTML = `<svg class="crisis-banner-chart" viewBox="0 0 64 32" aria-hidden="true"><polyline points="2,6 14,9 22,7 32,16 40,14 50,25 62,28"/></svg>
         <div class="crisis-banner-text"><strong>${uiIcon(def.svg || 'alert', 16)} ${escapeHtml(def.name)}${variant ? `: ${escapeHtml(variant.name.toLowerCase())}` : ''}</strong>
         <span class="crisis-banner-stage">Etap ${idx + 1} z ${CRISIS_STAGES.length}: ${escapeHtml(CRISIS_STAGE_NAMES[stage] || stage)}</span>
-        <span class="crisis-banner-hint">Co to znaczy dla Ciebie: ${escapeHtml(CRISIS_BANNER_HINTS[line.id] || '')}</span></div>
+        <span class="crisis-banner-hint">${escapeHtml(CRISIS_BANNER_HINTS[line.id] || '')}</span></div>
         <button type="button" class="btn-ghost-icon crisis-banner-close" aria-label="Zamknij baner kryzysu" onclick="closeCrisisBanner()">${uiIcon('zamknij', 16)}</button>`;
     el.classList.remove('is-anim'); void el.offsetWidth; el.classList.add('is-anim'); // animacja od nowa przy każdym etapie
     return el;

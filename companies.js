@@ -6917,7 +6917,7 @@ function buildGenealogyTree() {
     for (const e of genealogyLog) {
         if (e.parent) names[e.parent] = e.parentName || names[e.parent];
         if (e.child) names[e.child] = e.childName || names[e.child];
-        if (e.child) (notes[e.child] = notes[e.child] || []).push(`kw. ${e.q}: ${GENEALOGY_KINDS[e.kind] || e.kind}${e.parent && !edgeKinds.has(e.kind) ? ` (${e.parent})` : ''}${e.pct ? ` ${Math.round(e.pct * 100)}%` : ''}${e.note ? ` — ${e.note}` : ''}`);
+        if (e.child) (notes[e.child] = notes[e.child] || []).push(`${formatQuarterDate(e.q)}: ${GENEALOGY_KINDS[e.kind] || e.kind}${e.parent && !edgeKinds.has(e.kind) ? ` (${e.parent})` : ''}${e.pct ? ` ${Math.round(e.pct * 100)}%` : ''}${e.note ? ` — ${e.note}` : ''}`);
         if (!edgeKinds.has(e.kind) || !e.parent || !e.child) continue;
         (children[e.parent] = children[e.parent] || []);
         if (!children[e.parent].some(c => c.child === e.child)) children[e.parent].push({ child: e.child, kind: e.kind, q: e.q });
@@ -6926,7 +6926,7 @@ function buildGenealogyTree() {
     const status = sym => { const s = stocks.find(x => x.symbol === sym); return !s ? 'poza grą' : s.delisted === 'absorbed' ? 'wchłonięta' : s.isBankrupt ? 'upadła' : s.isSubsidiaryOf ? `córka ${s.isSubsidiaryOf}` : 'samodzielna'; };
     const lines = [];
     const walk = (sym, depth, via, seen) => {
-        lines.push(`${'    '.repeat(depth)}${depth ? '└ ' : ''}${names[sym] || sym} (${sym}) [${status(sym)}]${via ? ` ← ${GENEALOGY_KINDS[via.kind]} kw. ${via.q}` : ''}`);
+        lines.push(`${'    '.repeat(depth)}${depth ? '└ ' : ''}${names[sym] || sym} (${sym}) [${status(sym)}]${via ? ` ← ${GENEALOGY_KINDS[via.kind]} ${formatQuarterDate(via.q)}` : ''}`);
         for (const n of (notes[sym] || []).slice(-4)) lines.push(`${'    '.repeat(depth + 1)}· ${n}`);
         if (seen.has(sym)) return;
         seen.add(sym);

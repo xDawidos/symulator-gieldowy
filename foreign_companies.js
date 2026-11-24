@@ -138,7 +138,8 @@ function payForeignDividend(i, st, net) {
 /** Split / konsolidacja: progi z splits.js liczone w złotych po kursie (kurs 1000 zł, nie 1000 JPY). Posiadacze dostają floor(akcje × współczynnik). */
 function maybeForeignSplit(i) {
     const pln = toPln(i.price, i.currency);
-    if (i.tradeHalted || !(pln > 0) || macro.quarter - (Number(i.lastSplitQuarter) || -99) < SPLIT_COOLDOWN_QUARTERS) return null;
+    const lastQ = Number.isFinite(Number(i.lastSplitQuarter)) ? Number(i.lastSplitQuarter) : -99;
+    if (i.tradeHalted || !(pln > 0) || macro.quarter - lastQ < (isUrgentSplitPrice(pln) ? SPLIT_URGENT_COOLDOWN_QUARTERS : SPLIT_COOLDOWN_QUARTERS)) return null;
     const proposal = getSplitProposal(pln);
     if (!proposal || Math.random() >= getSplitChance(pln)) return null;
     const factor = proposal.kind === 'split' ? proposal.ratio : 1 / proposal.ratio;
@@ -147,7 +148,7 @@ function maybeForeignSplit(i) {
 
 function applyForeignShareChange(i, factor) {
     if (!(factor > 0) || factor === 1) return null;
-    const floorShares = x => Math.floor(x + 1e-9), priceBefore = i.price, priceAfter = priceBefore / factor;
+    const floorShares = x => Math.floor(x + 1e-9), priceBefore = i.price, priceAfter = priceBefore / factor, playerHeldBefore = Number(i.holders?.player) || 0;
     for (const [holder, qty] of Object.entries(i.holders || {})) {
         const next = floorShares(qty * factor), fraction = qty * factor - next;
         if (next > 0) i.holders[holder] = next; else delete i.holders[holder];
@@ -163,11 +164,24 @@ function applyForeignShareChange(i, factor) {
     if (f) { scalePerShareList(f.history, factor, ['eps']); f.expectedEps /= factor; if (Number.isFinite(f.lastEps)) f.lastEps /= factor; f.fairValue /= factor; updateFundamentalRatios(i); }
     if (i.lastDividend) { i.lastDividend.dps /= factor; }
     if (i.divHistory) i.divHistory = i.divHistory.map(d => d / factor);
+    const playerBefore = playerHeldBefore;
+    if (i.playerAvg > 0) i.playerAvg /= factor; // koszt na akcję gracza (wartość pakietu bez zmian)
     i.lastSplitQuarter = macro.quarter; noteForeignStat(factor > 1 ? 'splits' : 'consolidations');
-    const text =`✂️ ${i.name} (${getShareSymbol(i)}): ${factor > 1 ? `podział akcji ${formatSplitRatio(factor)}` : `konsolidacja akcji ${formatSplitRatio(factor)}`}, kurs ${formatNumberPl(priceBefore, 2)} → ${formatNumberPl(priceAfter, 2)} ${i.currency}.`;
+    if (!Array.isArray(i.splitHistory)) i.splitHistory = [];
+    i.splitHistory.push({ q: macro.quarter, f: Math.round(factor * 1e6) / 1e6 });
+    if (i.splitHistory.length > 6) i.splitHistory.shift();
+    const ratio = formatSplitRatio(factor), when = typeof formatSplitDate === 'function' ? formatSplitDate(macro.quarter) : '';
+    const text = `✂️ ${i.name} (${getShareSymbol(i)}): ${factor > 1 ? `podział akcji ${ratio}` : `konsolidacja akcji ${ratio}`} (${when}), kurs ${formatNumberPl(priceBefore, 2)} → ${formatNumberPl(priceAfter, 2)} ${i.currency}. Wartość posiadanych akcji bez zmian.`;
     logEvent(text, 'market');
-    if ((i.holders?.player || 0) > 0 && typeof pushNews === 'function') pushNews(text, null);
-    return { factor, priceBefore, priceAfter };
+    const playerAfter = Number(i.holders?.player) || 0;
+    if (playerBefore > 0) {
+        if (typeof pushNews === 'function') pushNews(text, null);
+        const mine = `Masz teraz ${formatInt(playerAfter)} akcji (było ${formatInt(playerBefore)})`;
+        if (typeof addMail === 'function') addMail({ sender: 'PULS', subject: `✂️ ${i.name}: ${factor > 1 ? 'split' : 'konsolidacja akcji'} ${ratio}`, body: `${text}\n\n${mine}. Średnia cena zakupu przeliczona automatycznie.`, importance: 2 });
+        if (typeof showToast === 'function') showToast(`${i.name}: ${factor > 1 ? 'split' : 'konsolidacja akcji'} ${ratio}. ${mine}; wartość bez zmian.`, 'default');
+        if (typeof displayPortfolio === 'function') displayPortfolio();
+    }
+    return { factor, priceBefore, priceAfter, playerBefore, playerAfter };
 }
 
 /** Prezes: starzeje się, po 65. roku emerytura (zmiana osoby, ta sama cecha kraju). */
@@ -231,6 +245,7 @@ function getForeignCompanySnapshot(i) {
     if (i.lastDividend) row.ld = [rs(i.lastDividend.dps), i.lastDividend.q];
     if (i.divHistory?.length) row.dh = i.divHistory.map(rs);
     if (i.lastSplitQuarter !== undefined) row.ls = i.lastSplitQuarter;
+    if (i.splitHistory?.length) row.sh = i.splitHistory;
     if (i.lastSurprise !== undefined) row.su = roundSig(i.lastSurprise, 3);
     return row;
 }
@@ -252,6 +267,7 @@ function applyForeignCompanySnapshot(i, row) {
     if (row.ld) i.lastDividend = { dps: row.ld[0], q: row.ld[1], total: 0, yield: row.ld[0] / Math.max(0.01, i.price) };
     if (Array.isArray(row.dh)) i.divHistory = row.dh.map(Number).filter(Number.isFinite);
     if (row.ls !== undefined) i.lastSplitQuarter = row.ls;
+    if (Array.isArray(row.sh)) i.splitHistory = row.sh.filter(h => h && Number.isFinite(Number(h.q)) && Number(h.f) > 0).map(h => ({ q: Number(h.q), f: Number(h.f) })).slice(-6);
     if (row.su !== undefined) i.lastSurprise = row.su;
     return i;
 }

@@ -135,6 +135,7 @@ function renderMarketsTab() {
         ${id === 'CH' ? renderHiddenCashCard() : ''}
         ${access ? '' : `<p class="text-sm" role="status">Brak biletu na ten rynek — kupowanie jest zablokowane (sprzedaż posiadanych akcji działa). Bilet kupisz w Internecie, na stronie Ferie i wakacje (${formatZl(getTicketPrice(id), 0)}).</p>`}
         ${countryState[id]?.link ? `<p class="text-sm" role="status">Giełda połączona z naszą: spółki ${escapeHtml(def.name)} (${id}) są na głównej liście akcji, na poziomach naszych giełd (wg ceny i kapitalizacji), z kupnem i sprzedażą jak krajowe (prowizja krajowa, bez biletu; dostęp wg poziomu giełdy). Tu zostają kursy walut i forex.</p>` : `<table class="asset-mini-table w-full mt-3"><thead><tr><th>Spółka</th><th>Sektor</th><th class="text-right">Cena (waluta)</th><th class="text-right">Cena w ${getBaseCurrency()}</th><th class="text-right">Twoje akcje</th><th class="text-right">Zlecenie</th></tr></thead><tbody>${rows}</tbody></table>`}
+        <p class="text-sm" role="status">${uiIcon('moneta', 14)} Saldo funduszu w ${def.currency}: <strong>${formatNumberPl(getCurrencyCash('player', def.currency), 2)} ${def.currency}</strong> (≈ ${formatZl(toPln(getCurrencyCash('player', def.currency), def.currency), 0)}).${getCurrencyCash('player', def.currency) > 0 ? ` Zakupy idą najpierw z tego salda.` : ` Bez salda kantor wymieni złote przy każdym zakupie.`}</p>
         <p class="text-sm text-muted">Kupno płacisz najpierw gotówką w ${def.currency}, resztę wymienia kantor (spread). Prowizja ${formatNumberPl(getCountryCommission(id) * 100, 1)}%. Wpływy ze sprzedaży trafiają na konto walutowe — złotówki dostaniesz w kantorze. Zysk to zmiana ceny <em>i</em> kursu ${def.currency}; ceny zawierają dywidendy.</p>`;
 }
 
@@ -185,13 +186,36 @@ function marketsUiTrade(id, side) {
     if (side === 'buy' && tier?.linked && tier.level > playerAccessLevel) { showToast(`Ta spółka jest na poziomie: ${tier.label}. Twoje stanowisko nie daje jeszcze dostępu do tej giełdy.`, 'warning'); return; }
     const r = side === 'buy' ? buyForeignShares(id, qty) : sellForeignShares(id, qty);
     if (r.needsConfirm && typeof gameConfirm === 'function') { // 0.16.6 S1: kupno ponad próg wezwania — drabina nadzoru
-        gameConfirm(`${r.reason} Kupno ponad próg grozi ostrzeżeniem, karą i nakazem odsprzedaży nadzoru. Kupić mimo to?`, () => { const t = buyForeignShares(id, qty, { overThreshold: true }); showToast(t.ok ? `Kupiono ${qty} akcji (ponad próg wezwania).` : t.reason, t.ok ? 'warning' : 'error'); renderKantor(); if (typeof updateUI === 'function') updateUI(); }, { title: 'Przekroczenie progu wezwania', confirmLabel: 'Kupuję mimo to', danger: true });
+        gameConfirm(`${r.reason} Kupno ponad próg grozi ostrzeżeniem, karą i nakazem odsprzedaży nadzoru. Kupić mimo to?`, () => { const t = buyForeignShares(id, qty, { overThreshold: true }); showToast(t.ok ? `${describeForeignBuy(qty, foreignIssuers[id] ? getShareSymbol(foreignIssuers[id]) : id, t)} Ponad próg wezwania.` : t.reason, t.ok ? 'warning' : 'error'); renderKantor(); if (typeof updateUI === 'function') updateUI(); }, { title: 'Przekroczenie progu wezwania', confirmLabel: 'Kupuję mimo to', danger: true });
         return;
     }
     const label = foreignIssuers[id] ? getShareSymbol(foreignIssuers[id]) : id;
-    showToast(r.ok ? `${side === 'buy' ? 'Kupiono' : 'Sprzedano'} ${qty} akcji ${label}${side === 'buy' ? ` za ${formatZl(r.cost, 0)} (prowizja ${formatZl(r.commissionPln, 0)})` : ` — wpływ ${formatNumberPl(r.proceeds, 2)} ${r.currency}`}.` : r.reason, r.ok ? 'success' : 'warning');
+    showToast(r.ok ? (side === 'buy' ? describeForeignBuy(qty, label, r) : `Sprzedano ${formatShares(qty)} ${label} — wpływ ${formatNumberPl(r.proceeds, 2)} ${r.currency} na konto walutowe.`) : r.reason, r.ok ? 'success' : 'warning');
     renderKantor();
     if (typeof updateUI === 'function') updateUI();
+    if (typeof updateForeignDrawerImpact === 'function') updateForeignDrawerImpact(id);
+}
+
+/** Komunikat kupna akcji zagranicznych: wartość w walucie spółki i skąd poszły pieniądze (saldo walutowe / kantor), bez „0 PLN” przy zapłacie z salda. */
+function describeForeignBuy(qty, label, r) {
+    const cur = r.currency, parts = [];
+    if (r.paidLocal > 1e-9) parts.push(`${formatNumberPl(r.paidLocal, 2)} ${cur} z salda ${cur}`);
+    if (r.restLocal > 1e-9) parts.push(`${formatNumberPl(r.restLocal, 2)} ${cur} przez kantor za ${formatZl(r.restPln, 0)}`);
+    return `Kupiono ${formatShares(qty)} ${label} za ${formatNumberPl(r.valueLocal, 2)} ${cur} (≈ ${formatZl(r.costPln, 0)}): ${parts.join(' + ') || 'z salda'}; prowizja ${formatZl(r.commissionPln, 2)}.`;
+}
+
+/** Podpowiedź w szufladzie spółki zagranicznej: ile kosztuje zlecenie w walucie i czy saldo w tej walucie wystarczy (odświeżana po wpisaniu liczby i po transakcji). */
+function updateForeignDrawerImpact(id) {
+    const box = typeof document !== 'undefined' ? document.getElementById(`fimpact-${id}`) : null, i = foreignIssuers[id];
+    if (!box || !i) return;
+    const qty = Math.max(0, Math.floor(Number(document.getElementById(`mkt-qty-${id}`)?.value) || 0)), cur = i.currency;
+    const value = qty * i.price, have = getCurrencyCash('player', cur), held = getIssuerHeld(i);
+    const fromLocal = Math.min(have, value), rest = value - fromLocal, fee = toPln(value, cur) * getCountryCommission(i.country);
+    const pay = !qty ? '' : rest <= 1e-9 ? `zapłacisz z salda ${cur}`
+        : fromLocal > 1e-9 ? `${formatNumberPl(fromLocal, 2)} ${cur} z salda, brakujące ${formatNumberPl(rest, 2)} ${cur} kantor wymieni z PLN (spread)`
+            : `nie masz ${cur} — kantor wymieni ${formatNumberPl(rest, 2)} ${cur} z PLN (spread); taniej kupisz ${cur} wcześniej w Kantory24`;
+    box.innerHTML = `${box.dataset.blocked ? `<strong>${escapeHtml(box.dataset.blocked)}.</strong> ` : ''}Kurs ${formatNumberPl(i.price, 2)} ${cur}. Saldo: <strong>${formatNumberPl(have, 2)} ${cur}</strong>${held > 0 ? ` · masz ${formatShares(held)}` : ''}.`
+        + (qty ? ` Zlecenie ${formatShares(qty)}: ${formatNumberPl(value, 2)} ${cur} (≈ ${formatZl(toPln(value, cur), 0)}) — ${pay}; prowizja ≈ ${formatZl(fee, 2)}.` : '');
 }
 
 
@@ -207,7 +231,7 @@ function renderLinksCard() {
     const chance = getEffectiveLinkChance();
     const hint = chance >= 0.16 ? 'wysoka' : chance >= 0.04 ? 'rośnie' : 'niska';
     const rows = linked.map(id => `<li><strong>${escapeHtml(COUNTRY_DEFS[id].name)}</strong> — ${LINK_KIND_LABELS[countryState[id].link]}; bez biletu, prowizja ${formatNumberPl(LINK_RULES.domesticCommission * 100, 2)}%</li>`).join('');
-    const intl = exchangeLinks.intl ? `<p class="text-sm">Giełda międzynarodowa: ${['PL', ...exchangeLinks.intl.members.filter(m => m !== 'PL')].map(m => escapeHtml(m === 'PL' ? 'Polska' : COUNTRY_DEFS[m]?.name || m)).join(', ')}.</p>` : '';
+    const intl = exchangeLinks.intl ? `<p class="text-sm">Giełda międzynarodowa: ${uniqueIntlMembers(exchangeLinks.intl.members).map(m => escapeHtml(m === 'PL' ? 'Polska' : COUNTRY_DEFS[m]?.name || m)).join(', ')}.</p>` : '';
     const taken = exchangeLinks.takenBy ? `<p class="alert alert--warn">${uiIcon('alert', 16)}<span>Wariant B: nasza giełda należy do ${escapeHtml(COUNTRY_DEFS[exchangeLinks.takenBy].name)} — opłaty za notowanie na ${getMarketLabel('GPW')} ×${formatNumberPl(LINK_RULES.listingFeeMult, 1)}.</span></p>` : '';
     const community = isEuropeanCommunity() ? '<p class="text-sm">Wspólnota europejska giełd działa — na rynku gra europejski hazardzista.</p>' : `<p class="text-sm text-muted">Wspólnota europejska powstanie, gdy na giełdzie będą ${LINK_RULES.communityMin} kraje europejskie (teraz ${countEuropeanJoined()}).</p>`;
     return `<div class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('rynek', 20)}</span><div><h4>Połączone giełdy</h4><span class="bank-card-type">szansa na kolejne połączenie: ${hint}</span></div></header>

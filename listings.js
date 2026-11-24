@@ -539,7 +539,7 @@ function renderAntitrustInterventions() {
     const thresholds = tier
         ? `Progi interwencji (poziom ${Math.min(3, antitrustOffice.level)}): udział w sektorze ${pct(tier.sector)} po wzroście o ${pct(ANTITRUST_GROWTH)}, w przetargach ${pct(tier.tender)}, w kapitalizacji ${pct(tier.cap)}. Najpierw kara (${pct(tier.fine)} rocznych przychodów), po ${ANTITRUST_ORDER_AFTER} kw. nakaz podziału albo zakaz przejęć.`
         : 'Urząd na poziomie 0 nie interweniuje — rozwija go państwo wydatkami.';
-    const rows = antitrustLog.slice(-5).reverse().map(e => `<li>kw. ${e.quarter}: ${escapeHtml(e.symbol)} — ${ANTITRUST_KIND_LABELS[e.kind] || e.kind}${e.amount > 0 ? ` (${formatZl(e.amount, 0)})` : ""}</li>`).join('');
+    const rows = antitrustLog.slice(-5).reverse().map(e => `<li>${formatQuarterDate(e.quarter)}: ${escapeHtml(e.symbol)} — ${ANTITRUST_KIND_LABELS[e.kind] || e.kind}${e.amount > 0 ? ` (${formatZl(e.amount, 0)})` : ""}</li>`).join('');
     const noRows = `<li class="empty-li">${renderEmptyState({ icon: 'waga', title: 'Brak interwencji.', text: 'Urząd antymonopolowy wkracza, gdy spółka albo grupa zbyt mocno dominuje na rynku.' })}</li>`; // 0.18.6 O2
     return `<p class="text-sm text-muted">${thresholds}</p><ul class="list-plain text-sm">${rows || noRows}</ul>`;
 }
@@ -982,5 +982,5 @@ function renderKnfRulesCard() {
     const req = getListingRequirements('GPW'), last = knfRules.history[knfRules.history.length - 1], p = knfRules.pending;
     return `<article class="bank-card mt-3"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('waga', 20)}</span><div><h4>Zasady wejścia na GPW (KNF)</h4><span class="bank-card-type">wymogi wejścia i utrzymania</span></div></header>
         <dl class="bank-card-rates"><div><dt>Kapitalizacja</dt><dd>od ${formatZl(req.cap, 0)}</dd></div><div><dt>Free float</dt><dd>od ${formatNumberPl(req.freeFloat * 100, 0)}%</dd></div><div><dt>Zysk</dt><dd>${req.profit ? 'wymagany (poza spółkami innowacyjnymi)' : 'nie'}</dd></div></dl>
-        <p class="text-sm text-muted">${p ? `Zapowiedź: KNF ${p.dir > 0 ? 'zaostrzy' : 'złagodzi'} zasady od kw. ${p.effectiveQ} (${escapeHtml(p.why)}).` : last ? `Ostatnia zmiana w kw. ${last.q}: ${last.dir > 0 ? 'zaostrzenie' : 'poluzowanie'} ${escapeHtml(last.why)}.` : 'Zasady bez zmian od startu gry.'} Progi wyższych poziomów giełdy nie są jawne.</p></article>`;
+        <p class="text-sm text-muted">${p ? `Zapowiedź: KNF ${p.dir > 0 ? 'zaostrzy' : 'złagodzi'} zasady od ${formatQuarterDate(p.effectiveQ)} (${escapeHtml(p.why)}).` : last ? `Ostatnia zmiana: ${formatQuarterDate(last.q)}: ${last.dir > 0 ? 'zaostrzenie' : 'poluzowanie'} ${escapeHtml(last.why)}.` : 'Zasady bez zmian od startu gry.'} Progi wyższych poziomów giełdy nie są jawne.</p></article>`;
 }

@@ -465,7 +465,7 @@ Object.assign(ACADEMY_ENTRIES, {
     splitReverseSplit: {
         title: 'Split i reverse split', icon: '🔀',
         text: 'Split to podział akcji: spółka wymienia każdą akcję na kilka (np. 5:1), a kurs spada tyle razy, ile akcji przybywa. Kapitalizacja i wartość Twojej pozycji zostają bez zmian — to jak rozmiana banknotu na drobne. Spółki dzielą akcje, gdy kurs jest bardzo wysoki, bo tanie akcje łatwiej kupować. Reverse split (konsolidacja, np. 1:10) robi odwrotnie: wiele akcji zamienia się w jedną, a kurs rośnie — stosują go spółki z kursem poniżej 1 PLN, żeby nie wyglądać na „grosze” i uniknąć zawieszenia handlu. Ułamki akcji, których nie da się wymienić, spółka wypłaca gotówką. Sam podział nie czyni spółki ani lepszą, ani gorszą (reverse split bywa sygnałem kłopotów). W grze: split od 1000 PLN, konsolidacja poniżej 1 PLN; wykresy i dywidendy na akcję są przeliczane wstecz.',
-        example: () => { const e = splitLog[splitLog.length - 1]; return e ? `${e.name}: ${e.kind === 'split' ? 'split' : 'konsolidacja'} ${formatSplitRatio(e.kind === 'split' ? e.ratio : 1 / e.ratio)} w kw. ${e.quarter} — kurs ${formatNumberPl(e.priceBefore, 2)} → ${formatZl(e.priceAfter, 2)}.` : 'Przykład: akcja za 1200 PLN po splicie 3:1 kosztuje 400 PLN, a Ty masz 3 razy więcej akcji.'; },
+        example: () => { const e = splitLog[splitLog.length - 1]; return e ? `${e.name}: ${e.kind === 'split' ? 'split' : 'konsolidacja'} ${formatSplitRatio(e.kind === 'split' ? e.ratio : 1 / e.ratio)} (${formatSplitDate(e.quarter)}) — kurs ${formatNumberPl(e.priceBefore, 2)} → ${formatZl(e.priceAfter, 2)}.` : 'Przykład: akcja za 1200 PLN po splicie 3:1 kosztuje 400 PLN, a Ty masz 3 razy więcej akcji.'; },
         quiz: [
             { q: 'Masz 10 akcji po 1200 PLN. Spółka robi split 3:1. Ile masz akcji i po ile?', a: ['30 akcji po 400 PLN', '10 akcji po 400 PLN', '30 akcji po 1200 PLN'], c: 0 },
             { q: 'Jak split zmienia wartość Twojej pozycji?', a: ['nie zmienia jej', 'zwiększa ją', 'zmniejsza ją'], c: 0 },
@@ -505,7 +505,7 @@ Object.assign(ACADEMY_ENTRIES, {
     squeezeOut: {
         title: 'Przymusowy wykup (squeeze-out)', icon: '🧲',
         text: 'Gdy matka ma co najmniej 90% akcji córki, może przymusowo wykupić resztę — mniejszościowi muszą sprzedać. W grze cena wykupu zawiera premię 10–20% ponad kurs. Potem spółki się łączą: segment córki wraca do matki, córka znika z giełdy i zwalnia miejsce w limicie spółek. Pakiet mniejszościowy zamienia się w gotówkę.',
-        example: () => { const s = stocks.find(x => (x.absorbedCompanies || []).some(a => a && a.quarter !== undefined)); const a = s && s.absorbedCompanies.filter(x => x.quarter !== undefined).at(-1); return a ? `${s.name} wchłonęła ${a.name} (kw. ${a.quarter}).` : 'Matka z 92% córki wykupuje pozostałe 8% po kursie + 15% i łączy spółki.'; },
+        example: () => { const s = stocks.find(x => (x.absorbedCompanies || []).some(a => a && a.quarter !== undefined)); const a = s && s.absorbedCompanies.filter(x => x.quarter !== undefined).at(-1); return a ? `${s.name} wchłonęła ${a.name} (${formatQuarterDate(a.quarter)}).` : 'Matka z 92% córki wykupuje pozostałe 8% po kursie + 15% i łączy spółki.'; },
         quiz: [
             { q: 'Od jakiego udziału matka może przymusowo wykupić resztę akcji w grze?', a: ['90%', '50%', '75%'], c: 0 },
             { q: 'Co dostaje akcjonariusz mniejszościowy przy squeeze-oucie?', a: ['gotówkę po cenie wykupu', 'akcje matki', 'nic'], c: 0 },
@@ -2156,7 +2156,7 @@ Object.assign(ACADEMY_ENTRIES, {
     antymonopol: {
         title: 'Urząd antymonopolowy', get icon() { return academyIcon('waga'); },
         text: 'Urząd antymonopolowy pilnuje, by żadna firma nie zdominowała rynku. Patrzy na udział spółki w przychodach sektora (gdy szybko rośnie), w przetargach i w kapitalizacji całego rynku. Im wyższy poziom urzędu (rozwijany wydatkami państwa), tym niższe progi interwencji. Najpierw jest kara (kilka procent rocznych przychodów), potem nakaz podziału (wydzielenie segmentu: akcjonariusze dostają akcje nowej spółki, więc wartość się nie traci) albo zakaz przejęć. Urząd może też zablokować fuzję, która dałaby zbyt duży udział w rynku.',
-        example: () => { const e = antitrustLog.at(-1); return e ? `Ostatnia interwencja: ${e.symbol} — ${ANTITRUST_KIND_LABELS[e.kind] || e.kind} (kwartał ${e.quarter}).` : `Poziom urzędu: ${antitrustOffice.level}; ${getAntitrustTier() ? "urząd interweniuje w skrajnych przypadkach" : "na poziomie 0 urząd nie interweniuje"}.`; },
+        example: () => { const e = antitrustLog.at(-1); return e ? `Ostatnia interwencja: ${e.symbol} — ${ANTITRUST_KIND_LABELS[e.kind] || e.kind} (${formatQuarterDate(e.quarter)}).` : `Poziom urzędu: ${antitrustOffice.level}; ${getAntitrustTier() ? "urząd interweniuje w skrajnych przypadkach" : "na poziomie 0 urząd nie interweniuje"}.`; },
         quiz: [
             { q: 'Co jest pierwszą sankcją urzędu antymonopolowego wobec dominującej spółki?', a: ['kara finansowa', 'natychmiastowy podział', 'wycofanie z giełdy'], c: 0 },
             { q: 'Czy nakaz podziału odbiera akcjonariuszom wartość?', a: ['nie — dostają akcje wydzielonej spółki', 'tak, całą', 'tak, połowę'], c: 0 },

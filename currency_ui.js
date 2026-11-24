@@ -7,6 +7,7 @@
 let kantorSelected = 'EUR';
 let kantorTab = 'rates';
 let kantorProviderId = 'std';
+let kantorAmountInput = null; // kwota wpisana przez gracza w oknie wymiany — zostaje po kupnie/sprzedaży (dawniej wracała do 1000)
 
 const COUNTRY_NAMES = { PL: 'Polska', DE: 'Niemcy', US: 'USA', CZ: 'Czechy', SE: 'Szwecja', CH: 'Szwajcaria', JP: 'Japonia', CN: 'Chiny', IN: 'Indie', TW: 'Tajwan', FR: 'Francja' };
 
@@ -123,7 +124,7 @@ function renderRatesTab() {
         <div class="bank-card mt-3"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('moneta', 20)}</span><div><h4>Wymiana ${code}</h4><span class="bank-card-type">kupno i sprzedaż po kursie kantoru</span></div></header>
             <div class="kantor-form"><label for="kantor-provider" class="text-sm">Kantor <select id="kantor-provider" onchange="setKantorProvider(this.value)">${renderProviderOptions(kantorProviderId, code)}</select></label>
             <label for="kantor-amount" class="text-sm">Kwota (${getBaseCurrency()} przy kupnie, jednostki ${code} przy sprzedaży)</label>
-            <input id="kantor-amount" type="number" min="1" step="any" value="${Math.max(1000, Math.round(Math.min(playerCash, 50000) / 1000) * 1000)}" oninput="updateKantorQuote()" aria-describedby="kantor-quote">
+            <input id="kantor-amount" type="number" min="0" step="any" value="${kantorAmountInput !== null ? kantorAmountInput : Math.max(1000, Math.round(Math.min(playerCash, 50000) / 1000) * 1000)}" oninput="kantorAmountInput = this.value; updateKantorQuote()" aria-describedby="kantor-quote">
             <div class="btn-row"><button class="btn-primary" onclick="kantorUiBuy()">Kup ${code} za ${getBaseCurrency()}</button><button class="btn-ghost" onclick="kantorUiSell()">Sprzedaj ${code}</button></div></div>
             <p id="kantor-quote" class="text-sm" aria-live="polite"></p></div>
         <h4 class="mt-3">Porównanie kursów ${code}</h4><div id="kantor-compare"></div>
@@ -161,6 +162,7 @@ function updateKantorQuote() {
 }
 
 function kantorUiBuy() {
+    kantorAmountInput = document.getElementById('kantor-amount')?.value ?? kantorAmountInput;
     const amount = (Number(document.getElementById('kantor-amount')?.value) || 0) * getBaseScale(); // jednostki gry
     const r = kantorBuyCurrency(kantorSelected, amount, kantorProviderId);
     showToast(r.ok ? `Kupiono ${formatNumberPl(r.foreign, 2)} ${kantorSelected} za ${formatZl(amount, 0)} (spread ${formatZl(r.spreadCost, 0)}).` : r.reason, r.ok ? 'success' : 'warning');
@@ -170,6 +172,7 @@ function kantorUiBuy() {
 
 /** Sprzedaż: kwota w oknie to liczba jednostek waluty (nie złotych). */
 function kantorUiSell() {
+    kantorAmountInput = document.getElementById('kantor-amount')?.value ?? kantorAmountInput;
     const amount = Number(document.getElementById('kantor-amount')?.value) || 0;
     const r = kantorSellCurrency(kantorSelected, amount, kantorProviderId);
     showToast(r.ok ? `Sprzedano ${formatNumberPl(amount, 2)} ${kantorSelected} za ${formatZl(r.pln, 0)} (spread ${formatZl(r.spreadCost, 0)}).` : r.reason, r.ok ? 'success' : 'warning');
@@ -227,7 +230,7 @@ function renderCashWindow() {
             <label class="text-sm" for="cash-to">Na walutę <select id="cash-to" onchange="cashWindowState.to=this.value;renderCashWindow()">${opt([base, ...FOREIGN_CURRENCIES].filter(c => c !== s.from), s.to)}</select></label>
             <label class="text-sm" for="cash-provider">Kantor <select id="cash-provider" onchange="cashWindowState.providerId=this.value;updateCashQuote()">${renderProviderOptions(s.providerId, s.to === base ? s.from : s.to)}</select></label>
             <label class="text-sm" for="cash-amount">Kwota w ${s.from} (masz ${formatNumberPl(maxAmount, 2)})</label>
-            <div class="btn-row"><input id="cash-amount" type="number" min="0" step="any" value="${whole > 0 ? (s.from === base ? Math.min(whole, 10000 / getBaseScale()) : whole) : ''}" oninput="updateCashQuote()" aria-describedby="cash-quote"><button type="button" class="btn-ghost btn-sm" onclick="document.getElementById('cash-amount').value=${whole};updateCashQuote()">Całe saldo</button></div>
+            <div class="btn-row"><input id="cash-amount" type="number" min="0" step="any" value="${s.amount !== undefined && s.amountFrom === s.from ? s.amount : whole > 0 ? (s.from === base ? Math.min(whole, 10000 / getBaseScale()) : whole) : ''}" oninput="cashWindowState.amount = this.value; cashWindowState.amountFrom = cashWindowState.from; updateCashQuote()" aria-describedby="cash-quote"><button type="button" class="btn-ghost btn-sm" onclick="document.getElementById('cash-amount').value=${whole};cashWindowState.amount='${whole}';cashWindowState.amountFrom=cashWindowState.from;updateCashQuote()">Całe saldo</button></div>
             <p id="cash-quote" class="text-sm" aria-live="polite"></p>
             <div class="btn-row"><button type="button" class="btn-primary" onclick="cashUiConvert()">Przewalutuj</button></div></div></div>
         <p class="text-sm text-muted mt-3">Zasady: akcje spółek zagranicznych kupujesz najpierw z salda w ich walucie, resztę wymienia kantor. Zakupy w złotych (akcje krajowe, inwestycje) odmawiają, gdy brakuje PLN — przewalutuj tu. Obowiązkowe płatności w złotych (umorzenia dla klientów, opłata za zarządzanie, spłata lombardu) przewalutowują same, z wpisem w dzienniku i kosztem spreadu. Waluta obca na obcą idzie przez złote, więc kosztuje dwa spready.</p>`;

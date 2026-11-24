@@ -638,6 +638,7 @@ function getCountriesSnapshot() {
         if (i.kind !== 'share') continue;
         const row = { p: i.price, h: i.history.slice(-COUNTRY_RULES.historyWeeks), q: i.listedQ, sp: Math.round(i.sp * 1e4) / 1e4, e: Math.round(i.ema * 1e3) / 1e3 };
         if (Object.keys(i.holders).length) row.o = i.holders;
+        if (i.holders.player > 0 && i.playerAvg > 0) row.pc = [Number(i.playerAvg.toPrecision(7)), Number((i.playerAvgPln || 0).toPrecision(7))]; // średni koszt gracza (waluta, PLN)
         if (i.leakQ !== undefined) row.lk = i.leakQ;
         if (i.vintage) row.v = i.vintage;
         if (i.tradeHalted) row.th = 1;
@@ -692,6 +693,7 @@ function applyCountriesSnapshot(snapshot) {
         if (issuer.parentPack > 0) issuer.float = issuer.shares - issuer.statePack - issuer.parentPack;
         issuer.holders = {};
         for (const [holder, qty] of Object.entries(row.o || {})) if (Number(qty) > 0) issuer.holders[holder] = Number(qty);
+        if (Array.isArray(row.pc) && Number(row.pc[0]) > 0 && issuer.holders.player > 0) { issuer.playerAvg = Number(row.pc[0]); if (Number(row.pc[1]) > 0) issuer.playerAvgPln = Number(row.pc[1]); }
     }
     if (snapshot.feed && typeof snapshot.feed === 'object') homeFeed = { last: Number(snapshot.feed.last) || null, sd: Number(snapshot.feed.sd) || 0.02 };
     if (typeof applyTicketsSnapshot === 'function') applyTicketsSnapshot(snapshot.tickets);
@@ -955,11 +957,22 @@ function buyForeignShares(issuerId, quantity, opts = {}) {
     if (total > playerCash + 1e-9) return { ok: false, reason: 'Za mało gotówki funduszu.' };
     playerCash -= total;
     if (useLocal > 0) { playerCashByCurrency[cur] = have - useLocal; if (playerCashByCurrency[cur] < 1e-9) delete playerCashByCurrency[cur]; }
-    issuer.holders.player = getIssuerHeld(issuer) + quantity;
+    const heldBefore = getIssuerHeld(issuer);
+    notePlayerForeignCost(issuer, heldBefore, quantity, valueLocal, midPln + commissionPln + spreadCost);
+    issuer.holders.player = heldBefore + quantity;
     if (over) applyForeignOversightStep(issuer, toPln((quantity - Math.max(0, room)) * issuer.price, cur));
     if (spreadCost > 0) recordPayment('player-fund', 'external:kantor', spreadCost, 'Kantor: spread przy zakupie akcji zagranicznych');
     if (commissionPln > 0) recordPayment('player-fund', `external:${def.operator.id}`, commissionPln, `Prowizja: ${def.operator.name}`);
-    return { ok: true, cost: total, commissionPln, spreadCost };
+    return { ok: true, cost: total, commissionPln, spreadCost, currency: cur, valueLocal, paidLocal: useLocal, restLocal, restPln, costPln: midPln + commissionPln + spreadCost };
+}
+
+/** Średni koszt pakietu gracza (do wyniku w Pozycjach funduszu): `playerAvg` w walucie spółki, `playerAvgPln` w złotych z prowizją i spreadem. */
+function notePlayerForeignCost(issuer, heldBefore, quantity, valueLocal, costPln) {
+    const prevLocal = heldBefore > 0 && issuer.playerAvg > 0 ? issuer.playerAvg : issuer.price;
+    const prevPln = heldBefore > 0 && issuer.playerAvgPln > 0 ? issuer.playerAvgPln : toPln(issuer.price, issuer.currency);
+    const n = heldBefore + quantity;
+    issuer.playerAvg = (prevLocal * heldBefore + valueLocal) / n;
+    issuer.playerAvgPln = (prevPln * heldBefore + costPln) / n;
 }
 
 /** Sprzedaż: wpływ w walucie spółki (minus prowizja); złotówki zdobędziesz w kantorze. */
@@ -974,7 +987,7 @@ function sellForeignShares(issuerId, quantity) {
     const def = COUNTRY_DEFS[issuer.country], gross = quantity * issuer.price, fee = gross * getCountryCommission(issuer.country);
     issuer.holders.player = held - quantity;
     if (typeof onParabankSharesSold === 'function') onParabankSharesSold({ symbol: issuer.id, name: issuer.name, totalShares: issuer.shares }, quantity); // panika w parabanku (0.11 B1)
-    if (issuer.holders.player <= 0) delete issuer.holders.player;
+    if (issuer.holders.player <= 0) { delete issuer.holders.player; delete issuer.playerAvg; delete issuer.playerAvgPln; }
     addCurrencyCash('player', issuer.currency, gross - fee);
     recordPayment('player-fund', `external:${def.operator.id}`, toPln(fee, issuer.currency), `Prowizja: ${def.operator.name}`);
     return { ok: true, proceeds: gross - fee, currency: issuer.currency };

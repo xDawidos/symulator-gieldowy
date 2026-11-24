@@ -3577,6 +3577,16 @@ body.dark-mode .portfolio-kpi-value,
   padding-right: 4px;
 }
 
+.sector-donut-details > summary { list-style: none; cursor: pointer; }
+.sector-donut-details > summary::-webkit-details-marker { display: none; }
+.sector-donut-details[open] > summary { font-weight: 600; }
+.sector-donut-companies { list-style: none; margin: 2px 0 6px 22px; padding: 0; font-size: 11px; color: var(--color-text-secondary, #8b949e); }
+.sector-donut-companies li { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; border-bottom: 1px dashed var(--ink-800, #30363d); }
+.portfolio-group-row.is-toggle { cursor: pointer; }
+.portfolio-group-row.is-toggle:hover td, .portfolio-group-row.is-toggle:focus-visible td { color: var(--color-text-primary, #e6edf3); }
+.portfolio-group-row .portfolio-group-count { font-weight: 400; }
+.portfolio-group-row .portfolio-group-sum { text-transform: none; letter-spacing: 0; }
+.pos-close-btn { display: inline-block; margin-top: 3px; padding: 1px 8px; font-size: 11px; line-height: 1.5; }
 .sector-donut-item {
   display: flex;
   align-items: center;
@@ -6084,6 +6094,11 @@ body.dark-mode .owned-badge, .owned-badge { background: transparent; color: var(
 .ms-ledger dd { margin: 0; text-align: right; font-family: var(--font-family-mono); font-variant-numeric: tabular-nums; font-weight: 600; }
 .ms-ledger dd.is-mine { color: var(--amber-400); }
 .ms-ledger dd small { display: block; font-family: var(--font-family-sans); font-weight: 400; font-size: 11px; color: var(--color-text-muted); }
+.ms-ledger .ledger-toggle { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; color: inherit; }
+.ms-ledger .ledger-toggle:focus-visible { outline: 2px solid var(--accent-info, #58a6ff); outline-offset: 2px; border-radius: 3px; }
+.ms-ledger .ledger-sub { padding: 4px 0 4px 18px; font-size: 12px; border-bottom-style: dashed; }
+.ms-ledger dd.ledger-sub { padding-left: 0; font-weight: 500; }
+.ms-ledger dd.ledger-sub-action { text-align: left; padding-left: 18px; }
 .ms-empty { padding: 12px; border: 1px solid var(--ink-700); border-radius: 6px; color: var(--color-text-secondary); white-space: normal; }
 .ms-empty b { color: var(--color-text-primary); }
 

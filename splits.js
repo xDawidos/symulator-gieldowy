@@ -7,8 +7,8 @@
 
 const SPLIT_PRICE = 1000;              // od tego kursu spółka może ogłosić split
 const REVERSE_SPLIT_PRICE = 1;         // poniżej tego kursu — konsolidację
-const SPLIT_CHANCE = 0.20;             // na kwartał po przekroczeniu progu
-const SPLIT_URGENT_CHANCE = 0.50;      // gdy kurs dobił do 3000 zł albo spadł poniżej 0,50 zł (cel: 99% spółek w 1–3000 zł)
+const SPLIT_CHANCE = 0.35;             // na kwartał po przekroczeniu progu (było 20%: spółki wisiały latami nad 1000 zł)
+const SPLIT_URGENT_CHANCE = 1;         // kurs od 3000 zł albo poniżej 0,50 zł: zmiana w najbliższym kwartale (było 50%: kursy do 15 tys. zł)
 const SPLIT_URGENT_ABOVE = 3000;
 const REVERSE_URGENT_BELOW = 0.5;
 const SPLIT_RATIOS = [2, 3, 5, 10, 20, 50, 100, 200, 500, 1000];
@@ -16,15 +16,18 @@ const REVERSE_RATIOS = [2, 3, 5, 10, 20, 50, 100];
 const SPLIT_TARGET_MAX_PRICE = 700;    // po splicie kurs nie powinien przekraczać tej wartości
 const REVERSE_TARGET_MIN_PRICE = 3;    // po konsolidacji kurs powinien wynieść co najmniej tyle
 const SPLIT_COOLDOWN_QUARTERS = 8;
+const SPLIT_URGENT_COOLDOWN_QUARTERS = 2; // po splicie kurs, który znów skoczył ponad 3000 zł, może być dzielony po pół roku
 // Przełączniki (debug / pomiary): wyłączenie rodzaju zmiany nie zmienia reszty gry.
 const SPLIT_SETTINGS = { split: true, reverse: true };
 const SPLIT_LOG_LIMIT = 60;
 let splitLog = [];                     // { symbol, name, quarter, kind, ratio, priceBefore, priceAfter, fractionCash }
 
-/** Szansa na kwartał: 20% po przekroczeniu progu, 50% przy kursie ≥ 3000 zł albo < 0,50 zł. */
+/** Szansa na kwartał: 35% po przekroczeniu progu, pewna przy kursie ≥ 3000 zł albo < 0,50 zł. */
 function getSplitChance(price) {
     return Number(price) >= SPLIT_URGENT_ABOVE || Number(price) < REVERSE_URGENT_BELOW ? SPLIT_URGENT_CHANCE : SPLIT_CHANCE;
 }
+
+function isUrgentSplitPrice(price) { return Number(price) >= SPLIT_URGENT_ABOVE || (Number(price) > 0 && Number(price) < REVERSE_URGENT_BELOW); }
 
 function getSplitQuarter() {
     return typeof macro === 'object' && macro ? Number(macro.quarter) || 0 : 0;
@@ -43,11 +46,12 @@ function canChangeShareCount(stock) {
     if (!stock || stock.isBankrupt || stock.assetType === 'Startup' || stock.tradeHalted) return false;
     if (!(Number(stock.totalShares) > 0) || !(Number(stock.price) > 0)) return false;
     if (stock.mergerProcess || stock.tender || stock.spinoff) return false;
-    if (stock.governance?.pendingAgm?.items?.length) return false;
+    if (stock.governance?.pendingAgm?.items?.length && !isUrgentSplitPrice(stock.price)) return false; // walne z uchwałami wstrzymuje tylko zwykły split; przy skrajnym kursie zarząd dzieli akcje i tak
     if (typeof rescueOffers === 'object' && rescueOffers?.[stock.symbol]) return false;
     if (typeof privatizationOffer === 'object' && privatizationOffer?.symbol === stock.symbol) return false;
     if (typeof currentCollateralAuction === 'object' && currentCollateralAuction?.stockSymbol === stock.symbol) return false;
-    if (getSplitQuarter() - (Number(stock.lastSplitQuarter) || -99) < SPLIT_COOLDOWN_QUARTERS) return false;
+    const lastQ = Number.isFinite(Number(stock.lastSplitQuarter)) ? Number(stock.lastSplitQuarter) : -99; // kwartał 0 to też split (dawniej `|| -99` go gubiło)
+    if (getSplitQuarter() - lastQ < (isUrgentSplitPrice(stock.price) ? SPLIT_URGENT_COOLDOWN_QUARTERS : SPLIT_COOLDOWN_QUARTERS)) return false;
     return true;
 }
 
@@ -188,18 +192,21 @@ function formatSplitRatio(factor) {
     return factor >= 1 ? `${Math.round(factor)}:1` : `1:${Math.round(1 / factor)}`;
 }
 
+/** Termin splitu w kalendarzu gry: „Rok 9 · kw. 3” (dawniej surowy numer kwartału, np. „kw. 34”). */
+function formatSplitDate(q) { return typeof formatQuarterDate === 'function' ? formatQuarterDate(Number(q) || 0) : `Rok ${Math.floor((Number(q) || 0) / 4) + 1} · kw. ${((Number(q) || 0) % 4) + 1}`; }
+
 /** Zmiana liczby akcji z ostatnich 8 kwartałów (opis do znacznika w tabeli) albo null. */
 function getRecentShareCountChange(stock) {
     const last = stock?.splitHistory?.[stock.splitHistory.length - 1];
     if (!last || getSplitQuarter() - last.q > 8) return null;
-    return `${last.f >= 1 ? 'Split' : 'Konsolidacja akcji'} ${formatSplitRatio(last.f)} w kw. ${last.q} — liczba akcji i kurs zmienione, wartość posiadanych akcji bez zmian`;
+    return `${last.f >= 1 ? 'Split' : 'Konsolidacja akcji'} ${formatSplitRatio(last.f)} (${formatSplitDate(last.q)}) — liczba akcji i kurs zmienione, wartość posiadanych akcji bez zmian`;
 }
 
 /** Zdanie do karty spółki: wszystkie zmiany liczby akcji (z zapisu spółki). */
 function describeShareCountHistory(stock) {
     const list = stock?.splitHistory;
     if (!list?.length) return '';
-    return `<p class="text-sm"><strong>Podział akcji:</strong> ${list.map(h => `${h.f >= 1 ? 'split' : 'konsolidacja'} ${formatSplitRatio(h.f)} w kw. ${h.q}`).join(', ')} — wykres, wskaźniki i dywidendy na akcję przeliczone wstecz, wartość posiadanych akcji bez zmian.</p>`;
+    return `<p class="text-sm"><strong>Podział akcji:</strong> ${list.map(h => `${h.f >= 1 ? 'split' : 'konsolidacja'} ${formatSplitRatio(h.f)} (${formatSplitDate(h.q)})`).join(', ')} — wykres, wskaźniki i dywidendy na akcję przeliczone wstecz, wartość posiadanych akcji bez zmian.</p>`;
 }
 
 /** Powiadomienia o zmianie liczby akcji: dziennik, pasek newsów, znacznik na wykresie, poczta, dymek i hasło Akademii dla posiadacza. */

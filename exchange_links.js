@@ -100,10 +100,11 @@ function runLinkEvent(kind = pickLinkKind(), country = null) {
         text = `Nasza giełda przejmuje giełdę ${ex}: spółki kraju ${name} są u nas notowane bez biletu, z prowizją krajową.`;
     } else if (kind === 'intl') {
         for (let i = getRandomIntInRange(0, LINK_RULES.maxIntlAtStart); i > 0; i--) {
-            const rest = getLinkCandidates();
-            if (rest.length && linkCountry(getRandomElement(rest), 'intl')) entry.members.push(countryLastLinked());
+            const rest = getLinkCandidates(), pick = rest.length ? getRandomElement(rest) : null;
+            if (pick && linkCountry(pick, 'intl') && !entry.members.includes(pick)) entry.members.push(pick); // dołączony kraj, nie „ostatni wg joinedQ” (dawało duplikaty, np. Czechy ×2)
         }
-        exchangeLinks.intl = { members: ['PL', ...entry.members], startedQ: macro.quarter };
+        const prev = exchangeLinks.intl?.members || [];
+        exchangeLinks.intl = { members: uniqueIntlMembers([...prev, 'PL', ...entry.members]), startedQ: exchangeLinks.intl?.startedQ ?? macro.quarter };
         text = `Powstaje giełda międzynarodowa: Polska, ${entry.members.map(m => COUNTRY_DEFS[m].name).join(', ')}. Kolejne kraje mogą dołączać powoli.`;
     } else {
         entry.drop = applyTakeoverDrop();
@@ -141,7 +142,7 @@ function processLinksQuarterly() {
         if (candidates.length) {
             const id = getRandomElement(candidates);
             if (linkCountry(id, 'intl')) {
-                exchangeLinks.intl.members.push(id);
+                exchangeLinks.intl.members = uniqueIntlMembers([...exchangeLinks.intl.members, id]);
                 logEvent(`🌍 Giełda międzynarodowa przyjmuje kolejny kraj: ${COUNTRY_DEFS[id].name}.`, 'market');
                 checkEuropeanCommunity();
             }
@@ -165,6 +166,9 @@ function checkLinkInvariants() {
     return problems;
 }
 
+/** Członkowie giełdy międzynarodowej bez powtórzeń, Polska pierwsza. */
+function uniqueIntlMembers(list) { return ['PL', ...new Set((list || []).filter(m => m !== 'PL'))]; }
+
 function getLinksSnapshot() { return JSON.parse(JSON.stringify(exchangeLinks)); }
 function applyLinksSnapshot(snapshot) {
     exchangeLinks = createLinksState();
@@ -172,7 +176,7 @@ function applyLinksSnapshot(snapshot) {
     exchangeLinks.chance = Math.min(LINK_RULES.maxChance, Math.max(LINK_RULES.startChance, Number(snapshot.chance) || LINK_RULES.startChance));
     exchangeLinks.lastQ = Number.isFinite(Number(snapshot.lastQ)) ? Number(snapshot.lastQ) : -99;
     exchangeLinks.history = Array.isArray(snapshot.history) ? snapshot.history.slice(-12) : [];
-    exchangeLinks.intl = snapshot.intl && Array.isArray(snapshot.intl.members) ? { members: snapshot.intl.members.filter(m => m === 'PL' || COUNTRY_DEFS[m]), startedQ: Number(snapshot.intl.startedQ) || 0 } : null;
+    exchangeLinks.intl = snapshot.intl && Array.isArray(snapshot.intl.members) ? { members: uniqueIntlMembers(snapshot.intl.members.filter(m => m === 'PL' || COUNTRY_DEFS[m])), startedQ: Number(snapshot.intl.startedQ) || 0 } : null;
     exchangeLinks.takenBy = snapshot.takenBy && COUNTRY_DEFS[snapshot.takenBy] ? snapshot.takenBy : null;
     exchangeLinks.community = Boolean(snapshot.community);
     exchangeLinks.goldenQ = Number.isFinite(Number(snapshot.goldenQ)) ? Number(snapshot.goldenQ) : -99;

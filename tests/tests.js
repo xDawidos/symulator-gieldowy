@@ -10643,7 +10643,7 @@ group('0.15.4: Poprawki z gry 3 (licznik, okna, wykres, dywidenda, split, limit 
     });
 
     test('P4a: propozycja zmiany akcji — próg 1000 zł, krotność tak, by kurs po splicie ≤ 700 zł; kwartalny proces z szansą 20%, bez fuzji i z przerwą', () => {
-        assertEq(getSplitChance(1500), SPLIT_CHANCE, '20% po przekroczeniu progu'); assertEq(getSplitChance(3200), SPLIT_URGENT_CHANCE, '50% od 3000 zł'); assertEq(getSplitChance(0.4), SPLIT_URGENT_CHANCE, '50% poniżej 0,50 zł'); assertEq(getSplitChance(0.8), SPLIT_CHANCE, '20% przy 0,50–1 zł');
+        assertEq(getSplitChance(1500), SPLIT_CHANCE, '35% po przekroczeniu progu'); assertEq(getSplitChance(3200), SPLIT_URGENT_CHANCE, 'pewny split od 3000 zł'); assertEq(getSplitChance(0.4), SPLIT_URGENT_CHANCE, 'pewna konsolidacja poniżej 0,50 zł'); assertEq(getSplitChance(0.8), SPLIT_CHANCE, '35% przy 0,50–1 zł');
         assertEq(getSplitProposal(999), null, 'poniżej progu');
         assertEq(JSON.stringify(getSplitProposal(1000)), '{"kind":"split","ratio":2}', '1000 zł → 2:1');
         assertEq(getSplitProposal(1500).ratio, 3, '1500 zł → 3:1'); assertEq(getSplitProposal(2400).ratio, 5, '2400 zł → 5:1'); assertEq(getSplitProposal(4_000_000).ratio, 1000, '4 mln zł → 1000:1');
@@ -10754,9 +10754,9 @@ group('0.15.4: Poprawki z gry 3 (licznik, okna, wykres, dywidenda, split, limit 
         assert(mailbox.messages.length > mails0, 'poczta dla posiadacza');
         assert(isAcademyUnlocked('splitReverseSplit'), 'hasło Akademii odblokowane');
         assertEq(emojiIconName('🔀'), 'podzial', 'ikona SVG zamiast emoji'); assert(UI_ICON_PATHS.podzial, 'rysunek ikony');
-        assert(getRecentShareCountChange(a).startsWith('Split 5:1 w kw. 12'), 'opis znacznika w tabeli (słowa, nie kolor)');
+        assert(getRecentShareCountChange(a).startsWith('Split 5:1 (Rok 4 · kw. 1)'), 'opis znacznika w tabeli (słowa, nie kolor)');
         macro.quarter = 40; assertEq(getRecentShareCountChange(a), null, 'znacznik znika po 8 kwartałach');
-        assert(describeShareCountHistory(a).includes('split 5:1 w kw. 12'), 'wiersz w karcie spółki');
+        assert(describeShareCountHistory(a).includes('split 5:1 (Rok 4 · kw. 1)') && !/w kw\. 12/.test(describeShareCountHistory(a)), 'wiersz w karcie spółki');
         const entry2 = executeSplit(Object.assign(a, { price: 0.4, lastSplitQuarter: -99 }), getSplitProposal(0.4));
         assert(entry2 && entry2.kind === 'reverse' && newsLog.slice(0, 5).some(n => n.text.includes('skupia akcje 1:10')), 'komunikat konsolidacji');
         const entry3 = ACADEMY_ENTRIES.splitReverseSplit;
@@ -12361,7 +12361,7 @@ group('0.15.6 E7: interfejs i Akademia', () => {
         try {
             antitrustOffice.level = 2; antitrustLog = [{ quarter: 5, symbol: 'AAA', kind: 'fine', amount: 1000 }, { quarter: 9, symbol: 'BBB', kind: 'split', amount: 5000 }];
             const html = renderAntitrustInterventions();
-            assert(html.includes('poziom 2') && html.includes('80%') && html.includes('kw. 9: BBB — nakaz podziału') && html.includes('kw. 5: AAA — kara'), 'progi i interwencje (najnowsza pierwsza)');
+            assert(html.includes('poziom 2') && html.includes('80%') && html.includes('Rok 3 · kw. 2: BBB — nakaz podziału') && html.includes('Rok 2 · kw. 2: AAA — kara'), 'progi i interwencje (najnowsza pierwsza)');
             antitrustOffice.level = 0; antitrustLog = [];
             assert(renderAntitrustInterventions().includes('nie interweniuje') && renderAntitrustInterventions().includes('Brak interwencji'), 'poziom 0 i pusty dziennik');
         } finally { antitrustOffice.level = saved; antitrustLog = log; }
@@ -13149,6 +13149,47 @@ group('0.16.2', () => {
         assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
     }));
 
+    test('Poprawki z gry 2026-11-24: kupno akcji zagranicznych z salda waluty — komunikat w walucie (nie „0 PLN”), średni koszt i zamknięcie pozycji w Pozycjach, split przelicza koszt', () => withTickets(() => {
+        airportState.forced = true; joinCountry('ZZ'); buyTicket('ZZ'); fxRates.EUR = 4.4;
+        const i = foreignIssuers.ZB1; playerCashByCurrency.EUR = 100_000;
+        const r = buyForeignShares('ZB1', 10);
+        assert(r.ok, r.reason); assertNear(r.paidLocal, 10 * i.price, 'zapłata z salda EUR', 1e-6); assertEq(r.restPln, 0, 'bez kantoru');
+        const text = describeForeignBuy(10, 'ZB1', r);
+        assert(!/za 0 PLN/.test(text) && text.includes('EUR') && text.includes('z salda EUR'), text);
+        assertNear(i.playerAvg, i.price, 'średni koszt w walucie', 1e-9); assert(i.playerAvgPln > toPln(i.price, 'EUR'), 'koszt w PLN z prowizją');
+        // podpowiedź w szufladzie odświeża saldo po zakupie
+        const box = document.createElement('div'); box.innerHTML = `<input id="mkt-qty-ZB1" value="5"><div id="fimpact-ZB1" data-blocked=""></div>`; document.body.appendChild(box);
+        try {
+            updateForeignDrawerImpact('ZB1');
+            const t = document.getElementById('fimpact-ZB1').textContent;
+            assert(t.includes(formatNumberPl(getCurrencyCash('player', 'EUR'), 2)) && /z salda EUR/.test(t), t);
+            playerCashByCurrency.EUR = 0; delete playerCashByCurrency.EUR; updateForeignDrawerImpact('ZB1');
+            assert(/nie masz EUR/.test(document.getElementById('fimpact-ZB1').textContent), 'bez salda: wymiana przez kantor');
+        } finally { box.remove(); }
+        // split: liczba akcji ×5, koszt na akcję ÷5, historia splitu z datą w kalendarzu
+        const avg = i.playerAvg, held = i.holders.player;
+        applyForeignShareChange(i, 5);
+        assertEq(i.holders.player, held * 5, 'akcje gracza po splicie'); assertNear(i.playerAvg, avg / 5, 'koszt na akcję po splicie', 1e-9);
+        assert(i.splitHistory?.length === 1 && i.splitHistory[0].f === 5, 'historia splitu spółki zagranicznej');
+        // zapis: średni koszt wraca
+        const snap = JSON.parse(JSON.stringify(getCountriesSnapshot()));
+        applyCountriesSnapshot(snap);
+        assertNear(foreignIssuers.ZB1.playerAvg, avg / 5, 'średni koszt po wczytaniu', 1e-4);
+        // Pozycje funduszu: kategoria zwinięta, po rozwinięciu spółka z przyciskiem Zamknij
+        const t2 = document.createElement('table'); t2.innerHTML = '<tbody id="my-stocks-list"></tbody>'; document.body.appendChild(t2);
+        try {
+            for (const k of Object.keys(portfolioGroupsOpen)) delete portfolioGroupsOpen[k];
+            displayPortfolio();
+            const list = document.getElementById('my-stocks-list');
+            assert(/Akcje zagraniczne/.test(list.textContent) && !list.textContent.includes('Zeta'), 'kategoria zwinięta');
+            togglePortfolioGroup('foreign');
+            assert(list.textContent.includes(foreignIssuers.ZB1.name) && list.querySelector('.pos-close-btn'), 'po rozwinięciu spółka i przycisk Zamknij');
+            const c = closePosition('foreign', 'ZB1');
+            assert(c.ok && !(foreignIssuers.ZB1.holders.player > 0) && !foreignIssuers.ZB1.playerAvg, 'pozycja zamknięta, koszt wyczyszczony');
+        } finally { t2.remove(); for (const k of Object.keys(portfolioGroupsOpen)) delete portfolioGroupsOpen[k]; }
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+    }));
+
     test('G7: sprzedaż akcji zagranicznych zwraca walutę kraju minus prowizja; nie można kupić więcej niż wolny obrót ani akcji pakietu państwa', () => withTickets(() => {
         airportState.forced = true; joinCountry('ZZ'); buyTicket('ZZ');
         const zb = foreignIssuers.ZB1, zd = foreignIssuers.ZD1;
@@ -13574,6 +13615,20 @@ group('0.16.3', () => {
         assert(exchangeLinks.intl.members.length > before || getLinkCandidates().length === 0, 'kolejny kraj dołączył powoli');
         for (const m of exchangeLinks.intl.members) if (m !== 'PL') assertEq(countryState[m].link, getLinkedCountries().includes(m) ? countryState[m].link : null, 'członkowie połączeni');
         assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+    }));
+
+    test('Poprawki z gry 2026-11-24: giełda międzynarodowa bez zdublowanych krajów (dołączony wcześniej kraj nie wraca jako „ostatni”), stary zapis z duplikatem naprawiony', () => withLinks(() => {
+        let seed = 7;
+        const lcg = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+        for (let run = 0; run < 40; run++) {
+            resetForeignIssuers(); macro.quarter = 5; joinCountry('DE'); macro.quarter = 20; joinCountry('CZ'); macro.quarter = 30;
+            const r = Math.random; Math.random = lcg;
+            try { runLinkEvent('intl', 'CZ'); for (let q = 0; q < 6; q++) { macro.quarter++; processLinksQuarterly(); } } finally { Math.random = r; }
+            const m = exchangeLinks.intl.members;
+            assertEq(new Set(m).size, m.length, `bez powtórzeń: ${m.join(', ')}`); assertEq(m[0], 'PL', 'Polska pierwsza');
+        }
+        applyLinksSnapshot({ intl: { members: ['PL', 'CZ', 'CZ', 'DE', 'PL'], startedQ: 3 } });
+        assertEq(exchangeLinks.intl.members.join(','), 'PL,CZ,DE', 'duplikat z zapisu usunięty');
     }));
 
     test('G12: ścieżka negatywna (wariant B) — X przejmuje naszą giełdę: wyższe opłaty za notowanie, kurs GPW w dół 5–15%', () => withLinks(() => {
@@ -17352,7 +17407,7 @@ group('0.18.1 P4 Szok podażowy i baner kryzysu', () => {
             startCrisisLine('supply', { forced: true, skipSpark: true, variant: 'strait' });
             const el = document.getElementById('crisis-banner');
             assert(el && !el.hidden && el.getAttribute('role') === 'status', 'baner widoczny, rola status');
-            assert(/Szok podażowy/.test(el.textContent) && /Wybuch/.test(el.textContent) && /Co to znaczy dla Ciebie/.test(el.textContent), el.textContent);
+            assert(/Szok podażowy/.test(el.textContent) && /Wybuch/.test(el.textContent) && !/Co to znaczy dla Ciebie/.test(el.textContent) && /półprodukty drożeją/.test(el.textContent), el.textContent);
             assert(!/\p{Extended_Pictographic}/u.test(el.textContent), 'bez emoji');
             enterCrisisStage('spread'); assert(/Zarażanie/.test(el.textContent) && el.dataset.stage === 'spread', 'nowy etap');
             closeCrisisBanner(); assert(el.hidden, 'zamknięty');
@@ -18123,6 +18178,72 @@ group('0.18.8 Długa gra', () => {
             const keep = decadeState.reports; decadeState.reports = []; displayLeaderboard(); assert(host.textContent.includes('Historia jeszcze pusta'), 'stan pusty'); decadeState.reports = keep;
         } finally { host.remove(); leaderboardTab = 'funds'; historyDecade = null; }
         const snap = JSON.parse(JSON.stringify(getDecadeSnapshot())); decadeState = createDecadeState(); applyDecadeSnapshot(snap); assertEq(decadeState.reports.length, 3, 'zapis i odczyt');
+    });
+});
+
+group('Poprawki z gry 2026-11-24', () => {
+    const fresh = () => { resetWorld([mk156('AAA', { price: 120 }), mk156('BBB', { price: 50 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' }); playerCash = 1_000_000; initFxState(); resetForeignIssuers(); };
+
+    test('Pozycje: kategorie zwijane z liczbą pozycji, wartością i wynikiem; po rozwinięciu spółki; „Zamknij” sprzedaje wolne akcje (zastaw zostaje)', () => {
+        fresh(); const [a] = stocks;
+        playerPortfolio.AAA = { shares: 100, avgPrice: 100, assetType: 'stock' }; playerPortfolio.BBB = { shares: 50, avgPrice: 60, assetType: 'stock', lockedShares: 20 };
+        a.sharesHeld = 100; stocks[1].sharesHeld = 50;
+        const t = document.createElement('table'); t.innerHTML = '<tbody id="my-stocks-list"></tbody>'; document.body.appendChild(t);
+        try {
+            for (const k of Object.keys(portfolioGroupsOpen)) delete portfolioGroupsOpen[k];
+            displayPortfolio();
+            const list = document.getElementById('my-stocks-list'), head = list.querySelector('.portfolio-group-row');
+            assert(head && /Akcje krajowe/.test(head.textContent) && /\(2\)/.test(head.textContent), head?.textContent);
+            assert(!list.textContent.includes('Spółka AAA') && head.getAttribute('aria-expanded') === 'false', 'domyślnie zwinięte');
+            assert(head.textContent.includes(formatZl(100 * 120 + 50 * 50, 0)), 'suma wartości w nagłówku');
+            togglePortfolioGroup('domestic');
+            assert(list.textContent.includes('Spółka AAA') && list.textContent.includes('Spółka BBB'), 'po rozwinięciu spółki');
+            assertEq(list.querySelectorAll('.pos-close-btn').length, 2, 'przycisk Zamknij przy wyniku');
+            const info = getClosePositionInfo('stock', 'AAA');
+            assertEq(info.qty, 100, 'cała pozycja'); assertNear(info.pl, 100 * 20, 'wynik pozycji', 1e-9);
+            assert(closePosition('stock', 'AAA').ok && !playerPortfolio.AAA, 'pozycja zamknięta');
+            assertEq(getClosePositionInfo('stock', 'BBB').qty, 30, 'zastaw nie wchodzi do zamknięcia');
+            assert(closePosition('stock', 'BBB').ok && playerPortfolio.BBB.shares === 20, 'zostają akcje w zastawie');
+        } finally { t.remove(); for (const k of Object.keys(portfolioGroupsOpen)) delete portfolioGroupsOpen[k]; }
+    });
+
+    test('Kantor: wpisana kwota zostaje po sprzedaży (1 CZK nie zmienia się w 1000); okno gotówki też pamięta kwotę', () => {
+        fresh(); playerCashByCurrency.CZK = 50; kantorSelected = 'CZK'; kantorProviderId = 'std'; kantorAmountInput = null;
+        const box = document.createElement('div'); box.id = 'kantor-body'; document.body.appendChild(box);
+        const prev = kantorTab; kantorTab = 'rates';
+        try {
+            renderKantor();
+            const input = document.getElementById('kantor-amount'); input.value = '1'; input.dispatchEvent(new Event('input'));
+            kantorUiSell();
+            assertNear(getCurrencyCash('player', 'CZK'), 49, 'sprzedano 1 CZK', 1e-9);
+            assertEq(document.getElementById('kantor-amount').value, '1', 'kwota po sprzedaży bez zmian');
+        } finally { box.remove(); kantorTab = prev; kantorAmountInput = null; delete playerCashByCurrency.CZK; }
+    });
+
+    test('Księga funduszu: „Gotówka funduszu” to złote + waluty, po kliknięciu rozbicie na PLN i każdą walutę', () => {
+        fresh(); playerCashByCurrency.CZK = 1000; ledgerCashOpen = false;
+        const closed = renderLedgerCashRows(playerCash, getFundAssets());
+        assert(closed.includes(formatZl(getFundCashTotalPln())) && !closed.includes('ledger-sub'), 'zwinięte: suma');
+        ledgerCashOpen = true;
+        const open = renderLedgerCashRows(playerCash, getFundAssets());
+        assert(open.includes('PLN') && open.includes(`${formatNumberPl(1000, 2)} CZK`) && open.includes(formatZl(toPln(1000, 'CZK'), 0)), 'rozbicie PLN i CZK z wartością');
+        ledgerCashOpen = false; delete playerCashByCurrency.CZK;
+    });
+
+    test('Split: kurs od 3000 zł dzielony w najbliższym kwartale mimo walnego z uchwałami; 35% od 1000 zł; termin w kalendarzu (rok · kwartał)', () => {
+        fresh(); const [a] = stocks; macro.quarter = 34;
+        a.price = 4200; a.governance = { pendingAgm: { items: [{ id: 'x' }] } }; a.lastSplitQuarter = 0;
+        assert(canChangeShareCount(a), 'pilny split mimo walnego');
+        a.price = 1500; assert(!canChangeShareCount(a), 'zwykły split czeka na walne');
+        a.governance = {}; a.lastSplitQuarter = 30; assert(!canChangeShareCount(a), 'zwykły split: 8 kwartałów przerwy');
+        a.price = 4200; a.lastSplitQuarter = 32; assert(canChangeShareCount(a), 'pilny: przerwa 2 kwartały');
+        assertEq(getSplitChance(4200), 1, 'pewny przy ≥ 3000 zł'); assertEq(getSplitChance(1500), 0.35, '35% od 1000 zł');
+        assertEq(formatSplitDate(34), 'Rok 9 · kw. 3', 'kwartał 34 → rok 9, kw. 3');
+    });
+
+    test('Baner kryzysu: sama informacja o skutkach, bez „Co to znaczy dla Ciebie”', () => {
+        assert(!Object.values(CRISIS_BANNER_HINTS).some(t => /Ciebie|Twój|Twoj/i.test(t)), 'bez zwrotów do gracza');
+        assert(/Przez drogie paliwo tracą transport, turystyka i chemia\. Energia rośnie/.test(CRISIS_BANNER_HINTS.oil), CRISIS_BANNER_HINTS.oil);
     });
 });
 
